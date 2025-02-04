@@ -24,7 +24,7 @@ func (e *ClickhouseScrapper) Dialect() string {
 	return "clickhouse"
 }
 
-func NewClickhouseExecutor(ctx context.Context, conf ClickhouseScrapperConf) (*ClickhouseScrapper, error) {
+func NewClickhouseScrapper(ctx context.Context, conf ClickhouseScrapperConf) (*ClickhouseScrapper, error) {
 	executor, err := dwhexecclickhouse.NewClickhouseExecutor(ctx, &conf.ClickhouseConf)
 	if err != nil {
 		return nil, err
