@@ -1,0 +1,29 @@
+name: Go
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+          go-version-file: 'go.mod'
+
+      - name: Build
+        run: |
+          go generate
+          GOOS=darwin CGO_ENABLED=0 GOARCH=amd64 go build main.go
+          GOOS=darwin CGO_ENABLED=0 GOARCH=arm64 go build main.go
+          GOOS=linux CGO_ENABLED=0 GOARCH=amd64 go build main.go
+          GOOS=linux CGO_ENABLED=0 GOARCH=arm64 go build main.go
+
+      - name: Test
+        run: go test -v ./...

@@ -1,0 +1,14 @@
+synq:
+    client_id: "Y3tzSMJVojRFuYWUBC055l2fFqKHemjg"
+    client_secret: "c0lnU1VaQko4UTg1RVd4N3R3VnFSUDVvV1oyalhOUlo="
+    endpoint: localhost:50051
+
+connections:
+    "pg-local":
+        name: "PG Local"
+        postgres:
+            host: localhost
+            port: 54320
+            username: postgres
+            password: getsynq10
+            database: kernel-ext_dwh_metrics
