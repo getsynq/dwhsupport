@@ -2,7 +2,6 @@ package databricks
 
 import (
 	"context"
-	"net/http"
 	"regexp"
 	"strings"
 
@@ -17,7 +16,6 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-	httptrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http"
 )
 
 type DatabricksScrapperConf struct {
@@ -68,10 +66,8 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 
 	useragent.WithProduct("synq", "1.0.0")
 
-	httpTransport := httptrace.WrapClient(http.DefaultClient)
 	databricksConf := &databricks.Config{
-		Host:          conf.WorkspaceUrl,
-		HTTPTransport: httpTransport.Transport,
+		Host: conf.WorkspaceUrl,
 	}
 	conf.Auth.Configure(databricksConf)
 	client, err := databricks.NewWorkspaceClient(databricksConf)

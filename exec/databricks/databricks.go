@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"net/http"
 
 	"github.com/databricks/databricks-sdk-go"
 	servicesql "github.com/databricks/databricks-sdk-go/service/sql"
@@ -16,7 +15,6 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
-	httptrace "gopkg.in/DataDog/dd-trace-go.v1/contrib/net/http"
 )
 
 type Auth interface {
@@ -73,10 +71,8 @@ func NewDatabricksExecutor(ctx context.Context, conf *DatabricksConf) (*Databric
 
 	useragent.WithProduct("synq", "1.0.0")
 
-	httpTransport := httptrace.WrapClient(http.DefaultClient)
 	databricksConfig := &databricks.Config{
-		Host:          conf.WorkspaceUrl,
-		HTTPTransport: httpTransport.Transport,
+		Host: conf.WorkspaceUrl,
 	}
 	conf.Auth.Configure(databricksConfig)
 	client, err := databricks.NewWorkspaceClient(databricksConfig)
