@@ -1,19 +1,39 @@
 agent:
-    name: lustefaniak
-    log_level: trace
+  name: lustefaniak
+  log_level: trace
 synq:
-    client_id: "Y3tzSMJVojRFuYWUBC055l2fFqKHemjg"
-    client_secret: "c0lnU1VaQko4UTg1RVd4N3R3VnFSUDVvV1oyalhOUlo="
-    endpoint: localhost:50051
+  client_id: "Y3tzSMJVojRFuYWUBC055l2fFqKHemjg"
+  client_secret: "c0lnU1VaQko4UTg1RVd4N3R3VnFSUDVvV1oyalhOUlo="
+  endpoint: localhost:50051
 
 connections:
-    "pg-local":
-        name: "PG Local"
-        postgres:
-            host: localhost
-            port: 54320
-            username: postgres
-            password: getsynq10
-            database: kernel_ext_dwh_metrics
-            allow_insecure: true
+  "pg-local":
+    name: "PG Local"
+    postgres:
+      host: localhost
+      port: 54320
+      username: postgres
+      password: getsynq10
+      database: kernel_ext_dwh_metrics
+      allow_insecure: true
+  "nifty-motif-341212":
+    bigquery:
+      project_id: nifty-motif-341212
+
+  "ch-staging":
+    name: Clickhouse
+    clickhouse:
+      host: nogwv291ou.europe-west4.gcp.clickhouse.cloud
+      port: 9440
+      username: default
+      password: ${STAGING_CLICKHOUSE_PASSWORD}
+  "sf":
+    snowflake:
+      username: "ZDENKO"
+      password: "zKY5J53qmKhEE$z2"
+      account: "cuunsqr-ir70409"
+      warehouse: "SYNQ_WH"
+      databases: ["PETR"]
+      role: "SYNQ_ROLE"
+      use_get_ddl: true
 

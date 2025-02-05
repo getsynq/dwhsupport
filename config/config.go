@@ -55,7 +55,9 @@ func LoadConfig() (*agentdwhv1.Config, error) {
 	}
 
 	for connectionId := range configLoader.Sub("connections") {
-		connection := &agentdwhv1.Config_Connection{}
+		connection := &agentdwhv1.Config_Connection{
+			Name: connectionId,
+		}
 		connections[connectionId] = connection
 		sub := configLoader.Sub(fmt.Sprintf("connections.%s", connectionId))
 		for key := range sub {
@@ -103,6 +105,14 @@ func LoadConfig() (*agentdwhv1.Config, error) {
 				}
 				connection.Config = &agentdwhv1.Config_Connection_Mysql{
 					Mysql: mysql,
+				}
+			case "clickhouse":
+				clickhouse := &agentdwhv1.ClickhouseConf{}
+				if err := configLoader.BindStruct(fmt.Sprintf("connections.%s.clickhouse", connectionId), clickhouse); err != nil {
+					return nil, err
+				}
+				connection.Config = &agentdwhv1.Config_Connection_Clickhouse{
+					Clickhouse: clickhouse,
 				}
 			default:
 				logrus.Warnf("Unknown key %s in connection %s", key, connectionId)

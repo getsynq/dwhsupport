@@ -71,29 +71,28 @@ func (m dwhAgentServiceServerMock) Connect(g grpc.BidiStreamingServer[agentdwhv1
 		switch t := req.Message.(type) {
 		case *agentdwhv1grpc.ConnectRequest_Hello:
 			log.Info(t.Hello)
-			for i := 0; i < 10; i++ {
-				var tasks []*agentdwhv1grpc.AgentTask
-				for _, connection := range t.Hello.AvailableConnections {
-					tasks = append(tasks, &agentdwhv1grpc.AgentTask{
-						ConnectionId: connection.ConnectionId,
-						TaskId:       uuid.NewString(),
-						Command: &agentdwhv1grpc.AgentTask_FetchFullCatalog{
-							FetchFullCatalog: &agentdwhv1grpc.FetchFullCatalogCommand{},
-						},
-					})
-					tasks = append(tasks, &agentdwhv1grpc.AgentTask{
-						ConnectionId: connection.ConnectionId,
-						TaskId:       uuid.NewString(),
-						Command: &agentdwhv1grpc.AgentTask_FetchFullMetrics{
-							FetchFullMetrics: &agentdwhv1grpc.FetchFullMetricsCommand{},
-						},
-					})
-				}
-				if err := g.Send(&agentdwhv1grpc.ConnectResponse{
-					Tasks: tasks,
-				}); err != nil {
-					return err
-				}
+
+			var tasks []*agentdwhv1grpc.AgentTask
+			for _, connection := range t.Hello.AvailableConnections {
+				tasks = append(tasks, &agentdwhv1grpc.AgentTask{
+					ConnectionId: connection.ConnectionId,
+					TaskId:       uuid.NewString(),
+					Command: &agentdwhv1grpc.AgentTask_FetchFullCatalog{
+						FetchFullCatalog: &agentdwhv1grpc.FetchFullCatalogCommand{},
+					},
+				})
+				tasks = append(tasks, &agentdwhv1grpc.AgentTask{
+					ConnectionId: connection.ConnectionId,
+					TaskId:       uuid.NewString(),
+					Command: &agentdwhv1grpc.AgentTask_FetchFullMetrics{
+						FetchFullMetrics: &agentdwhv1grpc.FetchFullMetricsCommand{},
+					},
+				})
+			}
+			if err := g.Send(&agentdwhv1grpc.ConnectResponse{
+				Tasks: tasks,
+			}); err != nil {
+				return err
 			}
 		}
 	}
@@ -106,17 +105,17 @@ type dwhServiceServerMock struct {
 }
 
 func (d dwhServiceServerMock) IngestTableInformation(ctx context.Context, request *ingestdwhv1.IngestTableInformationRequest) (*ingestdwhv1.IngestTableInformationResponse, error) {
-	d.dumpRequest(request)
+	d.dumpRequest("tables", request)
 	return &ingestdwhv1.IngestTableInformationResponse{}, nil
 }
 
 func (d dwhServiceServerMock) IngestSqlDefinitions(ctx context.Context, request *ingestdwhv1.IngestSqlDefinitionsRequest) (*ingestdwhv1.IngestSqlDefinitionsResponse, error) {
-	d.dumpRequest(request)
+	d.dumpRequest("sql", request)
 	return &ingestdwhv1.IngestSqlDefinitionsResponse{}, nil
 }
 
 func (d dwhServiceServerMock) IngestSchemas(ctx context.Context, request *ingestdwhv1.IngestSchemasRequest) (*ingestdwhv1.IngestSchemasResponse, error) {
-	d.dumpRequest(request)
+	d.dumpRequest("schemas", request)
 	return &ingestdwhv1.IngestSchemasResponse{}, nil
 }
 
@@ -127,9 +126,9 @@ type IngestRequest interface {
 	GetStateAt() *timestamppb.Timestamp
 }
 
-func (d dwhServiceServerMock) dumpRequest(request IngestRequest) {
+func (d dwhServiceServerMock) dumpRequest(s string, request IngestRequest) {
 
-	fileName := fmt.Sprintf("ingest_%T_%s_%s_%s_%s.json", request, request.GetConnectionId(), request.GetUploadId(), request.GetStateAt().AsTime().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339Nano))
+	fileName := fmt.Sprintf("%s_%s_%s_%s_%s.json", request.GetConnectionId(), request.GetUploadId(), s, request.GetStateAt().AsTime().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339Nano))
 
 	marshaller := protojson.MarshalOptions{
 		Multiline: true,

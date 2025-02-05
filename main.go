@@ -20,7 +20,8 @@ func main() {
 
 	conf, err := config.LoadConfig()
 	if err != nil {
-		logrus.Panic(err)
+		config.ExplainError(err)
+		os.Exit(1)
 	}
 	setupLogger(conf.GetAgent())
 
