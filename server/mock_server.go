@@ -69,6 +69,16 @@ func (m mockServer) Connect(g grpc.BidiStreamingServer[agentdwhv1grpc.ConnectReq
 					tasks = append(tasks, &agentdwhv1grpc.AgentTask{
 						ConnectionId: connection.ConnectionId,
 						TaskId:       uuid.NewString(),
+						Command: &agentdwhv1grpc.AgentTask_FetchFullCatalog{
+							FetchFullCatalog: &agentdwhv1grpc.FetchFullCatalogCommand{},
+						},
+					})
+					tasks = append(tasks, &agentdwhv1grpc.AgentTask{
+						ConnectionId: connection.ConnectionId,
+						TaskId:       uuid.NewString(),
+						Command: &agentdwhv1grpc.AgentTask_FetchFullMetrics{
+							FetchFullMetrics: &agentdwhv1grpc.FetchFullMetricsCommand{},
+						},
 					})
 				}
 				if err := g.Send(&agentdwhv1grpc.ConnectResponse{

@@ -34,6 +34,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/samber/lo v1.49.1 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/crypto v0.32.0 // indirect

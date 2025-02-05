@@ -8,6 +8,8 @@ import (
 	agentdwhv1grpc "github.com/getsynq/api/agent/dwh/v1"
 	"github.com/getsynq/synq-dwh/build"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -94,13 +96,18 @@ func (s *ConnectionService) connect() error {
 		if err != nil {
 			return err
 		}
+		logrus.WithField("message", messageDump(msg)).Debug("Received message")
 
 		select {
 		case s.msgQueue <- msg:
 		default:
-			logrus.Warn("Message queue full, dropping message")
+			logrus.WithField("message", messageDump(msg)).Warn("Message queue full, dropping message")
 		}
 	}
+}
+
+func messageDump(msg proto.Message) string {
+	return protojson.Format(msg)
 }
 
 func createHelloMessage(conf *agentdwhv1grpc.Config) *agentdwhv1grpc.Hello {

@@ -1,3 +1,6 @@
+agent:
+    name: lustefaniak
+    log_level: trace
 synq:
     client_id: "Y3tzSMJVojRFuYWUBC055l2fFqKHemjg"
     client_secret: "c0lnU1VaQko4UTg1RVd4N3R3VnFSUDVvV1oyalhOUlo="
@@ -11,4 +14,6 @@ connections:
             port: 54320
             username: postgres
             password: getsynq10
-            database: kernel-ext_dwh_metrics
+            database: kernel_ext_dwh_metrics
+            allow_insecure: true
+
