@@ -40,7 +40,7 @@ type Tag struct {
 	TagValue string `json:"tag_value"`
 }
 
-type ColumnCatalogRow struct {
+type CatalogColumnRow struct {
 	Instance       string  `db:"instance" json:"instance" ch:"instance" bigquery:"instance"`
 	Database       string  `db:"database" json:"database" ch:"_database" bigquery:"database"`
 	Schema         string  `db:"schema" json:"schema" ch:"schema" bigquery:"schema"`
@@ -76,7 +76,7 @@ type SchemaColumnField struct {
 	Fields []*SchemaColumnField `protobuf:"bytes,9,rep,name=fields,proto3" json:"fields,omitempty"`
 }
 
-func (r ColumnCatalogRow) TableFqn() DwhFqn {
+func (r CatalogColumnRow) TableFqn() DwhFqn {
 	return DwhFqn{
 		Instance: r.Instance,
 		Database: r.Database,
@@ -85,14 +85,14 @@ func (r ColumnCatalogRow) TableFqn() DwhFqn {
 	}
 }
 
-func (r ColumnCatalogRow) GetComment() string {
+func (r CatalogColumnRow) GetComment() string {
 	if r.Comment == nil {
 		return ""
 	}
 	return *r.Comment
 }
 
-func (r ColumnCatalogRow) GetTableComment() string {
+func (r CatalogColumnRow) GetTableComment() string {
 	if r.TableComment == nil {
 		return ""
 	}

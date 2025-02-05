@@ -10,6 +10,7 @@ import (
 	"github.com/gookit/config/v2"
 	"github.com/gookit/config/v2/yaml"
 	"github.com/samber/lo"
+	"github.com/sirupsen/logrus"
 )
 
 func LoadConfig() (*agentdwhv1.Config, error) {
@@ -52,8 +53,65 @@ func LoadConfig() (*agentdwhv1.Config, error) {
 	if err := configLoader.BindStruct("synq", synq); err != nil {
 		return nil, err
 	}
-	if err := configLoader.BindStruct("connections", &connections); err != nil {
-		return nil, err
+
+	for connectionId := range configLoader.Sub("connections") {
+		connection := &agentdwhv1.Config_Connection{}
+		connections[connectionId] = connection
+		sub := configLoader.Sub(fmt.Sprintf("connections.%s", connectionId))
+		for key := range sub {
+			switch key {
+			case "parallelism":
+				connection.Parallelism = int32(configLoader.Int(fmt.Sprintf("connections.%s.parallelism")))
+			case "name":
+				connection.Name = configLoader.String(fmt.Sprintf("connections.%s.name", connectionId))
+			case "postgres":
+				postgres := &agentdwhv1.PostgresConf{}
+				if err := configLoader.BindStruct(fmt.Sprintf("connections.%s.postgres", connectionId), postgres); err != nil {
+					return nil, err
+				}
+				connection.Config = &agentdwhv1.Config_Connection_Postgres{
+					Postgres: postgres,
+				}
+			case "snowflake":
+				snowflake := &agentdwhv1.SnowflakeConf{}
+				if err := configLoader.BindStruct(fmt.Sprintf("connections.%s.snowflake", connectionId), snowflake); err != nil {
+					return nil, err
+				}
+				connection.Config = &agentdwhv1.Config_Connection_Snowflake{
+					Snowflake: snowflake,
+				}
+			case "bigquery":
+				bigquery := &agentdwhv1.BigQueryConf{}
+				if err := configLoader.BindStruct(fmt.Sprintf("connections.%s.bigquery", connectionId), bigquery); err != nil {
+					return nil, err
+				}
+				connection.Config = &agentdwhv1.Config_Connection_Bigquery{
+					Bigquery: bigquery,
+				}
+			case "redshift":
+				redshift := &agentdwhv1.RedshiftConf{}
+				if err := configLoader.BindStruct(fmt.Sprintf("connections.%s.redshift", connectionId), redshift); err != nil {
+					return nil, err
+				}
+				connection.Config = &agentdwhv1.Config_Connection_Redshift{
+					Redshift: redshift,
+				}
+			case "mysql":
+				mysql := &agentdwhv1.MySQLConf{}
+				if err := configLoader.BindStruct(fmt.Sprintf("connections.%s.mysql", connectionId), mysql); err != nil {
+					return nil, err
+				}
+				connection.Config = &agentdwhv1.Config_Connection_Mysql{
+					Mysql: mysql,
+				}
+			default:
+				logrus.Warnf("Unknown key %s in connection %s", key, connectionId)
+			}
+		}
+
+		if connection.Parallelism == 0 {
+			connection.Parallelism = 2
+		}
 	}
 
 	protoConf := &agentdwhv1.Config{

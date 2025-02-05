@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	agentdwhv1grpc "github.com/getsynq/api/agent/dwh/v1"
+	ingestdwhv1 "github.com/getsynq/api/ingest/dwh/v1"
 	"github.com/getsynq/synq-dwh/config"
 	"github.com/getsynq/synq-dwh/server"
 	"github.com/getsynq/synq-dwh/service"
@@ -34,6 +35,7 @@ func main() {
 	}
 
 	agentServiceClient := agentdwhv1grpc.NewDwhAgentServiceClient(grpcConnection)
+	dwhServiceClient := ingestdwhv1.NewDwhServiceClient(grpcConnection)
 
 	// Create and start connection service
 	connectionService := service.NewConnectionService(agentServiceClient, conf)
@@ -41,7 +43,7 @@ func main() {
 	defer connectionService.Stop()
 
 	// Create work pool with workers for each database connection
-	workPool := service.NewWorkPool(conf.Connections)
+	workPool := service.NewWorkPool(conf.Connections, dwhServiceClient)
 	defer workPool.Stop()
 
 	// Process messages from the queue and distribute to appropriate workers

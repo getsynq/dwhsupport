@@ -2,12 +2,19 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"os"
+	"time"
 
 	agentdwhv1grpc "github.com/getsynq/api/agent/dwh/v1"
+	ingestdwhv1 "github.com/getsynq/api/ingest/dwh/v1"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func StartMockServer(ctx context.Context) {
@@ -23,7 +30,8 @@ func startMockServerInternal(ctx context.Context) {
 
 	var serverOpts []grpc.ServerOption
 	s := grpc.NewServer(serverOpts...)
-	agentdwhv1grpc.RegisterDwhAgentServiceServer(s, &mockServer{})
+	agentdwhv1grpc.RegisterDwhAgentServiceServer(s, &dwhAgentServiceServerMock{})
+	ingestdwhv1.RegisterDwhServiceServer(s, &dwhServiceServerMock{})
 
 	// Create channel for server errors
 	errChan := make(chan error, 1)
@@ -46,13 +54,13 @@ func startMockServerInternal(ctx context.Context) {
 	}
 }
 
-var _ agentdwhv1grpc.DwhAgentServiceServer = &mockServer{}
+var _ agentdwhv1grpc.DwhAgentServiceServer = &dwhAgentServiceServerMock{}
 
-type mockServer struct {
+type dwhAgentServiceServerMock struct {
 	agentdwhv1grpc.UnimplementedDwhAgentServiceServer
 }
 
-func (m mockServer) Connect(g grpc.BidiStreamingServer[agentdwhv1grpc.ConnectRequest, agentdwhv1grpc.ConnectResponse]) error {
+func (m dwhAgentServiceServerMock) Connect(g grpc.BidiStreamingServer[agentdwhv1grpc.ConnectRequest, agentdwhv1grpc.ConnectResponse]) error {
 	log := logrus.WithField("server", true)
 	for {
 		req, err := g.Recv()
@@ -87,8 +95,46 @@ func (m mockServer) Connect(g grpc.BidiStreamingServer[agentdwhv1grpc.ConnectReq
 					return err
 				}
 			}
-
 		}
+	}
+}
 
+var _ ingestdwhv1.DwhServiceServer = &dwhServiceServerMock{}
+
+type dwhServiceServerMock struct {
+	ingestdwhv1.UnimplementedDwhServiceServer
+}
+
+func (d dwhServiceServerMock) IngestTableInformation(ctx context.Context, request *ingestdwhv1.IngestTableInformationRequest) (*ingestdwhv1.IngestTableInformationResponse, error) {
+	d.dumpRequest(request)
+	return &ingestdwhv1.IngestTableInformationResponse{}, nil
+}
+
+func (d dwhServiceServerMock) IngestSqlDefinitions(ctx context.Context, request *ingestdwhv1.IngestSqlDefinitionsRequest) (*ingestdwhv1.IngestSqlDefinitionsResponse, error) {
+	d.dumpRequest(request)
+	return &ingestdwhv1.IngestSqlDefinitionsResponse{}, nil
+}
+
+func (d dwhServiceServerMock) IngestSchemas(ctx context.Context, request *ingestdwhv1.IngestSchemasRequest) (*ingestdwhv1.IngestSchemasResponse, error) {
+	d.dumpRequest(request)
+	return &ingestdwhv1.IngestSchemasResponse{}, nil
+}
+
+type IngestRequest interface {
+	proto.Message
+	GetConnectionId() string
+	GetUploadId() string
+	GetStateAt() *timestamppb.Timestamp
+}
+
+func (d dwhServiceServerMock) dumpRequest(request IngestRequest) {
+
+	fileName := fmt.Sprintf("ingest_%T_%s_%s_%s_%s.json", request, request.GetConnectionId(), request.GetUploadId(), request.GetStateAt().AsTime().Format(time.RFC3339), time.Now().UTC().Format(time.RFC3339Nano))
+
+	marshaller := protojson.MarshalOptions{
+		Multiline: true,
+	}
+	if err := os.WriteFile(fileName, []byte(marshaller.Format(request)), 0644); err != nil {
+		logrus.Errorf("failed to write file %s: %v", fileName, err)
 	}
 }

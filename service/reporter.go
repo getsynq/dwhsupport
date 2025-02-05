@@ -6,6 +6,6 @@ import (
 	agentdwhv1 "github.com/getsynq/api/agent/dwh/v1"
 )
 
-type Reporter interface {
-	Report(ctx context.Context, databaseId string, severity agentdwhv1.LogSeverity, message string) error
+type LogReporter interface {
+	Report(ctx context.Context, connectionId string, severity agentdwhv1.LogLevel, message string) error
 }

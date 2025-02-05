@@ -5,8 +5,8 @@ type DatabaseCommand interface {
 }
 type FetchFullMetrics struct{}
 
-func (r *FetchFullMetrics) isDatabaseCommand() {}
+func (r FetchFullMetrics) isDatabaseCommand() {}
 
 type FetchFullCatalog struct{}
 
-func (r *FetchFullCatalog) isDatabaseCommand() {}
+func (r FetchFullCatalog) isDatabaseCommand() {}
