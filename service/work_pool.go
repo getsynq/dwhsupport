@@ -84,11 +84,34 @@ func (w *Worker) start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	w.ctx = ctx
 	w.cancel = cancel
+
+	// Create timer for connection timeout
+	connectionTimer := time.NewTimer(30 * time.Second)
+	defer connectionTimer.Stop()
+
 	for {
+		// Reset timer if it's running
+		if !connectionTimer.Stop() {
+			select {
+			case <-connectionTimer.C:
+			default:
+			}
+		}
+		connectionTimer.Reset(30 * time.Second)
+
 		select {
 		case <-w.done:
 			w.cancel()
+			if w.scrapper != nil {
+				w.scrapper.Close()
+			}
 			return
+		case <-connectionTimer.C:
+			if w.scrapper != nil {
+				logrus.Infof("Closing idle database connection for %s", w.databaseID)
+				w.scrapper.Close()
+				w.scrapper = nil
+			}
 		case msg := <-w.msgChan:
 			if w.scrapper == nil {
 				logrus.Infof("Connecting to database %s", w.databaseID)

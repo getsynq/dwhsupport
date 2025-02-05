@@ -49,7 +49,6 @@ func main() {
 		select {
 		case <-ctx.Done():
 			connectionService.Stop()
-			workPool.Stop()
 			return
 		case msg := <-connectionService.GetMessageChan():
 			// Get the appropriate worker for the database connection

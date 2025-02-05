@@ -7,6 +7,7 @@ import (
 
 	agentdwhv1grpc "github.com/getsynq/api/agent/dwh/v1"
 	"github.com/getsynq/synq-dwh/build"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -65,6 +66,9 @@ func (s *ConnectionService) maintainConnection() {
 			return
 		default:
 			if err := s.connect(); err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
 				logrus.Errorf("Connection error: %v, reconnecting in %v", err, reconnectDelay)
 				time.Sleep(reconnectDelay)
 				continue
@@ -122,12 +126,16 @@ func createHelloMessage(conf *agentdwhv1grpc.Config) *agentdwhv1grpc.Hello {
 func configConnectionsToAvailableConnections(conf *agentdwhv1grpc.Config) []*agentdwhv1grpc.Hello_AvailableConnection {
 	var res []*agentdwhv1grpc.Hello_AvailableConnection
 	for connectionId, connection := range conf.GetConnections() {
-		res = append(res, &agentdwhv1grpc.Hello_AvailableConnection{
-			ConnectionId: connectionId,
-			Name:         connection.GetName(),
-			Instance:     "",
-			Databases:    nil,
-		})
+		res = append(res, createAvailableConnection(connectionId, connection))
 	}
 	return res
+}
+
+func createAvailableConnection(connectionId string, connection *agentdwhv1grpc.Config_Connection) *agentdwhv1grpc.Hello_AvailableConnection {
+	return &agentdwhv1grpc.Hello_AvailableConnection{
+		ConnectionId: connectionId,
+		Name:         connection.GetName(),
+		Instance:     "",
+		Databases:    nil,
+	}
 }
