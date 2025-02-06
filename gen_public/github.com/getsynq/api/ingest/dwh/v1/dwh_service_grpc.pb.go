@@ -19,18 +19,20 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DwhService_IngestTableInformation_FullMethodName = "/synq.ingest.dwh.v1.DwhService/IngestTableInformation"
-	DwhService_IngestSqlDefinitions_FullMethodName   = "/synq.ingest.dwh.v1.DwhService/IngestSqlDefinitions"
-	DwhService_IngestSchemas_FullMethodName          = "/synq.ingest.dwh.v1.DwhService/IngestSchemas"
+	DwhService_IngestObjectInformation_FullMethodName = "/synq.ingest.dwh.v1.DwhService/IngestObjectInformation"
+	DwhService_IngestSqlDefinitions_FullMethodName    = "/synq.ingest.dwh.v1.DwhService/IngestSqlDefinitions"
+	DwhService_IngestSchemas_FullMethodName           = "/synq.ingest.dwh.v1.DwhService/IngestSchemas"
+	DwhService_IngestObjectMetrics_FullMethodName     = "/synq.ingest.dwh.v1.DwhService/IngestObjectMetrics"
 )
 
 // DwhServiceClient is the client API for DwhService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type DwhServiceClient interface {
-	IngestTableInformation(ctx context.Context, in *IngestTableInformationRequest, opts ...grpc.CallOption) (*IngestTableInformationResponse, error)
+	IngestObjectInformation(ctx context.Context, in *IngestObjectInformationRequest, opts ...grpc.CallOption) (*IngestObjectInformationResponse, error)
 	IngestSqlDefinitions(ctx context.Context, in *IngestSqlDefinitionsRequest, opts ...grpc.CallOption) (*IngestSqlDefinitionsResponse, error)
 	IngestSchemas(ctx context.Context, in *IngestSchemasRequest, opts ...grpc.CallOption) (*IngestSchemasResponse, error)
+	IngestObjectMetrics(ctx context.Context, in *IngestObjectMetricsRequest, opts ...grpc.CallOption) (*IngestObjectMetricsResponse, error)
 }
 
 type dwhServiceClient struct {
@@ -41,10 +43,10 @@ func NewDwhServiceClient(cc grpc.ClientConnInterface) DwhServiceClient {
 	return &dwhServiceClient{cc}
 }
 
-func (c *dwhServiceClient) IngestTableInformation(ctx context.Context, in *IngestTableInformationRequest, opts ...grpc.CallOption) (*IngestTableInformationResponse, error) {
+func (c *dwhServiceClient) IngestObjectInformation(ctx context.Context, in *IngestObjectInformationRequest, opts ...grpc.CallOption) (*IngestObjectInformationResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(IngestTableInformationResponse)
-	err := c.cc.Invoke(ctx, DwhService_IngestTableInformation_FullMethodName, in, out, cOpts...)
+	out := new(IngestObjectInformationResponse)
+	err := c.cc.Invoke(ctx, DwhService_IngestObjectInformation_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -71,13 +73,24 @@ func (c *dwhServiceClient) IngestSchemas(ctx context.Context, in *IngestSchemasR
 	return out, nil
 }
 
+func (c *dwhServiceClient) IngestObjectMetrics(ctx context.Context, in *IngestObjectMetricsRequest, opts ...grpc.CallOption) (*IngestObjectMetricsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IngestObjectMetricsResponse)
+	err := c.cc.Invoke(ctx, DwhService_IngestObjectMetrics_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DwhServiceServer is the server API for DwhService service.
 // All implementations must embed UnimplementedDwhServiceServer
 // for forward compatibility.
 type DwhServiceServer interface {
-	IngestTableInformation(context.Context, *IngestTableInformationRequest) (*IngestTableInformationResponse, error)
+	IngestObjectInformation(context.Context, *IngestObjectInformationRequest) (*IngestObjectInformationResponse, error)
 	IngestSqlDefinitions(context.Context, *IngestSqlDefinitionsRequest) (*IngestSqlDefinitionsResponse, error)
 	IngestSchemas(context.Context, *IngestSchemasRequest) (*IngestSchemasResponse, error)
+	IngestObjectMetrics(context.Context, *IngestObjectMetricsRequest) (*IngestObjectMetricsResponse, error)
 	mustEmbedUnimplementedDwhServiceServer()
 }
 
@@ -88,14 +101,17 @@ type DwhServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedDwhServiceServer struct{}
 
-func (UnimplementedDwhServiceServer) IngestTableInformation(context.Context, *IngestTableInformationRequest) (*IngestTableInformationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method IngestTableInformation not implemented")
+func (UnimplementedDwhServiceServer) IngestObjectInformation(context.Context, *IngestObjectInformationRequest) (*IngestObjectInformationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IngestObjectInformation not implemented")
 }
 func (UnimplementedDwhServiceServer) IngestSqlDefinitions(context.Context, *IngestSqlDefinitionsRequest) (*IngestSqlDefinitionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IngestSqlDefinitions not implemented")
 }
 func (UnimplementedDwhServiceServer) IngestSchemas(context.Context, *IngestSchemasRequest) (*IngestSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IngestSchemas not implemented")
+}
+func (UnimplementedDwhServiceServer) IngestObjectMetrics(context.Context, *IngestObjectMetricsRequest) (*IngestObjectMetricsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method IngestObjectMetrics not implemented")
 }
 func (UnimplementedDwhServiceServer) mustEmbedUnimplementedDwhServiceServer() {}
 func (UnimplementedDwhServiceServer) testEmbeddedByValue()                    {}
@@ -118,20 +134,20 @@ func RegisterDwhServiceServer(s grpc.ServiceRegistrar, srv DwhServiceServer) {
 	s.RegisterService(&DwhService_ServiceDesc, srv)
 }
 
-func _DwhService_IngestTableInformation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(IngestTableInformationRequest)
+func _DwhService_IngestObjectInformation_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IngestObjectInformationRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DwhServiceServer).IngestTableInformation(ctx, in)
+		return srv.(DwhServiceServer).IngestObjectInformation(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DwhService_IngestTableInformation_FullMethodName,
+		FullMethod: DwhService_IngestObjectInformation_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DwhServiceServer).IngestTableInformation(ctx, req.(*IngestTableInformationRequest))
+		return srv.(DwhServiceServer).IngestObjectInformation(ctx, req.(*IngestObjectInformationRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -172,6 +188,24 @@ func _DwhService_IngestSchemas_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DwhService_IngestObjectMetrics_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IngestObjectMetricsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DwhServiceServer).IngestObjectMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DwhService_IngestObjectMetrics_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DwhServiceServer).IngestObjectMetrics(ctx, req.(*IngestObjectMetricsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DwhService_ServiceDesc is the grpc.ServiceDesc for DwhService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -180,8 +214,8 @@ var DwhService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*DwhServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "IngestTableInformation",
-			Handler:    _DwhService_IngestTableInformation_Handler,
+			MethodName: "IngestObjectInformation",
+			Handler:    _DwhService_IngestObjectInformation_Handler,
 		},
 		{
 			MethodName: "IngestSqlDefinitions",
@@ -190,6 +224,10 @@ var DwhService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IngestSchemas",
 			Handler:    _DwhService_IngestSchemas_Handler,
+		},
+		{
+			MethodName: "IngestObjectMetrics",
+			Handler:    _DwhService_IngestObjectMetrics_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -26,12 +26,12 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 
 	uploadId := uuid.NewString()
 
-	tableInfo := map[scrapper.DwhFqn]*ingestdwhv1.TableInfo{}
-	getOrCreate := func(fqn scrapper.DwhFqn) *ingestdwhv1.TableInfo {
+	tableInfo := map[scrapper.DwhFqn]*ingestdwhv1.ObjectInformation{}
+	getOrCreate := func(fqn scrapper.DwhFqn) *ingestdwhv1.ObjectInformation {
 		if info, ok := tableInfo[fqn]; ok {
 			return info
 		}
-		info := &ingestdwhv1.TableInfo{
+		info := &ingestdwhv1.ObjectInformation{
 			Fqn: fqnToProto(fqn),
 		}
 		tableInfo[fqn] = info
@@ -42,8 +42,8 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 
 	for _, tableRow := range tableRows {
 		info := getOrCreate(tableRow.TableFqn())
-		if tableRow.TableType != "" && info.TableType == "" {
-			info.TableType = tableRow.TableType
+		if tableRow.TableType != "" && info.ObjectNativeType == "" {
+			info.ObjectNativeType = tableRow.TableType
 		}
 		if info.Description == nil && tableRow.Description != nil {
 			info.Description = lo.ToPtr(*tableRow.Description)
@@ -138,30 +138,31 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 
 	// Always send table information, even if there are no tables
 	if len(allFqns) == 0 {
-		ingestTableInformationRequest := &ingestdwhv1.IngestTableInformationRequest{
+		ingestTableInformationRequest := &ingestdwhv1.IngestObjectInformationRequest{
 			ConnectionId: connectionId,
 			UploadId:     uploadId,
 			StateAt:      timestamppb.New(stateAt),
 		}
-		_, err := f.dwhServiceClient.IngestTableInformation(ctx, ingestTableInformationRequest)
+		_, err := f.dwhServiceClient.IngestObjectInformation(ctx, ingestTableInformationRequest)
 		if err != nil {
 			return errors.Wrap(err, "failed to ingest table information")
 		}
 	} else {
 		for _, fqnsChunk := range lo.Chunk(allFqns, 1000) {
-			ingestTableInformationRequest := &ingestdwhv1.IngestTableInformationRequest{
+			ingestTableInformationRequest := &ingestdwhv1.IngestObjectInformationRequest{
 				ConnectionId: connectionId,
 				UploadId:     uploadId,
 				StateAt:      timestamppb.New(stateAt),
 			}
 			for _, fqn := range fqnsChunk {
 				info := tableInfo[fqn]
-				info.TableTags = lo.Values(tagsPerFqn[fqn])
-				ingestTableInformationRequest.Tables = append(ingestTableInformationRequest.Tables, info)
+				info.Tags = lo.Values(tagsPerFqn[fqn])
+				info.IsTable = !info.IsView
+				ingestTableInformationRequest.Objects = append(ingestTableInformationRequest.Objects, info)
 			}
 
-			if len(ingestTableInformationRequest.Tables) > 0 {
-				_, err := f.dwhServiceClient.IngestTableInformation(ctx, ingestTableInformationRequest)
+			if len(ingestTableInformationRequest.Objects) > 0 {
+				_, err := f.dwhServiceClient.IngestObjectInformation(ctx, ingestTableInformationRequest)
 				if err != nil {
 					return errors.Wrap(err, "failed to ingest table information")
 				}
@@ -180,10 +181,10 @@ func columnsToProto(rows []*scrapper.CatalogColumnRow) []*ingestdwhv1.SchemaColu
 			NativeType:      row.Type,
 			OrdinalPosition: row.Position,
 			Description:     row.Comment,
-			ColumnTags:      toTags(row.ColumnTags),
-			IsStructColumn:  row.IsStructColumn,
-			IsArrayColumn:   row.IsArrayColumn,
-			FieldSchemas:    columnFieldsToProto(row.FieldSchemas),
+			Tags:            toTags(row.ColumnTags),
+			IsStruct:        row.IsStructColumn,
+			IsRepeated:      row.IsArrayColumn,
+			Fields:          columnFieldsToProto(row.FieldSchemas),
 		})
 	}
 	return res
@@ -218,9 +219,9 @@ func columnFieldsToProto(fields []*scrapper.SchemaColumnField) []*ingestdwhv1.Sc
 
 func fqnToProto(fqn scrapper.DwhFqn) *ingestdwhv1.Fqn {
 	return &ingestdwhv1.Fqn{
-		Instance: fqn.Instance,
-		Database: fqn.Database,
-		Schema:   fqn.Schema,
-		Table:    fqn.Table,
+		InstanceName: fqn.InstanceName,
+		DatabaseName: fqn.DatabaseName,
+		SchemaName:   fqn.SchemaName,
+		ObjectName:   fqn.ObjectName,
 	}
 }

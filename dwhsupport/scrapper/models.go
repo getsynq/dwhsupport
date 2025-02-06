@@ -5,10 +5,10 @@ import (
 )
 
 type DwhFqn struct {
-	Instance string
-	Database string
-	Schema   string
-	Table    string
+	InstanceName string
+	DatabaseName string
+	SchemaName   string
+	ObjectName   string
 }
 
 type HasTableFqn interface {
@@ -27,10 +27,10 @@ type TableMetricsRow struct {
 
 func (r TableMetricsRow) TableFqn() DwhFqn {
 	return DwhFqn{
-		Instance: r.Instance,
-		Database: r.Database,
-		Schema:   r.Schema,
-		Table:    r.Table,
+		InstanceName: r.Instance,
+		DatabaseName: r.Database,
+		SchemaName:   r.Schema,
+		ObjectName:   r.Table,
 	}
 }
 
@@ -65,7 +65,7 @@ type SchemaColumnField struct {
 	// Native data type of the column as present in data warehouse.
 	NativeType string `protobuf:"bytes,4,opt,name=native_type,json=nativeType,proto3" json:"native_type,omitempty"`
 	// Description of the column
-	Description string `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
+	Description *string `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
 	// Ordinal position of the column in the table, starting from 1
 	OrdinalPosition int32 `protobuf:"varint,6,opt,name=ordinal_position,json=ordinalPosition,proto3" json:"ordinal_position,omitempty"`
 	// Indicates that the column type could be used as a struct/json in a data warehouse
@@ -78,10 +78,10 @@ type SchemaColumnField struct {
 
 func (r CatalogColumnRow) TableFqn() DwhFqn {
 	return DwhFqn{
-		Instance: r.Instance,
-		Database: r.Database,
-		Schema:   r.Schema,
-		Table:    r.Table,
+		InstanceName: r.Instance,
+		DatabaseName: r.Database,
+		SchemaName:   r.Schema,
+		ObjectName:   r.Table,
 	}
 }
 
@@ -110,10 +110,10 @@ type TableRow struct {
 
 func (r TableRow) TableFqn() DwhFqn {
 	return DwhFqn{
-		Instance: r.Instance,
-		Database: r.Database,
-		Schema:   r.Schema,
-		Table:    r.Table,
+		InstanceName: r.Instance,
+		DatabaseName: r.Database,
+		SchemaName:   r.Schema,
+		ObjectName:   r.Table,
 	}
 }
 
@@ -144,9 +144,9 @@ type WithSetInstance interface {
 
 func (r SqlDefinitionRow) TableFqn() DwhFqn {
 	return DwhFqn{
-		Instance: r.Instance,
-		Database: r.Database,
-		Schema:   r.Schema,
-		Table:    r.Table,
+		InstanceName: r.Instance,
+		DatabaseName: r.Database,
+		SchemaName:   r.Schema,
+		ObjectName:   r.Table,
 	}
 }
