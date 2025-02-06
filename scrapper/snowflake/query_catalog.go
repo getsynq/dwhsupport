@@ -64,8 +64,8 @@ func (d *ShareDesc) String() string {
 	return fmt.Sprintf("Name: %s, Kind: %s, OwnerAccount: %s, DatabaseName: %s, To: %s, Owner: %s, Comment: %s, ListingGlobalName: %s", d.Name, d.Kind, d.OwnerAccount, d.DatabaseName, d.To, d.Owner, d.Comment, d.ListingGlobalName)
 }
 
-func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.ColumnCatalogRow, error) {
-	var results []*scrapper.ColumnCatalogRow
+func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
+	var results []*scrapper.CatalogColumnRow
 
 	allDatabases, err := e.allAllowedDatabases(ctx)
 	if err != nil {
@@ -88,7 +88,7 @@ func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Colum
 		defer rows.Close()
 
 		for rows.Next() {
-			result := scrapper.ColumnCatalogRow{}
+			result := scrapper.CatalogColumnRow{}
 			if err := rows.StructScan(&result); err != nil {
 				return nil, err
 			}

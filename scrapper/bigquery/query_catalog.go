@@ -16,7 +16,7 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.ColumnCatalogRow, error) {
+func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	log := logging.
 		GetLogger(ctx).
 		WithField("executor", "bigquery").
@@ -25,7 +25,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Column
 	datasets := e.executor.GetBigQueryClient().Datasets(ctx)
 	datasets.ListHidden = true
 
-	var rows []*scrapper.ColumnCatalogRow
+	var rows []*scrapper.CatalogColumnRow
 	var mutex sync.Mutex
 
 	pool := workpool.New(50)
@@ -84,7 +84,9 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Column
 		// Collect sharded tables
 		shardLowerBound, shardUpperBound := getValidShardDateRange()
 		shardedTables := getShardedTables(tableIds, shardLowerBound, shardUpperBound)
-		log.Infof("found %d sharded tables", len(shardedTables))
+		if len(shardedTables) > 0 {
+			log.Infof("found %d sharded tables", len(shardedTables))
+		}
 
 		for _, unsafeTableId := range tableIds {
 			tableId := unsafeTableId
@@ -122,7 +124,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Column
 				defer mutex.Unlock()
 
 				for i, field := range tableMeta.Schema {
-					rows = append(rows, &scrapper.ColumnCatalogRow{
+					rows = append(rows, &scrapper.CatalogColumnRow{
 						Database:       e.conf.ProjectId,
 						Schema:         dataset.DatasetID,
 						Table:          tableAlias,

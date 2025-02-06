@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
@@ -13,7 +14,7 @@ import (
 )
 
 var (
-	tableDdlsSql = `
+	sqlDefinitionsSql = `
 	select
 		table_catalog as database,
 		table_schema as schema,
@@ -21,7 +22,7 @@ var (
 		ddl as sql,
 		table_type = 'VIEW' OR table_type = 'MATERIALIZED VIEW' as is_view
 	from
-		region-%[1]s.INFORMATION_SCHEMA.TABLES
+		{REGION}INFORMATION_SCHEMA.TABLES
 	WHERE table_catalog IS NOT NULL AND table_schema IS NOT NULL AND table_name IS NOT NULL AND ddl IS NOT NULL
 	`
 )
@@ -100,7 +101,9 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 		// Collect sharded tables
 		shardLowerBound, shardUpperBound := getValidShardDateRange()
 		shardedTables := getShardedTables(tableIds, shardLowerBound, shardUpperBound)
-		log.Infof("found %d sharded tables", len(shardedTables))
+		if len(shardedTables) > 0 {
+			log.Infof("found %d sharded tables", len(shardedTables))
+		}
 
 		for _, unsafeTableId := range tableIds {
 			tableId := unsafeTableId
@@ -167,7 +170,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 func (e *BigQueryScrapper) querySqlDefinitionsSql(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	log := logging.GetLogger(ctx)
 
-	q := fmt.Sprintf(tableDdlsSql, e.conf.Region)
+	q := strings.ReplaceAll(sqlDefinitionsSql, "{REGION}", fmt.Sprintf("region-%[1]s.", e.conf.Region))
 
 	rows, err := e.queryRows(ctx, q)
 	if err != nil {

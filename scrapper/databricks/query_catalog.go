@@ -22,9 +22,9 @@ type Tags struct {
 	TagValue    string `db:"tag_value" json:"tag_value"`
 }
 
-func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.ColumnCatalogRow, error) {
+func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	log := logging.GetLogger(ctx)
-	var res []*scrapper.ColumnCatalogRow
+	var res []*scrapper.CatalogColumnRow
 
 	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})
 	if err != nil {
@@ -71,7 +71,7 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Colu
 				}
 				tableTags := getTableTags(tagsLookup, tableInfo.CatalogName, tableInfo.SchemaName, tableInfo.Name)
 				for _, columnInfo := range tableInfo.Columns {
-					catalogRow := &scrapper.ColumnCatalogRow{
+					catalogRow := &scrapper.CatalogColumnRow{
 						Instance:     e.conf.WorkspaceUrl,
 						Database:     tableInfo.CatalogName,
 						Schema:       tableInfo.SchemaName,

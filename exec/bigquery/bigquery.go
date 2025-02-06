@@ -16,6 +16,7 @@ type BigQueryConf struct {
 	ProjectId       string
 	Region          string
 	CredentialsJson string
+	CredentialsFile string
 }
 
 type Executor interface {
@@ -28,11 +29,20 @@ type BigQueryExecutor struct {
 }
 
 func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExecutor, error) {
+
+	var options []option.ClientOption
+	options = append(options, option.WithUserAgent("synq-bq-client-v1.0.0"))
+	if len(conf.CredentialsJson) > 0 {
+		options = append(options, option.WithCredentialsJSON([]byte(conf.CredentialsJson)))
+	}
+	if len(conf.CredentialsFile) > 0 {
+		options = append(options, option.WithCredentialsFile(conf.CredentialsFile))
+	}
+
 	client, err := bigquery.NewClient(
 		ctx,
 		conf.ProjectId,
-		option.WithCredentialsJSON([]byte(conf.CredentialsJson)),
-		option.WithUserAgent("synq-bq-client-v1.0.0"),
+		options...,
 	)
 	if err != nil {
 		return nil, err

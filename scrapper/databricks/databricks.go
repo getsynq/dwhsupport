@@ -20,12 +20,12 @@ import (
 
 type DatabricksScrapperConf struct {
 	dwhexecdatabricks.DatabricksConf
-	CatalogBlocklist      string
-	FetchQueryLogs        bool
-	FetchTableMetrics     bool
-	FetchTableMetricsScan bool
-	FetchTableTags        bool
-	UseShowCreateTable    bool
+	CatalogBlocklist           string
+	FetchQueryLogs             bool
+	RefreshTableMetrics        bool
+	RefreshTableMetricsUseScan bool
+	FetchTableTags             bool
+	UseShowCreateTable         bool
 }
 
 var _ scrapper.Scrapper = &DatabricksScrapper{}

@@ -24,6 +24,14 @@ type Auth interface {
 var _ Auth = &TokenAuth{}
 var _ Auth = &OAuthM2mAuth{}
 
+func NewTokenAuth(token string) *TokenAuth {
+	return &TokenAuth{Token: token}
+}
+
+func NewOAuthM2mAuth(clientId, clientSecret string) *OAuthM2mAuth {
+	return &OAuthM2mAuth{ClientId: clientId, ClientSecret: clientSecret}
+}
+
 type TokenAuth struct {
 	Token string
 }
