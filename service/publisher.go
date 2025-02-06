@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	ingestdwhv1 "github.com/getsynq/api/ingest/dwh/v1"
@@ -41,7 +42,11 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 	tagsPerFqn := map[scrapper.DwhFqn]map[string]*ingestdwhv1.Tag{}
 
 	for _, tableRow := range tableRows {
-		info := getOrCreate(tableRow.TableFqn())
+		fqn := tableRow.TableFqn()
+		if f.RejectedFqn(fqn) {
+			continue
+		}
+		info := getOrCreate(fqn)
 		if tableRow.TableType != "" && info.ObjectNativeType == "" {
 			info.ObjectNativeType = tableRow.TableType
 		}
@@ -55,6 +60,9 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 
 	for _, columnRow := range catalogRows {
 		fqn := columnRow.TableFqn()
+		if f.RejectedFqn(fqn) {
+			continue
+		}
 		info := getOrCreate(fqn)
 		info.IsView = info.IsView || columnRow.IsView
 		if info.Description == nil && columnRow.TableComment != nil {
@@ -77,6 +85,9 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 
 	for _, sqlDefinitionRow := range sqlDefinitionRows {
 		fqn := sqlDefinitionRow.TableFqn()
+		if f.RejectedFqn(fqn) {
+			continue
+		}
 		info := getOrCreate(fqn)
 		info.IsView = info.IsView || sqlDefinitionRow.IsView
 		sqlDefinitionRowsPerFqn[fqn] = append(sqlDefinitionRowsPerFqn[fqn], sqlDefinitionRow)
@@ -115,10 +126,6 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 
 		for _, fqn := range fqnsChunk {
 			for _, sqlDefinitionRow := range sqlDefinitionRowsPerFqn[fqn] {
-				if len(sqlDefinitionRow.Sql) == 0 {
-					continue
-				}
-
 				ingestSqlDefinitionsRequest.SqlDefinitions = append(ingestSqlDefinitionsRequest.SqlDefinitions,
 					&ingestdwhv1.SqlDefinition{
 						Fqn: fqnToProto(fqn),
@@ -187,6 +194,10 @@ func (f *Publisher) PublishMetrics(ctx context.Context, connectionId string, sta
 			StateAt:      timestamppb.New(stateAt),
 		}
 		for _, tableMetricsRow := range rowsChunk {
+			if f.RejectedFqn(tableMetricsRow.TableFqn()) {
+				continue
+			}
+
 			var updatedAt *timestamppb.Timestamp
 			if tableMetricsRow.UpdatedAt != nil {
 				updatedAt = timestamppb.New(*tableMetricsRow.UpdatedAt)
@@ -205,6 +216,13 @@ func (f *Publisher) PublishMetrics(ctx context.Context, connectionId string, sta
 	}
 
 	return nil
+}
+
+func (f *Publisher) RejectedFqn(fqn scrapper.DwhFqn) bool {
+	if strings.ToLower(fqn.SchemaName) == "information_schema" {
+		return true
+	}
+	return false
 }
 
 func columnsToProto(rows []*scrapper.CatalogColumnRow) []*ingestdwhv1.SchemaColumn {
