@@ -21,6 +21,9 @@ func NewWorkPool(databaseConnections map[string]*agentdwhv1grpc.Config_Connectio
 
 	// Create a worker for each database connection
 	for dbID, dbConf := range databaseConnections {
+		if dbConf.Disabled {
+			continue
+		}
 		worker := &Worker{
 			connectionId: dbID,
 			parallelism:  int(dbConf.Parallelism),

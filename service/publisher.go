@@ -136,22 +136,35 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 		}
 	}
 
-	for _, fqnsChunk := range lo.Chunk(allFqns, 1000) {
+	// Always send table information, even if there are no tables
+	if len(allFqns) == 0 {
 		ingestTableInformationRequest := &ingestdwhv1.IngestTableInformationRequest{
 			ConnectionId: connectionId,
 			UploadId:     uploadId,
 			StateAt:      timestamppb.New(stateAt),
 		}
-		for _, fqn := range fqnsChunk {
-			info := tableInfo[fqn]
-			info.TableTags = lo.Values(tagsPerFqn[fqn])
-			ingestTableInformationRequest.Tables = append(ingestTableInformationRequest.Tables, info)
+		_, err := f.dwhServiceClient.IngestTableInformation(ctx, ingestTableInformationRequest)
+		if err != nil {
+			return errors.Wrap(err, "failed to ingest table information")
 		}
+	} else {
+		for _, fqnsChunk := range lo.Chunk(allFqns, 1000) {
+			ingestTableInformationRequest := &ingestdwhv1.IngestTableInformationRequest{
+				ConnectionId: connectionId,
+				UploadId:     uploadId,
+				StateAt:      timestamppb.New(stateAt),
+			}
+			for _, fqn := range fqnsChunk {
+				info := tableInfo[fqn]
+				info.TableTags = lo.Values(tagsPerFqn[fqn])
+				ingestTableInformationRequest.Tables = append(ingestTableInformationRequest.Tables, info)
+			}
 
-		if len(ingestTableInformationRequest.Tables) > 0 {
-			_, err := f.dwhServiceClient.IngestTableInformation(ctx, ingestTableInformationRequest)
-			if err != nil {
-				return errors.Wrap(err, "failed to ingest table information")
+			if len(ingestTableInformationRequest.Tables) > 0 {
+				_, err := f.dwhServiceClient.IngestTableInformation(ctx, ingestTableInformationRequest)
+				if err != nil {
+					return errors.Wrap(err, "failed to ingest table information")
+				}
 			}
 		}
 	}

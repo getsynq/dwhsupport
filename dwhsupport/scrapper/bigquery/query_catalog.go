@@ -84,7 +84,9 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 		// Collect sharded tables
 		shardLowerBound, shardUpperBound := getValidShardDateRange()
 		shardedTables := getShardedTables(tableIds, shardLowerBound, shardUpperBound)
-		log.Infof("found %d sharded tables", len(shardedTables))
+		if len(shardedTables) > 0 {
+			log.Infof("found %d sharded tables", len(shardedTables))
+		}
 
 		for _, unsafeTableId := range tableIds {
 			tableId := unsafeTableId

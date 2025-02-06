@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	_ "embed"
+	"fmt"
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec"
@@ -14,7 +15,8 @@ import (
 )
 
 type ClickhouseConf struct {
-	Host            string
+	Hostname        string
+	Port            int
 	Username        string
 	Password        string
 	DefaultDatabase string
@@ -41,7 +43,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 	clickhouseOptions := &clickhouse.Options{
 		Protocol:    clickhouse.Native,
 		DialTimeout: 30 * time.Second,
-		Addr:        []string{conf.Host},
+		Addr:        []string{fmt.Sprintf("%s:%d", conf.Hostname, conf.Port)},
 		Auth: clickhouse.Auth{
 			Username: conf.Username,
 			Password: conf.Password,

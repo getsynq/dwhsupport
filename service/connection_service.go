@@ -135,6 +135,7 @@ func createAvailableConnection(connectionId string, connection *agentdwhv1.Confi
 	conn := &agentdwhv1.Hello_AvailableConnection{
 		ConnectionId: connectionId,
 		Name:         connection.GetName(),
+		Disabled:     connection.GetDisabled(),
 	}
 
 	switch t := connection.Config.(type) {

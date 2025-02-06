@@ -1,5 +1,4 @@
-SELECT ''            as _database,
-       tbls.database as schema,
+SELECT tbls.database as schema,
        tbls.name     as table,
        tbls.engine   as table_type,
        tbls.comment  as description

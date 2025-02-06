@@ -66,6 +66,8 @@ func LoadConfig() (*agentdwhv1.Config, error) {
 				connection.Parallelism = int32(configLoader.Int(fmt.Sprintf("connections.%s.parallelism")))
 			case "name":
 				connection.Name = configLoader.String(fmt.Sprintf("connections.%s.name", connectionId))
+			case "disabled":
+				connection.Disabled = configLoader.Bool(fmt.Sprintf("connections.%s.disabled", connectionId))
 			case "postgres":
 				postgres := &agentdwhv1.PostgresConf{}
 				if err := configLoader.BindStruct(fmt.Sprintf("connections.%s.postgres", connectionId), postgres); err != nil {

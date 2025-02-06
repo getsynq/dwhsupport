@@ -18,7 +18,7 @@ func (e *ClickhouseScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 
 	sqlDefs, err := dwhexecclickhouse.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, querySqlDefinitionsSql,
 		dwhexec.WithPostProcessors[scrapper.SqlDefinitionRow](func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
-			row.Database = e.conf.Host
+			row.Database = e.conf.Hostname
 			if len(e.conf.DatabaseName) > 0 {
 				row.Database = e.conf.DatabaseName
 			}

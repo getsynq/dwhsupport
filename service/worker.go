@@ -63,6 +63,9 @@ func (w *Worker) start() {
 	// Add a WaitGroup to track active operations
 	var wg sync.WaitGroup
 
+	// Track number of active operations
+	activeOps := 0
+
 	for {
 		// Reset timer if it's running
 		if !connectionTimer.Stop() {
@@ -95,7 +98,8 @@ func (w *Worker) start() {
 			}
 			return
 		case <-connectionTimer.C:
-			if w.scrapper != nil {
+			// Only close connection if there are no active operations
+			if w.scrapper != nil && activeOps == 0 {
 				logrus.Infof("Closing idle database connection for %s", w.connectionId)
 				w.scrapper.Close()
 				w.scrapper = nil
@@ -125,11 +129,17 @@ func (w *Worker) start() {
 				return
 			}
 
+			// Increment active operations counter
+			activeOps++
+
 			// Launch goroutine to handle the command
 			wg.Add(1)
 			go func(msg DatabaseCommand) {
-				defer wg.Done()          // Decrement WaitGroup when done
-				defer func() { <-sem }() // Release semaphore slot when done
+				defer wg.Done() // Decrement WaitGroup when done
+				defer func() {
+					<-sem       // Release semaphore slot
+					activeOps-- // Decrement active operations counter
+				}()
 
 				logrus.Infof("Processing command for database %s: %T", w.connectionId, msg)
 				switch msg.(type) {
@@ -141,21 +151,21 @@ func (w *Worker) start() {
 
 					tableRows, err := w.scrapper.QueryTables(ctx)
 					if err != nil {
-						logrus.Errorf("Error fetching catalog for database %s: %v", w.connectionId, err)
+						logrus.Errorf("Error fetching tables for database %s: %v", w.connectionId, err)
 						return
 					}
 					logrus.Infof("Fetched %d tables for database %s", len(tableRows), w.connectionId)
 
 					catalogRows, err := w.scrapper.QueryCatalog(ctx)
 					if err != nil {
-						logrus.Errorf("Error fetching catalog for database %s: %v", w.connectionId, err)
+						logrus.Errorf("Error fetching columns for database %s: %v", w.connectionId, err)
 						return
 					}
-					logrus.Infof("Fetched %d catalog entries for database %s", len(catalogRows), w.connectionId)
+					logrus.Infof("Fetched %d columns for database %s", len(catalogRows), w.connectionId)
 
 					sqlDefinitionsRows, err := w.scrapper.QuerySqlDefinitions(ctx)
 					if err != nil {
-						logrus.Errorf("Error fetching catalog for database %s: %v", w.connectionId, err)
+						logrus.Errorf("Error fetching sql definitions for database %s: %v", w.connectionId, err)
 						return
 					}
 					logrus.Infof("Fetched %d sql definitions for database %s", len(sqlDefinitionsRows), w.connectionId)
@@ -199,7 +209,8 @@ func (w *Worker) connect() (scrapper.Scrapper, error) {
 	case *agentdwhv1.Config_Connection_Clickhouse:
 		return scrapperclickhouse.NewClickhouseScrapper(w.ctx, scrapperclickhouse.ClickhouseScrapperConf{
 			ClickhouseConf: dwhexecclickhouse.ClickhouseConf{
-				Host:            t.Clickhouse.GetHost(),
+				Hostname:        t.Clickhouse.GetHost(),
+				Port:            int(t.Clickhouse.GetPort()),
 				Username:        t.Clickhouse.GetUsername(),
 				Password:        t.Clickhouse.GetPassword(),
 				DefaultDatabase: t.Clickhouse.GetDatabase(),

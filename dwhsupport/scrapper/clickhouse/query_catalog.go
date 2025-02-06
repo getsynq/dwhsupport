@@ -16,7 +16,7 @@ func (e *ClickhouseScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 
 	return dwhexecclickhouse.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, queryCatalogSql,
 		dwhexec.WithPostProcessors[scrapper.CatalogColumnRow](func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
-			row.Database = e.conf.Host
+			row.Database = e.conf.Hostname
 			if len(e.conf.DatabaseName) > 0 {
 				row.Database = e.conf.DatabaseName
 			}
