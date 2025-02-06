@@ -180,12 +180,21 @@ func (w *Worker) start() {
 					lastMetricFetchTime := time.Now().UTC()
 					ctx, c := context.WithTimeout(w.ctx, 55*time.Minute)
 					defer c()
+
+					stateAt := time.Now().UTC()
+
 					metricRows, err := w.scrapper.QueryTableMetrics(ctx, w.lastMetricFetchTime)
 					if err != nil {
 						logrus.Errorf("Error fetching metrics for database %s: %v", w.connectionId, err)
 						return
 					}
 					logrus.Infof("Fetched %d metrics for database %s", len(metricRows), w.connectionId)
+
+					err = w.publisher.PublishMetrics(ctx, w.connectionId, stateAt, metricRows)
+					if err != nil {
+						logrus.Errorf("Error publishing metrics for database %s: %v", w.connectionId, err)
+						return
+					}
 
 					w.lastMetricFetchTime = lastMetricFetchTime
 				}

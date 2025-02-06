@@ -173,6 +173,40 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 	return nil
 }
 
+func (f *Publisher) PublishMetrics(ctx context.Context, connectionId string, stateAt time.Time, rows []*scrapper.TableMetricsRow) error {
+	if len(rows) == 0 {
+		return nil
+	}
+
+	uploadId := uuid.NewString()
+
+	for _, rowsChunk := range lo.Chunk(rows, 1000) {
+		ingestObjectMetricsRequest := &ingestdwhv1.IngestObjectMetricsRequest{
+			ConnectionId: connectionId,
+			UploadId:     uploadId,
+			StateAt:      timestamppb.New(stateAt),
+		}
+		for _, tableMetricsRow := range rowsChunk {
+			var updatedAt *timestamppb.Timestamp
+			if tableMetricsRow.UpdatedAt != nil {
+				updatedAt = timestamppb.New(*tableMetricsRow.UpdatedAt)
+			}
+			ingestObjectMetricsRequest.Metrics = append(ingestObjectMetricsRequest.Metrics, &ingestdwhv1.ObjectMetrics{
+				Fqn:       fqnToProto(tableMetricsRow.TableFqn()),
+				RowCount:  tableMetricsRow.RowCount,
+				UpdatedAt: updatedAt,
+				SizeBytes: tableMetricsRow.SizeBytes,
+			})
+		}
+		_, err := f.dwhServiceClient.IngestObjectMetrics(ctx, ingestObjectMetricsRequest)
+		if err != nil {
+			return errors.Wrap(err, "failed to ingest table information")
+		}
+	}
+
+	return nil
+}
+
 func columnsToProto(rows []*scrapper.CatalogColumnRow) []*ingestdwhv1.SchemaColumn {
 	var res []*ingestdwhv1.SchemaColumn
 	for _, row := range rows {
