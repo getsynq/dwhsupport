@@ -4,7 +4,7 @@ agent:
 synq:
   client_id: "LybhNQe0hkF0m5k4PEqa26zqucWRTI6F"
   client_secret: "OVhIRHpQQUNQazM0NFdQOW9IZHdhdHlIRVlrbW5nVWM="
-  endpoint: localhost:8000
+#  endpoint: localhost:8000
 
 connections:
   "pg-local":
