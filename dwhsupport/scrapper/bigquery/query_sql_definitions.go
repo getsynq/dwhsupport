@@ -170,12 +170,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 func (e *BigQueryScrapper) querySqlDefinitionsSql(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	log := logging.GetLogger(ctx)
 
-	q := sqlDefinitionsSql
-	if e.conf.Region == "" {
-		q = strings.ReplaceAll(q, "{REGION}", "")
-	} else {
-		q = strings.ReplaceAll(q, "{REGION}", fmt.Sprintf("region-%[1]s.", e.conf.Region))
-	}
+	q := strings.ReplaceAll(sqlDefinitionsSql, "{REGION}", fmt.Sprintf("region-%[1]s.", e.conf.Region))
 
 	rows, err := e.queryRows(ctx, q)
 	if err != nil {
