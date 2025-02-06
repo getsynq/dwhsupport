@@ -2,9 +2,9 @@ agent:
   name: lustefaniak
   log_level: trace
 synq:
-  client_id: "Y3tzSMJVojRFuYWUBC055l2fFqKHemjg"
-  client_secret: "c0lnU1VaQko4UTg1RVd4N3R3VnFSUDVvV1oyalhOUlo="
-  endpoint: localhost:50051
+  client_id: "LybhNQe0hkF0m5k4PEqa26zqucWRTI6F"
+  client_secret: "OVhIRHpQQUNQazM0NFdQOW9IZHdhdHlIRVlrbW5nVWM="
+  endpoint: localhost:8000
 
 connections:
   "pg-local":

@@ -31,10 +31,11 @@ func LoadConfig() (*agentdwhv1.Config, error) {
 		Name: hostname,
 	}
 	synq := &agentdwhv1.Config_SYNQ{
-		ClientId:     "",
-		ClientSecret: "",
-		Endpoint:     "developer.synq.io:443",
-		OauthUrl:     "https://developer.synq.io/oauth2/token",
+		ClientId:       "",
+		ClientSecret:   "",
+		Endpoint:       "developer.synq.io:443",
+		IngestEndpoint: "developer.synq.io:443",
+		OauthUrl:       "https://developer.synq.io/oauth2/token",
 	}
 	connections := make(map[string]*agentdwhv1.Config_Connection)
 	if s := configLoader.String("agent.name"); s != "" {

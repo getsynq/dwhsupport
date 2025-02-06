@@ -13,9 +13,7 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 )
 
-func NewGrpcConnection(ctx context.Context, config *agentdwhv1.Config) (*grpc.ClientConn, error) {
-
-	endpoint := config.GetSynq().GetEndpoint()
+func NewGrpcConnection(ctx context.Context, config *agentdwhv1.Config, endpoint string) (*grpc.ClientConn, error) {
 	host, _, err := net.SplitHostPort(endpoint)
 	if err != nil {
 		return nil, err

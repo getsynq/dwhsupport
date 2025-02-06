@@ -9,7 +9,6 @@ import (
 	agentdwhv1grpc "github.com/getsynq/api/agent/dwh/v1"
 	ingestdwhv1 "github.com/getsynq/api/ingest/dwh/v1"
 	"github.com/getsynq/synq-dwh/config"
-	"github.com/getsynq/synq-dwh/server"
 	"github.com/getsynq/synq-dwh/service"
 	"github.com/getsynq/synq-dwh/synq"
 	"github.com/sirupsen/logrus"
@@ -28,15 +27,20 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill, syscall.SIGTERM)
 	defer cancel()
 
-	server.StartMockServer(ctx)
-
-	grpcConnection, err := synq.NewGrpcConnection(ctx, conf)
+	agentConnection, err := synq.NewGrpcConnection(ctx, conf, conf.GetSynq().GetEndpoint())
 	if err != nil {
 		logrus.Panic(err)
 	}
-
-	agentServiceClient := agentdwhv1grpc.NewDwhAgentServiceClient(grpcConnection)
-	dwhServiceClient := ingestdwhv1.NewDwhServiceClient(grpcConnection)
+	ingestConnection := agentConnection
+	if conf.GetSynq().GetEndpoint() != conf.GetSynq().GetIngestEndpoint() {
+		ingestConnection, err = synq.NewGrpcConnection(ctx, conf, conf.GetSynq().GetIngestEndpoint())
+		if err != nil {
+			logrus.Panic(err)
+		}
+	}
+	
+	agentServiceClient := agentdwhv1grpc.NewDwhAgentServiceClient(agentConnection)
+	dwhServiceClient := ingestdwhv1.NewDwhServiceClient(ingestConnection)
 
 	// Create and start connection service
 	connectionService := service.NewConnectionService(agentServiceClient, conf)
