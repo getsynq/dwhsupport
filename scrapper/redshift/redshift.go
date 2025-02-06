@@ -29,7 +29,7 @@ func (e *RedshiftScrapper) Dialect() string {
 	return "redshift"
 }
 
-func NewRedshiftExecutor(ctx context.Context, conf *RedshiftScrapperConf) (*RedshiftScrapper, error) {
+func NewRedshiftScrapper(ctx context.Context, conf *RedshiftScrapperConf) (*RedshiftScrapper, error) {
 	executor, err := dwhexecredshift.NewRedshiftExecutor(ctx, &conf.RedshiftConf)
 	if err != nil {
 		return nil, err

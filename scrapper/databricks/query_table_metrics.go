@@ -24,7 +24,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 	var errorMessages []string
 
 	noScan := " NOSCAN"
-	if e.conf.FetchTableMetricsScan {
+	if e.conf.RefreshTableMetricsUseScan {
 		noScan = ""
 	}
 
@@ -140,7 +140,7 @@ func (e *DatabricksScrapper) shouldRefreshTableInfo(lastMetricsFetchTime time.Ti
 	if tableInfo.TableType == servicecatalog.TableTypeView || tableInfo.TableType == servicecatalog.TableTypeMaterializedView {
 		return false
 	}
-	if !e.conf.FetchTableMetrics {
+	if !e.conf.RefreshTableMetrics {
 		return false
 	}
 

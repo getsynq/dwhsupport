@@ -24,7 +24,7 @@ var ErrUnsupported = errors.New("unsupported")
 type Scrapper interface {
 	Dialect() string
 	ValidateConfiguration(ctx context.Context) (warnings []string, err error)
-	QueryCatalog(ctx context.Context) ([]*ColumnCatalogRow, error)
+	QueryCatalog(ctx context.Context) ([]*CatalogColumnRow, error)
 	QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*TableMetricsRow, error)
 	QuerySqlDefinitions(ctx context.Context) ([]*SqlDefinitionRow, error)
 	QueryTables(ctx context.Context) ([]*TableRow, error)

@@ -12,9 +12,9 @@ import (
 //go:embed query_catalog.sql
 var queryCatalogSql string
 
-func (e *MySQLScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.ColumnCatalogRow, error) {
-	return dwhexecmysql.NewQuerier[scrapper.ColumnCatalogRow](e.executor).QueryMany(ctx, queryCatalogSql,
-		dwhexec.WithPostProcessors(func(row *scrapper.ColumnCatalogRow) (*scrapper.ColumnCatalogRow, error) {
+func (e *MySQLScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
+	return dwhexecmysql.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, queryCatalogSql,
+		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Database = e.conf.Host
 			return row, nil
 		}),

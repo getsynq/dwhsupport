@@ -24,9 +24,7 @@ import (
 
 type BigQueryScrapperConf struct {
 	dwhexecbigquery.BigQueryConf
-	Blocklist         string
-	FetchQueryLogs    bool
-	FetchTableMetrics bool
+	Blocklist string
 }
 
 type Executor interface {

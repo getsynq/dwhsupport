@@ -12,11 +12,14 @@ import (
 //go:embed query_catalog.sql
 var queryCatalogSql string
 
-func (e *ClickhouseScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.ColumnCatalogRow, error) {
+func (e *ClickhouseScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 
-	return dwhexecclickhouse.NewQuerier[scrapper.ColumnCatalogRow](e.executor).QueryMany(ctx, queryCatalogSql,
-		dwhexec.WithPostProcessors[scrapper.ColumnCatalogRow](func(row *scrapper.ColumnCatalogRow) (*scrapper.ColumnCatalogRow, error) {
-			row.Database = e.conf.DatabaseName
+	return dwhexecclickhouse.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, queryCatalogSql,
+		dwhexec.WithPostProcessors[scrapper.CatalogColumnRow](func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
+			row.Database = e.conf.Hostname
+			if len(e.conf.DatabaseName) > 0 {
+				row.Database = e.conf.DatabaseName
+			}
 			return row, nil
 		}),
 	)
