@@ -94,6 +94,8 @@ func (s *ConnectionService) connect() error {
 		return err
 	}
 
+	logrus.Infof("Connected to SYNQ control plane")
+
 	// Start receiving messages
 	for {
 		msg, err := bidi.Recv()
