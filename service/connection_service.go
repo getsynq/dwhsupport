@@ -96,18 +96,54 @@ func (s *ConnectionService) connect() error {
 
 	logrus.Infof("Connected to SYNQ control plane")
 
-	// Start receiving messages
-	for {
-		msg, err := bidi.Recv()
-		if err != nil {
-			return err
-		}
-		logrus.WithField("message", messageDump(msg)).Debug("Received message")
+	// Create ticker for periodic hello messages
+	ticker := time.NewTicker(4 * time.Minute)
+	defer ticker.Stop()
 
+	// Create error channel for receiving goroutine
+	errChan := make(chan error, 1)
+
+	// Start receiving messages in a separate goroutine
+	go func() {
+		for {
+			select {
+			case <-s.ctx.Done():
+				return
+			default:
+			}
+			msg, err := bidi.Recv()
+			if err != nil {
+				errChan <- err
+				return
+			}
+			logrus.WithField("message", messageDump(msg)).Debug("Received message")
+
+			select {
+			case s.msgQueue <- msg:
+			default:
+				logrus.WithField("message", messageDump(msg)).Error("Message queue full, dropping message")
+			}
+		}
+	}()
+
+	// Handle ticker and errors
+	for {
 		select {
-		case s.msgQueue <- msg:
-		default:
-			logrus.WithField("message", messageDump(msg)).Error("Message queue full, dropping message")
+		case <-ticker.C:
+			// Send periodic hello message
+			err = bidi.Send(&agentdwhv1.ConnectRequest{
+				Message: &agentdwhv1.ConnectRequest_Hello{
+					Hello: createHelloMessage(s.config),
+				},
+			})
+			if err != nil {
+				return err
+			}
+			logrus.Debug("Sent periodic hello message")
+		case err := <-errChan:
+			return err
+		case <-s.ctx.Done():
+			return s.ctx.Err()
 		}
 	}
 }
