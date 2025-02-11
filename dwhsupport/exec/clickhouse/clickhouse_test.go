@@ -27,7 +27,8 @@ type res struct {
 func (s *ClickhouseSuite) TestSomething() {
 	ctx := context.TODO()
 	execer, err := NewClickhouseExecutor(ctx, &ClickhouseConf{
-		Host:            "nogwv291ou.europe-west4.gcp.clickhouse.cloud:9440",
+		Hostname:        "nogwv291ou.europe-west4.gcp.clickhouse.cloud",
+		Port:            9440,
 		Username:        "default",
 		Password:        "McDp5Av8VDY~i",
 		DefaultDatabase: "default",

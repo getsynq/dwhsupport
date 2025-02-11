@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="go test dwhsupport" type="GoTestRunConfiguration" factoryName="Go Test" nameIsGenerated="true">
+    <module name="dwhsupport" />
+    <working_directory value="$PROJECT_DIR$/../dwhsupport" />
+    <go_parameters value="-v" />
+    <kind value="DIRECTORY" />
+    <package value="github.com/getsynq/dwhsupport" />
+    <directory value="$PROJECT_DIR$/../dwhsupport" />
+    <filePath value="$PROJECT_DIR$" />
+    <framework value="gotest" />
+    <method v="2" />
+  </configuration>
+</component>
