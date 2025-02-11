@@ -12,8 +12,8 @@ import (
 )
 
 type DuckDBConf struct {
-	Database        string
-	MotherduckToken string
+	MotherduckAccount string
+	MotherduckToken   string
 }
 
 type Executor interface {
@@ -33,7 +33,7 @@ func (e *DuckDBExecutor) GetDb() *sqlx.DB {
 
 func NewDuckDBExecutor(ctx context.Context, conf *DuckDBConf) (*DuckDBExecutor, error) {
 
-	dsn := fmt.Sprintf("md:%s?motherduck_token=%s", conf.Database, url.QueryEscape(conf.MotherduckToken))
+	dsn := fmt.Sprintf("md:%s?motherduck_token=%s", conf.MotherduckAccount, url.QueryEscape(conf.MotherduckToken))
 
 	db, err := sqlx.Open("duckdb", dsn)
 
