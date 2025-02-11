@@ -1,2 +1,2 @@
-# synq-dwh
-SYNQ data-warehouse agent component to obtain schemas, metrics and run monitors on premise
+# dwhsupport
+Shared code to access DWH in more standardised way
