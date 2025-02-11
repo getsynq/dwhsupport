@@ -1,5 +1,4 @@
 agent:
-  name: lustefaniak
   log_level: trace
 synq:
   client_id: "LybhNQe0hkF0m5k4PEqa26zqucWRTI6F"
