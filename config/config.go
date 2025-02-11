@@ -64,7 +64,7 @@ func LoadConfig() (*agentdwhv1.Config, error) {
 		for key := range sub {
 			switch key {
 			case "parallelism":
-				connection.Parallelism = int32(configLoader.Int(fmt.Sprintf("connections.%s.parallelism")))
+				connection.Parallelism = int32(configLoader.Int(fmt.Sprintf("connections.%s.parallelism", connectionId)))
 			case "name":
 				connection.Name = configLoader.String(fmt.Sprintf("connections.%s.name", connectionId))
 			case "disabled":
