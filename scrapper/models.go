@@ -127,11 +127,11 @@ type SqlDefinitionRow struct {
 }
 
 type DatabaseRow struct {
-	Instance      string `db:"instance" json:"instance" ch:"instance" bigquery:"instance"`
-	Database      string `db:"database" json:"database" ch:"_database" bigquery:"database"`
-	Description   string `db:"description" json:"description" ch:"description" bigquery:"description"`
-	DatabaseType  string `db:"database_type" json:"database_type" ch:"database_type" bigquery:"database_type"`
-	DatabaseOwner string `db:"database_owner" json:"database_owner" ch:"database_owner" bigquery:"database_owner"`
+	Instance      string  `db:"instance" json:"instance" ch:"instance" bigquery:"instance"`
+	Database      string  `db:"database" json:"database" ch:"_database" bigquery:"database"`
+	Description   *string `db:"description" json:"description" ch:"description" bigquery:"description"`
+	DatabaseType  *string `db:"database_type" json:"database_type" ch:"database_type" bigquery:"database_type"`
+	DatabaseOwner *string `db:"database_owner" json:"database_owner" ch:"database_owner" bigquery:"database_owner"`
 }
 
 func (r DatabaseRow) SetInstance(instance string) {

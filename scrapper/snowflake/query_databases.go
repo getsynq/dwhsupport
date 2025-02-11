@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/samber/lo"
 )
 
 func (e *SnowflakeScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {
@@ -19,9 +20,9 @@ func (e *SnowflakeScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.Dat
 		res = append(res, &scrapper.DatabaseRow{
 			Instance:      e.conf.Account,
 			Database:      db.Name,
-			Description:   db.Comment,
-			DatabaseType:  db.Kind,
-			DatabaseOwner: db.Origin,
+			Description:   lo.EmptyableToPtr(db.Comment),
+			DatabaseType:  lo.EmptyableToPtr(db.Kind),
+			DatabaseOwner: lo.EmptyableToPtr(db.Origin),
 		})
 	}
 	return res, nil

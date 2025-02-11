@@ -2,7 +2,7 @@ package duckdb
 
 import (
 	"context"
-
+	
 	dwhexecduckdb "github.com/getsynq/dwhsupport/exec/duckdb"
 	"github.com/getsynq/dwhsupport/scrapper"
 	_ "github.com/lib/pq"
