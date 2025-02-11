@@ -74,6 +74,10 @@ func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQ
 	return &BigQueryScrapper{executor: executor, conf: conf, blocklist: blocklist}, nil
 }
 
+func (e *BigQueryScrapper) Executor() *dwhexecbigquery.BigQueryExecutor {
+	return e.executor
+}
+
 func (e *BigQueryScrapper) queryRows(ctx context.Context, q string, args ...interface{}) (*bigquery.RowIterator, error) {
 	query := e.executor.GetBigQueryClient().Query(q)
 	job, err := query.Run(ctx)
