@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="go test synq-dwh" type="GoTestRunConfiguration" factoryName="Go Test" nameIsGenerated="true">
+    <module name="synq-dwh" />
+    <working_directory value="$PROJECT_DIR$/../synq-dwh" />
+    <go_parameters value="-v" />
+    <kind value="DIRECTORY" />
+    <package value="github.com/getsynq/synq-dwh" />
+    <directory value="$PROJECT_DIR$/../synq-dwh" />
+    <filePath value="$PROJECT_DIR$" />
+    <framework value="gotest" />
+    <method v="2">
+      <option name="GoBeforeRunTask" command="generate" />
+    </method>
+  </configuration>
+</component>
