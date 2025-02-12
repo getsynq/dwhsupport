@@ -17,6 +17,8 @@ import (
 //go:generate bash build/version.sh
 func main() {
 
+	initLogger()
+
 	conf, err := config.LoadConfig()
 	if err != nil {
 		config.ExplainError(err)
@@ -38,7 +40,7 @@ func main() {
 			logrus.Panic(err)
 		}
 	}
-	
+
 	agentServiceClient := agentdwhv1grpc.NewDwhAgentServiceClient(agentConnection)
 	dwhServiceClient := ingestdwhv1.NewDwhServiceClient(ingestConnection)
 
@@ -73,6 +75,13 @@ func main() {
 			}
 		}
 	}
+}
+
+func initLogger() {
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp:          true,
+		DisableLevelTruncation: true,
+	})
 }
 
 func setupLogger(agentConf *agentdwhv1grpc.Config_Agent) {
