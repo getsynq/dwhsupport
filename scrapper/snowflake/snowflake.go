@@ -69,6 +69,10 @@ type SnowflakeScrapper struct {
 	executor    *dwhexecsnowflake.SnowflakeExecutor
 }
 
+func (e *SnowflakeScrapper) GetExistingDbs() ([]*DbDesc, error) {
+	return e.existingDbs.Get()
+}
+
 func (e *SnowflakeScrapper) Dialect() string {
 	return "snowflake"
 }
@@ -140,6 +144,10 @@ func (e *SnowflakeScrapper) Close() error {
 
 func (e *SnowflakeScrapper) allAllowedDatabases(ctx context.Context) ([]*DbDesc, error) {
 	return e.existingDbs.Get()
+}
+
+func (e *SnowflakeScrapper) Executor() *dwhexecsnowflake.SnowflakeExecutor {
+	return e.executor
 }
 
 func ignoreShare(ownerAccount string) bool {
