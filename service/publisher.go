@@ -95,86 +95,65 @@ func (f *Publisher) PublishCatalog(ctx context.Context, connectionId string, sta
 
 	allFqns := lo.Keys(tableInfo)
 
-	for _, fqnsChunk := range lo.Chunk(allFqns, 100) {
-		ingestCatalogColumnsRequest := &ingestdwhv1.IngestSchemasRequest{
-			ConnectionId: connectionId,
-			UploadId:     uploadId,
-			StateAt:      timestamppb.New(stateAt),
-		}
+	ingestCatalogColumnsRequest := &ingestdwhv1.IngestSchemasRequest{
+		ConnectionId: connectionId,
+		UploadId:     uploadId,
+		StateAt:      timestamppb.New(stateAt),
+	}
 
-		for _, fqn := range fqnsChunk {
-			ingestCatalogColumnsRequest.Schemas = append(ingestCatalogColumnsRequest.Schemas,
-				&ingestdwhv1.Schema{
-					Fqn:     fqnToProto(fqn),
-					Columns: columnsToProto(catalogRowsPerFqn[fqn]),
+	for _, fqn := range allFqns {
+		ingestCatalogColumnsRequest.Schemas = append(ingestCatalogColumnsRequest.Schemas,
+			&ingestdwhv1.Schema{
+				Fqn:     fqnToProto(fqn),
+				Columns: columnsToProto(catalogRowsPerFqn[fqn]),
+			},
+		)
+	}
+
+	_, err := f.dwhServiceClient.IngestSchemas(ctx, ingestCatalogColumnsRequest)
+	if err != nil {
+		return errors.Wrap(err, "failed to ingest schemas")
+	}
+
+	ingestSqlDefinitionsRequest := &ingestdwhv1.IngestSqlDefinitionsRequest{
+		ConnectionId: connectionId,
+		UploadId:     uploadId,
+		StateAt:      timestamppb.New(stateAt),
+	}
+
+	for _, fqn := range allFqns {
+		for _, sqlDefinitionRow := range sqlDefinitionRowsPerFqn[fqn] {
+			ingestSqlDefinitionsRequest.SqlDefinitions = append(ingestSqlDefinitionsRequest.SqlDefinitions,
+				&ingestdwhv1.SqlDefinition{
+					Fqn: fqnToProto(fqn),
+					Sql: sqlDefinitionRow.Sql,
 				},
 			)
 		}
+	}
 
-		_, err := f.dwhServiceClient.IngestSchemas(ctx, ingestCatalogColumnsRequest)
+	if len(ingestSqlDefinitionsRequest.SqlDefinitions) > 0 {
+		_, err := f.dwhServiceClient.IngestSqlDefinitions(ctx, ingestSqlDefinitionsRequest)
 		if err != nil {
-			return errors.Wrap(err, "failed to ingest schemas")
+			return errors.Wrap(err, "failed to ingest sql definitions")
 		}
 	}
 
-	for _, fqnsChunk := range lo.Chunk(allFqns, 100) {
-		ingestSqlDefinitionsRequest := &ingestdwhv1.IngestSqlDefinitionsRequest{
-			ConnectionId: connectionId,
-			UploadId:     uploadId,
-			StateAt:      timestamppb.New(stateAt),
-		}
-
-		for _, fqn := range fqnsChunk {
-			for _, sqlDefinitionRow := range sqlDefinitionRowsPerFqn[fqn] {
-				ingestSqlDefinitionsRequest.SqlDefinitions = append(ingestSqlDefinitionsRequest.SqlDefinitions,
-					&ingestdwhv1.SqlDefinition{
-						Fqn: fqnToProto(fqn),
-						Sql: sqlDefinitionRow.Sql,
-					},
-				)
-			}
-		}
-
-		if len(ingestSqlDefinitionsRequest.SqlDefinitions) > 0 {
-			_, err := f.dwhServiceClient.IngestSqlDefinitions(ctx, ingestSqlDefinitionsRequest)
-			if err != nil {
-				return errors.Wrap(err, "failed to ingest sql definitions")
-			}
-		}
+	ingestTableInformationRequest := &ingestdwhv1.IngestObjectInformationRequest{
+		ConnectionId: connectionId,
+		UploadId:     uploadId,
+		StateAt:      timestamppb.New(stateAt),
+	}
+	for _, fqn := range allFqns {
+		info := tableInfo[fqn]
+		info.Tags = lo.Values(tagsPerFqn[fqn])
+		info.IsTable = !info.IsView
+		ingestTableInformationRequest.Objects = append(ingestTableInformationRequest.Objects, info)
 	}
 
-	// Always send table information, even if there are no tables
-	if len(allFqns) == 0 {
-		ingestTableInformationRequest := &ingestdwhv1.IngestObjectInformationRequest{
-			ConnectionId: connectionId,
-			UploadId:     uploadId,
-			StateAt:      timestamppb.New(stateAt),
-		}
-		_, err := f.dwhServiceClient.IngestObjectInformation(ctx, ingestTableInformationRequest)
-		if err != nil {
-			return errors.Wrap(err, "failed to ingest table information")
-		}
-	} else {
-		for _, fqnsChunk := range lo.Chunk(allFqns, 1000) {
-			ingestTableInformationRequest := &ingestdwhv1.IngestObjectInformationRequest{
-				ConnectionId: connectionId,
-				UploadId:     uploadId,
-				StateAt:      timestamppb.New(stateAt),
-			}
-			for _, fqn := range fqnsChunk {
-				info := tableInfo[fqn]
-				info.Tags = lo.Values(tagsPerFqn[fqn])
-				info.IsTable = !info.IsView
-				ingestTableInformationRequest.Objects = append(ingestTableInformationRequest.Objects, info)
-			}
-
-			if len(ingestTableInformationRequest.Objects) > 0 {
-				_, err := f.dwhServiceClient.IngestObjectInformation(ctx, ingestTableInformationRequest)
-				if err != nil {
-					return errors.Wrap(err, "failed to ingest table information")
-				}
-			}
-		}
+	_, err = f.dwhServiceClient.IngestObjectInformation(ctx, ingestTableInformationRequest)
+	if err != nil {
+		return errors.Wrap(err, "failed to ingest table information")
 	}
 
 	return nil
