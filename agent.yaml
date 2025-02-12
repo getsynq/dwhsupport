@@ -1,8 +1,8 @@
 agent:
   log_level: trace
 synq:
-  client_id: "xrNzaoneeXcclkxB0VDbe4Drhz3CvOnP"
-  client_secret: "UnRWb0hFNHk2dkhKMm5BMElHWFJMRW1LY0lZRHVlUG0="
+  client_id: "4pifyGeDDytnUnZyf8gNAHvR8W0LS4Zk"
+  client_secret: "dGhrZ0Y4ako0M0ZrbkljM3k3bjV6dVVwNlBoZlFxalE="
 #  endpoint: localhost:8000
 
 connections:
