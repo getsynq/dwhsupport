@@ -14,5 +14,5 @@ from clusterAllReplicas(default, system.tables) tbls
          left join parts
                    ON tbls.database = parts.schema
                        AND tbls.name = parts.table
-where has_own_data = 1
+where has_own_data = 1 AND schema NOT IN ('system', 'information_schema')
 settings join_use_nulls=1
