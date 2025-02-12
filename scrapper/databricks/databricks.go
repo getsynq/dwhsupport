@@ -104,6 +104,14 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 	return &DatabricksScrapper{client: client, conf: conf, blocklist: blocklist, lazyExecutor: executor}, nil
 }
 
+func (e *DatabricksScrapper) GetApiClient() *databricks.WorkspaceClient {
+	return e.client
+}
+
+func (e *DatabricksScrapper) Executor() (*dwhexecdatabricks.DatabricksExecutor, error) {
+	return e.lazyExecutor.Get()
+}
+
 func (e *DatabricksScrapper) isIgnoredCatalog(catalogInfo servicecatalog.CatalogInfo) bool {
 	if catalogInfo.CatalogType == servicecatalog.CatalogTypeSystemCatalog {
 		return true
