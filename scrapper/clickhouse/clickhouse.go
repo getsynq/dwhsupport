@@ -33,6 +33,10 @@ func NewClickhouseScrapper(ctx context.Context, conf ClickhouseScrapperConf) (*C
 	return &ClickhouseScrapper{executor: executor, conf: conf}, nil
 }
 
+func (e *ClickhouseScrapper) Executor() *dwhexecclickhouse.ClickhouseExecutor {
+	return e.executor
+}
+
 func (e *ClickhouseScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
