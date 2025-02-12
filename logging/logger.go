@@ -17,7 +17,7 @@ func WithLogger(ctx context.Context, logger logrus.FieldLogger) context.Context 
 func GetLogger(ctx context.Context) logrus.FieldLogger {
 	v := ctx.Value(loggerKey{})
 	if v == nil {
-		return logrus.New()
+		return logrus.StandardLogger()
 	}
 	return v.(logrus.FieldLogger)
 }
