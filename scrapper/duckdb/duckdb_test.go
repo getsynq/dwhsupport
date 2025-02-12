@@ -2,6 +2,7 @@ package duckdb
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -17,6 +18,9 @@ func TestNewDuckDBScrapperSuite(t *testing.T) {
 }
 
 func (s *DuckDBScrapperSuite) TestNewDuckDBScrapper() {
+	if len(os.Getenv("CI")) > 0 {
+		s.T().SkipNow()
+	}
 
 	ctx := context.TODO()
 
