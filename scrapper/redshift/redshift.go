@@ -41,6 +41,10 @@ func NewRedshiftScrapper(ctx context.Context, conf *RedshiftScrapperConf) (*Reds
 	}, nil
 }
 
+func (e *RedshiftScrapper) Executor() *dwhexecredshift.RedshiftExecutor {
+	return e.executor
+}
+
 func (e *RedshiftScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
