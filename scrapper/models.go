@@ -1,6 +1,7 @@
 package scrapper
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -38,6 +39,10 @@ type Tag struct {
 	// Optionally prefix (`tag.` / `policytag.` / etc)
 	TagName  string `json:"tag_name"`
 	TagValue string `json:"tag_value"`
+}
+
+func (t Tag) String() string {
+	return fmt.Sprintf("%s:%s", t.TagName, t.TagValue)
 }
 
 type CatalogColumnRow struct {
@@ -106,6 +111,9 @@ type TableRow struct {
 	Table       string  `db:"table" json:"table" ch:"table" bigquery:"table"`
 	TableType   string  `db:"table_type" json:"table_type" ch:"table_type" bigquery:"table_type"`
 	Description *string `db:"description" json:"description" ch:"description" bigquery:"description"`
+	Tags        []*Tag  `db:"tags" json:"tags"`
+	IsView      bool    `db:"is_view" json:"is_view" ch:"is_view"`
+	IsTable     bool    `db:"is_table" json:"is_table" ch:"is_table"`
 }
 
 func (r TableRow) TableFqn() DwhFqn {
