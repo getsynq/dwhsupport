@@ -2,7 +2,7 @@ package mysql
 
 import (
 	"context"
-	
+
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
 	_ "github.com/go-sql-driver/mysql"

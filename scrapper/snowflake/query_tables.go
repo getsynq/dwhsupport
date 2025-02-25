@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"fmt"
+
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 

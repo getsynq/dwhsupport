@@ -3,8 +3,9 @@ package snowflake
 import (
 	"context"
 	"fmt"
-	"github.com/getsynq/dwhsupport/scrapper"
 	"time"
+
+	"github.com/getsynq/dwhsupport/scrapper"
 )
 
 var tableMetricsSql = `
