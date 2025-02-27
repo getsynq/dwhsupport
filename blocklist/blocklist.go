@@ -1,9 +1,10 @@
 package blocklist
 
 import (
-	"github.com/samber/lo"
 	"regexp"
 	"strings"
+
+	"github.com/samber/lo"
 )
 
 type Blocklist interface {

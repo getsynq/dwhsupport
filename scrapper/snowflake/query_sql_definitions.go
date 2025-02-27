@@ -3,9 +3,10 @@ package snowflake
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/xxjwxc/gowp/workpool"
-	"strings"
 )
 
 var sqlDefinitionsQuery = `
