@@ -158,3 +158,34 @@ func (r SqlDefinitionRow) TableFqn() DwhFqn {
 		ObjectName:   r.Table,
 	}
 }
+
+type Value interface {
+	isValue()
+}
+
+type DoubleValue float64
+
+func (DoubleValue) isValue() {}
+
+type IntValue int64
+
+func (IntValue) isValue() {}
+
+type TimeValue time.Time
+
+func (TimeValue) isValue() {}
+
+type IgnoredValue struct{}
+
+func (IgnoredValue) isValue() {}
+
+type ColumnValue struct {
+	Name   string
+	Value  Value
+	IsNull bool
+}
+
+type CustomMetricsRow struct {
+	Segment      *string `db:"segment" json:"segment" ch:"segment" bigquery:"segment"`
+	ColumnValues []*ColumnValue
+}
