@@ -20,10 +20,6 @@ type ClickhouseScrapper struct {
 	executor *dwhexecclickhouse.ClickhouseExecutor
 }
 
-func (e *ClickhouseScrapper) Dialect() string {
-	return "clickhouse"
-}
-
 func NewClickhouseScrapper(ctx context.Context, conf ClickhouseScrapperConf) (*ClickhouseScrapper, error) {
 	executor, err := dwhexecclickhouse.NewClickhouseExecutor(ctx, &conf.ClickhouseConf)
 	if err != nil {
@@ -31,6 +27,14 @@ func NewClickhouseScrapper(ctx context.Context, conf ClickhouseScrapperConf) (*C
 	}
 
 	return &ClickhouseScrapper{executor: executor, conf: conf}, nil
+}
+
+func (e *ClickhouseScrapper) IsPermissionError(err error) bool {
+	return false
+}
+
+func (e *ClickhouseScrapper) Dialect() string {
+	return "clickhouse"
 }
 
 func (e *ClickhouseScrapper) Executor() *dwhexecclickhouse.ClickhouseExecutor {

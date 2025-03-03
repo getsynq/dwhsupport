@@ -5,7 +5,9 @@ import (
 
 	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
+	"github.com/pkg/errors"
 )
 
 type PostgresScapperConf = dwhexecpostgres.PostgresConf
@@ -15,10 +17,6 @@ var _ scrapper.Scrapper = &PostgresScrapper{}
 type PostgresScrapper struct {
 	conf     *PostgresScapperConf
 	executor *dwhexecpostgres.PostgresExecutor
-}
-
-func (e *PostgresScrapper) Dialect() string {
-	return "postgres"
 }
 
 func NewPostgresScrapper(ctx context.Context, conf *PostgresScapperConf) (*PostgresScrapper, error) {
@@ -31,6 +29,19 @@ func NewPostgresScrapper(ctx context.Context, conf *PostgresScapperConf) (*Postg
 		conf:     conf,
 		executor: executor,
 	}, nil
+}
+
+func (e *PostgresScrapper) IsPermissionError(err error) bool {
+	pqError := &pq.Error{}
+	if errors.As(err, &pqError) {
+		return pqError.Code == "42501"
+	}
+
+	return false
+}
+
+func (e *PostgresScrapper) Dialect() string {
+	return "postgres"
 }
 
 func (e *PostgresScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {

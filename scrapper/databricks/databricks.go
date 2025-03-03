@@ -8,7 +8,6 @@ import (
 	"github.com/databricks/databricks-sdk-go"
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	"github.com/databricks/databricks-sdk-go/useragent"
-	_ "github.com/databricks/databricks-sql-go"
 	"github.com/getsynq/dwhsupport/blocklist"
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
@@ -102,6 +101,16 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 	})
 
 	return &DatabricksScrapper{client: client, conf: conf, blocklist: blocklist, lazyExecutor: executor}, nil
+}
+
+func (e *DatabricksScrapper) IsPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	return strings.Contains(errMsg, "PERMISSION_DENIED") ||
+		strings.Contains(errMsg, "ACCESS_DENIED") ||
+		strings.Contains(errMsg, "does not have permission")
 }
 
 func (e *DatabricksScrapper) GetApiClient() *databricks.WorkspaceClient {

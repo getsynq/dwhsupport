@@ -39,6 +39,10 @@ type BigQueryScrapper struct {
 	executor  *dwhexecbigquery.BigQueryExecutor
 }
 
+func (e *BigQueryScrapper) IsPermissionError(err error) bool {
+	return errIsAccessDenied(err)
+}
+
 func (e *BigQueryScrapper) Dialect() string {
 	return "bigquery"
 }

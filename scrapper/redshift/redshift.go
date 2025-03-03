@@ -6,7 +6,9 @@ import (
 	dwhexecredshift "github.com/getsynq/dwhsupport/exec/redshift"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
+	"github.com/pkg/errors"
 )
 
 type RedshiftScrapperConf struct {
@@ -25,10 +27,6 @@ type RedshiftScrapper struct {
 	executor *dwhexecredshift.RedshiftExecutor
 }
 
-func (e *RedshiftScrapper) Dialect() string {
-	return "redshift"
-}
-
 func NewRedshiftScrapper(ctx context.Context, conf *RedshiftScrapperConf) (*RedshiftScrapper, error) {
 	executor, err := dwhexecredshift.NewRedshiftExecutor(ctx, &conf.RedshiftConf)
 	if err != nil {
@@ -39,6 +37,19 @@ func NewRedshiftScrapper(ctx context.Context, conf *RedshiftScrapperConf) (*Reds
 		conf:     conf,
 		executor: executor,
 	}, nil
+}
+
+func (e *RedshiftScrapper) IsPermissionError(err error) bool {
+	pqError := &pq.Error{}
+	if errors.As(err, &pqError) {
+		return pqError.Code == "42501"
+	}
+
+	return false
+}
+
+func (e *RedshiftScrapper) Dialect() string {
+	return "redshift"
 }
 
 func (e *RedshiftScrapper) Executor() *dwhexecredshift.RedshiftExecutor {

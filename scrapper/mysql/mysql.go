@@ -5,8 +5,9 @@ import (
 
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 )
 
 type MySQLScrapperConf = dwhexecmysql.MySQLConf
@@ -22,10 +23,6 @@ type MySQLScrapper struct {
 	executor *dwhexecmysql.MySQLExecutor
 }
 
-func (e *MySQLScrapper) Dialect() string {
-	return "mysql"
-}
-
 func NewMySQLScrapper(ctx context.Context, conf *MySQLScrapperConf) (*MySQLScrapper, error) {
 	executor, err := dwhexecmysql.NewMySQLExecutor(ctx, conf)
 	if err != nil {
@@ -33,6 +30,19 @@ func NewMySQLScrapper(ctx context.Context, conf *MySQLScrapperConf) (*MySQLScrap
 	}
 
 	return &MySQLScrapper{conf: conf, executor: executor}, nil
+}
+
+func (e *MySQLScrapper) IsPermissionError(err error) bool {
+	mySqlError := &mysql.MySQLError{}
+	if errors.As(err, &mySqlError) {
+		return mySqlError.Number == 1044
+	}
+
+	return false
+}
+
+func (e *MySQLScrapper) Dialect() string {
+	return "mysql"
 }
 
 func (e *MySQLScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {

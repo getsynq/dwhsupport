@@ -69,14 +69,6 @@ type SnowflakeScrapper struct {
 	executor    *dwhexecsnowflake.SnowflakeExecutor
 }
 
-func (e *SnowflakeScrapper) GetExistingDbs() ([]*DbDesc, error) {
-	return e.existingDbs.Get()
-}
-
-func (e *SnowflakeScrapper) Dialect() string {
-	return "snowflake"
-}
-
 func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*SnowflakeScrapper, error) {
 	executor, err := dwhexecsnowflake.NewSnowflakeExecutor(ctx, &conf.SnowflakeConf)
 	if err != nil {
@@ -110,6 +102,18 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 	})
 
 	return &SnowflakeScrapper{conf: conf, executor: executor, existingDbs: lazyExistingDbs}, nil
+}
+
+func (e *SnowflakeScrapper) IsPermissionError(err error) bool {
+	return false
+}
+
+func (e *SnowflakeScrapper) Dialect() string {
+	return "snowflake"
+}
+
+func (e *SnowflakeScrapper) GetExistingDbs() ([]*DbDesc, error) {
+	return e.existingDbs.Get()
 }
 
 func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
