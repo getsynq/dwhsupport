@@ -3,6 +3,7 @@ module github.com/getsynq/dwhsupport
 go 1.23
 
 require (
+	cloud.google.com/go v0.116.0
 	cloud.google.com/go/bigquery v1.65.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.30.1
 	github.com/databricks/databricks-sdk-go v0.55.0
@@ -24,7 +25,6 @@ require (
 )
 
 require (
-	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.14.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
