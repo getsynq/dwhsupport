@@ -15,12 +15,12 @@ type MonitorPartitioning struct {
 }
 
 type MonitorArgs struct {
-	Filter       string
+	Filter       string //FIXME: make it expression
 	Segmentation *Segmentation
 }
 
 type Segmentation struct {
-	Field string
+	Field string // FIXME: make it expression
 	Rule  SegmentationRule
 }
 
@@ -80,8 +80,10 @@ func ApplyMonitorDefArgs(
 	return qb
 }
 
-var TableVolumeMetricsCols = []Expr{
-	TableMetric(METRIC_NUM_ROWS),
+func TableVolumeMetricsCols() []Expr {
+	return []Expr{
+		TableMetric(METRIC_NUM_ROWS),
+	}
 }
 
 func TableLastLoadedAtMetricsCols(timeCol TimeExpr) []Expr {
@@ -105,10 +107,14 @@ func TableMetric(metricId MetricId) *TableMetricExpr {
 func (m *TableMetricExpr) ToSql(dialect Dialect) (string, error) {
 	switch m.MetricId {
 	case METRIC_NUM_ROWS:
-		return As(dialect.Count(Star()), Identifier(string(METRIC_NUM_ROWS))).ToSql(dialect)
+		return As(dialect.Count(Star()), m.OutColumnAlias()).ToSql(dialect)
 	default:
 		return "", fmt.Errorf("unknown TABLE metric type: %s", m.MetricId)
 	}
+}
+
+func (m *TableMetricExpr) OutColumnAlias() TextExpr {
+	return Identifier(string(m.MetricId))
 }
 
 //
@@ -157,35 +163,39 @@ func NumericMetric(col NumericExpr, metricId MetricId) *NumericMetricExpr {
 func (m *NumericMetricExpr) ToSql(dialect Dialect) (string, error) {
 	switch m.MetricId {
 	case METRIC_NUM_ROWS:
-		return As(dialect.Count(Star()), Identifier(string(METRIC_NUM_ROWS))).ToSql(dialect)
+		return As(dialect.Count(Star()), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_NOT_NULL:
-		return As(dialect.Count(m.Column), Identifier(string(METRIC_NUM_NOT_NULL))).ToSql(dialect)
+		return As(dialect.Count(m.Column), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_UNIQUE:
-		return As(dialect.Count(Distinct(m.Column)), Identifier(string(METRIC_NUM_UNIQUE))).ToSql(dialect)
+		return As(dialect.Count(Distinct(m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_EMPTY:
-		return As(dialect.CountIf(Eq(m.Column, Int64(0))), Identifier(string(METRIC_NUM_EMPTY))).ToSql(dialect)
+		return As(dialect.CountIf(Eq(m.Column, Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MEAN:
-		return As(dialect.ToFloat64(Fn("avg", m.Column)), Identifier(string(METRIC_MEAN))).ToSql(dialect)
+		return As(dialect.ToFloat64(Fn("avg", m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MEDIAN:
-		return As(dialect.ToFloat64(dialect.Median(m.Column)), Identifier(string(METRIC_MEDIAN))).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Median(m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MIN:
-		return As(dialect.ToFloat64(Fn("min", m.Column)), Identifier(string(METRIC_MIN))).ToSql(dialect)
+		return As(dialect.ToFloat64(Fn("min", m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MAX:
-		return As(dialect.ToFloat64(Fn("max", m.Column)), Identifier(string(METRIC_MAX))).ToSql(dialect)
+		return As(dialect.ToFloat64(Fn("max", m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_STDDEV:
-		return As(dialect.ToFloat64(dialect.Stddev(m.Column)), Identifier(string(METRIC_STDDEV))).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Stddev(m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	default:
 		return "", fmt.Errorf("unknown NUMERIC metric type for : %s", m.MetricId)
 	}
+}
+
+func (m *NumericMetricExpr) OutColumnAlias() TextExpr {
+	return Identifier(string(m.MetricId))
 }
 
 //
@@ -229,26 +239,30 @@ func TimeMetric(col TimeExpr, metricId MetricId) *TimeMetricExpr {
 func (m *TimeMetricExpr) ToSql(dialect Dialect) (string, error) {
 	switch m.MetricId {
 	case METRIC_NUM_ROWS:
-		return As(dialect.Count(Star()), Identifier(string(METRIC_NUM_ROWS))).ToSql(dialect)
+		return As(dialect.Count(Star()), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_NOT_NULL:
-		return As(dialect.Count(m.TimeExpr), Identifier(string(METRIC_NUM_NOT_NULL))).ToSql(dialect)
+		return As(dialect.Count(m.TimeExpr), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MIN:
-		return As(Fn("min", m.TimeExpr), Identifier(string(METRIC_MIN))).ToSql(dialect)
+		return As(Fn("min", m.TimeExpr), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MAX:
-		return As(Fn("max", m.TimeExpr), Identifier(string(METRIC_MAX))).ToSql(dialect)
+		return As(Fn("max", m.TimeExpr), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_FRESHNESS:
-		return As(Fn("max", m.TimeExpr), Identifier(string(METRIC_FRESHNESS))).ToSql(dialect)
+		return As(Fn("max", m.TimeExpr), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_LAST_LOADED_AT:
-		return As(Fn("max", m.TimeExpr), Identifier(string(METRIC_LAST_LOADED_AT))).ToSql(dialect)
+		return As(Fn("max", m.TimeExpr), m.OutColumnAlias()).ToSql(dialect)
 
 	default:
 		return "", fmt.Errorf("unknown TIME metric type for : %s", m.MetricId)
 	}
+}
+
+func (m *TimeMetricExpr) OutColumnAlias() TextExpr {
+	return Identifier(string(m.MetricId))
 }
 
 //
@@ -292,18 +306,46 @@ func (m *TextMetricExpr) As(alias string) *AsExpr {
 func (m *TextMetricExpr) ToSql(dialect Dialect) (string, error) {
 	switch m.MetricId {
 	case METRIC_NUM_ROWS:
-		return As(dialect.Count(Star()), Identifier(string(METRIC_NUM_ROWS))).ToSql(dialect)
+		return As(dialect.Count(Star()), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_NOT_NULL:
-		return As(dialect.Count(m.Column), Identifier(string(METRIC_NUM_NOT_NULL))).ToSql(dialect)
+		return As(dialect.Count(m.Column), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_UNIQUE:
-		return As(dialect.Count(Distinct(m.Column)), Identifier(string(METRIC_NUM_UNIQUE))).ToSql(dialect)
+		return As(dialect.Count(Distinct(m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_EMPTY:
-		return As(dialect.CountIf(Eq(m.Column, String(""))), Identifier(string(METRIC_NUM_EMPTY))).ToSql(dialect)
+		return As(dialect.CountIf(Eq(m.Column, String(""))), m.OutColumnAlias()).ToSql(dialect)
 
 	default:
 		return "", fmt.Errorf("unknown TEXT metric type for : %s", m.MetricId)
 	}
+}
+
+func (m *TextMetricExpr) OutColumnAlias() TextExpr {
+	return Identifier(string(m.MetricId))
+}
+
+type CustomNumericMetricExpr struct {
+	MetricId MetricId
+	Sql      NumericExpr
+}
+
+func (m *CustomNumericMetricExpr) ToSql(dialect Dialect) (string, error) {
+	return As(ToFloat64(m.Sql), m.OutColumnAlias()).ToSql(dialect)
+}
+
+func (m *CustomNumericMetricExpr) OutColumnAlias() TextExpr {
+	return Identifier(string(m.MetricId))
+}
+
+func CustomNumericMetric(sql NumericExpr, metricId MetricId) *CustomNumericMetricExpr {
+	return &CustomNumericMetricExpr{
+		MetricId: metricId,
+		Sql:      sql,
+	}
+}
+
+func CustomNumericMetricsCols(sql NumericExpr, numeric MetricId) []Expr {
+	return []Expr{CustomNumericMetric(sql, numeric)}
 }
