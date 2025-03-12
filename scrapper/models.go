@@ -185,7 +185,12 @@ type ColumnValue struct {
 	IsNull bool
 }
 
+type SegmentValue struct {
+	Name  string
+	Value string
+}
+
 type CustomMetricsRow struct {
-	Segment      *string `db:"segment" json:"segment" ch:"segment" bigquery:"segment"`
+	Segments     []*SegmentValue
 	ColumnValues []*ColumnValue
 }

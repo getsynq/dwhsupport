@@ -58,7 +58,7 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 			isNull := !exists || value == nil
 
 			// Handle segment column specially
-			if strings.ToLower(colName) == "segment" {
+			if strings.HasPrefix(strings.ToLower(colName), "segment") {
 				if !isNull {
 					strValue, ok := value.(string)
 					if ok {
@@ -66,7 +66,10 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 						if !utf8.ValidString(strValue) {
 							strValue = strings.ToValidUTF8(strValue, "")
 						}
-						customRow.Segment = &strValue
+						customRow.Segments = append(customRow.Segments, &scrapper.SegmentValue{
+							Name:  colName,
+							Value: strValue,
+						})
 					}
 				}
 				continue

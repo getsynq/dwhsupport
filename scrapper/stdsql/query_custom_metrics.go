@@ -55,14 +55,17 @@ func QueryCustomMetrics(ctx context.Context, db *sqlx.DB, sqlQuery string, args 
 			rawValue := scanners[i].(*sql.RawBytes)
 			isNull := *rawValue == nil
 
-			if strings.ToLower(colName) == "segment" {
+			if strings.HasPrefix(strings.ToLower(colName), "segment") {
 				if !isNull {
 					strValue := string(*rawValue)
 					// Clean invalid UTF-8 characters
 					if !utf8.ValidString(strValue) {
 						strValue = strings.ToValidUTF8(strValue, "")
 					}
-					row.Segment = &strValue
+					row.Segments = append(row.Segments, &scrapper.SegmentValue{
+						Name:  colName,
+						Value: strValue,
+					})
 				}
 				continue
 			}
