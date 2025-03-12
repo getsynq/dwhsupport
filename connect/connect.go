@@ -9,6 +9,7 @@ import (
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	dwhexecredshift "github.com/getsynq/dwhsupport/exec/redshift"
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
+	"github.com/getsynq/dwhsupport/scrapper"
 	scrapperbigquery "github.com/getsynq/dwhsupport/scrapper/bigquery"
 	scrapperclickhouse "github.com/getsynq/dwhsupport/scrapper/clickhouse"
 	scrapperdatabricks "github.com/getsynq/dwhsupport/scrapper/databricks"
@@ -16,6 +17,7 @@ import (
 	scrapperpostgres "github.com/getsynq/dwhsupport/scrapper/postgres"
 	scrapperredshift "github.com/getsynq/dwhsupport/scrapper/redshift"
 	scrappersnowflake "github.com/getsynq/dwhsupport/scrapper/snowflake"
+	"github.com/pkg/errors"
 )
 
 func BigQuery(ctx context.Context, t *agentdwhv1.BigQueryConf) (*scrapperbigquery.BigQueryScrapper, error) {
@@ -109,4 +111,25 @@ func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowf
 		},
 		NoGetDll: !t.GetUseGetDdl(),
 	})
+}
+
+func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrapper, error) {
+	switch t := conf.Config.(type) {
+	case *agentdwhv1.Connection_Bigquery:
+		return BigQuery(ctx, t.Bigquery)
+	case *agentdwhv1.Connection_Clickhouse:
+		return Clickhouse(ctx, t.Clickhouse)
+	case *agentdwhv1.Connection_Databricks:
+		return Databricks(ctx, t.Databricks)
+	case *agentdwhv1.Connection_Mysql:
+		return MySQL(ctx, t.Mysql)
+	case *agentdwhv1.Connection_Postgres:
+		return Postgres(ctx, t.Postgres)
+	case *agentdwhv1.Connection_Redshift:
+		return Redshift(ctx, t.Redshift)
+	case *agentdwhv1.Connection_Snowflake:
+		return Snowflake(ctx, t.Snowflake)
+	default:
+		return nil, errors.New("unsupported database type")
+	}
 }

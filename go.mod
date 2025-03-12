@@ -3,7 +3,7 @@ module github.com/getsynq/dwhsupport
 go 1.23
 
 require (
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.5-20250307163437-5d80565c2964.1
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.5-20250312111721-899e73a68003.1
 	cloud.google.com/go v0.116.0
 	cloud.google.com/go/bigquery v1.65.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.30.1
