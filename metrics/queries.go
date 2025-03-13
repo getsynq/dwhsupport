@@ -15,8 +15,8 @@ type MonitorPartitioning struct {
 }
 
 type MonitorArgs struct {
-	Filter       string //FIXME: make it expression
-	Segmentation *Segmentation
+	Conditions   []CondExpr
+	Segmentation []*Segmentation
 }
 
 type Segmentation struct {
@@ -61,21 +61,23 @@ func ApplyMonitorDefArgs(
 		return qb
 	}
 
-	if args.Filter != "" {
-		qb = qb.WithFilter(Sql(args.Filter))
+	for _, condition := range args.Conditions {
+		qb = qb.WithFilter(condition)
 	}
 
-	if args.Segmentation != nil && args.Segmentation.Field != "" {
-		switch t := args.Segmentation.Rule.(type) {
-		case *SegmentationRuleAcceptList:
-			qb = qb.WithSegmentValues(t.Values, false)
-		case *SegmentationRuleExcludeList:
-			qb = qb.WithSegmentValues(t.Values, true)
-		case *SegmentationRuleAll:
-			// No filtration
-		}
+	if len(args.Segmentation) > 0 {
+		if args.Segmentation[0].Field != "" {
+			switch t := args.Segmentation[0].Rule.(type) {
+			case *SegmentationRuleAcceptList:
+				qb = qb.WithSegmentValues(t.Values, false)
+			case *SegmentationRuleExcludeList:
+				qb = qb.WithSegmentValues(t.Values, true)
+			case *SegmentationRuleAll:
+				// No filtration
+			}
 
-		qb = qb.WithSegment(Sql(args.Segmentation.Field)).OrderBy(Asc(Identifier("segment")))
+			qb = qb.WithSegment(Sql(args.Segmentation[0].Field)).OrderBy(Asc(Identifier("segment")))
+		}
 	}
 	return qb
 }

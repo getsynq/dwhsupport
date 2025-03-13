@@ -6,6 +6,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/querybuilder"
 	. "github.com/getsynq/dwhsupport/sqldialect"
+	"github.com/samber/lo"
 )
 
 type Partition struct {
@@ -20,24 +21,37 @@ func SegmentsListQuery(
 	partition *Partition,
 	limit int64,
 ) (*querybuilder.QueryBuilder, error) {
-	filter := args.Filter
-	segmentation := args.Segmentation
-
-	if segmentation == nil {
+	if len(args.Segmentation) == 0 {
 		return nil, fmt.Errorf("segmentation is not configured")
 	}
 
-	query := querybuilder.
-		NewQueryBuilder(tableFqn, []Expr{Distinct(As(ToString(Sql(segmentation.Field)), Identifier("segment")))}).
-		OrderBy(Asc(Identifier("segment"))).
-		WithLimit(limit)
+	var expressions []Expr
+	var segmentColumns []string
+
+	for i, s := range args.Segmentation {
+		alias := fmt.Sprintf("segment%d", i+1)
+		if i == 0 {
+			alias = "segment"
+		}
+		segmentColumns = append(segmentColumns, alias)
+		expressions = append(expressions, As(ToString(Sql(s.Field)), Identifier(alias)))
+	}
+	countColExpr := Identifier(string(METRIC_NUM_ROWS))
+	expressions = append(expressions, As(CountAll(), countColExpr))
+
+	query := querybuilder.NewQueryBuilder(tableFqn, expressions).OrderBy(Desc(countColExpr)).WithLimit(limit)
+
+	groupBy := lo.Map(segmentColumns, func(segmentColumn string, i int) Expr {
+		return AggregationColumnReference(expressions[i], segmentColumn)
+	})
+	query.WithGroupBy(groupBy...)
 
 	if partition != nil {
 		query = query.WithFieldTimeRange(TimeCol(partition.Field), partition.From, partition.To)
 	}
 
-	if filter != "" {
-		query = query.WithFilter(Sql(filter))
+	for _, condition := range args.Conditions {
+		query = query.WithFilter(condition)
 	}
 
 	return query, nil

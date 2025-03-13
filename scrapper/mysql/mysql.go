@@ -5,6 +5,7 @@ import (
 
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
@@ -41,8 +42,12 @@ func (e *MySQLScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
-func (e *MySQLScrapper) Dialect() string {
+func (e *MySQLScrapper) DialectType() string {
 	return "mysql"
+}
+
+func (e *MySQLScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewMySQLDialect()
 }
 
 func (e *MySQLScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {

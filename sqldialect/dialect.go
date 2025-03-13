@@ -3,6 +3,8 @@ package sqldialect
 import (
 	"fmt"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 //
@@ -44,6 +46,9 @@ func NewClickHouseDialect() *ClickHouseDialect {
 }
 
 func (d *ClickHouseDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
+	if fqn == nil {
+		return "", errors.New("fqn is nil")
+	}
 	return fmt.Sprintf("%s.%s", fqn.datasetId, fqn.tableId), nil
 }
 

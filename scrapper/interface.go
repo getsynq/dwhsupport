@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
 )
 
@@ -22,7 +23,8 @@ func NewNoEnoughPermissionsError(err error) *NoEnoughPermissionsError {
 var ErrUnsupported = errors.New("unsupported")
 
 type Scrapper interface {
-	Dialect() string
+	DialectType() string
+	SqlDialect() sqldialect.Dialect
 	IsPermissionError(err error) bool
 	ValidateConfiguration(ctx context.Context) (warnings []string, err error)
 	QueryCatalog(ctx context.Context) ([]*CatalogColumnRow, error)

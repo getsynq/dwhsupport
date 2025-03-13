@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/sirupsen/logrus"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
 )
@@ -108,8 +109,12 @@ func (e *SnowflakeScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
-func (e *SnowflakeScrapper) Dialect() string {
+func (e *SnowflakeScrapper) DialectType() string {
 	return "snowflake"
+}
+
+func (e *SnowflakeScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewSnowflakeDialect()
 }
 
 func (e *SnowflakeScrapper) GetExistingDbs() ([]*DbDesc, error) {

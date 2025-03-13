@@ -5,6 +5,7 @@ import (
 
 	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
@@ -40,8 +41,12 @@ func (e *PostgresScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
-func (e *PostgresScrapper) Dialect() string {
+func (e *PostgresScrapper) DialectType() string {
 	return "postgres"
+}
+
+func (e *PostgresScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewPostgresDialect()
 }
 
 func (e *PostgresScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {

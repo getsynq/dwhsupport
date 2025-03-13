@@ -29,6 +29,10 @@ type TimeExpr interface {
 	IsTimeExpr()
 }
 
+type ToCondExpr interface {
+	ToCondExpr() CondExpr
+}
+
 type CondExpr interface {
 	Expr
 	IsCondExpr()
@@ -40,10 +44,10 @@ type TableExpr interface {
 }
 
 type LimitExpr struct {
-	rows IntLitExpr
+	rows *IntLitExpr
 }
 
-func Limit(rows IntLitExpr) *LimitExpr {
+func Limit(rows *IntLitExpr) *LimitExpr {
 	return &LimitExpr{rows}
 }
 
@@ -571,6 +575,22 @@ func (e *CoalesceExpr) ToSql(dialect Dialect) (string, error) {
 //
 // ToStringExpr
 //
+
+var _ Expr = (*CountAllExpr)(nil)
+var _ NumericExpr = (*CountAllExpr)(nil)
+
+type CountAllExpr struct {
+}
+
+func (c CountAllExpr) IsNumericExpr() {}
+
+func (c CountAllExpr) ToSql(dialect Dialect) (string, error) {
+	return dialect.Count(Sql("*")).ToSql(dialect)
+}
+
+func CountAll() *CountAllExpr {
+	return &CountAllExpr{}
+}
 
 type ToStringExpr struct {
 	expr Expr

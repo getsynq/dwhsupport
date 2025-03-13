@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/blocklist"
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"google.golang.org/api/cloudresourcemanager/v1"
@@ -43,8 +44,12 @@ func (e *BigQueryScrapper) IsPermissionError(err error) bool {
 	return errIsAccessDenied(err)
 }
 
-func (e *BigQueryScrapper) Dialect() string {
+func (e *BigQueryScrapper) DialectType() string {
 	return "bigquery"
+}
+
+func (e *BigQueryScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewBigQueryDialect()
 }
 
 var BaseExpectedPermissions = []string{

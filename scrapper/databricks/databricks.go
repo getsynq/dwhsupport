@@ -13,6 +13,7 @@ import (
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
@@ -40,8 +41,12 @@ type DatabricksScrapper struct {
 	blocklist    blocklist.Blocklist
 }
 
-func (e *DatabricksScrapper) Dialect() string {
+func (e *DatabricksScrapper) DialectType() string {
 	return "databricks"
+}
+
+func (e *DatabricksScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewDatabricksDialect()
 }
 
 func (e *DatabricksScrapper) Close() error {

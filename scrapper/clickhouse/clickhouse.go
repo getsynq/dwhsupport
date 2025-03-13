@@ -6,6 +6,7 @@ import (
 
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
 type ClickhouseScrapperConf struct {
@@ -33,8 +34,12 @@ func (e *ClickhouseScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
-func (e *ClickhouseScrapper) Dialect() string {
+func (e *ClickhouseScrapper) DialectType() string {
 	return "clickhouse"
+}
+
+func (e *ClickhouseScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewClickHouseDialect()
 }
 
 func (e *ClickhouseScrapper) Executor() *dwhexecclickhouse.ClickhouseExecutor {

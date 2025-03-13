@@ -38,7 +38,7 @@ func (e *DuckDBScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
-func (e *DuckDBScrapper) Dialect() string {
+func (e *DuckDBScrapper) DialectType() string {
 	return "duckdb"
 }
 

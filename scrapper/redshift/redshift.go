@@ -5,6 +5,7 @@ import (
 
 	dwhexecredshift "github.com/getsynq/dwhsupport/exec/redshift"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 	_ "github.com/lib/pq"
@@ -48,8 +49,12 @@ func (e *RedshiftScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
-func (e *RedshiftScrapper) Dialect() string {
+func (e *RedshiftScrapper) DialectType() string {
 	return "redshift"
+}
+
+func (e *RedshiftScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewRedshiftDialect()
 }
 
 func (e *RedshiftScrapper) Executor() *dwhexecredshift.RedshiftExecutor {

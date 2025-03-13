@@ -124,7 +124,7 @@ package metrics
 //						Schedule:           dailyScheduleWithDelay,
 //						Partitioning:       partitioning("usage_day", 24*time.Hour, true),
 //						Args: &anomaliesv1.MonitorArgs{
-//							Filter: "age > 18",
+//							Conditions: "age > 18",
 //							Segmentation: &anomaliesv1.Segmentation{
 //								Field: "country",
 //								Rule:  &anomaliesv1.Segmentation_All_{},
@@ -144,7 +144,7 @@ package metrics
 //						Schedule:           intervalScheduleWithDelay,
 //						Partitioning:       partitioning("updated_at", time.Hour, false),
 //						Args: &anomaliesv1.MonitorArgs{
-//							Filter: "age > 18",
+//							Conditions: "age > 18",
 //							Segmentation: &anomaliesv1.Segmentation{
 //								Field: "age",
 //								Rule: &anomaliesv1.Segmentation_List_{
@@ -166,7 +166,7 @@ package metrics
 //						Schedule:           intervalSchedule,
 //						Partitioning:       partitioning("updated_at", time.Hour, false),
 //						Args: &anomaliesv1.MonitorArgs{
-//							Filter: "age > 18",
+//							Conditions: "age > 18",
 //							Segmentation: &anomaliesv1.Segmentation{
 //								Field: "age",
 //								Rule: &anomaliesv1.Segmentation_ExcludeList{
@@ -264,7 +264,7 @@ package metrics
 //				MonitoredAssetPath: snowflakeTablePath,
 //				Partitioning:       partitioning("updated_at", time.Hour, false),
 //				Args: &anomaliesv1.MonitorArgs{
-//					Filter: "",
+//					Conditions: "",
 //					Segmentation: &anomaliesv1.Segmentation{
 //						Field: "workspace",
 //					},
@@ -290,12 +290,12 @@ package metrics
 //func args(filter string, segmentationField string) *MonitorArgs {
 //	if segmentationField == "" {
 //		return &MonitorArgs{
-//			Filter: filter,
+//			Conditions: filter,
 //		}
 //	}
 //
 //	return &MonitorArgs{
-//		Filter:       filter,
+//		Conditions:       filter,
 //		Segmentation: &Segmentation{Field: segmentationField, Rule: &SegmentationRuleAll{}},
 //	}
 //}

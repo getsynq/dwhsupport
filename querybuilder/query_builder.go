@@ -24,6 +24,8 @@ type QueryBuilder struct {
 	segmentValues      []Expr
 	segmentIsExcluding bool
 
+	groupBy []Expr
+
 	filters []CondExpr
 
 	q *Select
@@ -85,7 +87,7 @@ func (b *QueryBuilder) WithTimeSegment(col *TimeColExpr, segment time.Duration) 
 }
 
 func (b *QueryBuilder) WithLimit(limit int64) *QueryBuilder {
-	b.q = b.q.WithLimit(Limit(*Int64(limit)))
+	b.q = b.q.WithLimit(Limit(Int64(limit)))
 
 	return b
 }
@@ -107,6 +109,11 @@ func (b *QueryBuilder) GetTimeSegment() (time.Duration, error) {
 func (b *QueryBuilder) WithFilter(filter CondExpr) *QueryBuilder {
 	b.filters = append(b.filters, filter)
 
+	return b
+}
+
+func (b *QueryBuilder) WithGroupBy(groupBy ...Expr) *QueryBuilder {
+	b.groupBy = append(b.groupBy, groupBy...)
 	return b
 }
 
@@ -164,6 +171,10 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 				q = q.Where(In(AggregationColumnReference(segmentExpr, "segment"), b.segmentValues...))
 			}
 		}
+	}
+
+	if len(b.groupBy) > 0 {
+		q = q.GroupBy(b.groupBy...)
 	}
 
 	// Apply custom filters
