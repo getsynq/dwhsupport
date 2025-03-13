@@ -585,7 +585,7 @@ type CountAllExpr struct {
 func (c CountAllExpr) IsNumericExpr() {}
 
 func (c CountAllExpr) ToSql(dialect Dialect) (string, error) {
-	return dialect.Count(Sql("*")).ToSql(dialect)
+	return dialect.Count(Star()).ToSql(dialect)
 }
 
 func CountAll() *CountAllExpr {

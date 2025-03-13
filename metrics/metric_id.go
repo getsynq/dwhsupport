@@ -26,6 +26,9 @@ const (
 	METRIC_PCT_UNIQUE          MetricId = "pct_unique"
 	METRIC_PCT_NULL            MetricId = "pct_null"
 	METRIC_PCT_EMPTY           MetricId = "pct_empty"
+	METRIC_MIN_LENGTH          MetricId = "min_length"
+	METRIC_MAX_LENGTH          MetricId = "max_length"
+	METRIC_MEAN_LENGTH         MetricId = "mean_length"
 )
 
 // Implement the sql.Scanner interface
@@ -82,6 +85,12 @@ func MetricIdDescription(id MetricId) string {
 		return "Percentage of Null"
 	case METRIC_PCT_EMPTY:
 		return "Percentage of Empty"
+	case METRIC_MIN_LENGTH:
+		return "Min Length"
+	case METRIC_MAX_LENGTH:
+		return "Max Length"
+	case METRIC_MEAN_LENGTH:
+		return "Mean Length"
 	default:
 		return string(id)
 	}

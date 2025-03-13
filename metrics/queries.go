@@ -94,9 +94,33 @@ func TableLastLoadedAtMetricsCols(timeCol TimeExpr) []Expr {
 	}
 }
 
+type MetricConf struct {
+	AliasPrefix string
+}
+
+func (c *MetricConf) PrefixedAliasForMetric(metricId MetricId) TextExpr {
+	if c.AliasPrefix == "" {
+		return Identifier(string(metricId))
+	}
+	return Identifier(fmt.Sprintf("%s$%s", c.AliasPrefix, string(metricId)))
+}
+
+type MetricConfOption func(*MetricConf)
+
+func DefaultMetricConf() *MetricConf {
+	return &MetricConf{}
+}
+
+func WithPrefixForColumn(prefix string) MetricConfOption {
+	return func(conf *MetricConf) {
+		conf.AliasPrefix = prefix
+	}
+}
+
 // Expr
 
 type TableMetricExpr struct {
+	MetricConf
 	MetricId MetricId
 }
 
@@ -116,7 +140,7 @@ func (m *TableMetricExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (m *TableMetricExpr) OutColumnAlias() TextExpr {
-	return Identifier(string(m.MetricId))
+	return m.PrefixedAliasForMetric(m.MetricId)
 }
 
 //
@@ -126,7 +150,6 @@ func (m *TableMetricExpr) OutColumnAlias() TextExpr {
 // Groupings
 
 var NumericMetrics = []MetricId{
-	METRIC_NUM_ROWS,
 	METRIC_NUM_NOT_NULL,
 	METRIC_NUM_UNIQUE,
 	METRIC_NUM_EMPTY,
@@ -137,13 +160,25 @@ var NumericMetrics = []MetricId{
 	METRIC_STDDEV,
 }
 
-func NumericMetricsCols(field string) []Expr {
+func NumericMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 	metricFieldCol := NumericCol(field)
 
-	cols := []Expr{As(String(field), Identifier("field"))}
+	var cols []Expr
 	for _, metricId := range NumericMetrics {
-		cols = append(cols, NumericMetric(metricFieldCol, metricId))
+		metricExpr := NumericMetric(metricFieldCol, metricId)
+		for _, opt := range opts {
+			opt(&metricExpr.MetricConf)
+		}
+		cols = append(cols, metricExpr)
 	}
+
+	return cols
+}
+
+func NumericMetricsCols(field string, opts ...MetricConfOption) []Expr {
+	cols := []Expr{As(String(field), Identifier("field"))}
+	cols = append(cols, CountStar(METRIC_NUM_ROWS))
+	cols = append(cols, NumericMetricsValuesCols(field, opts...)...)
 
 	return cols
 }
@@ -151,6 +186,7 @@ func NumericMetricsCols(field string) []Expr {
 // Expr
 
 type NumericMetricExpr struct {
+	MetricConf
 	MetricId MetricId
 	Column   NumericExpr
 }
@@ -197,7 +233,7 @@ func (m *NumericMetricExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (m *NumericMetricExpr) OutColumnAlias() TextExpr {
-	return Identifier(string(m.MetricId))
+	return m.PrefixedAliasForMetric(m.MetricId)
 }
 
 //
@@ -207,19 +243,30 @@ func (m *NumericMetricExpr) OutColumnAlias() TextExpr {
 // Grouping
 
 var TimeMetrics = []MetricId{
-	METRIC_NUM_ROWS,
 	METRIC_NUM_NOT_NULL,
 	METRIC_MIN,
 	METRIC_MAX,
 }
 
-func TimeMetricsCols(field string) []Expr {
+func TimeMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 	timeFieldCol := TimeCol(field)
 
-	cols := []Expr{As(String(field), Identifier("field"))}
+	var cols []Expr
 	for _, metricId := range TimeMetrics {
-		cols = append(cols, TimeMetric(timeFieldCol, metricId))
+		metricExpr := TimeMetric(timeFieldCol, metricId)
+		for _, opt := range opts {
+			opt(&metricExpr.MetricConf)
+		}
+		cols = append(cols, metricExpr)
 	}
+
+	return cols
+}
+
+func TimeMetricsCols(field string, opts ...MetricConfOption) []Expr {
+	cols := []Expr{As(String(field), Identifier("field"))}
+	cols = append(cols, CountStar(METRIC_NUM_ROWS))
+	cols = append(cols, TimeMetricsValuesCols(field, opts...)...)
 
 	return cols
 }
@@ -227,6 +274,7 @@ func TimeMetricsCols(field string) []Expr {
 // Expr
 
 type TimeMetricExpr struct {
+	MetricConf
 	MetricId MetricId
 	TimeExpr TimeExpr
 }
@@ -264,7 +312,7 @@ func (m *TimeMetricExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (m *TimeMetricExpr) OutColumnAlias() TextExpr {
-	return Identifier(string(m.MetricId))
+	return m.PrefixedAliasForMetric(m.MetricId)
 }
 
 //
@@ -272,24 +320,59 @@ func (m *TimeMetricExpr) OutColumnAlias() TextExpr {
 //
 
 var TextMetrics = []MetricId{
-	METRIC_NUM_ROWS,
 	METRIC_NUM_NOT_NULL,
 	METRIC_NUM_UNIQUE,
 	METRIC_NUM_EMPTY,
 }
 
-func TextMetricsCols(field string) []Expr {
+var TextLengthMetrics = []MetricId{
+	METRIC_MIN_LENGTH,
+	METRIC_MAX_LENGTH,
+	METRIC_MEAN_LENGTH,
+}
+
+func TextMetricsLengthCols(field string, opts ...MetricConfOption) []Expr {
 	textFieldCol := TextCol(field)
 
-	cols := []Expr{As(String(field), Identifier("field"))}
-	for _, metricId := range TextMetrics {
-		cols = append(cols, TextMetric(textFieldCol, metricId))
+	var cols []Expr
+	for _, metricId := range TextLengthMetrics {
+		metricExpr := TextMetric(textFieldCol, metricId)
+		for _, opt := range opts {
+			opt(&metricExpr.MetricConf)
+		}
+		cols = append(cols, metricExpr)
+
 	}
 
 	return cols
 }
 
+func TextMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
+	textFieldCol := TextCol(field)
+
+	var cols []Expr
+	for _, metricId := range TextMetrics {
+		metricExpr := TextMetric(textFieldCol, metricId)
+		for _, opt := range opts {
+			opt(&metricExpr.MetricConf)
+		}
+		cols = append(cols, metricExpr)
+
+	}
+
+	return cols
+}
+
+func TextMetricsCols(field string, opts ...MetricConfOption) []Expr {
+	cols := []Expr{As(String(field), Identifier("field"))}
+	cols = append(cols, CountStar(METRIC_NUM_ROWS))
+	cols = append(cols, TextMetricsValuesCols(field, opts...)...)
+
+	return cols
+}
+
 type TextMetricExpr struct {
+	MetricConf
 	MetricId MetricId
 	Column   TextExpr
 }
@@ -319,16 +402,26 @@ func (m *TextMetricExpr) ToSql(dialect Dialect) (string, error) {
 	case METRIC_NUM_EMPTY:
 		return As(dialect.CountIf(Eq(m.Column, String(""))), m.OutColumnAlias()).ToSql(dialect)
 
+	case METRIC_MEAN_LENGTH:
+		return As(dialect.ToFloat64(Fn("avg", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+
+	case METRIC_MIN_LENGTH:
+		return As(dialect.ToFloat64(Fn("min", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+
+	case METRIC_MAX_LENGTH:
+		return As(dialect.ToFloat64(Fn("max", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+
 	default:
 		return "", fmt.Errorf("unknown TEXT metric type for : %s", m.MetricId)
 	}
 }
 
 func (m *TextMetricExpr) OutColumnAlias() TextExpr {
-	return Identifier(string(m.MetricId))
+	return m.PrefixedAliasForMetric(m.MetricId)
 }
 
 type CustomNumericMetricExpr struct {
+	MetricConf
 	MetricId MetricId
 	Sql      NumericExpr
 }
@@ -338,7 +431,7 @@ func (m *CustomNumericMetricExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (m *CustomNumericMetricExpr) OutColumnAlias() TextExpr {
-	return Identifier(string(m.MetricId))
+	return m.PrefixedAliasForMetric(m.MetricId)
 }
 
 func CustomNumericMetric(sql NumericExpr, metricId MetricId) *CustomNumericMetricExpr {
@@ -348,6 +441,30 @@ func CustomNumericMetric(sql NumericExpr, metricId MetricId) *CustomNumericMetri
 	}
 }
 
-func CustomNumericMetricsCols(sql NumericExpr, numeric MetricId) []Expr {
-	return []Expr{CustomNumericMetric(sql, numeric)}
+func CustomNumericMetricsCols(sql NumericExpr, metricId MetricId) []Expr {
+	return []Expr{CustomNumericMetric(sql, metricId)}
+}
+
+type CountExpr struct {
+	MetricConf
+	Expresion Expr
+	MetricId  MetricId
+}
+
+func (m CountExpr) ToSql(dialect Dialect) (string, error) {
+	return As(dialect.Count(m.Expresion), m.OutColumnAlias()).ToSql(dialect)
+}
+
+func (m CountExpr) IsNumericExpr() {
+}
+
+func (m CountExpr) OutColumnAlias() TextExpr {
+	return m.PrefixedAliasForMetric(m.MetricId)
+}
+
+func CountStar(metricId MetricId) NumericExpr {
+	return &CountExpr{
+		Expresion: Star(),
+		MetricId:  metricId,
+	}
 }

@@ -5,6 +5,7 @@ import (
 
 	dwhexecduckdb "github.com/getsynq/dwhsupport/exec/duckdb"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	duckdb "github.com/marcboeker/go-duckdb"
 	"github.com/pkg/errors"
 )
@@ -40,6 +41,10 @@ func (e *DuckDBScrapper) IsPermissionError(err error) bool {
 
 func (e *DuckDBScrapper) DialectType() string {
 	return "duckdb"
+}
+
+func (e *DuckDBScrapper) SqlDialect() sqldialect.Dialect {
+	return sqldialect.NewDuckDBDialect()
 }
 
 func (e *DuckDBScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
