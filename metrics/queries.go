@@ -65,18 +65,32 @@ func ApplyMonitorDefArgs(
 		qb = qb.WithFilter(condition)
 	}
 
-	if len(args.Segmentation) > 0 {
-		if args.Segmentation[0].Field != "" {
-			switch t := args.Segmentation[0].Rule.(type) {
+	for _, segmentation := range args.Segmentation {
+		if segmentation.Field != "" {
+
+			var useValues = false
+			var values []string
+			var isExcluding bool
+
+			switch t := segmentation.Rule.(type) {
 			case *SegmentationRuleAcceptList:
-				qb = qb.WithSegmentValues(t.Values, false)
+				useValues = true
+				values = t.Values
 			case *SegmentationRuleExcludeList:
-				qb = qb.WithSegmentValues(t.Values, true)
+				useValues = true
+				isExcluding = true
 			case *SegmentationRuleAll:
 				// No filtration
 			}
 
-			qb = qb.WithSegment(Sql(args.Segmentation[0].Field)).OrderBy(Asc(Identifier("segment")))
+			if useValues {
+				qb = qb.WithSegmentFiltered(
+					Sql(segmentation.Field),
+					values,
+					isExcluding)
+			} else {
+				qb = qb.WithSegment(Sql(segmentation.Field))
+			}
 		}
 	}
 	return qb

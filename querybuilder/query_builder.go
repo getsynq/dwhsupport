@@ -20,9 +20,9 @@ type QueryBuilder struct {
 	timeSegment      *time.Duration
 	timeSegmentShift *time.Duration
 
-	segment            *Expr
-	segmentValues      []Expr
-	segmentIsExcluding bool
+	segments           []Expr
+	segmentValues      map[int][]Expr
+	segmentIsExcluding map[int]bool
 
 	groupBy []Expr
 
@@ -32,23 +32,21 @@ type QueryBuilder struct {
 }
 
 func (b *QueryBuilder) WithSegment(segment Expr) *QueryBuilder {
-	b.segment = &segment
+	b.segments = append(b.segments, segment)
 
 	return b
 }
 
-func (b *QueryBuilder) WithSegmentValues(values []string, isExcluding bool) *QueryBuilder {
+func (b *QueryBuilder) WithSegmentFiltered(segment Expr, values []string, isExcluding bool) *QueryBuilder {
 	valueExprs := lo.Map(values, func(val string, _ int) Expr { return String(val) })
-	b.segmentValues = valueExprs
-	b.segmentIsExcluding = isExcluding
+	i := len(b.segments)
+	b.segments = append(b.segments, segment)
+	b.segmentValues[i] = valueExprs
+	b.segmentIsExcluding[i] = isExcluding
 	return b
 }
 
 func (b *QueryBuilder) WithTimeRange(from, to time.Time) (*QueryBuilder, error) {
-	if b.timeSegment == nil {
-		return nil, fmt.Errorf("time segment not set")
-	}
-
 	b.timeFrom = from.Round(time.Minute)
 	b.timeTo = to.Round(time.Minute)
 
@@ -126,6 +124,28 @@ func NewQueryBuilder(table *TableFqnExpr, cols []Expr) *QueryBuilder {
 func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	q := b.q
 
+	// Apply custom segment
+
+	for i, segment := range b.segments {
+		values, hasFiltration := b.segmentValues[i]
+		segmentExpr := Coalesce(
+			ToString(segment),
+			String(""),
+		)
+		alias := b.segmentColumnName(i)
+		q = q.
+			Cols(As(segmentExpr, Identifier(alias))).
+			GroupBy(AggregationColumnReference(segmentExpr, alias))
+
+		if hasFiltration {
+			if b.segmentIsExcluding[i] {
+				q = q.Where(NotIn(AggregationColumnReference(segmentExpr, alias), values...))
+			} else {
+				q = q.Where(In(AggregationColumnReference(segmentExpr, alias), values...))
+			}
+		}
+	}
+
 	if b.timeCol != nil && b.timeSegment != nil {
 		if b.timeSegmentShift != nil {
 			timeExpr := dialect.AddTime(
@@ -154,25 +174,6 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 		)
 	}
 
-	// Apply custom segment
-	if b.segment != nil {
-		segmentExpr := Coalesce(
-			ToString(*b.segment),
-			String(""),
-		)
-		q = q.
-			Cols(As(segmentExpr, Identifier("segment"))).
-			GroupBy(Identifier("segment"))
-
-		if len(b.segmentValues) > 0 {
-			if b.segmentIsExcluding {
-				q = q.Where(NotIn(AggregationColumnReference(segmentExpr, "segment"), b.segmentValues...))
-			} else {
-				q = q.Where(In(AggregationColumnReference(segmentExpr, "segment"), b.segmentValues...))
-			}
-		}
-	}
-
 	if len(b.groupBy) > 0 {
 		q = q.GroupBy(b.groupBy...)
 	}
@@ -183,4 +184,11 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	}
 
 	return q.ToSql(dialect)
+}
+
+func (b *QueryBuilder) segmentColumnName(i int) string {
+	if i == 0 {
+		return "segment"
+	}
+	return fmt.Sprintf("segment_%d", i+1)
 }
