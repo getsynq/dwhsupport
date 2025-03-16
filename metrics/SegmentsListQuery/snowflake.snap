@@ -1,10 +1,18 @@
 
 [TestSegmentsSuite/TestSegmentQueries/snowflake - 1]
-
-    select SUBSTRING(to_varchar(workspace), 1, 100) as "segment", SUBSTRING(to_varchar(run_status), 1, 100) as "segment2", SUBSTRING(to_varchar(run_type), 1, 100) as "segment3", count(*) as "num_rows"
-    from db.default.runs 
-    where created_at >= '1985-07-16T00:00:00Z' and created_at < '2025-03-16T00:00:00Z' and 1=1
-    group by "segment", "segment2", "segment3"
-    order by "num_rows" desc limit 10
-
+select
+  SUBSTRING(to_varchar(workspace), 1, 100) as "segment", 
+  SUBSTRING(to_varchar(run_status), 1, 100) as "segment2", 
+  SUBSTRING(to_varchar(run_type), 1, 100) as "segment3", 
+  count(*) as "num_rows"
+from db.default.runs 
+where
+  created_at >= '1985-07-16T00:00:00Z' and 
+  created_at < '2025-03-16T00:00:00Z' and 
+  1=1
+group by
+  "segment", 
+  "segment2", 
+  "segment3"
+order by "num_rows" desc limit 10
 ---

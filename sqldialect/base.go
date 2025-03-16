@@ -222,13 +222,11 @@ func (s *Select) ToSql(dialect Dialect) (string, error) {
 		}
 	}
 
-	return fmt.Sprintf(`
-	%s
-	from %s %s
-	%s
-	%s
-	%s %s
-	`,
+	return fmt.Sprintf(`%s
+from %s %s
+%s
+%s
+%s %s`,
 		buildListSegment("select", ", ", colsSql),
 		tableSql,
 		strings.Join(joinsSql, " "),
@@ -243,8 +241,12 @@ func buildListSegment(segmentId string, separator string, sqls []string) string 
 	if len(sqls) == 0 {
 		return ""
 	}
+	if len(sqls) == 1 {
+		return fmt.Sprintf(`%s %s`, segmentId, strings.Join(sqls, separator))
+	}
 
-	return fmt.Sprintf(`%s %s`, segmentId, strings.Join(sqls, separator))
+	separator = fmt.Sprintf("%s\n  ", separator)
+	return fmt.Sprintf("%s\n  %s", segmentId, strings.Join(sqls, separator))
 }
 
 func exprsToSql[T Expr](exprs []T, dialect Dialect) ([]string, error) {
