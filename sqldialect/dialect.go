@@ -27,6 +27,7 @@ type Dialect interface {
 	ToString(Expr) Expr
 	Coalesce(exprs ...Expr) Expr
 	ToFloat64(Expr) Expr
+	SubString(expr Expr, start int, length int) Expr
 
 	ResolveTime(time.Time) (string, error)
 	ResolveTimeColumn(col *TimeColExpr) (string, error)
@@ -118,6 +119,10 @@ func (d *ClickHouseDialect) AggregationColumnReference(expression Expr, alias st
 	return Identifier(alias)
 }
 
+func (d *ClickHouseDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("substring", expr, Int64(int64(start)), Int64(int64(length)))
+}
+
 //
 // BigQueryDialect
 //
@@ -198,6 +203,10 @@ func (d *BigQueryDialect) Coalesce(exprs ...Expr) Expr {
 
 func (d *BigQueryDialect) AggregationColumnReference(expression Expr, alias string) Expr {
 	return expression
+}
+
+func (d *BigQueryDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("SUBSTR", expr, Int64(int64(start)), Int64(int64(length)))
 }
 
 //
@@ -282,6 +291,10 @@ func (d *SnowflakeDialect) AggregationColumnReference(expression Expr, alias str
 	return Identifier(alias)
 }
 
+func (d *SnowflakeDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+}
+
 //
 // RedshiftDialect
 //
@@ -362,6 +375,10 @@ func (d *RedshiftDialect) Coalesce(exprs ...Expr) Expr {
 
 func (d *RedshiftDialect) AggregationColumnReference(expression Expr, alias string) Expr {
 	return Identifier(alias)
+}
+
+func (d *RedshiftDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
 }
 
 //
@@ -446,8 +463,12 @@ func (d *PostgresDialect) AggregationColumnReference(expression Expr, alias stri
 	return expression
 }
 
+func (d *PostgresDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+}
+
 //
-// PostgresDialect
+// DuckDBDialect
 //
 
 var _ Dialect = (*DuckDBDialect)(nil)
@@ -526,6 +547,10 @@ func (d *DuckDBDialect) Coalesce(exprs ...Expr) Expr {
 
 func (d *DuckDBDialect) AggregationColumnReference(expression Expr, alias string) Expr {
 	return expression
+}
+
+func (d *DuckDBDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
 }
 
 //
@@ -621,6 +646,10 @@ func (d *MySQLDialect) AggregationColumnReference(expression Expr, alias string)
 	return expression
 }
 
+func (d *MySQLDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+}
+
 //
 // DatabricksDialect
 //
@@ -701,6 +730,10 @@ func (d *DatabricksDialect) Coalesce(exprs ...Expr) Expr {
 
 func (d *DatabricksDialect) AggregationColumnReference(expression Expr, alias string) Expr {
 	return Identifier(alias)
+}
+
+func (d *DatabricksDialect) SubString(expr Expr, start int, length int) Expr {
+	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
 }
 
 // utils

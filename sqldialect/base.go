@@ -47,6 +47,8 @@ type LimitExpr struct {
 	rows *IntLitExpr
 }
 
+var _ Expr = (*LimitExpr)(nil)
+
 func Limit(rows *IntLitExpr) *LimitExpr {
 	return &LimitExpr{rows}
 }
@@ -64,6 +66,8 @@ type NotImplementedExpr struct {
 	msg string
 }
 
+var _ Expr = (*NotImplementedExpr)(nil)
+
 func NotImplementedWithExplanation(msg string) *NotImplementedExpr {
 	return &NotImplementedExpr{msg: msg}
 }
@@ -80,6 +84,9 @@ func (e *NotImplementedExpr) ToSql(dialect Dialect) (string, error) {
 type IdentifierExpr struct {
 	identifier string
 }
+
+var _ Expr = (*IdentifierExpr)(nil)
+var _ TextExpr = (*IdentifierExpr)(nil)
 
 func Identifier(identifier string) *IdentifierExpr {
 	return &IdentifierExpr{identifier: identifier}
@@ -99,6 +106,8 @@ type OrderExpr struct {
 	expr Expr
 	desc bool
 }
+
+var _ Expr = (*OrderExpr)(nil)
 
 func Asc(expr Expr) *OrderExpr {
 	return &OrderExpr{expr: expr, desc: false}
@@ -260,6 +269,8 @@ type StarExpr struct {
 	except []Expr
 }
 
+var _ Expr = (*StarExpr)(nil)
+
 func Star(except ...Expr) *StarExpr {
 	return &StarExpr{except: except}
 }
@@ -275,6 +286,8 @@ func (s *StarExpr) ToSql(dialect Dialect) (string, error) {
 type SqlExpr struct {
 	sql string
 }
+
+var _ Expr = (*SqlExpr)(nil)
 
 func Sql(sql string) *SqlExpr {
 	return &SqlExpr{sql: sql}
@@ -307,6 +320,9 @@ type TextColExpr struct {
 	ColBaseExpr
 }
 
+var _ Expr = (*TextColExpr)(nil)
+var _ TextExpr = (*TextColExpr)(nil)
+
 func TextCol(name string) *TextColExpr {
 	return &TextColExpr{ColBaseExpr: ColBaseExpr{sql: name}}
 }
@@ -316,6 +332,9 @@ func (s *TextColExpr) IsTextExpr() {}
 type TimeColExpr struct {
 	name string
 }
+
+var _ Expr = (*TimeColExpr)(nil)
+var _ TimeExpr = (*TimeColExpr)(nil)
 
 func TimeCol(name string) *TimeColExpr {
 	return &TimeColExpr{name: name}
@@ -330,6 +349,9 @@ func (t *TimeColExpr) ToSql(dialect Dialect) (string, error) {
 type NumericColExpr struct {
 	ColBaseExpr
 }
+
+var _ Expr = (*NumericColExpr)(nil)
+var _ NumericExpr = (*NumericColExpr)(nil)
 
 func NumericCol(name string) *NumericColExpr {
 	return &NumericColExpr{ColBaseExpr: ColBaseExpr{sql: name}}
@@ -346,6 +368,9 @@ type TableFqnExpr struct {
 	datasetId string
 	tableId   string
 }
+
+var _ Expr = (*TableFqnExpr)(nil)
+var _ TableExpr = (*TableFqnExpr)(nil)
 
 func TableFqn(projectId, datasetId, tableId string) *TableFqnExpr {
 	return &TableFqnExpr{
@@ -370,6 +395,9 @@ type JoinExpr struct {
 	how   JoinDefExpr
 }
 
+var _ Expr = (*JoinExpr)(nil)
+var _ TableExpr = (*JoinExpr)(nil)
+
 func Join(other TableExpr, how JoinDefExpr) *JoinExpr {
 	return &JoinExpr{
 		other: other,
@@ -391,7 +419,8 @@ func (t *JoinExpr) ToSql(dialect Dialect) (string, error) {
 	return fmt.Sprintf("join %s %s", tableSql, howSql), nil
 }
 
-func (t *JoinExpr) IsJoinExpr() {}
+func (t *JoinExpr) IsJoinExpr()  {}
+func (t *JoinExpr) IsTableExpr() {}
 
 type JoinDefExpr interface {
 	Expr
@@ -401,6 +430,9 @@ type JoinDefExpr interface {
 type JoinOnExpr struct {
 	conds []CondExpr
 }
+
+var _ Expr = (*JoinOnExpr)(nil)
+var _ JoinDefExpr = (*JoinOnExpr)(nil)
 
 func On(conds ...CondExpr) *JoinOnExpr {
 	return &JoinOnExpr{conds: conds}
@@ -420,6 +452,9 @@ func (t *JoinOnExpr) IsJoinDefExpr() {}
 type JoinUsingExpr struct {
 	exprs []Expr
 }
+
+var _ Expr = (*JoinUsingExpr)(nil)
+var _ JoinDefExpr = (*JoinUsingExpr)(nil)
 
 func Using(exprs ...Expr) *JoinUsingExpr {
 	return &JoinUsingExpr{exprs: exprs}
@@ -444,6 +479,8 @@ type ArgExpr struct {
 	pos int
 }
 
+var _ Expr = (*ArgExpr)(nil)
+
 func Arg(pos int) *ArgExpr {
 	return &ArgExpr{pos: pos}
 }
@@ -460,6 +497,9 @@ type StringLitExpr struct {
 	val string
 }
 
+var _ Expr = (*StringLitExpr)(nil)
+var _ TextExpr = (*StringLitExpr)(nil)
+
 func String(val string) *StringLitExpr {
 	return &StringLitExpr{val: val}
 }
@@ -472,9 +512,13 @@ func (e *StringLitExpr) ToSql(dialect Dialect) (string, error) {
 	return fmt.Sprintf("'%v'", e.val), nil
 }
 
+func (e *StringLitExpr) IsTextExpr() {}
+
 //
 // IntLitExpr
 //
+
+var _ Expr = (*IntLitExpr)(nil)
 
 type IntLitExpr struct {
 	val int64
@@ -494,6 +538,8 @@ func (e *IntLitExpr) IsNumericExpr() {}
 // TimeLitExpr
 //
 
+var _ Expr = (*TimeLitExpr)(nil)
+
 type TimeLitExpr struct {
 	val *time.Time
 }
@@ -511,6 +557,8 @@ func (e *TimeLitExpr) IsTimeExpr() {}
 //
 // AsExpr
 //
+
+var _ Expr = (*AsExpr)(nil)
 
 type AsExpr struct {
 	expr  Expr
@@ -539,6 +587,8 @@ func (e *AsExpr) ToSql(dialect Dialect) (string, error) {
 // DistinctExpr
 //
 
+var _ Expr = (*DistinctExpr)(nil)
+
 type DistinctExpr struct {
 	expr Expr
 }
@@ -559,6 +609,8 @@ func (e *DistinctExpr) ToSql(dialect Dialect) (string, error) {
 //
 // CoalesceExpr
 //
+
+var _ Expr = (*CoalesceExpr)(nil)
 
 type CoalesceExpr struct {
 	exprs []Expr
@@ -592,6 +644,8 @@ func CountAll() *CountAllExpr {
 	return &CountAllExpr{}
 }
 
+var _ Expr = (*ToStringExpr)(nil)
+
 type ToStringExpr struct {
 	expr Expr
 }
@@ -604,9 +658,32 @@ func (e *ToStringExpr) ToSql(dialect Dialect) (string, error) {
 	return dialect.ToString(e.expr).ToSql(dialect)
 }
 
+var _ Expr = (*SubStringExpr)(nil)
+
+type SubStringExpr struct {
+	expr   Expr
+	start  int
+	length int
+}
+
+func SubString(expr Expr, start int, length int) *SubStringExpr {
+	return &SubStringExpr{
+		expr:   expr,
+		start:  start,
+		length: length,
+	}
+}
+
+func (s SubStringExpr) ToSql(dialect Dialect) (string, error) {
+	return dialect.SubString(s.expr, s.start, s.length).ToSql(dialect)
+}
+
 type ToFloat64Expr struct {
 	expr Expr
 }
+
+var _ Expr = (*ToFloat64Expr)(nil)
+var _ NumericExpr = (*ToFloat64Expr)(nil)
 
 func ToFloat64(expr Expr) *ToFloat64Expr {
 	return &ToFloat64Expr{expr: expr}
@@ -616,6 +693,8 @@ func (e *ToFloat64Expr) ToSql(dialect Dialect) (string, error) {
 	return dialect.ToFloat64(e.expr).ToSql(dialect)
 }
 
+func (e *ToFloat64Expr) IsNumericExpr() {}
+
 //
 // FnExpr
 //
@@ -624,6 +703,8 @@ type FnExpr struct {
 	name string
 	ops  []Expr
 }
+
+var _ Expr = (*FnExpr)(nil)
 
 func Fn(name string, ops ...Expr) *FnExpr {
 	return &FnExpr{name: name, ops: ops}
@@ -651,6 +732,8 @@ type WrapSqlExpr struct {
 	sql     string
 	wrapped []Expr
 }
+
+var _ Expr = (*WrapSqlExpr)(nil)
 
 func WrapSql(sql string, wrapped ...Expr) *WrapSqlExpr {
 	return &WrapSqlExpr{sql: sql, wrapped: wrapped}
@@ -680,6 +763,8 @@ type AggregationColumnReferenceExpr struct {
 	expression Expr
 	alias      string
 }
+
+var _ Expr = (*AggregationColumnReferenceExpr)(nil)
 
 func AggregationColumnReference(expression Expr, alias string) *AggregationColumnReferenceExpr {
 	return &AggregationColumnReferenceExpr{expression: expression, alias: alias}
