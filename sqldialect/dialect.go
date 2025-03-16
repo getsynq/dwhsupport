@@ -27,7 +27,7 @@ type Dialect interface {
 	ToString(Expr) Expr
 	Coalesce(exprs ...Expr) Expr
 	ToFloat64(Expr) Expr
-	SubString(expr Expr, start int, length int) Expr
+	SubString(expr Expr, start int64, length int64) Expr
 
 	ResolveTime(time.Time) (string, error)
 	ResolveTimeColumn(col *TimeColExpr) (string, error)
@@ -119,8 +119,8 @@ func (d *ClickHouseDialect) AggregationColumnReference(expression Expr, alias st
 	return Identifier(alias)
 }
 
-func (d *ClickHouseDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("substring", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *ClickHouseDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("substring", expr, Int64(start), Int64(length))
 }
 
 //
@@ -205,8 +205,8 @@ func (d *BigQueryDialect) AggregationColumnReference(expression Expr, alias stri
 	return expression
 }
 
-func (d *BigQueryDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("SUBSTR", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *BigQueryDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("SUBSTR", expr, Int64(start), Int64(length))
 }
 
 //
@@ -291,8 +291,8 @@ func (d *SnowflakeDialect) AggregationColumnReference(expression Expr, alias str
 	return Identifier(alias)
 }
 
-func (d *SnowflakeDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *SnowflakeDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
 //
@@ -377,8 +377,8 @@ func (d *RedshiftDialect) AggregationColumnReference(expression Expr, alias stri
 	return Identifier(alias)
 }
 
-func (d *RedshiftDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *RedshiftDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
 //
@@ -463,8 +463,8 @@ func (d *PostgresDialect) AggregationColumnReference(expression Expr, alias stri
 	return expression
 }
 
-func (d *PostgresDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *PostgresDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
 //
@@ -549,8 +549,8 @@ func (d *DuckDBDialect) AggregationColumnReference(expression Expr, alias string
 	return expression
 }
 
-func (d *DuckDBDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *DuckDBDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
 //
@@ -646,8 +646,8 @@ func (d *MySQLDialect) AggregationColumnReference(expression Expr, alias string)
 	return expression
 }
 
-func (d *MySQLDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *MySQLDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
 //
@@ -732,8 +732,8 @@ func (d *DatabricksDialect) AggregationColumnReference(expression Expr, alias st
 	return Identifier(alias)
 }
 
-func (d *DatabricksDialect) SubString(expr Expr, start int, length int) Expr {
-	return Fn("SUBSTRING", expr, Int64(int64(start)), Int64(int64(length)))
+func (d *DatabricksDialect) SubString(expr Expr, start int64, length int64) Expr {
+	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
 // utils

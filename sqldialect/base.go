@@ -662,11 +662,11 @@ var _ Expr = (*SubStringExpr)(nil)
 
 type SubStringExpr struct {
 	expr   Expr
-	start  int
-	length int
+	start  int64
+	length int64
 }
 
-func SubString(expr Expr, start int, length int) *SubStringExpr {
+func SubString(expr Expr, start int64, length int64) *SubStringExpr {
 	return &SubStringExpr{
 		expr:   expr,
 		start:  start,

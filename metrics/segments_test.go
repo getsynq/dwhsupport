@@ -34,7 +34,7 @@ func (s *SegmentsSuite) TestSegmentQueries() {
 		{"duckdb", dwhsql.NewDuckDBDialect()},
 	} {
 
-		tableFqnExpr := sqldialect.TableFqn("", "default", "runs")
+		tableFqnExpr := sqldialect.TableFqn("db", "default", "runs")
 
 		args := &MonitorArgs{
 			Conditions: []sqldialect.CondExpr{
@@ -61,11 +61,12 @@ func (s *SegmentsSuite) TestSegmentQueries() {
 			From:  time.Date(1985, 7, 16, 0, 0, 0, 0, time.UTC),
 			To:    time.Date(2025, 3, 16, 0, 0, 0, 0, time.UTC),
 		}
-		limit := int64(10)
+		rowsLimit := int64(10)
+		segmentLengthLimit := int64(100)
 
 		s.Run(dialect.name, func() {
 
-			queryBuilder, err := SegmentsListQuery(tableFqnExpr, args, partition, limit)
+			queryBuilder, err := SegmentsListQuery(tableFqnExpr, args, partition, rowsLimit, segmentLengthLimit)
 			s.Require().NoError(err)
 			s.Require().NotNil(queryBuilder)
 
