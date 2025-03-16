@@ -1,0 +1,10 @@
+
+[TestSegmentsSuite/TestSegmentQueries/clickhouse - 1]
+
+    select toString(workspace) as segment, toString(run_status) as segment2, toString(run_type) as segment3, toInt64(count(*)) as num_rows
+    from default.runs 
+    where created_at >= parseDateTimeBestEffort('1985-07-16 00:00:00') and created_at < parseDateTimeBestEffort('2025-03-16 00:00:00') and 1=1
+    group by segment, segment2, segment3
+    order by num_rows desc limit 10
+
+---

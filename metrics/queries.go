@@ -32,14 +32,30 @@ type SegmentationRuleAll struct{}
 
 func (s *SegmentationRuleAll) isSegmentationRule() {}
 
+func AllSegments() *SegmentationRuleAll {
+	return &SegmentationRuleAll{}
+}
+
 type SegmentationRuleAcceptList struct {
 	Values []string
+}
+
+func AcceptSegments(values ...string) *SegmentationRuleAcceptList {
+	return &SegmentationRuleAcceptList{
+		Values: values,
+	}
 }
 
 func (s *SegmentationRuleAcceptList) isSegmentationRule() {}
 
 type SegmentationRuleExcludeList struct {
 	Values []string
+}
+
+func ExcludeSegments(values ...string) *SegmentationRuleExcludeList {
+	return &SegmentationRuleExcludeList{
+		Values: values,
+	}
 }
 
 func (s *SegmentationRuleExcludeList) isSegmentationRule() {}

@@ -1,0 +1,10 @@
+
+[TestSegmentsSuite/TestSegmentQueries/bigquery - 1]
+
+    select SAFE_CAST(workspace AS STRING) as segment, SAFE_CAST(run_status AS STRING) as segment2, SAFE_CAST(run_type AS STRING) as segment3, count(*) as num_rows
+    from `.default.runs` 
+    where timestamp(created_at) >= timestamp '1985-07-16T00:00:00Z' and timestamp(created_at) < timestamp '2025-03-16T00:00:00Z' and 1=1
+    group by SAFE_CAST(workspace AS STRING) as segment, SAFE_CAST(run_status AS STRING) as segment2, SAFE_CAST(run_type AS STRING) as segment3
+    order by num_rows desc limit 10
+
+---

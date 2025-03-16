@@ -1,0 +1,10 @@
+
+[TestSegmentsSuite/TestSegmentQueries/mysql - 1]
+
+    select CAST(workspace AS CHAR) as segment, CAST(run_status AS CHAR) as segment2, CAST(run_type AS CHAR) as segment3, count(*) as num_rows
+    from default.runs 
+    where created_at >= '1985-07-16T00:00:00Z' and created_at < '2025-03-16T00:00:00Z' and 1=1
+    group by CAST(workspace AS CHAR) as segment, CAST(run_status AS CHAR) as segment2, CAST(run_type AS CHAR) as segment3
+    order by num_rows desc limit 10
+
+---
