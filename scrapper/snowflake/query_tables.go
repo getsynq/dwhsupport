@@ -13,12 +13,13 @@ var tablesQuery = `
         t.table_schema as "schema",
         t.table_name as "table",
         t.table_type as "table_type",
-        NVL2(t.comment, t.comment, '') as "description"
+        NVL2(t.comment, t.comment, '') as "description",
+        (table_type='VIEW' OR table_type='MATERIALIZED VIEW') as "is_view",
+        table_type='BASE TABLE' as "is_table"
 	from  
 		%s.information_schema.tables as t
 	where 
-		table_type='BASE TABLE'
-	AND UPPER(t.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
+		UPPER(t.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
 	`
 
 func (e *SnowflakeScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
@@ -48,6 +49,9 @@ func (e *SnowflakeScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableR
 				return nil, err
 			}
 			result.Instance = e.conf.Account
+			if result.Description != nil && *result.Description == "" {
+				result.Description = nil
+			}
 			results = append(results, &result)
 		}
 	}
