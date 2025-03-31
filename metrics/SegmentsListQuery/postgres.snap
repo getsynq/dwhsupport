@@ -14,5 +14,5 @@ group by
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
   SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3
-order by num_rows desc limit 10
+order by count(*) desc limit 10
 ---
