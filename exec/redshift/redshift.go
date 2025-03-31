@@ -104,8 +104,12 @@ func (e *RedshiftExecutor) Exec(ctx context.Context, q string) error {
 func (e *RedshiftExecutor) Close() error {
 	var errs []error
 	if e.sshTunnelDialer != nil {
-		errs = append(errs, e.sshTunnelDialer.Close())
+		if err := e.sshTunnelDialer.Close(); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	errs = append(errs, e.db.Close())
+	if err := e.db.Close(); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
 }
