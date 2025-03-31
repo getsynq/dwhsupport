@@ -33,8 +33,9 @@ func (d *SshTunnelDialer) Close() error {
 	if d.client == nil {
 		return nil
 	}
+	err := d.client.Close()
 	d.client = nil
-	return d.client.Close()
+	return err
 }
 
 func (d *SshTunnelDialer) Dial(network, address string) (net.Conn, error) {
