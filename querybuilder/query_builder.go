@@ -41,7 +41,13 @@ func (b *QueryBuilder) WithSegmentFiltered(segment Expr, values []string, isExcl
 	valueExprs := lo.Map(values, func(val string, _ int) Expr { return String(val) })
 	i := len(b.segments)
 	b.segments = append(b.segments, segment)
+	if b.segmentValues == nil {
+		b.segmentValues = map[int][]Expr{}
+	}
 	b.segmentValues[i] = valueExprs
+	if b.segmentIsExcluding == nil {
+		b.segmentIsExcluding = map[int]bool{}
+	}
 	b.segmentIsExcluding[i] = isExcluding
 	return b
 }
