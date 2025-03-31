@@ -1,0 +1,13 @@
+
+[TestMetricsSuite/TestSimpleQueryBuilder - 1]
+select
+  'workspace' as field, 
+  count(*) as num_rows, 
+  count(workspace) as num_not_null, 
+  count(distinct workspace) as num_unique, 
+  SUM(CASE WHEN %s THEN 1 ELSE 0 END)(workspace = '') as num_empty
+from "db"."default"."runs" 
+
+
+ 
+---
