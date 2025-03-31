@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -33,8 +34,9 @@ type Executor interface {
 var _ stdsql.StdSqlExecutor = &PostgresExecutor{}
 
 type PostgresExecutor struct {
-	conf *PostgresConf
-	db   *sqlx.DB
+	conf            *PostgresConf
+	db              *sqlx.DB
+	sshTunnelDialer *sshtunnel.SshTunnelDialer
 }
 
 func (e *PostgresExecutor) GetDb() *sqlx.DB {
@@ -62,10 +64,11 @@ func NewPostgresExecutor(ctx context.Context, conf *PostgresConf) (*PostgresExec
 
 	var err error
 	var db *sqlx.DB
+	var sshTunnelDialer *sshtunnel.SshTunnelDialer
 
 	if conf.SSHTunnel.IsEnabled() {
 		logging.GetLogger(ctx).Infof("using ssh tunnel to connect to %s", conf.Host)
-		sshTunnelDialer, err := sshtunnel.NewSshTunnelDialer(conf.SSHTunnel)
+		sshTunnelDialer, err = sshtunnel.NewSshTunnelDialer(conf.SSHTunnel)
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +92,7 @@ func NewPostgresExecutor(ctx context.Context, conf *PostgresConf) (*PostgresExec
 		return nil, exec.NewAuthError(err)
 	}
 
-	return &PostgresExecutor{conf: conf, db: db}, nil
+	return &PostgresExecutor{conf: conf, db: db, sshTunnelDialer: sshTunnelDialer}, nil
 }
 
 func (e *PostgresExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
@@ -105,5 +108,14 @@ func (e *PostgresExecutor) Exec(ctx context.Context, q string) error {
 }
 
 func (e *PostgresExecutor) Close() error {
-	return e.db.Close()
+	var errs []error
+	if e.sshTunnelDialer != nil {
+		if err := e.sshTunnelDialer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if err := e.db.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }

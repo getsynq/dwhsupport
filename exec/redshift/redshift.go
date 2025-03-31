@@ -3,6 +3,7 @@ package redshift
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 
@@ -33,8 +34,9 @@ type Executor interface {
 var _ stdsql.StdSqlExecutor = &RedshiftExecutor{}
 
 type RedshiftExecutor struct {
-	conf *RedshiftConf
-	db   *sqlx.DB
+	conf            *RedshiftConf
+	db              *sqlx.DB
+	sshTunnelDialer *sshtunnel.SshTunnelDialer
 }
 
 func (e *RedshiftExecutor) GetDb() *sqlx.DB {
@@ -56,10 +58,11 @@ func NewRedshiftExecutor(ctx context.Context, conf *RedshiftConf) (*RedshiftExec
 
 	var err error
 	var db *sqlx.DB
+	var sshTunnelDialer *sshtunnel.SshTunnelDialer
 
 	if conf.SSHTunnel.IsEnabled() {
 		logging.GetLogger(ctx).Infof("using ssh tunnel to connect to %s", conf.Host)
-		sshTunnelDialer, err := sshtunnel.NewSshTunnelDialer(conf.SSHTunnel)
+		sshTunnelDialer, err = sshtunnel.NewSshTunnelDialer(conf.SSHTunnel)
 		if err != nil {
 			return nil, err
 		}
@@ -83,7 +86,7 @@ func NewRedshiftExecutor(ctx context.Context, conf *RedshiftConf) (*RedshiftExec
 		return nil, exec.NewAuthError(err)
 	}
 
-	return &RedshiftExecutor{conf: conf, db: db}, nil
+	return &RedshiftExecutor{conf: conf, db: db, sshTunnelDialer: sshTunnelDialer}, nil
 }
 
 func (e *RedshiftExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
@@ -99,5 +102,14 @@ func (e *RedshiftExecutor) Exec(ctx context.Context, q string) error {
 }
 
 func (e *RedshiftExecutor) Close() error {
-	return e.db.Close()
+	var errs []error
+	if e.sshTunnelDialer != nil {
+		if err := e.sshTunnelDialer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if err := e.db.Close(); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }
