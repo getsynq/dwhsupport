@@ -1,0 +1,15 @@
+
+[TestMetricsSuite/TestPartition - 1]
+select
+  'ingested_at' as field, 
+  toInt64(count(*)) as num_rows, 
+  toInt64(count(ingested_at)) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+where
+  ingested_at >= parseDateTimeBestEffort('2025-01-01 00:00:00') and 
+  ingested_at < parseDateTimeBestEffort('2025-02-01 00:00:00')
+
+ 
+---

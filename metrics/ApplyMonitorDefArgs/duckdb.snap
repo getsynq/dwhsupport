@@ -1,0 +1,320 @@
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_no_conditions_no_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+
+group by time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_no_conditions_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+
+
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_no_conditions_single_segmentation_all/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+
+group by
+  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_no_conditions_single_segmentation_all/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment
+from default.runs 
+
+group by COALESCE(CAST(run_type AS VARCHAR), '')
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_no_conditions_multi_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+where
+  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
+  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4')
+group by
+  COALESCE(CAST(workspace AS VARCHAR), ''), 
+  COALESCE(CAST(run_status AS VARCHAR), ''), 
+  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_no_conditions_multi_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
+from default.runs 
+where
+  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
+  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4')
+group by
+  COALESCE(CAST(workspace AS VARCHAR), ''), 
+  COALESCE(CAST(run_status AS VARCHAR), ''), 
+  COALESCE(CAST(run_type AS VARCHAR), '')
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_single_condition_no_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+where 1=1
+group by time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_single_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+where 1=1
+
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_single_condition_single_segmentation_all/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+where 1=1
+group by
+  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_single_condition_single_segmentation_all/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment
+from default.runs 
+where 1=1
+group by COALESCE(CAST(run_type AS VARCHAR), '')
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_single_condition_multi_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+where
+  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
+  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  1=1
+group by
+  COALESCE(CAST(workspace AS VARCHAR), ''), 
+  COALESCE(CAST(run_status AS VARCHAR), ''), 
+  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_single_condition_multi_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
+from default.runs 
+where
+  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
+  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  1=1
+group by
+  COALESCE(CAST(workspace AS VARCHAR), ''), 
+  COALESCE(CAST(run_status AS VARCHAR), ''), 
+  COALESCE(CAST(run_type AS VARCHAR), '')
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_multi_condition_no_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+where
+  run_status > 0 and 
+  run_type > 0
+group by time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_multi_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+where
+  run_status > 0 and 
+  run_type > 0
+
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_multi_condition_single_segmentation_all/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+where
+  run_status > 0 and 
+  run_type > 0
+group by
+  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_multi_condition_single_segmentation_all/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment
+from default.runs 
+where
+  run_status > 0 and 
+  run_type > 0
+group by COALESCE(CAST(run_type AS VARCHAR), '')
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_multi_condition_multi_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3, 
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
+from default.runs 
+where
+  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
+  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  run_status > 0 and 
+  run_type > 0
+group by
+  COALESCE(CAST(workspace AS VARCHAR), ''), 
+  COALESCE(CAST(run_status AS VARCHAR), ''), 
+  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/duckdb_multi_condition_multi_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
+from default.runs 
+where
+  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
+  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  run_status > 0 and 
+  run_type > 0
+group by
+  COALESCE(CAST(workspace AS VARCHAR), ''), 
+  COALESCE(CAST(run_status AS VARCHAR), ''), 
+  COALESCE(CAST(run_type AS VARCHAR), '')
+ 
+---

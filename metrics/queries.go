@@ -95,6 +95,7 @@ func ApplyMonitorDefArgs(
 			case *SegmentationRuleExcludeList:
 				useValues = true
 				isExcluding = true
+				values = t.Values
 			case *SegmentationRuleAll:
 				// No filtration
 			}

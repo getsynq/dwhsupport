@@ -1,0 +1,320 @@
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_no_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+
+group by time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from "db"."default"."runs" 
+
+
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_single_segmentation_all/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+
+group by
+  segment, 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_single_segmentation_all/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment
+from "db"."default"."runs" 
+
+group by segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_multi_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+where
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4')
+group by
+  segment, 
+  segment_2, 
+  segment_3, 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_multi_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
+from "db"."default"."runs" 
+where
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4')
+group by
+  segment, 
+  segment_2, 
+  segment_3
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_no_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+where 1=1
+group by time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from "db"."default"."runs" 
+where 1=1
+
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_single_segmentation_all/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+where 1=1
+group by
+  segment, 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_single_segmentation_all/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment
+from "db"."default"."runs" 
+where 1=1
+group by segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_multi_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+where
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
+  1=1
+group by
+  segment, 
+  segment_2, 
+  segment_3, 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_multi_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
+from "db"."default"."runs" 
+where
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
+  1=1
+group by
+  segment, 
+  segment_2, 
+  segment_3
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_no_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+where
+  run_status > 0 and 
+  run_type > 0
+group by time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from "db"."default"."runs" 
+where
+  run_status > 0 and 
+  run_type > 0
+
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_single_segmentation_all/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+where
+  run_status > 0 and 
+  run_type > 0
+group by
+  segment, 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_single_segmentation_all/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment
+from "db"."default"."runs" 
+where
+  run_status > 0 and 
+  run_type > 0
+group by segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_multi_segmentation/partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3, 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment
+from "db"."default"."runs" 
+where
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
+  run_status > 0 and 
+  run_type > 0
+group by
+  segment, 
+  segment_2, 
+  segment_3, 
+  time_segment
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_multi_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max, 
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_status AS VARCHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
+from "db"."default"."runs" 
+where
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
+  run_status > 0 and 
+  run_type > 0
+group by
+  segment, 
+  segment_2, 
+  segment_3
+ 
+---

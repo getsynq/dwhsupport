@@ -1,0 +1,21 @@
+
+[TestMetricsSuite/TestPartitionWithTimeRange - 1]
+select
+  'run_type' as field, 
+  count(*) as num_rows, 
+  count(run_type) as num_not_null, 
+  count(distinct run_type) as num_unique, 
+  SUM(CASE WHEN %s THEN 1 ELSE 0 END)(run_type = 0) as num_empty, 
+  CAST(avg(run_type) AS FLOAT) as mean, 
+  CAST(min(run_type) AS FLOAT) as min, 
+  CAST(max(run_type) AS FLOAT) as max, 
+  CAST(MEDIAN(run_type) AS FLOAT) as median, 
+  CAST(STDDEV(run_type) AS FLOAT) as stddev, 
+  DATEADD(DAY, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d 00:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+from default.runs 
+where
+  ingested_at >= '2025-01-01T00:00:00Z' and 
+  ingested_at < '2025-02-01T00:00:00Z'
+group by time_segment
+ 
+---

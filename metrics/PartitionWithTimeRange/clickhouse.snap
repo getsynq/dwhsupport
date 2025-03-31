@@ -1,0 +1,21 @@
+
+[TestMetricsSuite/TestPartitionWithTimeRange - 1]
+select
+  'run_type' as field, 
+  toInt64(count(*)) as num_rows, 
+  toInt64(count(run_type)) as num_not_null, 
+  toInt64(count(distinct run_type)) as num_unique, 
+  toInt64(countIf(run_type = 0)) as num_empty, 
+  toFloat64(avg(run_type)) as mean, 
+  toFloat64(min(run_type)) as min, 
+  toFloat64(max(run_type)) as max, 
+  toFloat64(median(run_type)) as median, 
+  toFloat64(stddevSamp(run_type)) as stddev, 
+  timestamp_add(toStartOfInterval(ingested_at, interval 1 DAY), interval 1 DAY) as time_segment
+from default.runs 
+where
+  ingested_at >= parseDateTimeBestEffort('2025-01-01 00:00:00') and 
+  ingested_at < parseDateTimeBestEffort('2025-02-01 00:00:00')
+group by time_segment
+ 
+---
