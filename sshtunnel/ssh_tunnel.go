@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/pkg/errors"
@@ -23,21 +24,43 @@ func (r *SshTunnel) IsEnabled() bool {
 
 type SshTunnelDialer struct {
 	client *ssh.Client
+	mu     sync.Mutex
 }
 
 func (d *SshTunnelDialer) Close() error {
-	return d.Close()
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.client == nil {
+		return nil
+	}
+	d.client = nil
+	return d.client.Close()
 }
 
 func (d *SshTunnelDialer) Dial(network, address string) (net.Conn, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.client == nil {
+		return nil, errors.New("dialer is closed")
+	}
 	return d.client.Dial(network, address)
 }
 
 func (d *SshTunnelDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.client == nil {
+		return nil, errors.New("dialer is closed")
+	}
 	return d.client.DialContext(ctx, network, address)
 }
 
 func (d *SshTunnelDialer) DialTimeout(network, address string, timeout time.Duration) (net.Conn, error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.client == nil {
+		return nil, errors.New("dialer is closed")
+	}
 	return d.client.Dial(network, address)
 }
 
