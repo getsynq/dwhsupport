@@ -9,7 +9,7 @@ select
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
 from default.runs 
 
-group by time_segment
+group by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -39,7 +39,7 @@ from default.runs
 
 group by
   COALESCE(CAST(run_type AS VARCHAR), ''), 
-  time_segment
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -76,7 +76,7 @@ group by
   COALESCE(CAST(workspace AS VARCHAR), ''), 
   COALESCE(CAST(run_status AS VARCHAR), ''), 
   COALESCE(CAST(run_type AS VARCHAR), ''), 
-  time_segment
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -111,7 +111,7 @@ select
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
 from default.runs 
 where 1=1
-group by time_segment
+group by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -141,7 +141,7 @@ from default.runs
 where 1=1
 group by
   COALESCE(CAST(run_type AS VARCHAR), ''), 
-  time_segment
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -179,7 +179,7 @@ group by
   COALESCE(CAST(workspace AS VARCHAR), ''), 
   COALESCE(CAST(run_status AS VARCHAR), ''), 
   COALESCE(CAST(run_type AS VARCHAR), ''), 
-  time_segment
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -217,7 +217,7 @@ from default.runs
 where
   run_status > 0 and 
   run_type > 0
-group by time_segment
+group by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -251,7 +251,7 @@ where
   run_type > 0
 group by
   COALESCE(CAST(run_type AS VARCHAR), ''), 
-  time_segment
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 
@@ -292,7 +292,7 @@ group by
   COALESCE(CAST(workspace AS VARCHAR), ''), 
   COALESCE(CAST(run_status AS VARCHAR), ''), 
   COALESCE(CAST(run_type AS VARCHAR), ''), 
-  time_segment
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
  
 ---
 

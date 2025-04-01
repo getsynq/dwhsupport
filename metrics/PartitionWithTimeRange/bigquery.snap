@@ -16,6 +16,6 @@ from `db.default.runs`
 where
   timestamp(ingested_at) >= timestamp '2025-01-01T00:00:00Z' and 
   timestamp(ingested_at) < timestamp '2025-02-01T00:00:00Z'
-group by time_segment
+group by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), DAY), INTERVAL 1 DAY)
  
 ---

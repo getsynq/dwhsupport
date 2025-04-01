@@ -163,12 +163,12 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 			)
 			q = q.
 				Cols(As(timeExpr, Identifier("time_segment"))).
-				GroupBy(Identifier("time_segment"))
+				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
 		} else {
 			timeExpr := dialect.CeilTime(b.timeCol, *b.timeSegment)
 			q = q.
 				Cols(As(timeExpr, Identifier("time_segment"))).
-				GroupBy(Identifier("time_segment"))
+				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
 		}
 	}
 

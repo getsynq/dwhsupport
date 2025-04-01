@@ -16,6 +16,6 @@ from default.runs
 where
   ingested_at >= '2025-01-01T00:00:00Z' and 
   ingested_at < '2025-02-01T00:00:00Z'
-group by time_segment
+group by DATE_TRUNC('DAY', ingested_at) + '1 DAY'
  
 ---

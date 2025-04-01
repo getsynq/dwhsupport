@@ -38,7 +38,7 @@ select
 from default.runs 
 
 group by
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  segment, 
   time_segment
  
 ---
@@ -53,7 +53,7 @@ select
   COALESCE(CAST(run_type AS VARCHAR), '') as segment
 from default.runs 
 
-group by COALESCE(CAST(run_type AS VARCHAR), '')
+group by segment
  
 ---
 
@@ -70,12 +70,12 @@ select
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
 from default.runs 
 where
-  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
-  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4')
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4')
 group by
-  COALESCE(CAST(workspace AS VARCHAR), ''), 
-  COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  segment, 
+  segment_2, 
+  segment_3, 
   time_segment
  
 ---
@@ -92,12 +92,12 @@ select
   COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
 from default.runs 
 where
-  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
-  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4')
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4')
 group by
-  COALESCE(CAST(workspace AS VARCHAR), ''), 
-  COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), '')
+  segment, 
+  segment_2, 
+  segment_3
  
 ---
 
@@ -140,7 +140,7 @@ select
 from default.runs 
 where 1=1
 group by
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  segment, 
   time_segment
  
 ---
@@ -155,7 +155,7 @@ select
   COALESCE(CAST(run_type AS VARCHAR), '') as segment
 from default.runs 
 where 1=1
-group by COALESCE(CAST(run_type AS VARCHAR), '')
+group by segment
  
 ---
 
@@ -172,13 +172,13 @@ select
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
 from default.runs 
 where
-  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
-  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
   1=1
 group by
-  COALESCE(CAST(workspace AS VARCHAR), ''), 
-  COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  segment, 
+  segment_2, 
+  segment_3, 
   time_segment
  
 ---
@@ -195,13 +195,13 @@ select
   COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
 from default.runs 
 where
-  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
-  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
   1=1
 group by
-  COALESCE(CAST(workspace AS VARCHAR), ''), 
-  COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), '')
+  segment, 
+  segment_2, 
+  segment_3
  
 ---
 
@@ -250,7 +250,7 @@ where
   run_status > 0 and 
   run_type > 0
 group by
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  segment, 
   time_segment
  
 ---
@@ -267,7 +267,7 @@ from default.runs
 where
   run_status > 0 and 
   run_type > 0
-group by COALESCE(CAST(run_type AS VARCHAR), '')
+group by segment
  
 ---
 
@@ -284,14 +284,14 @@ select
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' as time_segment
 from default.runs 
 where
-  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
-  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
   run_status > 0 and 
   run_type > 0
 group by
-  COALESCE(CAST(workspace AS VARCHAR), ''), 
-  COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
+  segment, 
+  segment_2, 
+  segment_3, 
   time_segment
  
 ---
@@ -308,13 +308,13 @@ select
   COALESCE(CAST(run_type AS VARCHAR), '') as segment_3
 from default.runs 
 where
-  COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
-  COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
+  segment not in ('synq-demo') and 
+  segment_2 in ('1', '2', '3', '4') and 
   run_status > 0 and 
   run_type > 0
 group by
-  COALESCE(CAST(workspace AS VARCHAR), ''), 
-  COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), '')
+  segment, 
+  segment_2, 
+  segment_3
  
 ---

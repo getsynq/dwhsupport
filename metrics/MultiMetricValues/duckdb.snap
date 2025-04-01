@@ -17,7 +17,7 @@ select
 from default.runs 
 
 group by
-  COALESCE(CAST(workspace AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), '')
+  segment, 
+  segment_2
  
 ---

@@ -546,7 +546,7 @@ func (d *DuckDBDialect) Coalesce(exprs ...Expr) Expr {
 }
 
 func (d *DuckDBDialect) AggregationColumnReference(expression Expr, alias string) Expr {
-	return expression
+	return Identifier(alias)
 }
 
 func (d *DuckDBDialect) SubString(expr Expr, start int64, length int64) Expr {

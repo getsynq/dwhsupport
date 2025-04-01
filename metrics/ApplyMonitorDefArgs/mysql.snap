@@ -9,7 +9,7 @@ select
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
 from default.runs 
 
-group by time_segment
+group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -39,7 +39,7 @@ from default.runs
 
 group by
   COALESCE(CAST(run_type AS CHAR), ''), 
-  time_segment
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -76,7 +76,7 @@ group by
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
   COALESCE(CAST(run_type AS CHAR), ''), 
-  time_segment
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -111,7 +111,7 @@ select
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
 from default.runs 
 where 1=1
-group by time_segment
+group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -141,7 +141,7 @@ from default.runs
 where 1=1
 group by
   COALESCE(CAST(run_type AS CHAR), ''), 
-  time_segment
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -179,7 +179,7 @@ group by
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
   COALESCE(CAST(run_type AS CHAR), ''), 
-  time_segment
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -217,7 +217,7 @@ from default.runs
 where
   run_status > 0 and 
   run_type > 0
-group by time_segment
+group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -251,7 +251,7 @@ where
   run_type > 0
 group by
   COALESCE(CAST(run_type AS CHAR), ''), 
-  time_segment
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
@@ -292,7 +292,7 @@ group by
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
   COALESCE(CAST(run_type AS CHAR), ''), 
-  time_segment
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
  
 ---
 
