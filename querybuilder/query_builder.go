@@ -12,6 +12,13 @@ import (
 // Query Builder
 //
 
+func NewQueryBuilder(table *TableFqnExpr, cols []Expr) *QueryBuilder {
+	return &QueryBuilder{
+		table: table,
+		cols:  cols,
+	}
+}
+
 type QueryBuilder struct {
 	timeCol  *TimeColExpr
 	timeFrom time.Time
@@ -28,7 +35,10 @@ type QueryBuilder struct {
 
 	filters []CondExpr
 
-	q *Select
+	table   *TableFqnExpr
+	cols    []Expr
+	limit   *LimitExpr
+	orderBy []*OrderExpr
 }
 
 func (b *QueryBuilder) WithSegment(segment Expr) *QueryBuilder {
@@ -91,13 +101,14 @@ func (b *QueryBuilder) WithTimeSegment(col *TimeColExpr, segment time.Duration) 
 }
 
 func (b *QueryBuilder) WithLimit(limit int64) *QueryBuilder {
-	b.q = b.q.WithLimit(Limit(Int64(limit)))
+	b.limit = Limit(Int64(limit))
 
 	return b
 }
 
 func (b *QueryBuilder) OrderBy(orderBy ...*OrderExpr) *QueryBuilder {
-	b.q = b.q.OrderBy(orderBy...)
+
+	b.orderBy = append(b.orderBy, orderBy...)
 
 	return b
 }
@@ -121,14 +132,29 @@ func (b *QueryBuilder) WithGroupBy(groupBy ...Expr) *QueryBuilder {
 	return b
 }
 
-func NewQueryBuilder(table *TableFqnExpr, cols []Expr) *QueryBuilder {
-	return &QueryBuilder{q: NewSelect().
-		From(table).
-		Cols(cols...)}
-}
-
 func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
-	q := b.q
+	q := NewSelect().From(b.table)
+
+	var timeExpr Expr
+
+	// Apply time segment, we will add column after segment columns
+	if b.timeCol != nil && b.timeSegment != nil {
+		if b.timeSegmentShift != nil {
+			timeExpr = dialect.AddTime(
+				dialect.CeilTime(
+					dialect.SubTime(b.timeCol, *b.timeSegmentShift),
+					*b.timeSegment,
+				),
+				*b.timeSegmentShift,
+			)
+			q = q.
+				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
+		} else {
+			timeExpr = dialect.CeilTime(b.timeCol, *b.timeSegment)
+			q = q.
+				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
+		}
+	}
 
 	// Apply custom segment
 
@@ -152,24 +178,12 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 		}
 	}
 
-	if b.timeCol != nil && b.timeSegment != nil {
-		if b.timeSegmentShift != nil {
-			timeExpr := dialect.AddTime(
-				dialect.CeilTime(
-					dialect.SubTime(b.timeCol, *b.timeSegmentShift),
-					*b.timeSegment,
-				),
-				*b.timeSegmentShift,
-			)
-			q = q.
-				Cols(As(timeExpr, Identifier("time_segment"))).
-				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
-		} else {
-			timeExpr := dialect.CeilTime(b.timeCol, *b.timeSegment)
-			q = q.
-				Cols(As(timeExpr, Identifier("time_segment"))).
-				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
-		}
+	if timeExpr != nil {
+		q = q.Cols(As(timeExpr, Identifier("time_segment")))
+	}
+
+	if len(b.cols) > 0 {
+		q = q.Cols(b.cols...)
 	}
 
 	// Apply time constraint and segment if given. Not using BETWEEN as its inclusive for both limits and we risk double counting.
@@ -183,6 +197,27 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	if len(b.groupBy) > 0 {
 		q = q.GroupBy(b.groupBy...)
 	}
+
+	if len(b.orderBy) > 0 {
+		q = q.OrderBy(b.orderBy...)
+	} else {
+		var orderBy []*OrderExpr
+		if timeExpr != nil {
+			orderBy = append(orderBy, Asc(AggregationColumnReference(timeExpr, "time_segment")))
+		}
+		for i, segment := range b.segments {
+			segmentExpr := Coalesce(
+				ToString(segment),
+				String(""),
+			)
+			alias := b.segmentColumnName(i)
+			orderBy = append(orderBy, Asc(AggregationColumnReference(segmentExpr, alias)))
+		}
+
+		q = q.OrderBy(orderBy...)
+	}
+
+	q.WithLimit(b.limit)
 
 	// Apply custom filters
 	if len(b.filters) > 0 {

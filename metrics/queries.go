@@ -65,6 +65,44 @@ func ApplyMonitorDefArgs(
 	args *MonitorArgs,
 	partitioning *MonitorPartitioning,
 ) *querybuilder.QueryBuilder {
+
+	if args != nil {
+
+		for _, condition := range args.Conditions {
+			qb = qb.WithFilter(condition)
+		}
+
+		for _, segmentation := range args.Segmentation {
+			if segmentation.Field != "" {
+
+				var useValues = false
+				var values []string
+				var isExcluding bool
+
+				switch t := segmentation.Rule.(type) {
+				case *SegmentationRuleAcceptList:
+					useValues = true
+					values = t.Values
+				case *SegmentationRuleExcludeList:
+					useValues = true
+					isExcluding = true
+					values = t.Values
+				case *SegmentationRuleAll:
+					// No filtration
+				}
+
+				if useValues {
+					qb = qb.WithSegmentFiltered(
+						Sql(segmentation.Field),
+						values,
+						isExcluding)
+				} else {
+					qb = qb.WithSegment(Sql(segmentation.Field))
+				}
+			}
+		}
+	}
+
 	if partitioning != nil {
 		if partitioning.ScheduleTimeShift == 0 {
 			qb = qb.WithTimeSegment(TimeCol(partitioning.Field), partitioning.Interval)
@@ -73,43 +111,6 @@ func ApplyMonitorDefArgs(
 		}
 	}
 
-	if args == nil {
-		return qb
-	}
-
-	for _, condition := range args.Conditions {
-		qb = qb.WithFilter(condition)
-	}
-
-	for _, segmentation := range args.Segmentation {
-		if segmentation.Field != "" {
-
-			var useValues = false
-			var values []string
-			var isExcluding bool
-
-			switch t := segmentation.Rule.(type) {
-			case *SegmentationRuleAcceptList:
-				useValues = true
-				values = t.Values
-			case *SegmentationRuleExcludeList:
-				useValues = true
-				isExcluding = true
-				values = t.Values
-			case *SegmentationRuleAll:
-				// No filtration
-			}
-
-			if useValues {
-				qb = qb.WithSegmentFiltered(
-					Sql(segmentation.Field),
-					values,
-					isExcluding)
-			} else {
-				qb = qb.WithSegment(Sql(segmentation.Field))
-			}
-		}
-	}
 	return qb
 }
 

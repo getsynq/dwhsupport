@@ -1,6 +1,7 @@
 
 [TestMetricsSuite/TestSegmentWithTimeRange - 1]
 select
+  COALESCE(CAST(CAST(workspace AS VARCHAR) AS VARCHAR), '') as segment, 
   'run_type' as field, 
   count(*) as num_rows, 
   count(run_type) as num_not_null, 
@@ -10,12 +11,11 @@ select
   CAST(min(run_type) AS FLOAT) as min, 
   CAST(max(run_type) AS FLOAT) as max, 
   CAST(MEDIAN(run_type) AS FLOAT) as median, 
-  CAST(STDDEV(run_type) AS FLOAT) as stddev, 
-  COALESCE(CAST(CAST(workspace AS VARCHAR) AS VARCHAR), '') as segment
+  CAST(STDDEV(run_type) AS FLOAT) as stddev
 from "db"."default"."runs" 
 where
   ingested_at >= '2025-01-01T00:00:00Z' and 
   ingested_at < '2025-02-01T00:00:00Z'
 group by segment
- 
+order by segment 
 ---

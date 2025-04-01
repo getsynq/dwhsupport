@@ -1,16 +1,16 @@
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_no_conditions_no_segmentation/partitioning - 1]
 select
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 
 group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+order by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_no_conditions_no_segmentation/no_partitioning - 1]
@@ -28,68 +28,74 @@ from default.runs
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_no_conditions_single_segmentation_all/partitioning - 1]
 select
+  COALESCE(CAST(run_type AS CHAR), '') as segment, 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 
 group by
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '')
+order by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_no_conditions_single_segmentation_all/no_partitioning - 1]
 select
+  COALESCE(CAST(run_type AS CHAR), '') as segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment
+  max(ingested_at) as max
 from default.runs 
 
 group by COALESCE(CAST(run_type AS CHAR), '')
- 
+order by COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_no_conditions_multi_segmentation/partitioning - 1]
 select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(workspace AS CHAR), '') as segment, 
-  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 where
   COALESCE(CAST(workspace AS CHAR), '') not in ('synq-demo') and 
   COALESCE(CAST(run_status AS CHAR), '') in ('1', '2', '3', '4')
 group by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+  COALESCE(CAST(run_type AS CHAR), '')
+order by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(workspace AS CHAR), ''), 
+  COALESCE(CAST(run_status AS CHAR), ''), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_no_conditions_multi_segmentation/no_partitioning - 1]
 select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(workspace AS CHAR), '') as segment, 
-  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment_3
+  max(ingested_at) as max
 from default.runs 
 where
   COALESCE(CAST(workspace AS CHAR), '') not in ('synq-demo') and 
@@ -98,21 +104,24 @@ group by
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
   COALESCE(CAST(run_type AS CHAR), '')
- 
+order by
+  COALESCE(CAST(workspace AS CHAR), ''), 
+  COALESCE(CAST(run_status AS CHAR), ''), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_single_condition_no_segmentation/partitioning - 1]
 select
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 where 1=1
 group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+order by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_single_condition_no_segmentation/no_partitioning - 1]
@@ -130,69 +139,75 @@ where 1=1
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_single_condition_single_segmentation_all/partitioning - 1]
 select
+  COALESCE(CAST(run_type AS CHAR), '') as segment, 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 where 1=1
 group by
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '')
+order by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_single_condition_single_segmentation_all/no_partitioning - 1]
 select
+  COALESCE(CAST(run_type AS CHAR), '') as segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment
+  max(ingested_at) as max
 from default.runs 
 where 1=1
 group by COALESCE(CAST(run_type AS CHAR), '')
- 
+order by COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_single_condition_multi_segmentation/partitioning - 1]
 select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(workspace AS CHAR), '') as segment, 
-  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 where
   COALESCE(CAST(workspace AS CHAR), '') not in ('synq-demo') and 
   COALESCE(CAST(run_status AS CHAR), '') in ('1', '2', '3', '4') and 
   1=1
 group by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+  COALESCE(CAST(run_type AS CHAR), '')
+order by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(workspace AS CHAR), ''), 
+  COALESCE(CAST(run_status AS CHAR), ''), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_single_condition_multi_segmentation/no_partitioning - 1]
 select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(workspace AS CHAR), '') as segment, 
-  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment_3
+  max(ingested_at) as max
 from default.runs 
 where
   COALESCE(CAST(workspace AS CHAR), '') not in ('synq-demo') and 
@@ -202,23 +217,26 @@ group by
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
   COALESCE(CAST(run_type AS CHAR), '')
- 
+order by
+  COALESCE(CAST(workspace AS CHAR), ''), 
+  COALESCE(CAST(run_status AS CHAR), ''), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_multi_condition_no_segmentation/partitioning - 1]
 select
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 where
   run_status > 0 and 
   run_type > 0
 group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+order by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_multi_condition_no_segmentation/no_partitioning - 1]
@@ -238,50 +256,52 @@ where
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_multi_condition_single_segmentation_all/partitioning - 1]
 select
+  COALESCE(CAST(run_type AS CHAR), '') as segment, 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 where
   run_status > 0 and 
   run_type > 0
 group by
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '')
+order by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_multi_condition_single_segmentation_all/no_partitioning - 1]
 select
+  COALESCE(CAST(run_type AS CHAR), '') as segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment
+  max(ingested_at) as max
 from default.runs 
 where
   run_status > 0 and 
   run_type > 0
 group by COALESCE(CAST(run_type AS CHAR), '')
- 
+order by COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_multi_condition_multi_segmentation/partitioning - 1]
 select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(workspace AS CHAR), '') as segment, 
-  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) as time_segment
+  max(ingested_at) as max
 from default.runs 
 where
   COALESCE(CAST(workspace AS CHAR), '') not in ('synq-demo') and 
@@ -289,23 +309,27 @@ where
   run_status > 0 and 
   run_type > 0
 group by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
- 
+  COALESCE(CAST(run_type AS CHAR), '')
+order by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(workspace AS CHAR), ''), 
+  COALESCE(CAST(run_status AS CHAR), ''), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mysql_multi_condition_multi_segmentation/no_partitioning - 1]
 select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
+  COALESCE(CAST(run_type AS CHAR), '') as segment_3, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
-  max(ingested_at) as max, 
-  COALESCE(CAST(workspace AS CHAR), '') as segment, 
-  COALESCE(CAST(run_status AS CHAR), '') as segment_2, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment_3
+  max(ingested_at) as max
 from default.runs 
 where
   COALESCE(CAST(workspace AS CHAR), '') not in ('synq-demo') and 
@@ -316,5 +340,8 @@ group by
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
   COALESCE(CAST(run_type AS CHAR), '')
- 
+order by
+  COALESCE(CAST(workspace AS CHAR), ''), 
+  COALESCE(CAST(run_status AS CHAR), ''), 
+  COALESCE(CAST(run_type AS CHAR), '') 
 ---

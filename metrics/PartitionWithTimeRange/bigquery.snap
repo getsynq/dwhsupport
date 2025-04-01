@@ -1,6 +1,7 @@
 
 [TestMetricsSuite/TestPartitionWithTimeRange - 1]
 select
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), DAY), INTERVAL 1 DAY) as time_segment, 
   'run_type' as field, 
   count(*) as num_rows, 
   count(run_type) as num_not_null, 
@@ -10,12 +11,11 @@ select
   CAST(min(run_type) AS FLOAT64) as min, 
   CAST(max(run_type) AS FLOAT64) as max, 
   CAST(approx_quantiles(run_type, 2)[offset(1)] AS FLOAT64) as median, 
-  CAST(stddev_samp(run_type) AS FLOAT64) as stddev, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), DAY), INTERVAL 1 DAY) as time_segment
+  CAST(stddev_samp(run_type) AS FLOAT64) as stddev
 from `db.default.runs` 
 where
   timestamp(ingested_at) >= timestamp '2025-01-01T00:00:00Z' and 
   timestamp(ingested_at) < timestamp '2025-02-01T00:00:00Z'
 group by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), DAY), INTERVAL 1 DAY)
- 
+order by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), DAY), INTERVAL 1 DAY) 
 ---
