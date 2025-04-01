@@ -38,8 +38,8 @@ select
 from default.runs 
 
 group by
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '')
 order by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(run_type AS CHAR), '') 
@@ -75,10 +75,10 @@ where
   COALESCE(CAST(workspace AS CHAR), '') not in ('synq-demo') and 
   COALESCE(CAST(run_status AS CHAR), '') in ('1', '2', '3', '4')
 group by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
+  COALESCE(CAST(run_type AS CHAR), '')
 order by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
@@ -149,8 +149,8 @@ select
 from default.runs 
 where 1=1
 group by
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '')
 order by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(run_type AS CHAR), '') 
@@ -187,10 +187,10 @@ where
   COALESCE(CAST(run_status AS CHAR), '') in ('1', '2', '3', '4') and 
   1=1
 group by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
+  COALESCE(CAST(run_type AS CHAR), '')
 order by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
@@ -268,8 +268,8 @@ where
   run_status > 0 and 
   run_type > 0
 group by
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
+  COALESCE(CAST(run_type AS CHAR), '')
 order by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(run_type AS CHAR), '') 
@@ -309,10 +309,10 @@ where
   run_status > 0 and 
   run_type > 0
 group by
+  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 
   COALESCE(CAST(run_status AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), ''), 
-  DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
+  COALESCE(CAST(run_type AS CHAR), '')
 order by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(CAST(workspace AS CHAR), ''), 

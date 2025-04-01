@@ -38,8 +38,8 @@ select
 from `db.default.runs` 
 
 group by
-  COALESCE(SAFE_CAST(run_type AS STRING), ''), 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '')
 order by
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(run_type AS STRING), '') 
@@ -75,10 +75,10 @@ where
   COALESCE(SAFE_CAST(workspace AS STRING), '') not in ('synq-demo') and 
   COALESCE(SAFE_CAST(run_status AS STRING), '') in ('1', '2', '3', '4')
 group by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
-  COALESCE(SAFE_CAST(run_type AS STRING), ''), 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
+  COALESCE(SAFE_CAST(run_type AS STRING), '')
 order by
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
@@ -149,8 +149,8 @@ select
 from `db.default.runs` 
 where 1=1
 group by
-  COALESCE(SAFE_CAST(run_type AS STRING), ''), 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '')
 order by
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(run_type AS STRING), '') 
@@ -187,10 +187,10 @@ where
   COALESCE(SAFE_CAST(run_status AS STRING), '') in ('1', '2', '3', '4') and 
   1=1
 group by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
-  COALESCE(SAFE_CAST(run_type AS STRING), ''), 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
+  COALESCE(SAFE_CAST(run_type AS STRING), '')
 order by
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
@@ -268,8 +268,8 @@ where
   run_status > 0 and 
   run_type > 0
 group by
-  COALESCE(SAFE_CAST(run_type AS STRING), ''), 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '')
 order by
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(run_type AS STRING), '') 
@@ -309,10 +309,10 @@ where
   run_status > 0 and 
   run_type > 0
 group by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
-  COALESCE(SAFE_CAST(run_type AS STRING), ''), 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
+  COALESCE(SAFE_CAST(run_type AS STRING), '')
 order by
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 

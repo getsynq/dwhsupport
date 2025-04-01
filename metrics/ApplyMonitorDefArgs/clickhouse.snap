@@ -38,8 +38,8 @@ select
 from default.runs 
 
 group by
-  segment, 
-  time_segment
+  time_segment, 
+  segment
 order by
   time_segment, 
   segment 
@@ -75,10 +75,10 @@ where
   segment not in ('synq-demo') and 
   segment_2 in ('1', '2', '3', '4')
 group by
+  time_segment, 
   segment, 
   segment_2, 
-  segment_3, 
-  time_segment
+  segment_3
 order by
   time_segment, 
   segment, 
@@ -149,8 +149,8 @@ select
 from default.runs 
 where 1=1
 group by
-  segment, 
-  time_segment
+  time_segment, 
+  segment
 order by
   time_segment, 
   segment 
@@ -187,10 +187,10 @@ where
   segment_2 in ('1', '2', '3', '4') and 
   1=1
 group by
+  time_segment, 
   segment, 
   segment_2, 
-  segment_3, 
-  time_segment
+  segment_3
 order by
   time_segment, 
   segment, 
@@ -268,8 +268,8 @@ where
   run_status > 0 and 
   run_type > 0
 group by
-  segment, 
-  time_segment
+  time_segment, 
+  segment
 order by
   time_segment, 
   segment 
@@ -309,10 +309,10 @@ where
   run_status > 0 and 
   run_type > 0
 group by
+  time_segment, 
   segment, 
   segment_2, 
-  segment_3, 
-  time_segment
+  segment_3
 order by
   time_segment, 
   segment, 

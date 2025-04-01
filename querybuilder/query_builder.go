@@ -135,6 +135,27 @@ func (b *QueryBuilder) WithGroupBy(groupBy ...Expr) *QueryBuilder {
 func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	q := NewSelect().From(b.table)
 
+	var timeExpr Expr
+
+	// Apply time segment, we will add column after segment columns
+	if b.timeCol != nil && b.timeSegment != nil {
+		if b.timeSegmentShift != nil {
+			timeExpr = dialect.AddTime(
+				dialect.CeilTime(
+					dialect.SubTime(b.timeCol, *b.timeSegmentShift),
+					*b.timeSegment,
+				),
+				*b.timeSegmentShift,
+			)
+			q = q.
+				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
+		} else {
+			timeExpr = dialect.CeilTime(b.timeCol, *b.timeSegment)
+			q = q.
+				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
+		}
+	}
+
 	// Apply custom segment
 
 	for i, segment := range b.segments {
@@ -157,26 +178,8 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 		}
 	}
 
-	var timeExpr Expr
-
-	if b.timeCol != nil && b.timeSegment != nil {
-		if b.timeSegmentShift != nil {
-			timeExpr = dialect.AddTime(
-				dialect.CeilTime(
-					dialect.SubTime(b.timeCol, *b.timeSegmentShift),
-					*b.timeSegment,
-				),
-				*b.timeSegmentShift,
-			)
-			q = q.
-				Cols(As(timeExpr, Identifier("time_segment"))).
-				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
-		} else {
-			timeExpr = dialect.CeilTime(b.timeCol, *b.timeSegment)
-			q = q.
-				Cols(As(timeExpr, Identifier("time_segment"))).
-				GroupBy(AggregationColumnReference(timeExpr, "time_segment"))
-		}
+	if timeExpr != nil {
+		q = q.Cols(As(timeExpr, Identifier("time_segment")))
 	}
 
 	if len(b.cols) > 0 {

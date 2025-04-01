@@ -38,8 +38,8 @@ select
 from default.runs 
 
 group by
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
-  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
+  COALESCE(CAST(run_type AS VARCHAR), '')
 order by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(run_type AS VARCHAR), '') 
@@ -75,10 +75,10 @@ where
   COALESCE(CAST(workspace AS VARCHAR), '') not in ('synq-demo') and 
   COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4')
 group by
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(workspace AS VARCHAR), ''), 
   COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
-  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
+  COALESCE(CAST(run_type AS VARCHAR), '')
 order by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(workspace AS VARCHAR), ''), 
@@ -149,8 +149,8 @@ select
 from default.runs 
 where 1=1
 group by
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
-  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
+  COALESCE(CAST(run_type AS VARCHAR), '')
 order by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(run_type AS VARCHAR), '') 
@@ -187,10 +187,10 @@ where
   COALESCE(CAST(run_status AS VARCHAR), '') in ('1', '2', '3', '4') and 
   1=1
 group by
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(workspace AS VARCHAR), ''), 
   COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
-  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
+  COALESCE(CAST(run_type AS VARCHAR), '')
 order by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(workspace AS VARCHAR), ''), 
@@ -268,8 +268,8 @@ where
   run_status > 0 and 
   run_type > 0
 group by
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
-  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
+  COALESCE(CAST(run_type AS VARCHAR), '')
 order by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(run_type AS VARCHAR), '') 
@@ -309,10 +309,10 @@ where
   run_status > 0 and 
   run_type > 0
 group by
+  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(workspace AS VARCHAR), ''), 
   COALESCE(CAST(run_status AS VARCHAR), ''), 
-  COALESCE(CAST(run_type AS VARCHAR), ''), 
-  DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
+  COALESCE(CAST(run_type AS VARCHAR), '')
 order by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(CAST(workspace AS VARCHAR), ''), 
