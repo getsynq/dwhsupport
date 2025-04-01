@@ -1,16 +1,16 @@
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_no_conditions_no_segmentation/partitioning - 1]
 select
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 
 group by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_no_conditions_no_segmentation/no_partitioning - 1]
@@ -28,46 +28,48 @@ from `db.default.runs`
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_no_conditions_single_segmentation_all/partitioning - 1]
 select
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 
 group by
   COALESCE(SAFE_CAST(run_type AS STRING), ''), 
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_no_conditions_single_segmentation_all/no_partitioning - 1]
 select
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 
 group by COALESCE(SAFE_CAST(run_type AS STRING), '')
- 
+order by COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_no_conditions_multi_segmentation/partitioning - 1]
 select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
-  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   COALESCE(SAFE_CAST(workspace AS STRING), '') not in ('synq-demo') and 
@@ -77,19 +79,23 @@ group by
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
   COALESCE(SAFE_CAST(run_type AS STRING), ''), 
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(workspace AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_status AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_no_conditions_multi_segmentation/no_partitioning - 1]
 select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
-  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   COALESCE(SAFE_CAST(workspace AS STRING), '') not in ('synq-demo') and 
@@ -98,21 +104,24 @@ group by
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
   COALESCE(SAFE_CAST(run_type AS STRING), '')
- 
+order by
+  COALESCE(SAFE_CAST(workspace AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_status AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_single_condition_no_segmentation/partitioning - 1]
 select
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where 1=1
 group by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_single_condition_no_segmentation/no_partitioning - 1]
@@ -130,46 +139,48 @@ where 1=1
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_single_condition_single_segmentation_all/partitioning - 1]
 select
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where 1=1
 group by
   COALESCE(SAFE_CAST(run_type AS STRING), ''), 
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_single_condition_single_segmentation_all/no_partitioning - 1]
 select
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where 1=1
 group by COALESCE(SAFE_CAST(run_type AS STRING), '')
- 
+order by COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_single_condition_multi_segmentation/partitioning - 1]
 select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
-  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   COALESCE(SAFE_CAST(workspace AS STRING), '') not in ('synq-demo') and 
@@ -180,19 +191,23 @@ group by
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
   COALESCE(SAFE_CAST(run_type AS STRING), ''), 
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(workspace AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_status AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_single_condition_multi_segmentation/no_partitioning - 1]
 select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
-  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   COALESCE(SAFE_CAST(workspace AS STRING), '') not in ('synq-demo') and 
@@ -202,23 +217,26 @@ group by
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
   COALESCE(SAFE_CAST(run_type AS STRING), '')
- 
+order by
+  COALESCE(SAFE_CAST(workspace AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_status AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_multi_condition_no_segmentation/partitioning - 1]
 select
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   run_status > 0 and 
   run_type > 0
 group by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_multi_condition_no_segmentation/no_partitioning - 1]
@@ -238,13 +256,13 @@ where
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_multi_condition_single_segmentation_all/partitioning - 1]
 select
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   run_status > 0 and 
@@ -252,36 +270,38 @@ where
 group by
   COALESCE(SAFE_CAST(run_type AS STRING), ''), 
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_multi_condition_single_segmentation_all/no_partitioning - 1]
 select
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   run_status > 0 and 
   run_type > 0
 group by COALESCE(SAFE_CAST(run_type AS STRING), '')
- 
+order by COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_multi_condition_multi_segmentation/partitioning - 1]
 select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
-  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
-  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR) as time_segment
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   COALESCE(SAFE_CAST(workspace AS STRING), '') not in ('synq-demo') and 
@@ -293,19 +313,23 @@ group by
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
   COALESCE(SAFE_CAST(run_type AS STRING), ''), 
   TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR)
- 
+order by
+  TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), HOUR), INTERVAL 1 HOUR), 
+  COALESCE(SAFE_CAST(workspace AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_status AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/bigquery_multi_condition_multi_segmentation/no_partitioning - 1]
 select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3, 
   'ingested_at' as field, 
   count(*) as num_rows, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
-  max(timestamp(ingested_at)) as max, 
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
-  COALESCE(SAFE_CAST(run_status AS STRING), '') as segment_2, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_3
+  max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where
   COALESCE(SAFE_CAST(workspace AS STRING), '') not in ('synq-demo') and 
@@ -316,5 +340,8 @@ group by
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
   COALESCE(SAFE_CAST(run_status AS STRING), ''), 
   COALESCE(SAFE_CAST(run_type AS STRING), '')
- 
+order by
+  COALESCE(SAFE_CAST(workspace AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_status AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---

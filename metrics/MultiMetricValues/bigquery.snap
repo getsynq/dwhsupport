@@ -1,6 +1,8 @@
 
 [TestMetricsSuite/TestMultiMetricValues - 1]
 select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_2, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
   countif(workspace = '') as workspace$num_empty, 
@@ -11,13 +13,13 @@ select
   CAST(min(run_type) AS FLOAT64) as run_type$min, 
   CAST(max(run_type) AS FLOAT64) as run_type$max, 
   CAST(approx_quantiles(run_type, 2)[offset(1)] AS FLOAT64) as run_type$median, 
-  CAST(stddev_samp(run_type) AS FLOAT64) as run_type$stddev, 
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
-  COALESCE(SAFE_CAST(run_type AS STRING), '') as segment_2
+  CAST(stddev_samp(run_type) AS FLOAT64) as run_type$stddev
 from `db.default.runs` 
 
 group by
   COALESCE(SAFE_CAST(workspace AS STRING), ''), 
   COALESCE(SAFE_CAST(run_type AS STRING), '')
- 
+order by
+  COALESCE(SAFE_CAST(workspace AS STRING), ''), 
+  COALESCE(SAFE_CAST(run_type AS STRING), '') 
 ---

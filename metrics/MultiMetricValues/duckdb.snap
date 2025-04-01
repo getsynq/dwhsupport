@@ -1,6 +1,8 @@
 
 [TestMetricsSuite/TestMultiMetricValues - 1]
 select
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(CAST(run_type AS VARCHAR), '') as segment_2, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
   SUM(CASE WHEN %s THEN 1 ELSE 0 END)(workspace = '') as workspace$num_empty, 
@@ -11,13 +13,13 @@ select
   CAST(min(run_type) AS FLOAT) as run_type$min, 
   CAST(max(run_type) AS FLOAT) as run_type$max, 
   CAST(MEDIAN(run_type) AS FLOAT) as run_type$median, 
-  CAST(STDDEV(run_type) AS FLOAT) as run_type$stddev, 
-  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
-  COALESCE(CAST(run_type AS VARCHAR), '') as segment_2
+  CAST(STDDEV(run_type) AS FLOAT) as run_type$stddev
 from default.runs 
 
 group by
   segment, 
   segment_2
- 
+order by
+  segment, 
+  segment_2 
 ---
