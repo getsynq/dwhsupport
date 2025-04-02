@@ -1,0 +1,24 @@
+
+[TestMetricsSuite/TestSegmentationRules/postgres_empty_exclude - 1]
+select
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+where COALESCE(CAST(workspace AS VARCHAR), '') not in ()
+group by COALESCE(CAST(workspace AS VARCHAR), '')
+order by COALESCE(CAST(workspace AS VARCHAR), '') 
+---
+
+[TestMetricsSuite/TestSegmentationRules/postgres_empty_include - 1]
+select
+  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+where COALESCE(CAST(workspace AS VARCHAR), '') in ()
+group by COALESCE(CAST(workspace AS VARCHAR), '')
+order by COALESCE(CAST(workspace AS VARCHAR), '') 
+---
