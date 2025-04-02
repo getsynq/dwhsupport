@@ -26,7 +26,8 @@ func SegmentsListQuery(
 		return nil, fmt.Errorf("segmentation is not configured")
 	}
 
-	var expressions []Expr
+	var selectExpressions []Expr
+	var aggregationExpressions []Expr
 	var segmentColumns []string
 
 	for i, s := range args.Segmentation {
@@ -35,15 +36,16 @@ func SegmentsListQuery(
 			alias = "segment"
 		}
 		segmentColumns = append(segmentColumns, alias)
-		expressions = append(expressions, As(SubString(ToString(Sql(s.Field)), 1, segmentLengthLimit), Identifier(alias)))
+		selectExpressions = append(selectExpressions, As(SubString(ToString(Sql(s.Field)), 1, segmentLengthLimit), Identifier(alias)))
+		aggregationExpressions = append(aggregationExpressions, SubString(ToString(Sql(s.Field)), 1, segmentLengthLimit))
 	}
 	countColExpr := Identifier(string(METRIC_NUM_ROWS))
-	expressions = append(expressions, As(CountAll(), countColExpr))
+	selectExpressions = append(selectExpressions, As(CountAll(), countColExpr))
 
-	query := querybuilder.NewQueryBuilder(tableFqn, expressions)
+	query := querybuilder.NewQueryBuilder(tableFqn, selectExpressions)
 
 	groupBy := lo.Map(segmentColumns, func(segmentColumn string, i int) Expr {
-		return AggregationColumnReference(expressions[i], segmentColumn)
+		return AggregationColumnReference(aggregationExpressions[i], segmentColumn)
 	})
 	query.WithGroupBy(groupBy...)
 
