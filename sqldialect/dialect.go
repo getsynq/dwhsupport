@@ -460,7 +460,7 @@ func (d *PostgresDialect) Coalesce(exprs ...Expr) Expr {
 }
 
 func (d *PostgresDialect) AggregationColumnReference(expression Expr, alias string) Expr {
-	return expression
+	return Identifier(alias)
 }
 
 func (d *PostgresDialect) SubString(expr Expr, start int64, length int64) Expr {
@@ -643,7 +643,7 @@ func (d *MySQLDialect) Coalesce(exprs ...Expr) Expr {
 }
 
 func (d *MySQLDialect) AggregationColumnReference(expression Expr, alias string) Expr {
-	return expression
+	return Identifier(alias)
 }
 
 func (d *MySQLDialect) SubString(expr Expr, start int64, length int64) Expr {
