@@ -176,6 +176,55 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 	}
 }
 
+func (s *MetricsSuite) TestSegmentationRules() {
+
+	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
+
+	for _, dialect := range s.Dialects() {
+		for _, seg := range []struct {
+			name         string
+			segmentation []*Segmentation
+		}{
+			{
+				"empty_exclude",
+				[]*Segmentation{
+					{
+						Field: "workspace",
+						Rule:  ExcludeSegments(),
+					},
+				},
+			},
+			{
+				"empty_include",
+				[]*Segmentation{
+					{
+						Field: "workspace",
+						Rule:  AcceptSegments(),
+					},
+				},
+			},
+		} {
+			monitorArgs := &MonitorArgs{
+				Segmentation: seg.segmentation,
+			}
+
+			s.Run(fmt.Sprintf("%s_%s", dialect.Name, seg.name), func() {
+
+				expressions := TimeMetricsValuesCols("ingested_at")
+
+				queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
+				queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil)
+				sql, err := queryBuilder.ToSql(dialect.Dialect)
+				s.Require().NoError(err)
+				s.Require().NotEmpty(sql)
+				s.T().Log(sql)
+
+				snaps.WithConfig(snaps.Dir("SegmentationRules"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+			})
+		}
+	}
+}
+
 func (s *MetricsSuite) TestPartition() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")

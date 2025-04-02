@@ -81,12 +81,18 @@ func ApplyMonitorDefArgs(
 
 				switch t := segmentation.Rule.(type) {
 				case *SegmentationRuleAcceptList:
-					useValues = true
-					values = t.Values
+					if len(t.Values) > 0 {
+						useValues = true
+						values = t.Values
+					} else {
+						qb.WithFilter(Sql("1=2"))
+					}
 				case *SegmentationRuleExcludeList:
-					useValues = true
-					isExcluding = true
-					values = t.Values
+					if len(t.Values) > 0 {
+						useValues = true
+						isExcluding = true
+						values = t.Values
+					}
 				case *SegmentationRuleAll:
 					// No filtration
 				}

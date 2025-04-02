@@ -1,0 +1,24 @@
+
+[TestMetricsSuite/TestSegmentationRules/mysql_empty_exclude - 1]
+select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+
+group by COALESCE(CAST(workspace AS CHAR), '')
+order by COALESCE(CAST(workspace AS CHAR), '') 
+---
+
+[TestMetricsSuite/TestSegmentationRules/mysql_empty_include - 1]
+select
+  COALESCE(CAST(workspace AS CHAR), '') as segment, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from default.runs 
+where 1=2
+group by COALESCE(CAST(workspace AS CHAR), '')
+order by COALESCE(CAST(workspace AS CHAR), '') 
+---
