@@ -11,8 +11,8 @@ where
   created_at < '2025-03-16T00:00:00Z' and 
   1=1
 group by
-  SUBSTRING(CAST(workspace AS CHAR), 1, 100), 
-  SUBSTRING(CAST(run_status AS CHAR), 1, 100), 
-  SUBSTRING(CAST(run_type AS CHAR), 1, 100)
-order by count(*) desc limit 10
+  segment, 
+  segment2, 
+  segment3
+order by num_rows desc limit 10
 ---
