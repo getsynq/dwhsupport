@@ -18,7 +18,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from "db"."default"."runs" 
-where segment in ()
+where 1=2
 group by segment
 order by segment 
 ---

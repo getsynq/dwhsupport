@@ -18,7 +18,7 @@ select
   min(timestamp(ingested_at)) as min, 
   max(timestamp(ingested_at)) as max
 from `db.default.runs` 
-where COALESCE(SAFE_CAST(workspace AS STRING), '') in ()
+where 1=2
 group by COALESCE(SAFE_CAST(workspace AS STRING), '')
 order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
 ---
