@@ -203,6 +203,15 @@ func (s *MetricsSuite) TestSegmentationRules() {
 					},
 				},
 			},
+			{
+				"allowed_segments",
+				[]*Segmentation{
+					{
+						Field: "workspace",
+						Rule:  AcceptSegments("synq-demo", "synq-demo-2"),
+					},
+				},
+			},
 		} {
 			monitorArgs := &MonitorArgs{
 				Segmentation: seg.segmentation,

@@ -22,3 +22,15 @@ where 1=2
 group by COALESCE(SAFE_CAST(workspace AS STRING), '')
 order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
 ---
+
+[TestMetricsSuite/TestSegmentationRules/bigquery_allowed_segments - 1]
+select
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  count(timestamp(ingested_at)) as num_not_null, 
+  min(timestamp(ingested_at)) as min, 
+  max(timestamp(ingested_at)) as max
+from `db.default.runs` 
+where COALESCE(SAFE_CAST(workspace AS STRING), '') in ('synq-demo', 'synq-demo-2')
+group by COALESCE(SAFE_CAST(workspace AS STRING), '')
+order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
+---
