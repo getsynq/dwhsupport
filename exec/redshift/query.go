@@ -6,5 +6,5 @@ import (
 )
 
 func NewQuerier[T any](conn *RedshiftExecutor) querier.Querier[T] {
-	return stdsql.NewQuerier[T](conn.db)
+	return stdsql.NewQuerier(conn.db, stdsql.Querier_WithSshTunnelDialer[T](conn.sshTunnelDialer))
 }
