@@ -3,7 +3,6 @@ package stdsql
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/querier"
@@ -64,9 +63,7 @@ func (s StdSqlQuerier[T]) Close() error {
 	}
 
 	if s.sshTunnelDialer != nil {
-		fmt.Println("closing ssh tunnel")
 		if err := s.sshTunnelDialer.Close(); err != nil {
-			fmt.Println("error closing ssh tunnel", err)
 			errs = append(errs, err)
 		}
 	}
