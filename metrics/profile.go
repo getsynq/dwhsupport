@@ -40,7 +40,7 @@ func ProfileColumns(
 			alias = "segment"
 		}
 		segmentColumns = append(segmentColumns, alias)
-		expressions = append(expressions, As(OptionalLengthLimit(ToString(s.Expression), segmentLengthLimit), Identifier(alias)))
+		expressions = append(expressions, As(SubString(ToString(s.Expression), 1, segmentLengthLimit), Identifier(alias)))
 	}
 	countColExpr := Identifier(string(METRIC_NUM_ROWS))
 	expressions = append(expressions, As(CountAll(), countColExpr))

@@ -64,6 +64,7 @@ func ApplyMonitorDefArgs(
 	qb *querybuilder.QueryBuilder,
 	args *MonitorArgs,
 	partitioning *MonitorPartitioning,
+	segmentLengthLimit int64,
 ) *querybuilder.QueryBuilder {
 
 	if args != nil {
@@ -97,13 +98,15 @@ func ApplyMonitorDefArgs(
 					// No filtration
 				}
 
+				segmentExpr := SubString(ToString(segmentation.Expression), 1, segmentLengthLimit)
+
 				if useValues {
 					qb = qb.WithSegmentFiltered(
-						segmentation.Expression,
+						segmentExpr,
 						values,
 						isExcluding)
 				} else {
-					qb = qb.WithSegment(segmentation.Expression)
+					qb = qb.WithSegment(segmentExpr)
 				}
 			}
 		}

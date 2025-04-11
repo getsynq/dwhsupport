@@ -36,8 +36,8 @@ func SegmentsListQuery(
 			alias = "segment"
 		}
 		segmentColumns = append(segmentColumns, alias)
-		selectExpressions = append(selectExpressions, As(OptionalLengthLimit(ToString(s.Expression), segmentLengthLimit), Identifier(alias)))
-		aggregationExpressions = append(aggregationExpressions, OptionalLengthLimit(ToString(s.Expression), segmentLengthLimit))
+		selectExpressions = append(selectExpressions, As(SubString(ToString(s.Expression), 1, segmentLengthLimit), Identifier(alias)))
+		aggregationExpressions = append(aggregationExpressions, SubString(ToString(s.Expression), 1, segmentLengthLimit))
 	}
 	countColExpr := Identifier(string(METRIC_NUM_ROWS))
 	selectExpressions = append(selectExpressions, As(CountAll(), countColExpr))

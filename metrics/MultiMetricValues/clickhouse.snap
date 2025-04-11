@@ -1,8 +1,8 @@
 
 [TestMetricsSuite/TestMultiMetricValues - 1]
 select
-  coalesce(toString(workspace), '') as segment, 
-  coalesce(toString(run_type), '') as segment_2, 
+  coalesce(workspace, '') as segment, 
+  coalesce(run_type, '') as segment_2, 
   toInt64(count(workspace)) as workspace$num_not_null, 
   toInt64(count(distinct workspace)) as workspace$num_unique, 
   toInt64(countIf(workspace = '')) as workspace$num_empty, 

@@ -672,13 +672,6 @@ type SubStringExpr struct {
 
 func (s SubStringExpr) IsTextExpr() {}
 
-func OptionalLengthLimit(expr TextExpr, length int64) TextExpr {
-	if length == 0 {
-		return expr
-	}
-	return SubString(expr, 1, length)
-}
-
 func SubString(expr Expr, start int64, length int64) *SubStringExpr {
 	return &SubStringExpr{
 		expr:   expr,
@@ -787,4 +780,16 @@ func (e *AggregationColumnReferenceExpr) ToSql(dialect Dialect) (string, error) 
 	refExpr := dialect.AggregationColumnReference(e.expression, e.alias)
 
 	return refExpr.ToSql(dialect)
+}
+
+func ToExprSlice[T Expr](expr []T) []Expr {
+	ret := make([]Expr, len(expr))
+	for i, t := range expr {
+		ret[i] = t
+	}
+	return ret
+}
+
+func ToExpr[T Expr](expr T) Expr {
+	return expr
 }
