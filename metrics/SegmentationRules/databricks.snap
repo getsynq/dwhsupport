@@ -1,7 +1,7 @@
 
 [TestMetricsSuite/TestSegmentationRules/databricks_empty_exclude - 1]
 select
-  COALESCE(CAST(workspace AS STRING), '') as `segment`, 
+  COALESCE(SUBSTRING(CAST(workspace AS STRING), 1, 100), '') as `segment`, 
   count(ingested_at) as `num_not_null`, 
   min(ingested_at) as `min`, 
   max(ingested_at) as `max`
@@ -13,7 +13,7 @@ order by `segment`
 
 [TestMetricsSuite/TestSegmentationRules/databricks_empty_include - 1]
 select
-  COALESCE(CAST(workspace AS STRING), '') as `segment`, 
+  COALESCE(SUBSTRING(CAST(workspace AS STRING), 1, 100), '') as `segment`, 
   count(ingested_at) as `num_not_null`, 
   min(ingested_at) as `min`, 
   max(ingested_at) as `max`
@@ -25,7 +25,7 @@ order by `segment`
 
 [TestMetricsSuite/TestSegmentationRules/databricks_allowed_segments - 1]
 select
-  COALESCE(CAST(workspace AS STRING), '') as `segment`, 
+  COALESCE(SUBSTRING(CAST(workspace AS STRING), 1, 100), '') as `segment`, 
   count(ingested_at) as `num_not_null`, 
   min(ingested_at) as `min`, 
   max(ingested_at) as `max`

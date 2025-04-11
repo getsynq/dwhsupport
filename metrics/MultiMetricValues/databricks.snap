@@ -1,8 +1,8 @@
 
 [TestMetricsSuite/TestMultiMetricValues - 1]
 select
-  COALESCE(CAST(`workspace` AS STRING), '') as `segment`, 
-  COALESCE(CAST(`run_type` AS STRING), '') as `segment_2`, 
+  COALESCE(`workspace`, '') as `segment`, 
+  COALESCE(`run_type`, '') as `segment_2`, 
   count(workspace) as `workspace$num_not_null`, 
   count(distinct workspace) as `workspace$num_unique`, 
   count_if(workspace = '') as `workspace$num_empty`, 

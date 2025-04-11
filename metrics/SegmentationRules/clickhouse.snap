@@ -1,7 +1,7 @@
 
 [TestMetricsSuite/TestSegmentationRules/clickhouse_empty_exclude - 1]
 select
-  coalesce(toString(workspace), '') as segment, 
+  coalesce(substring(toString(workspace), 1, 100), '') as segment, 
   toInt64(count(ingested_at)) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
@@ -13,7 +13,7 @@ order by segment
 
 [TestMetricsSuite/TestSegmentationRules/clickhouse_empty_include - 1]
 select
-  coalesce(toString(workspace), '') as segment, 
+  coalesce(substring(toString(workspace), 1, 100), '') as segment, 
   toInt64(count(ingested_at)) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
@@ -25,7 +25,7 @@ order by segment
 
 [TestMetricsSuite/TestSegmentationRules/clickhouse_allowed_segments - 1]
 select
-  coalesce(toString(workspace), '') as segment, 
+  coalesce(substring(toString(workspace), 1, 100), '') as segment, 
   toInt64(count(ingested_at)) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max

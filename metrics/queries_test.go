@@ -19,26 +19,8 @@ func TestMetricsSuite(t *testing.T) {
 	suite.Run(t, new(MetricsSuite))
 }
 
-type TestedDialect struct {
-	Name    string
-	Dialect dwhsql.Dialect
-}
-
-func (s *MetricsSuite) Dialects() []*TestedDialect {
-	return []*TestedDialect{
-		{"clickhouse", dwhsql.NewClickHouseDialect()},
-		{"snowflake", dwhsql.NewSnowflakeDialect()},
-		{"redshift", dwhsql.NewRedshiftDialect()},
-		{"bigquery", dwhsql.NewBigQueryDialect()},
-		{"postgres", dwhsql.NewPostgresDialect()},
-		{"mysql", dwhsql.NewMySQLDialect()},
-		{"databricks", dwhsql.NewDatabricksDialect()},
-		{"duckdb", dwhsql.NewDuckDBDialect()},
-	}
-}
-
 func (s *MetricsSuite) TestSimpleQueryBuilder() {
-	for _, dialect := range s.Dialects() {
+	for _, dialect := range DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, TextMetricsCols("workspace"))
 		sql, err := queryBuilder.ToSql(dialect.Dialect)
@@ -51,7 +33,7 @@ func (s *MetricsSuite) TestSimpleQueryBuilder() {
 }
 
 func (s *MetricsSuite) TestMultiMetricValues() {
-	for _, dialect := range s.Dialects() {
+	for _, dialect := range DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, append(
 			TextMetricsValuesCols("workspace", WithPrefixForColumn("workspace")),
@@ -72,7 +54,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range s.Dialects() {
+	for _, dialect := range DialectsToTest() {
 
 		for _, cond := range []struct {
 			name       string
@@ -109,8 +91,8 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 					"single_segmentation_all",
 					[]*Segmentation{
 						{
-							Field: "run_type",
-							Rule:  AllSegments(),
+							Expression: dwhsql.Sql("run_type"),
+							Rule:       AllSegments(),
 						},
 					},
 				},
@@ -118,16 +100,16 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 					"multi_segmentation",
 					[]*Segmentation{
 						{
-							Field: "workspace",
-							Rule:  ExcludeSegments("synq-demo"),
+							Expression: dwhsql.Sql("workspace"),
+							Rule:       ExcludeSegments("synq-demo"),
 						},
 						{
-							Field: "run_status",
-							Rule:  AcceptSegments("1", "2", "3", "4"),
+							Expression: dwhsql.Sql("run_status"),
+							Rule:       AcceptSegments("1", "2", "3", "4"),
 						},
 						{
-							Field: "run_type",
-							Rule:  AllSegments(),
+							Expression: dwhsql.Sql("run_type"),
+							Rule:       AllSegments(),
 						},
 					},
 				},
@@ -149,7 +131,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 						}
 
 						queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, partitioning)
+						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, partitioning, 100)
 						sql, err := queryBuilder.ToSql(dialect.Dialect)
 						s.Require().NoError(err)
 						s.Require().NotEmpty(sql)
@@ -161,7 +143,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 					s.Run("no_partitioning", func() {
 
 						queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil)
+						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100)
 						sql, err := queryBuilder.ToSql(dialect.Dialect)
 						s.Require().NoError(err)
 						s.Require().NotEmpty(sql)
@@ -180,7 +162,7 @@ func (s *MetricsSuite) TestSegmentationRules() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range s.Dialects() {
+	for _, dialect := range DialectsToTest() {
 		for _, seg := range []struct {
 			name         string
 			segmentation []*Segmentation
@@ -189,8 +171,8 @@ func (s *MetricsSuite) TestSegmentationRules() {
 				"empty_exclude",
 				[]*Segmentation{
 					{
-						Field: "workspace",
-						Rule:  ExcludeSegments(),
+						Expression: dwhsql.Sql("workspace"),
+						Rule:       ExcludeSegments(),
 					},
 				},
 			},
@@ -198,8 +180,8 @@ func (s *MetricsSuite) TestSegmentationRules() {
 				"empty_include",
 				[]*Segmentation{
 					{
-						Field: "workspace",
-						Rule:  AcceptSegments(),
+						Expression: dwhsql.Sql("workspace"),
+						Rule:       AcceptSegments(),
 					},
 				},
 			},
@@ -207,8 +189,8 @@ func (s *MetricsSuite) TestSegmentationRules() {
 				"allowed_segments",
 				[]*Segmentation{
 					{
-						Field: "workspace",
-						Rule:  AcceptSegments("synq-demo", "synq-demo-2"),
+						Expression: dwhsql.Sql("workspace"),
+						Rule:       AcceptSegments("synq-demo", "synq-demo-2"),
 					},
 				},
 			},
@@ -222,7 +204,7 @@ func (s *MetricsSuite) TestSegmentationRules() {
 				expressions := TimeMetricsValuesCols("ingested_at")
 
 				queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-				queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil)
+				queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100)
 				sql, err := queryBuilder.ToSql(dialect.Dialect)
 				s.Require().NoError(err)
 				s.Require().NotEmpty(sql)
@@ -238,7 +220,7 @@ func (s *MetricsSuite) TestPartition() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range s.Dialects() {
+	for _, dialect := range DialectsToTest() {
 
 		expressions := TimeMetricsCols("ingested_at")
 
@@ -263,7 +245,7 @@ func (s *MetricsSuite) TestPartitionWithTimeRange() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range s.Dialects() {
+	for _, dialect := range DialectsToTest() {
 
 		expressions := NumericMetricsCols("run_type")
 
@@ -289,7 +271,7 @@ func (s *MetricsSuite) TestSegmentWithTimeRange() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range s.Dialects() {
+	for _, dialect := range DialectsToTest() {
 
 		expressions := NumericMetricsCols("run_type")
 

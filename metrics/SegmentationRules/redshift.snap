@@ -1,7 +1,7 @@
 
 [TestMetricsSuite/TestSegmentationRules/redshift_empty_exclude - 1]
 select
-  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
@@ -13,7 +13,7 @@ order by segment
 
 [TestMetricsSuite/TestSegmentationRules/redshift_empty_include - 1]
 select
-  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
@@ -25,7 +25,7 @@ order by segment
 
 [TestMetricsSuite/TestSegmentationRules/redshift_allowed_segments - 1]
 select
-  COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max

@@ -1,36 +1,36 @@
 
 [TestMetricsSuite/TestSegmentationRules/bigquery_empty_exclude - 1]
 select
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '') as segment, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
   max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 
-group by COALESCE(SAFE_CAST(workspace AS STRING), '')
-order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
+group by COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '')
+order by COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestSegmentationRules/bigquery_empty_include - 1]
 select
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '') as segment, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
   max(timestamp(ingested_at)) as max
 from `db.default.runs` 
 where 1=2
-group by COALESCE(SAFE_CAST(workspace AS STRING), '')
-order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
+group by COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '')
+order by COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestSegmentationRules/bigquery_allowed_segments - 1]
 select
-  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
+  COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '') as segment, 
   count(timestamp(ingested_at)) as num_not_null, 
   min(timestamp(ingested_at)) as min, 
   max(timestamp(ingested_at)) as max
 from `db.default.runs` 
-where COALESCE(SAFE_CAST(workspace AS STRING), '') in ('synq-demo', 'synq-demo-2')
-group by COALESCE(SAFE_CAST(workspace AS STRING), '')
-order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
+where COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '') in ('synq-demo', 'synq-demo-2')
+group by COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '')
+order by COALESCE(SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), '') 
 ---

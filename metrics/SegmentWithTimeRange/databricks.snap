@@ -1,7 +1,7 @@
 
 [TestMetricsSuite/TestSegmentWithTimeRange - 1]
 select
-  COALESCE(CAST(CAST(`workspace` AS STRING) AS STRING), '') as `segment`, 
+  COALESCE(CAST(`workspace` AS STRING), '') as `segment`, 
   'run_type' as `field`, 
   count(*) as `num_rows`, 
   count(run_type) as `num_not_null`, 
