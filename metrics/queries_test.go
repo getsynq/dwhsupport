@@ -109,8 +109,8 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 					"single_segmentation_all",
 					[]*Segmentation{
 						{
-							Field: "run_type",
-							Rule:  AllSegments(),
+							Expression: dwhsql.Sql("run_type"),
+							Rule:       AllSegments(),
 						},
 					},
 				},
@@ -118,16 +118,16 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 					"multi_segmentation",
 					[]*Segmentation{
 						{
-							Field: "workspace",
-							Rule:  ExcludeSegments("synq-demo"),
+							Expression: dwhsql.Sql("workspace"),
+							Rule:       ExcludeSegments("synq-demo"),
 						},
 						{
-							Field: "run_status",
-							Rule:  AcceptSegments("1", "2", "3", "4"),
+							Expression: dwhsql.Sql("run_status"),
+							Rule:       AcceptSegments("1", "2", "3", "4"),
 						},
 						{
-							Field: "run_type",
-							Rule:  AllSegments(),
+							Expression: dwhsql.Sql("run_type"),
+							Rule:       AllSegments(),
 						},
 					},
 				},
@@ -189,8 +189,8 @@ func (s *MetricsSuite) TestSegmentationRules() {
 				"empty_exclude",
 				[]*Segmentation{
 					{
-						Field: "workspace",
-						Rule:  ExcludeSegments(),
+						Expression: dwhsql.Sql("workspace"),
+						Rule:       ExcludeSegments(),
 					},
 				},
 			},
@@ -198,8 +198,8 @@ func (s *MetricsSuite) TestSegmentationRules() {
 				"empty_include",
 				[]*Segmentation{
 					{
-						Field: "workspace",
-						Rule:  AcceptSegments(),
+						Expression: dwhsql.Sql("workspace"),
+						Rule:       AcceptSegments(),
 					},
 				},
 			},
@@ -207,8 +207,8 @@ func (s *MetricsSuite) TestSegmentationRules() {
 				"allowed_segments",
 				[]*Segmentation{
 					{
-						Field: "workspace",
-						Rule:  AcceptSegments("synq-demo", "synq-demo-2"),
+						Expression: dwhsql.Sql("workspace"),
+						Rule:       AcceptSegments("synq-demo", "synq-demo-2"),
 					},
 				},
 			},

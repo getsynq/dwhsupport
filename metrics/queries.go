@@ -20,8 +20,8 @@ type MonitorArgs struct {
 }
 
 type Segmentation struct {
-	Field string // FIXME: make it expression
-	Rule  SegmentationRule
+	Expression Expr
+	Rule       SegmentationRule
 }
 
 type SegmentationRule interface {
@@ -73,7 +73,7 @@ func ApplyMonitorDefArgs(
 		}
 
 		for _, segmentation := range args.Segmentation {
-			if segmentation.Field != "" {
+			if segmentation.Expression != nil {
 
 				var useValues = false
 				var values []string
@@ -99,11 +99,11 @@ func ApplyMonitorDefArgs(
 
 				if useValues {
 					qb = qb.WithSegmentFiltered(
-						Sql(segmentation.Field),
+						segmentation.Expression,
 						values,
 						isExcluding)
 				} else {
-					qb = qb.WithSegment(Sql(segmentation.Field))
+					qb = qb.WithSegment(segmentation.Expression)
 				}
 			}
 		}
@@ -184,6 +184,27 @@ func (m *TableMetricExpr) OutColumnAlias() TextExpr {
 //
 // Numeric Metric
 //
+
+var UnknownMetrics = []MetricId{
+	METRIC_NUM_NOT_NULL,
+	METRIC_NUM_UNIQUE,
+	METRIC_NUM_EMPTY,
+}
+
+func UnknownMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
+	metricFieldCol := NumericCol(field)
+
+	var cols []Expr
+	for _, metricId := range UnknownMetrics {
+		metricExpr := NumericMetric(metricFieldCol, metricId)
+		for _, opt := range opts {
+			opt(&metricExpr.MetricConf)
+		}
+		cols = append(cols, metricExpr)
+	}
+
+	return cols
+}
 
 // Groupings
 

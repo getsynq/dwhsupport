@@ -652,6 +652,8 @@ type ToStringExpr struct {
 	expr Expr
 }
 
+func (e *ToStringExpr) IsTextExpr() {}
+
 func ToString(expr Expr) *ToStringExpr {
 	return &ToStringExpr{expr: expr}
 }
@@ -666,6 +668,15 @@ type SubStringExpr struct {
 	expr   Expr
 	start  int64
 	length int64
+}
+
+func (s SubStringExpr) IsTextExpr() {}
+
+func OptionalLengthLimit(expr TextExpr, length int64) TextExpr {
+	if length == 0 {
+		return expr
+	}
+	return SubString(expr, 1, length)
 }
 
 func SubString(expr Expr, start int64, length int64) *SubStringExpr {

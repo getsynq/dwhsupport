@@ -28,6 +28,7 @@ func ProfileColumns(
 	args *MonitorArgs,
 	partition *Partition,
 	limit int64,
+	segmentLengthLimit int64,
 ) (*querybuilder.QueryBuilder, error) {
 
 	var expressions []Expr
@@ -39,7 +40,7 @@ func ProfileColumns(
 			alias = "segment"
 		}
 		segmentColumns = append(segmentColumns, alias)
-		expressions = append(expressions, As(ToString(Sql(s.Field)), Identifier(alias)))
+		expressions = append(expressions, As(OptionalLengthLimit(ToString(s.Expression), segmentLengthLimit), Identifier(alias)))
 	}
 	countColExpr := Identifier(string(METRIC_NUM_ROWS))
 	expressions = append(expressions, As(CountAll(), countColExpr))
@@ -47,6 +48,7 @@ func ProfileColumns(
 	for _, toProfile := range columnsToProfile {
 		switch toProfile.ColumnProfile {
 		case ColumnProfileUnknown:
+			expressions = append(expressions, UnknownMetricsValuesCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
 		case ColumnProfileString:
 			expressions = append(expressions, TextMetricsValuesCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
 			expressions = append(expressions, TextMetricsLengthCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
