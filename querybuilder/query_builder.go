@@ -27,8 +27,8 @@ type QueryBuilder struct {
 	timeSegment      *time.Duration
 	timeSegmentShift *time.Duration
 
-	segments           []Expr
-	segmentValues      map[int][]Expr
+	segments           []TextExpr
+	segmentValues      map[int][]TextExpr
 	segmentIsExcluding map[int]bool
 
 	groupBy []Expr
@@ -41,18 +41,18 @@ type QueryBuilder struct {
 	orderBy []*OrderExpr
 }
 
-func (b *QueryBuilder) WithSegment(segment Expr) *QueryBuilder {
+func (b *QueryBuilder) WithSegment(segment TextExpr) *QueryBuilder {
 	b.segments = append(b.segments, segment)
 
 	return b
 }
 
-func (b *QueryBuilder) WithSegmentFiltered(segment Expr, values []string, isExcluding bool) *QueryBuilder {
-	valueExprs := lo.Map(values, func(val string, _ int) Expr { return String(val) })
+func (b *QueryBuilder) WithSegmentFiltered(segment TextExpr, values []string, isExcluding bool) *QueryBuilder {
+	valueExprs := lo.Map(values, func(val string, _ int) TextExpr { return String(val) })
 	i := len(b.segments)
 	b.segments = append(b.segments, segment)
 	if b.segmentValues == nil {
-		b.segmentValues = map[int][]Expr{}
+		b.segmentValues = map[int][]TextExpr{}
 	}
 	b.segmentValues[i] = valueExprs
 	if b.segmentIsExcluding == nil {
@@ -161,7 +161,7 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	for i, segment := range b.segments {
 		values, hasFiltration := b.segmentValues[i]
 		segmentExpr := Coalesce(
-			ToString(segment),
+			segment,
 			String(""),
 		)
 		alias := b.segmentColumnName(i)
@@ -170,10 +170,11 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 			GroupBy(AggregationColumnReference(segmentExpr, alias))
 
 		if hasFiltration {
+
 			if b.segmentIsExcluding[i] {
-				q = q.Where(NotIn(AggregationColumnReference(segmentExpr, alias), values...))
+				q = q.Where(NotIn(AggregationColumnReference(segmentExpr, alias), ToExprSlice(values)...))
 			} else {
-				q = q.Where(In(AggregationColumnReference(segmentExpr, alias), values...))
+				q = q.Where(In(AggregationColumnReference(segmentExpr, alias), ToExprSlice(values)...))
 			}
 		}
 	}
@@ -207,7 +208,7 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 		}
 		for i, segment := range b.segments {
 			segmentExpr := Coalesce(
-				ToString(segment),
+				segment,
 				String(""),
 			)
 			alias := b.segmentColumnName(i)

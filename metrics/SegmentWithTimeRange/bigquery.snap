@@ -1,7 +1,7 @@
 
 [TestMetricsSuite/TestSegmentWithTimeRange - 1]
 select
-  COALESCE(SAFE_CAST(SAFE_CAST(workspace AS STRING) AS STRING), '') as segment, 
+  COALESCE(SAFE_CAST(workspace AS STRING), '') as segment, 
   'run_type' as field, 
   count(*) as num_rows, 
   count(run_type) as num_not_null, 
@@ -16,6 +16,6 @@ from `db.default.runs`
 where
   timestamp(ingested_at) >= timestamp '2025-01-01T00:00:00Z' and 
   timestamp(ingested_at) < timestamp '2025-02-01T00:00:00Z'
-group by COALESCE(SAFE_CAST(SAFE_CAST(workspace AS STRING) AS STRING), '')
-order by COALESCE(SAFE_CAST(SAFE_CAST(workspace AS STRING) AS STRING), '') 
+group by COALESCE(SAFE_CAST(workspace AS STRING), '')
+order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
 ---

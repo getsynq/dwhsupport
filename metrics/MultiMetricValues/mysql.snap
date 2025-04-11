@@ -1,8 +1,8 @@
 
 [TestMetricsSuite/TestMultiMetricValues - 1]
 select
-  COALESCE(CAST(workspace AS CHAR), '') as segment, 
-  COALESCE(CAST(run_type AS CHAR), '') as segment_2, 
+  COALESCE(workspace, '') as segment, 
+  COALESCE(run_type, '') as segment_2, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
   SUM(CASE WHEN %s THEN 1 ELSE 0 END)(workspace = '') as workspace$num_empty, 
@@ -17,9 +17,9 @@ select
 from default.runs 
 
 group by
-  COALESCE(CAST(workspace AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), '')
+  COALESCE(workspace, ''), 
+  COALESCE(run_type, '')
 order by
-  COALESCE(CAST(workspace AS CHAR), ''), 
-  COALESCE(CAST(run_type AS CHAR), '') 
+  COALESCE(workspace, ''), 
+  COALESCE(run_type, '') 
 ---

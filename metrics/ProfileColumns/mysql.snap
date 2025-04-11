@@ -33,7 +33,7 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/mysql_no_conditions_single_segmentation_all - 1]
 select
-  CAST(run_type AS CHAR) as segment, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment, 
   count(*) as num_rows, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
@@ -60,15 +60,15 @@ select
   max(created_at) as created_at$max
 from default.runs 
 
-group by CAST(run_type AS CHAR) as segment
+group by SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
 
 [TestProfileSuite/TestProfileColumns/mysql_no_conditions_multi_segmentation - 1]
 select
-  CAST(workspace AS CHAR) as segment, 
-  CAST(run_status AS CHAR) as segment2, 
-  CAST(run_type AS CHAR) as segment3, 
+  SUBSTRING(CAST(workspace AS CHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS CHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment3, 
   count(*) as num_rows, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
@@ -96,9 +96,9 @@ select
 from default.runs 
 
 group by
-  CAST(workspace AS CHAR) as segment, 
-  CAST(run_status AS CHAR) as segment2, 
-  CAST(run_type AS CHAR) as segment3
+  SUBSTRING(CAST(workspace AS CHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS CHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment3
 order by num_rows desc limit 1000
 ---
 
@@ -136,7 +136,7 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/mysql_single_condition_single_segmentation_all - 1]
 select
-  CAST(run_type AS CHAR) as segment, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment, 
   count(*) as num_rows, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
@@ -163,15 +163,15 @@ select
   max(created_at) as created_at$max
 from default.runs 
 where 1=1
-group by CAST(run_type AS CHAR) as segment
+group by SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
 
 [TestProfileSuite/TestProfileColumns/mysql_single_condition_multi_segmentation - 1]
 select
-  CAST(workspace AS CHAR) as segment, 
-  CAST(run_status AS CHAR) as segment2, 
-  CAST(run_type AS CHAR) as segment3, 
+  SUBSTRING(CAST(workspace AS CHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS CHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment3, 
   count(*) as num_rows, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
@@ -199,9 +199,9 @@ select
 from default.runs 
 where 1=1
 group by
-  CAST(workspace AS CHAR) as segment, 
-  CAST(run_status AS CHAR) as segment2, 
-  CAST(run_type AS CHAR) as segment3
+  SUBSTRING(CAST(workspace AS CHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS CHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment3
 order by num_rows desc limit 1000
 ---
 
@@ -241,7 +241,7 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/mysql_multi_condition_single_segmentation_all - 1]
 select
-  CAST(run_type AS CHAR) as segment, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment, 
   count(*) as num_rows, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
@@ -270,15 +270,15 @@ from default.runs
 where
   run_status > 0 and 
   run_type > 0
-group by CAST(run_type AS CHAR) as segment
+group by SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
 
 [TestProfileSuite/TestProfileColumns/mysql_multi_condition_multi_segmentation - 1]
 select
-  CAST(workspace AS CHAR) as segment, 
-  CAST(run_status AS CHAR) as segment2, 
-  CAST(run_type AS CHAR) as segment3, 
+  SUBSTRING(CAST(workspace AS CHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS CHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment3, 
   count(*) as num_rows, 
   count(workspace) as workspace$num_not_null, 
   count(distinct workspace) as workspace$num_unique, 
@@ -308,8 +308,8 @@ where
   run_status > 0 and 
   run_type > 0
 group by
-  CAST(workspace AS CHAR) as segment, 
-  CAST(run_status AS CHAR) as segment2, 
-  CAST(run_type AS CHAR) as segment3
+  SUBSTRING(CAST(workspace AS CHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS CHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS CHAR), 1, 100) as segment3
 order by num_rows desc limit 1000
 ---

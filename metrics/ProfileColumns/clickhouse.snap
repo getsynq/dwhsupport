@@ -33,7 +33,7 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/clickhouse_no_conditions_single_segmentation_all - 1]
 select
-  toString(run_type) as segment, 
+  substring(toString(run_type), 1, 100) as segment, 
   toInt64(count(*)) as num_rows, 
   toInt64(count(workspace)) as workspace$num_not_null, 
   toInt64(count(distinct workspace)) as workspace$num_unique, 
@@ -66,9 +66,9 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/clickhouse_no_conditions_multi_segmentation - 1]
 select
-  toString(workspace) as segment, 
-  toString(run_status) as segment2, 
-  toString(run_type) as segment3, 
+  substring(toString(workspace), 1, 100) as segment, 
+  substring(toString(run_status), 1, 100) as segment2, 
+  substring(toString(run_type), 1, 100) as segment3, 
   toInt64(count(*)) as num_rows, 
   toInt64(count(workspace)) as workspace$num_not_null, 
   toInt64(count(distinct workspace)) as workspace$num_unique, 
@@ -136,7 +136,7 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/clickhouse_single_condition_single_segmentation_all - 1]
 select
-  toString(run_type) as segment, 
+  substring(toString(run_type), 1, 100) as segment, 
   toInt64(count(*)) as num_rows, 
   toInt64(count(workspace)) as workspace$num_not_null, 
   toInt64(count(distinct workspace)) as workspace$num_unique, 
@@ -169,9 +169,9 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/clickhouse_single_condition_multi_segmentation - 1]
 select
-  toString(workspace) as segment, 
-  toString(run_status) as segment2, 
-  toString(run_type) as segment3, 
+  substring(toString(workspace), 1, 100) as segment, 
+  substring(toString(run_status), 1, 100) as segment2, 
+  substring(toString(run_type), 1, 100) as segment3, 
   toInt64(count(*)) as num_rows, 
   toInt64(count(workspace)) as workspace$num_not_null, 
   toInt64(count(distinct workspace)) as workspace$num_unique, 
@@ -241,7 +241,7 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/clickhouse_multi_condition_single_segmentation_all - 1]
 select
-  toString(run_type) as segment, 
+  substring(toString(run_type), 1, 100) as segment, 
   toInt64(count(*)) as num_rows, 
   toInt64(count(workspace)) as workspace$num_not_null, 
   toInt64(count(distinct workspace)) as workspace$num_unique, 
@@ -276,9 +276,9 @@ order by num_rows desc limit 1000
 
 [TestProfileSuite/TestProfileColumns/clickhouse_multi_condition_multi_segmentation - 1]
 select
-  toString(workspace) as segment, 
-  toString(run_status) as segment2, 
-  toString(run_type) as segment3, 
+  substring(toString(workspace), 1, 100) as segment, 
+  substring(toString(run_status), 1, 100) as segment2, 
+  substring(toString(run_type), 1, 100) as segment3, 
   toInt64(count(*)) as num_rows, 
   toInt64(count(workspace)) as workspace$num_not_null, 
   toInt64(count(distinct workspace)) as workspace$num_unique, 
