@@ -42,16 +42,16 @@ func (s *SegmentsSuite) TestSegmentQueries() {
 			},
 			Segmentation: []*Segmentation{
 				{
-					Field: "workspace",
-					Rule:  ExcludeSegments("synq-demo"),
+					Expression: dwhsql.Sql("workspace"),
+					Rule:       ExcludeSegments("synq-demo"),
 				},
 				{
-					Field: "run_status",
-					Rule:  AcceptSegments("1", "2", "3", "4"),
+					Expression: dwhsql.Sql("run_status"),
+					Rule:       AcceptSegments("1", "2", "3", "4"),
 				},
 				{
-					Field: "run_type",
-					Rule:  AllSegments(),
+					Expression: dwhsql.Sql("run_type"),
+					Rule:       AllSegments(),
 				},
 			},
 		}
