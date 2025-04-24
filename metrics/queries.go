@@ -263,13 +263,13 @@ func NumericMetric(col NumericExpr, metricId MetricId) *NumericMetricExpr {
 func (m *NumericMetricExpr) ToSql(dialect Dialect) (string, error) {
 	switch m.MetricId {
 	case METRIC_NUM_ROWS:
-		return As(dialect.Coalesce(dialect.Count(Star()), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Count(Star()), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_NOT_NULL:
-		return As(dialect.Coalesce(dialect.Count(m.Column), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Count(m.Column), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_UNIQUE:
-		return As(dialect.Coalesce(dialect.Count(Distinct(m.Column)), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Count(Distinct(m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_EMPTY:
 		return As(dialect.Coalesce(dialect.CountIf(Eq(m.Column, Int64(0))), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
@@ -462,16 +462,16 @@ func (m *TextMetricExpr) ToSql(dialect Dialect) (string, error) {
 		return As(dialect.Count(Distinct(m.Column)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_EMPTY:
-		return As(dialect.CountIf(Eq(m.Column, String(""))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Coalesce(dialect.CountIf(Eq(m.Column, String(""))), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MEAN_LENGTH:
-		return As(dialect.ToFloat64(Fn("avg", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(Fn("avg", Fn("length", m.Column)), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MIN_LENGTH:
-		return As(dialect.ToFloat64(Fn("min", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(Fn("min", Fn("length", m.Column)), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MAX_LENGTH:
-		return As(dialect.ToFloat64(Fn("max", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(Fn("max", Fn("length", m.Column)), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	default:
 		return "", fmt.Errorf("unknown TEXT metric type for : %s", m.MetricId)

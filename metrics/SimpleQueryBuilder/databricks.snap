@@ -5,7 +5,7 @@ select
   count(*) as `num_rows`, 
   count(workspace) as `num_not_null`, 
   count(distinct workspace) as `num_unique`, 
-  count_if(workspace = '') as `num_empty`
+  COALESCE(count_if(workspace = ''), 0) as `num_empty`
 from db.default.runs 
 
 
