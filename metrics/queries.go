@@ -263,31 +263,31 @@ func NumericMetric(col NumericExpr, metricId MetricId) *NumericMetricExpr {
 func (m *NumericMetricExpr) ToSql(dialect Dialect) (string, error) {
 	switch m.MetricId {
 	case METRIC_NUM_ROWS:
-		return As(dialect.Count(Star()), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Coalesce(dialect.Count(Star()), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_NOT_NULL:
-		return As(dialect.Count(m.Column), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Coalesce(dialect.Count(m.Column), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_UNIQUE:
-		return As(dialect.Count(Distinct(m.Column)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Coalesce(dialect.Count(Distinct(m.Column)), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_NUM_EMPTY:
-		return As(dialect.CountIf(Eq(m.Column, Int64(0))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.Coalesce(dialect.CountIf(Eq(m.Column, Int64(0))), Int64(0)), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MEAN:
-		return As(dialect.ToFloat64(Fn("avg", m.Column)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(Fn("avg", m.Column), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MEDIAN:
-		return As(dialect.ToFloat64(dialect.Median(m.Column)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(dialect.Median(m.Column), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MIN:
-		return As(dialect.ToFloat64(Fn("min", m.Column)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(Fn("min", m.Column), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MAX:
-		return As(dialect.ToFloat64(Fn("max", m.Column)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(Fn("max", m.Column), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_STDDEV:
-		return As(dialect.ToFloat64(dialect.Stddev(m.Column)), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(dialect.Coalesce(dialect.Stddev(m.Column), Int64(0))), m.OutColumnAlias()).ToSql(dialect)
 
 	default:
 		return "", fmt.Errorf("unknown NUMERIC metric type for : %s", m.MetricId)

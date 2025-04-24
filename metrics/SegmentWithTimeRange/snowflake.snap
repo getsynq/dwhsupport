@@ -4,14 +4,14 @@ select
   COALESCE(to_varchar("workspace"), '') as "segment", 
   'run_type' as "field", 
   count(*) as "num_rows", 
-  count(run_type) as "num_not_null", 
-  count(distinct run_type) as "num_unique", 
-  count_if(run_type = 0) as "num_empty", 
-  CAST(avg(run_type) AS FLOAT) as "mean", 
-  CAST(min(run_type) AS FLOAT) as "min", 
-  CAST(max(run_type) AS FLOAT) as "max", 
-  CAST(median(run_type) AS FLOAT) as "median", 
-  CAST(stddev(run_type) AS FLOAT) as "stddev"
+  COALESCE(count(run_type), 0) as "num_not_null", 
+  COALESCE(count(distinct run_type), 0) as "num_unique", 
+  COALESCE(count_if(run_type = 0), 0) as "num_empty", 
+  CAST(COALESCE(avg(run_type), 0) AS FLOAT) as "mean", 
+  CAST(COALESCE(min(run_type), 0) AS FLOAT) as "min", 
+  CAST(COALESCE(max(run_type), 0) AS FLOAT) as "max", 
+  CAST(COALESCE(median(run_type), 0) AS FLOAT) as "median", 
+  CAST(COALESCE(stddev(run_type), 0) AS FLOAT) as "stddev"
 from db.default.runs 
 where
   ingested_at >= '2025-01-01T00:00:00Z' and 
