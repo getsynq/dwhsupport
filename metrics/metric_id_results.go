@@ -30,8 +30,8 @@ func (identity MetricIdentity) ToKey() string {
 //
 
 type MetricCustomNumeric struct {
-	Segment     string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
-	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
+	Segment     string    `ch:"segment"        bigquery:"segment"        db:"segment"        json:"segment"`
+	TimeSegment time.Time `ch:"time_segment"   bigquery:"time_segment"   db:"time_segment"   json:"time_segment"`
 	Numeral     float64   `ch:"custom_numeric" bigquery:"custom_numeric" db:"custom_numeric" json:"custom_numeric"`
 }
 
@@ -58,9 +58,9 @@ func (volume *MetricCustomNumeric) WithPartition(timeSegment time.Time, segment 
 //
 
 type MetricVolume struct {
-	Segment     string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
+	Segment     string    `ch:"segment"      bigquery:"segment"      db:"segment"      json:"segment"`
 	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
-	NumRows     int64     `ch:"num_rows" bigquery:"num_rows" db:"num_rows" json:"num_rows"`
+	NumRows     int64     `ch:"num_rows"     bigquery:"num_rows"     db:"num_rows"     json:"num_rows"`
 }
 
 func NewMetricVolume(numRows int64) *MetricVolume {
@@ -100,9 +100,9 @@ func (volume *MetricVolume) WithPartition(timeSegment time.Time, segment string)
 //
 
 type MetricFreshness struct {
-	Segment     string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
+	Segment     string    `ch:"segment"      bigquery:"segment"      db:"segment"      json:"segment"`
 	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
-	At          time.Time `ch:"at" bigquery:"at" db:"at" json:"at"`
+	At          time.Time `ch:"at"           bigquery:"at"           db:"at"           json:"at"`
 }
 
 func NewMetricFreshness(at time.Time) *MetricFreshness {
@@ -136,8 +136,8 @@ func (metric *MetricFreshness) ToDefault(timeSegment time.Time, segment string) 
 //
 
 type MetricLastLoadedAt struct {
-	Segment      string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
-	TimeSegment  time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
+	Segment      string    `ch:"segment"        bigquery:"segment"        db:"segment"        json:"segment"`
+	TimeSegment  time.Time `ch:"time_segment"   bigquery:"time_segment"   db:"time_segment"   json:"time_segment"`
 	LastLoadedAt time.Time `ch:"last_loaded_at" bigquery:"last_loaded_at" db:"last_loaded_at" json:"last_loaded_at"`
 }
 
@@ -178,11 +178,11 @@ func (metric *MetricLastLoadedAt) WithPartition(timeSegment time.Time, segment s
 //
 
 type MetricTableStats struct {
-	Segment      string     `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
-	TimeSegment  time.Time  `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
+	Segment      string     `ch:"segment"        bigquery:"segment"        db:"segment"        json:"segment"`
+	TimeSegment  time.Time  `ch:"time_segment"   bigquery:"time_segment"   db:"time_segment"   json:"time_segment"`
 	LastLoadedAt *time.Time `ch:"last_loaded_at" bigquery:"last_loaded_at" db:"last_loaded_at" json:"last_loaded_at"`
-	NumRows      *int64     `ch:"num_rows" bigquery:"num_rows" db:"num_rows" json:"num_rows"`
-	SizeBytes    *int64     `ch:"size_bytes" bigquery:"size_bytes" db:"size_bytes" json:"size_bytes"`
+	NumRows      *int64     `ch:"num_rows"       bigquery:"num_rows"       db:"num_rows"       json:"num_rows"`
+	SizeBytes    *int64     `ch:"size_bytes"     bigquery:"size_bytes"     db:"size_bytes"     json:"size_bytes"`
 }
 
 func NewMetricTableStats(lastLoadedAt *time.Time, numRows *int64, sizeBytes *int64) *MetricTableStats {
@@ -218,8 +218,8 @@ func (stats *MetricTableStats) ToDefault(timeSegment time.Time, segment string) 
 //
 
 type MetricFieldDistribution struct {
-	Field       string    `ch:"field" bigquery:"field" db:"field" json:"field"`
-	Segment     string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
+	Field       string    `ch:"field"        bigquery:"field"        db:"field"        json:"field"`
+	Segment     string    `ch:"segment"      bigquery:"segment"      db:"segment"      json:"segment"`
 	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
 
 	Counts []int64  `ch:"counts" bigquery:"counts" db:"counts" json:"counts"`
@@ -245,24 +245,24 @@ func (metric *MetricFieldDistribution) ToDefault(timeSegment time.Time, segment 
 //
 
 type MetricNumericFieldStats struct {
-	Field       string    `ch:"field" bigquery:"field" db:"field" json:"field"`
-	Segment     string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
+	Field       string    `ch:"field"        bigquery:"field"        db:"field"        json:"field"`
+	Segment     string    `ch:"segment"      bigquery:"segment"      db:"segment"      json:"segment"`
 	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
 
-	NumTotal   int64 `ch:"num_rows" bigquery:"num_rows" db:"num_rows" json:"num_rows"`
-	NumUnique  int64 `ch:"num_unique" bigquery:"num_unique" db:"num_unique" json:"num_unique"`
+	NumTotal   int64 `ch:"num_rows"     bigquery:"num_rows"     db:"num_rows"     json:"num_rows"`
+	NumUnique  int64 `ch:"num_unique"   bigquery:"num_unique"   db:"num_unique"   json:"num_unique"`
 	NumNotNull int64 `ch:"num_not_null" bigquery:"num_not_null" db:"num_not_null" json:"num_not_null"`
-	NumEmpty   int64 `ch:"num_empty" bigquery:"num_empty" db:"num_empty" json:"num_empty"`
+	NumEmpty   int64 `ch:"num_empty"    bigquery:"num_empty"    db:"num_empty"    json:"num_empty"`
 
 	PctUnique  float64
 	PctNotNull float64
 	PctEmpty   float64
 
-	Min    float64 `ch:"min" bigquery:"min" db:"min" json:"min"`
-	Max    float64 `ch:"max" bigquery:"max" db:"max" json:"max"`
-	Mean   float64 `ch:"mean" bigquery:"mean" db:"mean" json:"mean"`
-	Median float64 `ch:"median" bigquery:"median" db:"median" json:"median"`
-	Stddev float64 `ch:"stddev" bigquery:"stddev" db:"stddev" json:"stddev"`
+	Min    *float64 `ch:"min"    bigquery:"min"    db:"min"    json:"min"`
+	Max    *float64 `ch:"max"    bigquery:"max"    db:"max"    json:"max"`
+	Mean   *float64 `ch:"mean"   bigquery:"mean"   db:"mean"   json:"mean"`
+	Median *float64 `ch:"median" bigquery:"median" db:"median" json:"median"`
+	Stddev *float64 `ch:"stddev" bigquery:"stddev" db:"stddev" json:"stddev"`
 }
 
 func (stats *MetricNumericFieldStats) GetIdentity() MetricIdentity {
@@ -281,11 +281,11 @@ func (stats *MetricNumericFieldStats) ToDefault(timeSegment time.Time, segment s
 	stats.NumNotNull = 0
 	stats.NumEmpty = 0
 
-	stats.Min = 0
-	stats.Max = 0
-	stats.Mean = 0
-	stats.Median = 0
-	stats.Stddev = 0
+	stats.Min = nil
+	stats.Max = nil
+	stats.Mean = nil
+	stats.Median = nil
+	stats.Stddev = nil
 }
 
 func (stats *MetricNumericFieldStats) WithPartition(timeSegment time.Time, segment string) {
@@ -294,15 +294,15 @@ func (stats *MetricNumericFieldStats) WithPartition(timeSegment time.Time, segme
 }
 
 type MetricTimeFieldStats struct {
-	Field       string    `ch:"field" bigquery:"field" db:"field" json:"field"`
-	Segment     string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
+	Field       string    `ch:"field"        bigquery:"field"        db:"field"        json:"field"`
+	Segment     string    `ch:"segment"      bigquery:"segment"      db:"segment"      json:"segment"`
 	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
 
-	NumTotal   int64      `ch:"num_rows" bigquery:"num_rows" db:"num_rows" json:"num_rows"`
-	NumUnique  int64      `ch:"num_unique" bigquery:"num_unique" db:"num_unique" json:"num_unique"`
+	NumTotal   int64      `ch:"num_rows"     bigquery:"num_rows"     db:"num_rows"     json:"num_rows"`
+	NumUnique  int64      `ch:"num_unique"   bigquery:"num_unique"   db:"num_unique"   json:"num_unique"`
 	NumNotNull int64      `ch:"num_not_null" bigquery:"num_not_null" db:"num_not_null" json:"num_not_null"`
-	Min        *time.Time `ch:"min" bigquery:"min" db:"min" json:"min"`
-	Max        *time.Time `ch:"max" bigquery:"max" db:"max" json:"max"`
+	Min        *time.Time `ch:"min"          bigquery:"min"          db:"min"          json:"min"`
+	Max        *time.Time `ch:"max"          bigquery:"max"          db:"max"          json:"max"`
 
 	PctUnique  float64
 	PctNotNull float64
@@ -330,14 +330,14 @@ func (stats *MetricTimeFieldStats) WithPartition(timeSegment time.Time, segment 
 }
 
 type MetricTextFieldStats struct {
-	Field       string    `ch:"field" bigquery:"field" db:"field" json:"field"`
-	Segment     string    `ch:"segment" bigquery:"segment" db:"segment" json:"segment"`
+	Field       string    `ch:"field"        bigquery:"field"        db:"field"        json:"field"`
+	Segment     string    `ch:"segment"      bigquery:"segment"      db:"segment"      json:"segment"`
 	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
 
-	NumTotal   int64 `ch:"num_rows" bigquery:"num_rows" db:"num_rows" json:"num_rows"`
-	NumUnique  int64 `ch:"num_unique" bigquery:"num_unique" db:"num_unique" json:"num_unique"`
+	NumTotal   int64 `ch:"num_rows"     bigquery:"num_rows"     db:"num_rows"     json:"num_rows"`
+	NumUnique  int64 `ch:"num_unique"   bigquery:"num_unique"   db:"num_unique"   json:"num_unique"`
 	NumNotNull int64 `ch:"num_not_null" bigquery:"num_not_null" db:"num_not_null" json:"num_not_null"`
-	NumEmpty   int64 `ch:"num_empty" bigquery:"num_empty" db:"num_empty" json:"num_empty"`
+	NumEmpty   int64 `ch:"num_empty"    bigquery:"num_empty"    db:"num_empty"    json:"num_empty"`
 
 	PctUnique  float64
 	PctNotNull float64
