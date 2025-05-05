@@ -312,7 +312,7 @@ func (d *RedshiftDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
 }
 
 func (d *RedshiftDialect) CountIf(expr Expr) Expr {
-	return Fn("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
+	return WrapSql("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
 }
 
 func (d *RedshiftDialect) Count(expr Expr) Expr {
@@ -398,7 +398,7 @@ func (d *PostgresDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
 }
 
 func (d *PostgresDialect) CountIf(expr Expr) Expr {
-	return Fn("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
+	return WrapSql("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
 }
 
 func (d *PostgresDialect) Count(expr Expr) Expr {
@@ -484,7 +484,7 @@ func (d *DuckDBDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
 }
 
 func (d *DuckDBDialect) CountIf(expr Expr) Expr {
-	return Fn("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
+	return WrapSql("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
 }
 
 func (d *DuckDBDialect) Count(expr Expr) Expr {
@@ -570,7 +570,7 @@ func (d *MySQLDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
 }
 
 func (d *MySQLDialect) CountIf(expr Expr) Expr {
-	return Fn("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
+	return WrapSql("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
 }
 
 func (d *MySQLDialect) Count(expr Expr) Expr {
