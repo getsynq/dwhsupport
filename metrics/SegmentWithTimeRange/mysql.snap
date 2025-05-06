@@ -5,7 +5,6 @@ select
   'run_type' as field, 
   count(*) as num_rows, 
   count(run_type) as num_not_null, 
-  count(distinct run_type) as num_unique, 
   SUM(CASE WHEN run_type = 0 THEN 1 ELSE 0 END) as num_empty, 
   CAST(avg(run_type) AS FLOAT) as mean, 
   CAST(min(run_type) AS FLOAT) as min, 
