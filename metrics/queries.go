@@ -213,7 +213,6 @@ func UnknownMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 
 var NumericMetrics = []MetricId{
 	METRIC_NUM_NOT_NULL,
-	METRIC_NUM_UNIQUE,
 	METRIC_NUM_EMPTY,
 	METRIC_MEAN,
 	METRIC_MIN,

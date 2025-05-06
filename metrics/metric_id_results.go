@@ -250,11 +250,9 @@ type MetricNumericFieldStats struct {
 	TimeSegment time.Time `ch:"time_segment" bigquery:"time_segment" db:"time_segment" json:"time_segment"`
 
 	NumTotal   int64 `ch:"num_rows"     bigquery:"num_rows"     db:"num_rows"     json:"num_rows"`
-	NumUnique  int64 `ch:"num_unique"   bigquery:"num_unique"   db:"num_unique"   json:"num_unique"`
 	NumNotNull int64 `ch:"num_not_null" bigquery:"num_not_null" db:"num_not_null" json:"num_not_null"`
 	NumEmpty   int64 `ch:"num_empty"    bigquery:"num_empty"    db:"num_empty"    json:"num_empty"`
 
-	PctUnique  float64
 	PctNotNull float64
 	PctEmpty   float64
 
@@ -277,7 +275,6 @@ func (stats *MetricNumericFieldStats) ToDefault(timeSegment time.Time, segment s
 	stats.TimeSegment = timeSegment
 
 	stats.NumTotal = 0
-	stats.NumUnique = 0
 	stats.NumNotNull = 0
 	stats.NumEmpty = 0
 
