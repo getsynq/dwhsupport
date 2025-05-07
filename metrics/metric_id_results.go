@@ -279,7 +279,9 @@ func (stats *MetricNumericFieldStats) ToDefault(timeSegment time.Time, segment s
 	stats.NumTotal = 0
 	stats.NumNotNull = 0
 	stats.NumEmpty = 0
+	stats.NumUnique = nil
 
+	stats.PctUnique = nil
 	stats.Min = nil
 	stats.Max = nil
 	stats.Mean = nil
