@@ -7,6 +7,7 @@ select
   count(distinct workspace) as `workspace$num_unique`, 
   count_if(workspace = '') as `workspace$num_empty`, 
   count(run_type) as `run_type$num_not_null`, 
+  count(distinct run_type) as `run_type$num_unique`, 
   count_if(run_type = 0) as `run_type$num_empty`, 
   CAST(avg(run_type) AS FLOAT) as `run_type$mean`, 
   CAST(min(run_type) AS FLOAT) as `run_type$min`, 

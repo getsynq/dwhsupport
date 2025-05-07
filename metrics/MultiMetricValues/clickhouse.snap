@@ -7,6 +7,7 @@ select
   toInt64(count(distinct workspace)) as workspace$num_unique, 
   toInt64(countIf(workspace = '')) as workspace$num_empty, 
   toInt64(count(run_type)) as run_type$num_not_null, 
+  toInt64(count(distinct run_type)) as run_type$num_unique, 
   toInt64(countIf(run_type = 0)) as run_type$num_empty, 
   toFloat64(avg(run_type)) as run_type$mean, 
   toFloat64(min(run_type)) as run_type$min, 

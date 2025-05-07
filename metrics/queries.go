@@ -6,6 +6,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/querybuilder"
 	. "github.com/getsynq/dwhsupport/sqldialect"
+	"github.com/samber/lo"
 )
 
 type MonitorPartitioning struct {
@@ -213,6 +214,7 @@ func UnknownMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 
 var NumericMetrics = []MetricId{
 	METRIC_NUM_NOT_NULL,
+	METRIC_NUM_UNIQUE,
 	METRIC_NUM_EMPTY,
 	METRIC_MEAN,
 	METRIC_MIN,
@@ -221,11 +223,18 @@ var NumericMetrics = []MetricId{
 	METRIC_STDDEV,
 }
 
-func NumericMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
+func NumericMetricsValuesCols(field string, dialect *Dialect, opts ...MetricConfOption) []Expr {
 	metricFieldCol := NumericCol(field)
 
 	var cols []Expr
-	for _, metricId := range NumericMetrics {
+	metrics := NumericMetrics
+	if _, ok := (*dialect).(*RedshiftDialect); ok {
+		metrics = lo.Filter(NumericMetrics, func(metricId MetricId, _ int) bool {
+			return metricId != METRIC_NUM_UNIQUE
+		})
+	}
+
+	for _, metricId := range metrics {
 		metricExpr := NumericMetric(metricFieldCol, metricId)
 		for _, opt := range opts {
 			opt(&metricExpr.MetricConf)
@@ -236,10 +245,10 @@ func NumericMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 	return cols
 }
 
-func NumericMetricsCols(field string, opts ...MetricConfOption) []Expr {
+func NumericMetricsCols(field string, dialect *Dialect, opts ...MetricConfOption) []Expr {
 	cols := []Expr{As(String(field), Identifier("field"))}
 	cols = append(cols, CountStar(METRIC_NUM_ROWS))
-	cols = append(cols, NumericMetricsValuesCols(field, opts...)...)
+	cols = append(cols, NumericMetricsValuesCols(field, dialect, opts...)...)
 
 	return cols
 }

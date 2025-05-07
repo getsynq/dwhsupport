@@ -23,6 +23,7 @@ type ColumnToProfile struct {
 }
 
 func ProfileColumns(
+	dialect *Dialect,
 	tableFqn *TableFqnExpr,
 	columnsToProfile []*ColumnToProfile,
 	args *MonitorArgs,
@@ -53,7 +54,7 @@ func ProfileColumns(
 			expressions = append(expressions, TextMetricsValuesCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
 			expressions = append(expressions, TextMetricsLengthCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
 		case ColumnProfileNumeric:
-			expressions = append(expressions, NumericMetricsValuesCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
+			expressions = append(expressions, NumericMetricsValuesCols(toProfile.Column, dialect, WithPrefixForColumn(toProfile.Column))...)
 		case ColumnProfileTime:
 			expressions = append(expressions, TimeMetricsValuesCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
 		}
