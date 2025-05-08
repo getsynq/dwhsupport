@@ -60,10 +60,6 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 	return nil, scrapper.ErrUnsupported
 }
 
-func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-	return nil, scrapper.ErrUnsupported
-}
-
 func (e *TrinoScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {
 	return nil, scrapper.ErrUnsupported
 }
