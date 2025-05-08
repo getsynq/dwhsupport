@@ -43,7 +43,8 @@ func (s *QueryCatalogSuite) TestQueryCatalog() {
 	spew.Dump(rows)
 
 	row := rows[0]
-	s.NotEmpty(row.Database)
+	s.Equal("localhost", row.Instance)
+	s.Equal("iceberg", row.Database)
 	s.NotEmpty(row.Schema)
 	s.NotEmpty(row.Table)
 	s.NotEmpty(row.Column)
