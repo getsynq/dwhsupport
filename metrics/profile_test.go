@@ -107,7 +107,7 @@ func (s *ProfileSuite) TestProfileColumns() {
 						},
 					}
 
-					queryBuilder, err := ProfileColumns(&dialect.Dialect, tableFqnExpr, columnsToProfile, monitorArgs, nil, 1000, 100)
+					queryBuilder, err := ProfileColumns(dialect.Dialect, tableFqnExpr, columnsToProfile, monitorArgs, nil, 1000, 100)
 					s.Require().NoError(err)
 					s.Require().NotNil(queryBuilder)
 					sql, err := queryBuilder.ToSql(dialect.Dialect)

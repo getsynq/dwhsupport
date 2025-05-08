@@ -223,12 +223,12 @@ var NumericMetrics = []MetricId{
 	METRIC_STDDEV,
 }
 
-func NumericMetricsValuesCols(field string, dialect *Dialect, opts ...MetricConfOption) []Expr {
+func NumericMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
 	metricFieldCol := NumericCol(field)
 
 	var cols []Expr
 	metrics := NumericMetrics
-	if _, ok := (*dialect).(*RedshiftDialect); ok {
+	if _, ok := (dialect).(*RedshiftDialect); ok {
 		metrics = lo.Filter(NumericMetrics, func(metricId MetricId, _ int) bool {
 			return metricId != METRIC_NUM_UNIQUE
 		})
@@ -245,7 +245,7 @@ func NumericMetricsValuesCols(field string, dialect *Dialect, opts ...MetricConf
 	return cols
 }
 
-func NumericMetricsCols(field string, dialect *Dialect, opts ...MetricConfOption) []Expr {
+func NumericMetricsCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
 	cols := []Expr{As(String(field), Identifier("field"))}
 	cols = append(cols, CountStar(METRIC_NUM_ROWS))
 	cols = append(cols, NumericMetricsValuesCols(field, dialect, opts...)...)

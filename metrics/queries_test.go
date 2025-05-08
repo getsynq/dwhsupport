@@ -37,7 +37,7 @@ func (s *MetricsSuite) TestMultiMetricValues() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, append(
 			TextMetricsValuesCols("workspace", WithPrefixForColumn("workspace")),
-			NumericMetricsValuesCols("run_type", &dialect.Dialect, WithPrefixForColumn("run_type"))...,
+			NumericMetricsValuesCols("run_type", dialect.Dialect, WithPrefixForColumn("run_type"))...,
 		))
 		queryBuilder = queryBuilder.WithSegment(dwhsql.Identifier("workspace"))
 		queryBuilder = queryBuilder.WithSegment(dwhsql.Identifier("run_type"))
@@ -247,7 +247,7 @@ func (s *MetricsSuite) TestPartitionWithTimeRange() {
 
 	for _, dialect := range DialectsToTest() {
 
-		expressions := NumericMetricsCols("run_type", &dialect.Dialect)
+		expressions := NumericMetricsCols("run_type", dialect.Dialect)
 
 		partition := &Partition{
 			Field: "ingested_at",
@@ -273,7 +273,7 @@ func (s *MetricsSuite) TestSegmentWithTimeRange() {
 
 	for _, dialect := range DialectsToTest() {
 
-		expressions := NumericMetricsCols("run_type", &dialect.Dialect)
+		expressions := NumericMetricsCols("run_type", dialect.Dialect)
 
 		partition := &Partition{
 			Field: "ingested_at",

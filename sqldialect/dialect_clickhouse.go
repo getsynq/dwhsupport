@@ -1,5 +1,12 @@
 package sqldialect
 
+import (
+	"fmt"
+	"time"
+
+	"github.com/pkg/errors"
+)
+
 //
 // ClickHouseDialect
 //

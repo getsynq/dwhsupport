@@ -23,7 +23,7 @@ type ColumnToProfile struct {
 }
 
 func ProfileColumns(
-	dialect *Dialect,
+	dialect Dialect,
 	tableFqn *TableFqnExpr,
 	columnsToProfile []*ColumnToProfile,
 	args *MonitorArgs,
