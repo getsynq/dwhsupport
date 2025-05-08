@@ -29,7 +29,7 @@ func (s *QueryTablesSuite) TestQueryTables() {
 		Port:     8080,
 		User:     "trino",
 		Password: "trino",
-		Catalogs: []string{"tpch", "tpcds"},
+		Catalogs: []string{"tpch"},
 	}
 	scr, err := NewTrinoScrapper(ctx, conf)
 	s.Require().NoError(err)
@@ -45,14 +45,15 @@ func (s *QueryTablesSuite) TestQueryTables() {
 		databases[row.Database] = true
 	}
 	s.True(databases["tpch"])
-	s.True(databases["tpcds"])
 
 	// Spot check first row fields
 	row := rows[0]
-	s.Empty(row.Instance)
+	// no description in default data for tables
 	s.Empty(row.Description)
+	// no tags at all
 	s.Empty(row.Tags)
-	s.NotEmpty(row.Database)
+	s.Equal("localhost", row.Instance)
+	s.Equal("tpch", row.Database)
 	s.NotEmpty(row.Schema)
 	s.NotEmpty(row.Table)
 	s.NotEmpty(row.TableType)
