@@ -16,8 +16,7 @@ type TrinoConf struct {
 	Port     int
 	User     string
 	Password string
-	Catalog  string
-	Schema   string
+	Catalogs []string
 	Source   string // optional, e.g. "synq"
 }
 
@@ -41,7 +40,7 @@ func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, err
 		conf.Port = 8080
 	}
 	password := url.QueryEscape(conf.Password)
-	dsn := fmt.Sprintf("http://%s:%s@%s:%d?catalog=%s&schema=%s", conf.User, password, conf.Host, conf.Port, conf.Catalog, conf.Schema)
+	dsn := fmt.Sprintf("http://%s:%s@%s:%d", conf.User, password, conf.Host, conf.Port)
 	if conf.Source != "" {
 		dsn += "&source=" + conf.Source
 	}
