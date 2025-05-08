@@ -35,15 +35,13 @@ func (s *TrinoSuite) TestBasicQuery() {
 		Port:     8080,
 		User:     "trino",
 		Password: "trino",
-		Catalog:  "tpch",
-		Schema:   "information_schema",
 	})
 	s.NoError(err)
 	s.NotNil(execer)
 	defer execer.Close()
 
 	q := NewQuerier[res](execer)
-	results, err := q.QueryMany(ctx, "SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables LIMIT 1")
+	results, err := q.QueryMany(ctx, "SELECT table_catalog, table_schema, table_name, table_type FROM tpch.information_schema.tables LIMIT 1")
 	s.Require().NoError(err)
 	s.Require().NotEmpty(results)
 	s.Equal("tpch", results[0].TableCatalog)
