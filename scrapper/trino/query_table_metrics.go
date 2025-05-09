@@ -32,14 +32,13 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 		query := fmt.Sprintf("SHOW STATS FOR %s", fqTable)
 		rows, err := db.QueryxContext(ctx, query)
 		if err != nil {
-			// skip tables with errors (e.g. views, permissions)
-			continue
+			return nil, err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var stat trinoStatsRow
 			if err := rows.StructScan(&stat); err != nil {
-				continue
+				return nil, err
 			}
 			if !stat.ColumnName.Valid { // NULL column_name row
 				var rowCount *int64
