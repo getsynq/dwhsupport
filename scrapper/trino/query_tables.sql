@@ -11,17 +11,4 @@ LEFT JOIN system.metadata.table_comments c
   ON t.table_catalog = c.catalog_name
   AND t.table_schema = c.schema_name
   AND t.table_name = c.table_name
-WHERE t.table_schema NOT IN ('information_schema', 'sys')
-
-UNION ALL
-
-SELECT 
-    table_catalog as database,
-    table_schema as schema,
-    table_name as "table",
-    'VIEW' AS table_type,
-    null as description,
-    false as is_table,
-    true as is_view
-FROM {{catalog}}.information_schema.views
-WHERE table_schema NOT IN ('information_schema', 'sys')
+WHERE t.table_schema NOT IN ('information_schema', 'sys', 'pg_catalog')
