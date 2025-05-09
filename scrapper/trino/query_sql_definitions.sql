@@ -5,7 +5,7 @@ with tables as (
         table_name,
         table_type
     from {{catalog}}.information_schema.tables
-    where table_schema not in ('information_schema', 'sys')
+    where table_schema not in ({{ignored_schemas}})
 )
 select 
     t.database,

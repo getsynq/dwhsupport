@@ -11,4 +11,4 @@ LEFT JOIN system.metadata.table_comments c
   ON t.table_catalog = c.catalog_name
   AND t.table_schema = c.schema_name
   AND t.table_name = c.table_name
-WHERE t.table_schema NOT IN ('information_schema', 'sys', 'pg_catalog')
+WHERE t.table_schema NOT IN ({{ignored_schemas}})

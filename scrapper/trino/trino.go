@@ -9,6 +9,23 @@ import (
 	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
+var (
+	IgnoredSchemas = []string{
+		"information_schema",
+		"sys",
+		"pg_catalog",
+		"pg_automv",
+		"catalog_history",
+		"pg_toast",
+		"pg_internal",
+		"performance_schema",
+		"mysql",
+		"system",
+		"SYSADMIN",
+		"INFORMATION_SCHEMA",
+	}
+)
+
 type TrinoScrapperConf struct {
 	*dwhexectrino.TrinoConf
 	Catalogs           []string

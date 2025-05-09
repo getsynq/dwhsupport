@@ -20,6 +20,8 @@ func (e *TrinoScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, 
 
 	for _, catalog := range e.conf.Catalogs {
 		catalogQuery := strings.Replace(query, "{{catalog}}", catalog, -1)
+		ignoredSchemas := "'" + strings.Join(IgnoredSchemas, "','") + "'"
+		catalogQuery = strings.Replace(catalogQuery, "{{ignored_schemas}}", ignoredSchemas, -1)
 		res, err := stdsql.QueryMany(ctx, db, catalogQuery,
 			dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {
 				row.Instance = e.conf.Host
