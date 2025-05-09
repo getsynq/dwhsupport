@@ -26,10 +26,11 @@ func (s *QueryCatalogSuite) TestQueryCatalog() {
 	// docker run --name trino -d -p 8080:8080 trinodb/trino
 	ctx := context.TODO()
 	conf := &trino.TrinoConf{
-		Host:     "localhost",
-		Port:     8080,
-		User:     "trino",
-		Password: "trino",
+		Host:      "localhost",
+		Port:      8080,
+		User:      "trino",
+		Password:  "trino",
+		Plaintext: true,
 	}
 	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
 		TrinoConf: conf,
