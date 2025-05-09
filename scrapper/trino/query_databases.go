@@ -9,8 +9,6 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
-// Removed unused trinoCatalogRow struct to reduce code clutter.
-
 //go:embed query_databases.sql
 var queryDatabasesSQL string
 
