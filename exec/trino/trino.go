@@ -48,7 +48,9 @@ func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, err
 		User:   url.UserPassword(conf.User, conf.Password),
 	}
 	if conf.Source != "" {
-		dsn.Query().Set("source", conf.Source)
+		query := dsn.Query()
+		query.Set("source", conf.Source)
+		dsn.RawQuery = query.Encode()
 	}
 
 	db, err := sqlx.Open("trino", dsn.String())
