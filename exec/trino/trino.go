@@ -16,6 +16,8 @@ type TrinoConf struct {
 	Port     int
 	User     string
 	Password string
+	Catalogs []string
+	Source   string // optional, e.g. "synq"
 }
 
 type Executor interface {
@@ -38,7 +40,10 @@ func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, err
 		conf.Port = 8080
 	}
 	password := url.QueryEscape(conf.Password)
-	dsn := fmt.Sprintf("http://%s:%s@%s:%d?source=%s", conf.User, password, conf.Host, conf.Port, exec.SynqApplicationId)
+	dsn := fmt.Sprintf("http://%s:%s@%s:%d", conf.User, password, conf.Host, conf.Port)
+	if conf.Source != "" {
+		dsn += "&source=" + conf.Source
+	}
 	db, err := sqlx.Open("trino", dsn)
 	if err != nil {
 		return nil, err
