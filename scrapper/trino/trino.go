@@ -54,11 +54,3 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 func (e *TrinoScrapper) Close() error {
 	return e.executor.Close()
 }
-
-func (e *TrinoScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {
-	return nil, scrapper.ErrUnsupported
-}
-
-func (e *TrinoScrapper) QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
-	return nil, scrapper.ErrUnsupported
-}
