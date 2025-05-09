@@ -38,7 +38,7 @@ func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, err
 		conf.Port = 8080
 	}
 	password := url.QueryEscape(conf.Password)
-	dsn := fmt.Sprintf("http://%s:%s@%s:%d&source=%s", conf.User, password, conf.Host, conf.Port, exec.SynqApplicationId)
+	dsn := fmt.Sprintf("http://%s:%s@%s:%d?source=%s", conf.User, password, conf.Host, conf.Port, exec.SynqApplicationId)
 	db, err := sqlx.Open("trino", dsn)
 	if err != nil {
 		return nil, err
