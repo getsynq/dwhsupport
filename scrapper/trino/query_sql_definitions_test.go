@@ -31,9 +31,11 @@ func (s *QuerySqlDefinitionsSuite) TestQuerySqlDefinitions() {
 		Port:     8080,
 		User:     "trino",
 		Password: "trino",
-		Catalogs: []string{"iceberg"},
 	}
-	scr, err := NewTrinoScrapper(ctx, conf)
+	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
+		TrinoConf: conf,
+		Catalogs:  []string{"iceberg"},
+	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)
 	defer scr.Close()

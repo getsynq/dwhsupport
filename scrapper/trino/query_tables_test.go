@@ -30,9 +30,11 @@ func (s *QueryTablesSuite) TestQueryTables() {
 		Port:     8080,
 		User:     "trino",
 		Password: "trino",
-		Catalogs: []string{"tpch"},
 	}
-	scr, err := NewTrinoScrapper(ctx, conf)
+	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
+		TrinoConf: conf,
+		Catalogs:  []string{"tpch"},
+	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)
 	defer scr.Close()
