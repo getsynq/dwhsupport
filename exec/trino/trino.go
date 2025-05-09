@@ -8,15 +8,17 @@ import (
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/jmoiron/sqlx"
+	"github.com/samber/lo"
 	_ "github.com/trinodb/trino-go-client/trino"
 )
 
 type TrinoConf struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	Source   string // optional, e.g. "synq"
+	Host      string
+	Port      int
+	Plaintext bool
+	User      string
+	Password  string
+	Source    string // optional, e.g. "synq"
 }
 
 type Executor interface {
@@ -35,15 +37,21 @@ func (e *TrinoExecutor) GetDb() *sqlx.DB {
 }
 
 func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, error) {
-	if conf.Port == 0 {
-		conf.Port = 8080
+	host := conf.Host
+	if conf.Port > 0 {
+		host = fmt.Sprintf("%s:%d", conf.Host, conf.Port)
 	}
-	password := url.QueryEscape(conf.Password)
-	dsn := fmt.Sprintf("http://%s:%s@%s:%d", conf.User, password, conf.Host, conf.Port)
+
+	dsn := &url.URL{
+		Scheme: lo.Ternary(conf.Plaintext, "http", "https"),
+		Host:   host,
+		User:   url.UserPassword(conf.User, conf.Password),
+	}
 	if conf.Source != "" {
-		dsn += "&source=" + conf.Source
+		dsn.Query().Set("source", conf.Source)
 	}
-	db, err := sqlx.Open("trino", dsn)
+
+	db, err := sqlx.Open("trino", dsn.String())
 	if err != nil {
 		return nil, err
 	}
