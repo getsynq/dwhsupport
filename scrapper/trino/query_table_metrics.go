@@ -34,9 +34,20 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 		if err != nil {
 			return nil, err
 		}
+
+		tableMetrics := &scrapper.TableMetricsRow{
+			Instance: t.Instance,
+			Database: t.Database,
+			Schema:   t.Schema,
+			Table:    t.Table,
+		}
+
 		// Close rows as soon as possible
 		func() {
 			defer rows.Close()
+			dataSize := int64(0)
+			dataSizePresent := false
+
 			for rows.Next() {
 				var stat trinoStatsRow
 				if err := rows.StructScan(&stat); err != nil {
@@ -48,19 +59,21 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 						v := int64(stat.RowCount.Float64)
 						rowCount = &v
 					}
-					out = append(out, &scrapper.TableMetricsRow{
-						Instance:  t.Instance,
-						Database:  t.Database,
-						Schema:    t.Schema,
-						Table:     t.Table,
-						RowCount:  rowCount,
-						UpdatedAt: nil,
-						SizeBytes: nil,
-					})
-					break
+					tableMetrics.RowCount = rowCount
+				}
+
+				if stat.DataSize.Valid {
+					dataSize += int64(stat.DataSize.Float64)
+					dataSizePresent = true
 				}
 			}
+
+			if dataSizePresent {
+				tableMetrics.SizeBytes = &dataSize
+			}
 		}()
+
+		out = append(out, tableMetrics)
 	}
 	return out, nil
 }
