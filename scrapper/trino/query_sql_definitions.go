@@ -3,7 +3,6 @@ package trino
 import (
 	"context"
 	_ "embed"
-	"fmt"
 	"strings"
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
@@ -21,7 +20,6 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 
 	for _, catalog := range e.conf.Catalogs {
 		catalogQuery := strings.Replace(query, "{{catalog}}", catalog, -1)
-		fmt.Println(catalogQuery)
 		res, err := stdsql.QueryMany(ctx, db, catalogQuery,
 			dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
 				row.Instance = e.conf.Host
