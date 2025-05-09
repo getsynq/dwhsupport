@@ -34,30 +34,33 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var stat trinoStatsRow
-			if err := rows.StructScan(&stat); err != nil {
-				return nil, err
-			}
-			if !stat.ColumnName.Valid { // NULL column_name row
-				var rowCount *int64
-				if stat.RowCount.Valid {
-					v := int64(stat.RowCount.Float64)
-					rowCount = &v
+		// Close rows as soon as possible
+		func() {
+			defer rows.Close()
+			for rows.Next() {
+				var stat trinoStatsRow
+				if err := rows.StructScan(&stat); err != nil {
+					return
 				}
-				out = append(out, &scrapper.TableMetricsRow{
-					Instance:  t.Instance,
-					Database:  t.Database,
-					Schema:    t.Schema,
-					Table:     t.Table,
-					RowCount:  rowCount,
-					UpdatedAt: nil,
-					SizeBytes: nil,
-				})
-				break
+				if !stat.ColumnName.Valid { // NULL column_name row
+					var rowCount *int64
+					if stat.RowCount.Valid {
+						v := int64(stat.RowCount.Float64)
+						rowCount = &v
+					}
+					out = append(out, &scrapper.TableMetricsRow{
+						Instance:  t.Instance,
+						Database:  t.Database,
+						Schema:    t.Schema,
+						Table:     t.Table,
+						RowCount:  rowCount,
+						UpdatedAt: nil,
+						SizeBytes: nil,
+					})
+					break
+				}
 			}
-		}
+		}()
 	}
 	return out, nil
 }
