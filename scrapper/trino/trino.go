@@ -9,7 +9,12 @@ import (
 	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
-type TrinoScrapperConf = dwhexectrino.TrinoConf
+type TrinoScrapperConf struct {
+	*dwhexectrino.TrinoConf
+	Catalogs           []string
+	UseShowCreateView  bool
+	UseShowCreateTable bool
+}
 
 var _ scrapper.Scrapper = &TrinoScrapper{}
 
@@ -19,7 +24,7 @@ type TrinoScrapper struct {
 }
 
 func NewTrinoScrapper(ctx context.Context, conf *TrinoScrapperConf) (*TrinoScrapper, error) {
-	executor, err := dwhexectrino.NewTrinoExecutor(ctx, conf)
+	executor, err := dwhexectrino.NewTrinoExecutor(ctx, conf.TrinoConf)
 	if err != nil {
 		return nil, err
 	}

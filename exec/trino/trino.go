@@ -16,7 +16,6 @@ type TrinoConf struct {
 	Port     int
 	User     string
 	Password string
-	Catalogs []string
 	Source   string // optional, e.g. "synq"
 }
 
