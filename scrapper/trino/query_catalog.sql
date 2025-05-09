@@ -9,7 +9,7 @@ SELECT
     c.comment as comment,
     tc.comment as table_comment
 FROM {{catalog}}.information_schema.tables t
-LEFT JOIN {{catalog}}.information_schema.columns c
+JOIN {{catalog}}.information_schema.columns c
   ON t.table_catalog = c.table_catalog
   AND t.table_schema = c.table_schema
   AND t.table_name = c.table_name

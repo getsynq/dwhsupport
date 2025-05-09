@@ -16,9 +16,6 @@ import (
 	_ "github.com/snowflakedb/gosnowflake"
 )
 
-// https://github.com/snowflakedb/gosnowflake/blob/099708d318689634a558f705ccc19b3b7b278972/doc.go#L107
-const SPNApplicationId = "SYNQ_Platform"
-
 type SnowflakeConf struct {
 	User       string
 	Password   string
@@ -53,13 +50,14 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	}
 
 	c := &gosnowflake.Config{
-		Account:     conf.Account,
-		User:        conf.User,
-		Password:    conf.Password,
-		Warehouse:   conf.Warehouse,
-		Role:        conf.Role,
-		Database:    database,
-		Application: SPNApplicationId,
+		Account:   conf.Account,
+		User:      conf.User,
+		Password:  conf.Password,
+		Warehouse: conf.Warehouse,
+		Role:      conf.Role,
+		Database:  database,
+		// https://github.com/snowflakedb/gosnowflake/blob/099708d318689634a558f705ccc19b3b7b278972/doc.go#L107
+		Application: exec.SynqApplicationId,
 		Params:      map[string]*string{},
 	}
 
