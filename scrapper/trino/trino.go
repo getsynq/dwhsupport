@@ -2,7 +2,6 @@ package trino
 
 import (
 	"context"
-	"time"
 
 	dwhexectrino "github.com/getsynq/dwhsupport/exec/trino"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -55,10 +54,6 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 
 func (e *TrinoScrapper) Close() error {
 	return e.executor.Close()
-}
-
-func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	return nil, scrapper.ErrUnsupported
 }
 
 func (e *TrinoScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {
