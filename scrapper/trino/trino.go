@@ -44,8 +44,7 @@ func (e *TrinoScrapper) DialectType() string {
 }
 
 func (e *TrinoScrapper) SqlDialect() sqldialect.Dialect {
-	// TODO: Implement or use Trino dialect
-	return nil
+	return sqldialect.NewTrinoDialect()
 }
 
 func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
@@ -54,8 +53,4 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 
 func (e *TrinoScrapper) Close() error {
 	return e.executor.Close()
-}
-
-func (e *TrinoScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {
-	return nil, scrapper.ErrUnsupported
 }
