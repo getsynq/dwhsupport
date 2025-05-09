@@ -59,11 +59,3 @@ func (e *TrinoScrapper) Close() error {
 func (e *TrinoScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {
 	return nil, scrapper.ErrUnsupported
 }
-
-func (e *TrinoScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {
-	return nil, scrapper.ErrUnsupported
-}
-
-func (e *TrinoScrapper) QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
-	return nil, scrapper.ErrUnsupported
-}
