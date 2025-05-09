@@ -56,10 +56,6 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 	return nil, scrapper.ErrUnsupported
 }
 
-func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	return nil, scrapper.ErrUnsupported
-}
-
 func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	return nil, scrapper.ErrUnsupported
 }
