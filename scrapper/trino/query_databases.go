@@ -9,11 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
-type trinoCatalogRow struct {
-	CatalogName   string `db:"catalog_name"`
-	ConnectorId   string `db:"connector_id"`
-	ConnectorName string `db:"connector_name"`
-}
+// Removed unused trinoCatalogRow struct to reduce code clutter.
 
 //go:embed query_databases.sql
 var queryDatabasesSQL string
