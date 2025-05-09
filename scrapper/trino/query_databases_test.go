@@ -24,14 +24,14 @@ func TestQueryDatabasesSuite(t *testing.T) {
 func (s *QueryDatabasesSuite) TestQueryDatabases() {
 	ctx := context.TODO()
 	conf := &trino.TrinoConf{
-		Host:     "localhost",
-		Port:     8080,
-		User:     "trino",
-		Password: "trino",
+		Host:      "localhost",
+		Port:      8080,
+		User:      "trino",
+		Password:  "trino",
+		Plaintext: true,
 	}
 	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
 		TrinoConf: conf,
-		Catalogs:  []string{"iceberg"},
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)
