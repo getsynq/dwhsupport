@@ -17,5 +17,6 @@ func DialectsToTest() []*TestedDialect {
 		{"mysql", dwhsql.NewMySQLDialect()},
 		{"databricks", dwhsql.NewDatabricksDialect()},
 		{"duckdb", dwhsql.NewDuckDBDialect()},
+		{"trino", dwhsql.NewTrinoDialect()},
 	}
 }
