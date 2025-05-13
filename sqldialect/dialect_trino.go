@@ -18,11 +18,11 @@ func NewTrinoDialect() *TrinoDialect {
 }
 
 func (d *TrinoDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
-	return fmt.Sprintf("%s.%s", fqn.datasetId, fqn.tableId), nil
+	return fmt.Sprintf("%s.%s.%s", fqn.projectId, fqn.datasetId, fqn.tableId), nil
 }
 
 func (d *TrinoDialect) CountIf(expr Expr) Expr {
-	return WrapSql("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
+	return Fn("count_if", expr)
 }
 
 func (d *TrinoDialect) Count(expr Expr) Expr {
@@ -30,7 +30,7 @@ func (d *TrinoDialect) Count(expr Expr) Expr {
 }
 
 func (d *TrinoDialect) Median(expr Expr) Expr {
-	return Fn("MEDIAN", expr)
+	return Fn("approx_percentile", expr, Sql("0.5"))
 }
 
 func (d *TrinoDialect) Stddev(expr Expr) Expr {
@@ -38,7 +38,7 @@ func (d *TrinoDialect) Stddev(expr Expr) Expr {
 }
 
 func (d *TrinoDialect) ResolveTime(t time.Time) (string, error) {
-	return fmt.Sprintf("'%s'", t.Format(time.RFC3339)), nil
+	return Fn("from_iso8601_timestamp", String(t.Format(time.RFC3339))).ToSql(d)
 }
 
 func (d *TrinoDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
@@ -58,13 +58,13 @@ func (d *TrinoDialect) CeilTime(expr Expr, interval time.Duration) Expr {
 func (d *TrinoDialect) SubTime(expr Expr, duration time.Duration) Expr {
 	unit, interval := getTimeUnitWithInterval(duration)
 
-	return WrapSql("%s + '%s %s'", expr, Int64(-1*interval), timeUnitSql(unit))
+	return WrapSql("DATE_ADD(%s, %s, %s)", timeUnitString(unit), Int64(-1*interval), expr)
 }
 
 func (d *TrinoDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	unit, interval := getTimeUnitWithInterval(duration)
 
-	return WrapSql("%s + '%s %s'", expr, Int64(interval), timeUnitSql(unit))
+	return WrapSql("DATE_ADD(%s, %s, %s)", timeUnitString(unit), Int64(interval), expr)
 }
 
 func (d *TrinoDialect) Identifier(identifier string) string {
@@ -76,7 +76,7 @@ func (d *TrinoDialect) ToString(expr Expr) Expr {
 }
 
 func (d *TrinoDialect) ToFloat64(expr Expr) Expr {
-	return WrapSql("CAST(%s AS FLOAT)", expr)
+	return WrapSql("CAST(%s AS DOUBLE)", expr)
 }
 
 func (d *TrinoDialect) Coalesce(exprs ...Expr) Expr {

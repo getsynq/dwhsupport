@@ -1,0 +1,21 @@
+
+[TestMetricsSuite/TestPartitionWithTimeRange - 1]
+select
+  DATE_ADD('DAY', 1, DATE_TRUNC('DAY', ingested_at)) as time_segment, 
+  'run_type' as field, 
+  count(*) as num_rows, 
+  count(run_type) as num_not_null, 
+  count(distinct run_type) as num_unique, 
+  count_if(run_type = 0) as num_empty, 
+  CAST(avg(run_type) AS DOUBLE) as mean, 
+  CAST(min(run_type) AS DOUBLE) as min, 
+  CAST(max(run_type) AS DOUBLE) as max, 
+  CAST(approx_percentile(run_type, 0.5) AS DOUBLE) as median, 
+  CAST(STDDEV(run_type) AS DOUBLE) as stddev
+from db.default.runs 
+where
+  ingested_at >= from_iso8601_timestamp('2025-01-01T00:00:00Z') and 
+  ingested_at < from_iso8601_timestamp('2025-02-01T00:00:00Z')
+group by DATE_ADD('DAY', 1, DATE_TRUNC('DAY', ingested_at))
+order by DATE_ADD('DAY', 1, DATE_TRUNC('DAY', ingested_at)) 
+---
