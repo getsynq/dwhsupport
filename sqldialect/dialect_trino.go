@@ -22,7 +22,7 @@ func (d *TrinoDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
 }
 
 func (d *TrinoDialect) CountIf(expr Expr) Expr {
-	return WrapSql("SUM(CASE WHEN %s THEN 1 ELSE 0 END)", expr)
+	return Fn("count_if", expr)
 }
 
 func (d *TrinoDialect) Count(expr Expr) Expr {
@@ -30,7 +30,7 @@ func (d *TrinoDialect) Count(expr Expr) Expr {
 }
 
 func (d *TrinoDialect) Median(expr Expr) Expr {
-	return Fn("MEDIAN", expr)
+	return Fn("approx_percentile", expr, Sql("0.5"))
 }
 
 func (d *TrinoDialect) Stddev(expr Expr) Expr {
@@ -76,7 +76,7 @@ func (d *TrinoDialect) ToString(expr Expr) Expr {
 }
 
 func (d *TrinoDialect) ToFloat64(expr Expr) Expr {
-	return WrapSql("CAST(%s AS FLOAT)", expr)
+	return WrapSql("CAST(%s AS DOUBLE)", expr)
 }
 
 func (d *TrinoDialect) Coalesce(exprs ...Expr) Expr {
