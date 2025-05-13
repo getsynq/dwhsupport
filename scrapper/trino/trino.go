@@ -54,3 +54,7 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 func (e *TrinoScrapper) Close() error {
 	return e.executor.Close()
 }
+
+func (e *TrinoScrapper) Executor() *dwhexectrino.TrinoExecutor {
+	return e.executor
+}
