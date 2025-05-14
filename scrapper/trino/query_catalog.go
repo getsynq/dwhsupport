@@ -16,8 +16,17 @@ var queryCatalogSQL string
 func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	db := e.executor.GetDb()
 	var out []*scrapper.CatalogColumnRow
-	for _, catalog := range e.conf.Catalogs {
-		query := strings.Replace(queryCatalogSQL, "{{catalog}}", catalog, -1)
+
+	availableCatalogs, err := e.allAvailableCatalogs.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, catalog := range availableCatalogs {
+		if !catalog.IsAccepted {
+			continue
+		}
+		query := strings.Replace(queryCatalogSQL, "{{catalog}}", catalog.CatalogName, -1)
 		rows, err := stdsql.QueryMany(ctx, db, query,
 			dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 				row.Instance = e.conf.Host

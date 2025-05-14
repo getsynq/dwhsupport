@@ -25,15 +25,14 @@ func TestQueryTableMetricsSuite(t *testing.T) {
 func (s *QueryTableMetricsSuite) TestQueryTableMetrics() {
 	ctx := context.TODO()
 	conf := &trino.TrinoConf{
-		Host:      "localhost",
-		Port:      8080,
-		User:      "trino",
-		Password:  "trino",
-		Plaintext: true,
+		User:     os.Getenv("STARBURST_USER"),
+		Password: os.Getenv("STARBURST_PASSWORD"),
+		Host:     "synq-free-gcp.trino.galaxy.starburst.io",
+		Port:     443,
 	}
 	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
 		TrinoConf: conf,
-		Catalogs:  []string{"iceberg"},
+		Catalogs:  []string{"iceberg_gcs"},
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)
@@ -45,8 +44,8 @@ func (s *QueryTableMetricsSuite) TestQueryTableMetrics() {
 	spew.Dump(rows)
 
 	row := rows[0]
-	s.Equal("localhost", row.Instance)
-	s.Equal("iceberg", row.Database)
+	s.Equal("synq-free-gcp.trino.galaxy.starburst.io", row.Instance)
+	s.Equal("iceberg_gcs", row.Database)
 	s.NotEmpty(row.Schema)
 	s.NotEmpty(row.Table)
 	s.NotNil(row.RowCount)

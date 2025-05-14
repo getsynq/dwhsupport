@@ -2,7 +2,6 @@ SELECT
     t.table_catalog as database,
     t.table_schema as schema,
     t.table_name as "table",
-    (t.table_type = 'VIEW') as is_view,
     c.column_name as column,
     c.ordinal_position as position,
     c.data_type as type,

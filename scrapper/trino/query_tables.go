@@ -14,22 +14,39 @@ import (
 var queryTablesSQL string
 
 func (e *TrinoScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
-	query := queryTablesSQL
-	db := e.executor.GetDb()
 	var out []*scrapper.TableRow
 
-	for _, catalog := range e.conf.Catalogs {
-		catalogQuery := strings.Replace(query, "{{catalog}}", catalog, -1)
-		res, err := stdsql.QueryMany(ctx, db, catalogQuery,
-			dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {
-				row.Instance = e.conf.Host
-				return row, nil
-			}),
-		)
+	availableCatalogs, err := e.allAvailableCatalogs.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, catalog := range availableCatalogs {
+		if !catalog.IsAccepted {
+			continue
+		}
+		res, err := e.queryTables(ctx, catalog.CatalogName)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, res...)
 	}
 	return out, nil
+}
+
+func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]*scrapper.TableRow, error) {
+	query := queryTablesSQL
+	db := e.executor.GetDb()
+
+	catalogQuery := strings.Replace(query, "{{catalog}}", catalogName, -1)
+	res, err := stdsql.QueryMany(ctx, db, catalogQuery,
+		dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {
+			row.Instance = e.conf.Host
+			return row, nil
+		}),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
 }
