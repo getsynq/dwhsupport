@@ -134,7 +134,7 @@ func (e *TrinoScrapper) showStatsMetricsStrategy(ctx context.Context, db *sqlx.D
 }
 
 type trinoIcebergSnapshotsRow struct {
-	CommitedAt   time.Time      `db:"committed_at"`
+	CommittedAt  time.Time      `db:"committed_at"`
 	SnapshotId   string         `db:"snapshot_id"`
 	ParentId     sql.NullString `db:"parent_id"`
 	Operation    string         `db:"operation"`
@@ -172,8 +172,8 @@ func (e *TrinoScrapper) icebergMetricsStrategy(ctx context.Context, db *sqlx.DB,
 			return err
 		}
 
-		if updatedAt == nil || stat.CommitedAt.After(*updatedAt) {
-			updatedAt = &stat.CommitedAt
+		if updatedAt == nil || stat.CommittedAt.After(*updatedAt) {
+			updatedAt = &stat.CommittedAt
 			latestSnapshot = &stat
 		}
 	}

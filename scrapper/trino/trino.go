@@ -3,6 +3,7 @@ package trino
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	dwhexectrino "github.com/getsynq/dwhsupport/exec/trino"
 	"github.com/getsynq/dwhsupport/lazy"
@@ -113,7 +114,7 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 
 	if len(missingCatalogs) > 0 {
 		if len(missingCatalogs) > 0 {
-			messages = append(messages, fmt.Sprintf("The following catalogs are not available: %s", missingCatalogs))
+			messages = append(messages, fmt.Sprintf("The following catalogs are not available: %s", strings.Join(missingCatalogs, ", ")))
 		}
 	}
 
