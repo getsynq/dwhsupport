@@ -26,15 +26,14 @@ func (s *QueryTablesSuite) TestQueryTables() {
 	// docker run --name trino -d -p 8080:8080 trinodb/trino
 	ctx := context.TODO()
 	conf := &trino.TrinoConf{
-		Host:      "localhost",
-		Port:      8080,
-		User:      "trino",
-		Password:  "trino",
-		Plaintext: true,
+		User:     os.Getenv("STARBURST_USER"),
+		Password: os.Getenv("STARBURST_PASSWORD"),
+		Host:     "synq-free-gcp.trino.galaxy.starburst.io",
+		Port:     443,
 	}
 	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
 		TrinoConf: conf,
-		Catalogs:  []string{"tpch"},
+		Catalogs:  []string{"iceberg_gcs"},
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)
@@ -48,7 +47,7 @@ func (s *QueryTablesSuite) TestQueryTables() {
 	for _, row := range rows {
 		databases[row.Database] = true
 	}
-	s.True(databases["tpch"])
+	s.True(databases["iceberg_gcs"])
 	spew.Dump(rows)
 
 	// Spot check first row fields
@@ -57,8 +56,8 @@ func (s *QueryTablesSuite) TestQueryTables() {
 	s.Empty(row.Description)
 	// no tags at all
 	s.Empty(row.Tags)
-	s.Equal("localhost", row.Instance)
-	s.Equal("tpch", row.Database)
+	s.Equal("synq-free-gcp.trino.galaxy.starburst.io", row.Instance)
+	s.Equal("iceberg_gcs", row.Database)
 	s.NotEmpty(row.Schema)
 	s.NotEmpty(row.Table)
 	s.NotEmpty(row.TableType)
