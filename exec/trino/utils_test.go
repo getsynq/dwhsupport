@@ -12,6 +12,7 @@ func TestRemoveTrailingSemicolon(t *testing.T) {
 		{";", ""},
 		{"", ""},
 		{"SELECT 1;;", "SELECT 1"},
+		{"SELECT 1;\nSELECT 2;\n", "SELECT 1;\nSELECT 2"},
 	}
 
 	for _, tt := range tests {
