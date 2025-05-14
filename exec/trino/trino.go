@@ -65,11 +65,11 @@ func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, err
 }
 
 func (e *TrinoExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
-	return e.db.QueryxContext(ctx, sql, args...)
+	return e.db.QueryxContext(ctx, trimRightSemicolons(sql), args...)
 }
 
 func (e *TrinoExecutor) Exec(ctx context.Context, q string) error {
-	_, err := e.db.Exec(q)
+	_, err := e.db.Exec(trimRightSemicolons(q))
 	return err
 }
 
