@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	dwhexec "github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/stdsql"
 	dwhexectrino "github.com/getsynq/dwhsupport/exec/trino"
 	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/logging"
@@ -46,25 +48,17 @@ func NewTrinoScrapper(ctx context.Context, conf *TrinoScrapperConf) (*TrinoScrap
 	}
 
 	allAvailableCatalogs := lazy.New[[]*TrinoCatalog](func() ([]*TrinoCatalog, error) {
-		rows, err := executor.GetDb().QueryxContext(ctx, fmt.Sprintf("SELECT * FROM system.metadata.catalogs"))
+		db := executor.GetDb()
+		allCatalogs, err := stdsql.QueryMany[TrinoCatalog](ctx, db, "SELECT * FROM system.metadata.catalogs",
+			dwhexec.WithPostProcessors[TrinoCatalog](func(row *TrinoCatalog) (*TrinoCatalog, error) {
+				row.IsAccepted = lo.Contains(conf.Catalogs, row.CatalogName)
+				return row, nil
+			}),
+		)
 		if err != nil {
 			return nil, err
 		}
-		defer rows.Close()
 
-		var allCatalogs []*TrinoCatalog
-		for rows.Next() {
-			cat := &TrinoCatalog{}
-			if err := rows.StructScan(cat); err != nil {
-				return nil, err
-			}
-
-			if lo.Contains(conf.Catalogs, cat.CatalogName) {
-				cat.IsAccepted = true
-			}
-
-			allCatalogs = append(allCatalogs, cat)
-		}
 		logging.GetLogger(ctx).WithField("all_catalogs", allCatalogs).Info("system.metadata.catalogs")
 
 		return allCatalogs, nil
