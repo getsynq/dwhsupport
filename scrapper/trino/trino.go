@@ -113,9 +113,7 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 	var messages []string
 
 	if len(missingCatalogs) > 0 {
-		if len(missingCatalogs) > 0 {
-			messages = append(messages, fmt.Sprintf("The following catalogs are not available: %s", strings.Join(missingCatalogs, ", ")))
-		}
+		messages = append(messages, fmt.Sprintf("The following catalogs are not available: %s", strings.Join(missingCatalogs, ", ")))
 	}
 
 	return messages, nil
