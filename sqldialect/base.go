@@ -793,3 +793,26 @@ func ToExprSlice[T Expr](expr []T) []Expr {
 func ToExpr[T Expr](expr T) Expr {
 	return expr
 }
+
+// Add after other CondExpr types
+
+type AndGroupsExpr struct {
+	conds []CondExpr
+}
+
+func AndGroups(conds ...CondExpr) *AndGroupsExpr {
+	return &AndGroupsExpr{conds: conds}
+}
+
+func (e *AndGroupsExpr) ToSql(dialect Dialect) (string, error) {
+	if len(e.conds) == 0 {
+		return "", nil
+	}
+	sqls, err := exprsToSql(e.conds, dialect)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("(%s)", strings.Join(sqls, ") and (")), nil
+}
+
+func (e *AndGroupsExpr) IsCondExpr() {}

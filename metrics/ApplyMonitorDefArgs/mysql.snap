@@ -119,7 +119,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where 1=1
+where (1=1)
 group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
 order by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) 
 ---
@@ -132,7 +132,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where 1=1
+where (1=1)
 
  
 ---
@@ -147,7 +147,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where 1=1
+where (1=1)
 group by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(SUBSTRING(CAST(run_type AS CHAR), 1, 100), '')
@@ -165,7 +165,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where 1=1
+where (1=1)
 group by COALESCE(SUBSTRING(CAST(run_type AS CHAR), 1, 100), '')
 order by COALESCE(SUBSTRING(CAST(run_type AS CHAR), 1, 100), '') 
 ---
@@ -185,7 +185,7 @@ from default.runs
 where
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS CHAR), 1, 100), '') in ('1', '2', '3', '4') and 
-  1=1
+  (1=1)
 group by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), ''), 
@@ -212,7 +212,7 @@ from default.runs
 where
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS CHAR), 1, 100), '') in ('1', '2', '3', '4') and 
-  1=1
+  (1=1)
 group by
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS CHAR), 1, 100), ''), 
@@ -232,9 +232,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where
-  run_status > 0 and 
-  run_type > 0
+where (run_status > 0) and (run_type > 0)
 group by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s'))
 order by DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')) 
 ---
@@ -247,9 +245,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where
-  run_status > 0 and 
-  run_type > 0
+where (run_status > 0) and (run_type > 0)
 
  
 ---
@@ -264,9 +260,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where
-  run_status > 0 and 
-  run_type > 0
+where (run_status > 0) and (run_type > 0)
 group by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(SUBSTRING(CAST(run_type AS CHAR), 1, 100), '')
@@ -284,9 +278,7 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from default.runs 
-where
-  run_status > 0 and 
-  run_type > 0
+where (run_status > 0) and (run_type > 0)
 group by COALESCE(SUBSTRING(CAST(run_type AS CHAR), 1, 100), '')
 order by COALESCE(SUBSTRING(CAST(run_type AS CHAR), 1, 100), '') 
 ---
@@ -306,8 +298,7 @@ from default.runs
 where
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS CHAR), 1, 100), '') in ('1', '2', '3', '4') and 
-  run_status > 0 and 
-  run_type > 0
+  (run_status > 0) and (run_type > 0)
 group by
   DATEADD(HOUR, 1, STR_TO_DATE(DATE_FORMAT(ingested_at, '%Y-%m-%d %H:00:00'), '%Y-%m-%d %H:%i:%s')), 
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), ''), 
@@ -334,8 +325,7 @@ from default.runs
 where
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS CHAR), 1, 100), '') in ('1', '2', '3', '4') and 
-  run_status > 0 and 
-  run_type > 0
+  (run_status > 0) and (run_type > 0)
 group by
   COALESCE(SUBSTRING(CAST(workspace AS CHAR), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS CHAR), 1, 100), ''), 

@@ -222,7 +222,7 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 
 	// Apply custom filters
 	if len(b.filters) > 0 {
-		q = q.Where(b.filters...)
+		q = q.Where(AndGroups(b.filters...))
 	}
 
 	return q.ToSql(dialect)

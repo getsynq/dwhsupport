@@ -1,5 +1,4 @@
-
-[TestMetricsSuite/TestSegmentWithTimeRange - 1]
+[TestMetricsSuite/TestSegmentWithTimeRangeWithFilter - 1]
 select
   coalesce(toString(workspace), '') as segment, 
   'run_type' as field, 
@@ -15,7 +14,8 @@ select
 from default.runs 
 where
   ingested_at >= parseDateTimeBestEffort('2025-01-01 00:00:00') and 
-  ingested_at < parseDateTimeBestEffort('2025-02-01 00:00:00')
+  ingested_at < parseDateTimeBestEffort('2025-02-01 00:00:00') and 
+  (workspace = 'synq-demo' OR 1=1)
 group by segment
 order by segment 
 ---

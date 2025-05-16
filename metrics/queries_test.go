@@ -267,7 +267,7 @@ func (s *MetricsSuite) TestPartitionWithTimeRange() {
 	}
 }
 
-func (s *MetricsSuite) TestSegmentWithTimeRange() {
+func (s *MetricsSuite) TestSegmentWithTimeRangeWithFilter() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
@@ -284,6 +284,7 @@ func (s *MetricsSuite) TestSegmentWithTimeRange() {
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
 		queryBuilder = queryBuilder.WithSegment(dwhsql.ToString(dwhsql.Identifier("workspace")))
 		queryBuilder = queryBuilder.WithFieldTimeRange(dwhsql.TimeCol(partition.Field), partition.From, partition.To)
+		queryBuilder = queryBuilder.WithFilter(dwhsql.Sql("workspace = 'synq-demo' OR 1=1"))
 		sql, err := queryBuilder.ToSql(dialect.Dialect)
 		s.Require().NoError(err)
 		s.Require().NotEmpty(sql)

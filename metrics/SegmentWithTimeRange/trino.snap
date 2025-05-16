@@ -1,5 +1,4 @@
-
-[TestMetricsSuite/TestSegmentWithTimeRange - 1]
+[TestMetricsSuite/TestSegmentWithTimeRangeWithFilter - 1]
 select
   COALESCE(CAST(workspace AS VARCHAR), '') as segment, 
   'run_type' as field, 
@@ -15,7 +14,8 @@ select
 from db.default.runs 
 where
   ingested_at >= from_iso8601_timestamp('2025-01-01T00:00:00Z') and 
-  ingested_at < from_iso8601_timestamp('2025-02-01T00:00:00Z')
+  ingested_at < from_iso8601_timestamp('2025-02-01T00:00:00Z') and 
+  (workspace = 'synq-demo' OR 1=1)
 group by COALESCE(CAST(workspace AS VARCHAR), '')
 order by COALESCE(CAST(workspace AS VARCHAR), '') 
 ---
