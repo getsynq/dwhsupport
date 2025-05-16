@@ -37,7 +37,7 @@ from `db.default.runs`
 where
   timestamp(ingested_at) >= timestamp '2025-01-01T00:00:00Z' and 
   timestamp(ingested_at) < timestamp '2025-02-01T00:00:00Z' and 
-  (workspace = 'synq-demo' OR workspace = 'synq-demo-2')
+  (workspace = 'synq-demo' OR 1=1)
 group by COALESCE(SAFE_CAST(workspace AS STRING), '')
 order by COALESCE(SAFE_CAST(workspace AS STRING), '') 
 ---

@@ -37,7 +37,7 @@ from default.runs
 where
   ingested_at >= parseDateTimeBestEffort('2025-01-01 00:00:00') and 
   ingested_at < parseDateTimeBestEffort('2025-02-01 00:00:00') and 
-  (workspace = 'synq-demo' OR workspace = 'synq-demo-2')
+  (workspace = 'synq-demo' OR 1=1)
 group by segment
 order by segment 
 ---
