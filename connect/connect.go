@@ -9,6 +9,7 @@ import (
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	dwhexecredshift "github.com/getsynq/dwhsupport/exec/redshift"
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
+	dwhexectrino "github.com/getsynq/dwhsupport/exec/trino"
 	"github.com/getsynq/dwhsupport/scrapper"
 	scrapperbigquery "github.com/getsynq/dwhsupport/scrapper/bigquery"
 	scrapperclickhouse "github.com/getsynq/dwhsupport/scrapper/clickhouse"
@@ -17,6 +18,7 @@ import (
 	scrapperpostgres "github.com/getsynq/dwhsupport/scrapper/postgres"
 	scrapperredshift "github.com/getsynq/dwhsupport/scrapper/redshift"
 	scrappersnowflake "github.com/getsynq/dwhsupport/scrapper/snowflake"
+	scrappertrino "github.com/getsynq/dwhsupport/scrapper/trino"
 	"github.com/pkg/errors"
 )
 
@@ -113,6 +115,22 @@ func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowf
 	})
 }
 
+func Trino(ctx context.Context, trino *agentdwhv1.TrinoConf) (scrapper.Scrapper, error) {
+	return scrappertrino.NewTrinoScrapper(ctx, &scrappertrino.TrinoScrapperConf{
+		TrinoConf: &dwhexectrino.TrinoConf{
+			Host:      trino.GetHost(),
+			Port:      int(trino.GetPort()),
+			Plaintext: trino.GetUsePlaintext(),
+			User:      trino.GetUsername(),
+			Password:  trino.GetPassword(),
+			Source:    "SYNQ",
+		},
+		Catalogs:           trino.GetCatalogs(),
+		UseShowCreateView:  !trino.GetNoShowCreateView(),
+		UseShowCreateTable: !trino.GetNoShowCreateTable(),
+	})
+}
+
 func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrapper, error) {
 	switch t := conf.Config.(type) {
 	case *agentdwhv1.Connection_Bigquery:
@@ -129,6 +147,8 @@ func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrappe
 		return Redshift(ctx, t.Redshift)
 	case *agentdwhv1.Connection_Snowflake:
 		return Snowflake(ctx, t.Snowflake)
+	case *agentdwhv1.Connection_Trino:
+		return Trino(ctx, t.Trino)
 	default:
 		return nil, errors.New("unsupported database type")
 	}
