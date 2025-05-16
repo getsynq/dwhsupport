@@ -9,7 +9,7 @@ from default.runs
 where
   created_at >= '1985-07-16T00:00:00Z' and 
   created_at < '2025-03-16T00:00:00Z' and 
-  1=1
+  (1=1)
 group by
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), 
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), 

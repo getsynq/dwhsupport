@@ -9,7 +9,7 @@ from `db.default.runs`
 where
   timestamp(created_at) >= timestamp '1985-07-16T00:00:00Z' and 
   timestamp(created_at) < timestamp '2025-03-16T00:00:00Z' and 
-  1=1
+  (1=1)
 group by
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), 
   SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100), 

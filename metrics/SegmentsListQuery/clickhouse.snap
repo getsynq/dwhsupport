@@ -9,7 +9,7 @@ from default.runs
 where
   created_at >= parseDateTimeBestEffort('1985-07-16 00:00:00') and 
   created_at < parseDateTimeBestEffort('2025-03-16 00:00:00') and 
-  1=1
+  (1=1)
 group by
   segment, 
   segment2, 
