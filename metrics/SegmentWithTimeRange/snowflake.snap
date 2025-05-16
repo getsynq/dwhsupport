@@ -1,25 +1,3 @@
-
-[TestMetricsSuite/TestSegmentWithTimeRange - 1]
-select
-  COALESCE(to_varchar("workspace"), '') as "segment", 
-  'run_type' as "field", 
-  count(*) as "num_rows", 
-  count(run_type) as "num_not_null", 
-  count(distinct run_type) as "num_unique", 
-  count_if(run_type = 0) as "num_empty", 
-  CAST(avg(run_type) AS FLOAT) as "mean", 
-  CAST(min(run_type) AS FLOAT) as "min", 
-  CAST(max(run_type) AS FLOAT) as "max", 
-  CAST(median(run_type) AS FLOAT) as "median", 
-  CAST(stddev(run_type) AS FLOAT) as "stddev"
-from db.default.runs 
-where
-  ingested_at >= '2025-01-01T00:00:00Z' and 
-  ingested_at < '2025-02-01T00:00:00Z'
-group by "segment"
-order by "segment" 
----
-
 [TestMetricsSuite/TestSegmentWithTimeRangeWithFilter - 1]
 select
   COALESCE(to_varchar("workspace"), '') as "segment", 
