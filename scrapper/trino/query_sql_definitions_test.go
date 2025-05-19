@@ -33,8 +33,10 @@ func (s *QuerySqlDefinitionsSuite) TestQuerySqlDefinitions() {
 		Port:     443,
 	}
 	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
-		TrinoConf: conf,
-		Catalogs:  []string{"iceberg_gcs"},
+		TrinoConf:          conf,
+		Catalogs:           []string{"iceberg_gcs"},
+		UseShowCreateTable: true,
+		UseShowCreateView:  true,
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)
