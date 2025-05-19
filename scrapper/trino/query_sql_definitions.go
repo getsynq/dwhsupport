@@ -24,13 +24,14 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 	if len(basic) > 0 && (e.conf.UseShowCreateTable || e.conf.UseShowCreateView) {
 		pool := workpool.New(8)
 		for _, sqlDef := range basic {
-			if (sqlDef.IsView && e.conf.UseShowCreateView) || (!sqlDef.IsView && e.conf.UseShowCreateTable) {
+			currentSqlDef := sqlDef // Create a local copy of the loop variable
+			if (currentSqlDef.IsView && e.conf.UseShowCreateView) || (!currentSqlDef.IsView && e.conf.UseShowCreateTable) {
 				pool.Do(func() error {
-					sql, err := e.showCreate(ctx, sqlDef.Database, sqlDef.Schema, sqlDef.Table, sqlDef.IsView, sqlDef.IsMaterializedView)
+					sql, err := e.showCreate(ctx, currentSqlDef.Database, currentSqlDef.Schema, currentSqlDef.Table, currentSqlDef.IsView, currentSqlDef.IsMaterializedView)
 					if err != nil {
 						return err
 					}
-					sqlDef.Sql = sql
+					currentSqlDef.Sql = sql
 
 					return nil
 				})

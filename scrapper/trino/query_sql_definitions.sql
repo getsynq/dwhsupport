@@ -11,7 +11,7 @@ select
     t.database,
     t.schema,
     t.table_name as "table",
-    mv.name is not null OR t.table_type = 'VIEW' as is_view,
+    (t.table_type = 'VIEW' AND v.view_definition IS NOT NULL) as is_view,
     mv.name is not null as is_materialized_view,
     coalesce(mv.definition, v.view_definition, '') as sql
 from tables t
