@@ -53,14 +53,15 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	}
 
 	c := &gosnowflake.Config{
-		Account:     conf.Account,
-		User:        conf.User,
-		Password:    conf.Password,
-		Warehouse:   conf.Warehouse,
-		Role:        conf.Role,
-		Database:    database,
-		Application: SPNApplicationId,
-		Params:      map[string]*string{},
+		Account:             conf.Account,
+		User:                conf.User,
+		Password:            conf.Password,
+		Warehouse:           conf.Warehouse,
+		Role:                conf.Role,
+		Database:            database,
+		Application:         SPNApplicationId,
+		Params:              map[string]*string{},
+		DisableConsoleLogin: gosnowflake.ConfigBoolTrue,
 	}
 
 	if len(conf.PrivateKey) > 0 {
