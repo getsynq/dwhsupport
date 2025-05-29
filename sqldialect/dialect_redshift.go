@@ -84,7 +84,7 @@ func (d *RedshiftDialect) Coalesce(exprs ...Expr) Expr {
 }
 
 func (d *RedshiftDialect) AggregationColumnReference(expression Expr, alias string) Expr {
-	return Identifier(alias)
+	return expression
 }
 
 func (d *RedshiftDialect) SubString(expr Expr, start int64, length int64) Expr {

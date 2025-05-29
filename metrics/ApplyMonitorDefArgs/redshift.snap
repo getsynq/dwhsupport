@@ -9,8 +9,8 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 
-group by time_segment
-order by time_segment 
+group by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at))
+order by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_no_segmentation/no_partitioning - 1]
@@ -38,11 +38,11 @@ select
 from "db"."default"."runs" 
 
 group by
-  time_segment, 
-  segment
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  time_segment, 
-  segment 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_single_segmentation_all/no_partitioning - 1]
@@ -55,8 +55,8 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 
-group by segment
-order by segment 
+group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_multi_segmentation/partitioning - 1]
@@ -72,18 +72,18 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where
-  segment not in ('synq-demo') and 
-  segment_2 in ('1', '2', '3', '4')
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
 group by
-  time_segment, 
-  segment, 
-  segment_2, 
-  segment_3
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  time_segment, 
-  segment, 
-  segment_2, 
-  segment_3 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_no_conditions_multi_segmentation/no_partitioning - 1]
@@ -98,16 +98,16 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where
-  segment not in ('synq-demo') and 
-  segment_2 in ('1', '2', '3', '4')
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
 group by
-  segment, 
-  segment_2, 
-  segment_3
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  segment, 
-  segment_2, 
-  segment_3 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_no_segmentation/partitioning - 1]
@@ -120,8 +120,8 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where (1=1)
-group by time_segment
-order by time_segment 
+group by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at))
+order by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_no_segmentation/no_partitioning - 1]
@@ -149,11 +149,11 @@ select
 from "db"."default"."runs" 
 where (1=1)
 group by
-  time_segment, 
-  segment
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  time_segment, 
-  segment 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_single_segmentation_all/no_partitioning - 1]
@@ -166,8 +166,8 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where (1=1)
-group by segment
-order by segment 
+group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_multi_segmentation/partitioning - 1]
@@ -183,19 +183,19 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where
-  segment not in ('synq-demo') and 
-  segment_2 in ('1', '2', '3', '4') and 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
   (1=1)
 group by
-  time_segment, 
-  segment, 
-  segment_2, 
-  segment_3
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  time_segment, 
-  segment, 
-  segment_2, 
-  segment_3 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_single_condition_multi_segmentation/no_partitioning - 1]
@@ -210,17 +210,17 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where
-  segment not in ('synq-demo') and 
-  segment_2 in ('1', '2', '3', '4') and 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
   (1=1)
 group by
-  segment, 
-  segment_2, 
-  segment_3
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  segment, 
-  segment_2, 
-  segment_3 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_no_segmentation/partitioning - 1]
@@ -233,8 +233,8 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where (run_status > 0) and (run_type > 0)
-group by time_segment
-order by time_segment 
+group by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at))
+order by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_no_segmentation/no_partitioning - 1]
@@ -262,11 +262,11 @@ select
 from "db"."default"."runs" 
 where (run_status > 0) and (run_type > 0)
 group by
-  time_segment, 
-  segment
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  time_segment, 
-  segment 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_single_segmentation_all/no_partitioning - 1]
@@ -279,8 +279,8 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where (run_status > 0) and (run_type > 0)
-group by segment
-order by segment 
+group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_multi_segmentation/partitioning - 1]
@@ -296,19 +296,19 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where
-  segment not in ('synq-demo') and 
-  segment_2 in ('1', '2', '3', '4') and 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
   (run_status > 0) and (run_type > 0)
 group by
-  time_segment, 
-  segment, 
-  segment_2, 
-  segment_3
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  time_segment, 
-  segment, 
-  segment_2, 
-  segment_3 
+  DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/redshift_multi_condition_multi_segmentation/no_partitioning - 1]
@@ -323,15 +323,15 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where
-  segment not in ('synq-demo') and 
-  segment_2 in ('1', '2', '3', '4') and 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
   (run_status > 0) and (run_type > 0)
 group by
-  segment, 
-  segment_2, 
-  segment_3
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by
-  segment, 
-  segment_2, 
-  segment_3 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---

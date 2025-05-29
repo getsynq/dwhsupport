@@ -16,9 +16,9 @@ select
 from "db"."default"."runs" 
 
 group by
-  segment, 
-  segment_2
+  COALESCE(workspace, ''), 
+  COALESCE(run_type, '')
 order by
-  segment, 
-  segment_2 
+  COALESCE(workspace, ''), 
+  COALESCE(run_type, '') 
 ---
