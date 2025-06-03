@@ -171,3 +171,26 @@ func Gte(a, b Expr) *CompareExpr {
 func Lte(a, b Expr) *CompareExpr {
 	return compare(a, COMPARE_LTE, b)
 }
+
+type OrExpr struct {
+	conds []CondExpr
+}
+
+func Or(conds ...CondExpr) *OrExpr {
+	return &OrExpr{conds: conds}
+}
+
+func (e *OrExpr) ToSql(dialect Dialect) (string, error) {
+	if len(e.conds) == 0 {
+		return "", nil
+	}
+
+	condsSql, err := exprsToSql(e.conds, dialect)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("(%s)", strings.Join(condsSql, " or ")), nil
+}
+
+func (e *OrExpr) IsCondExpr() {}

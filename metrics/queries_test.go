@@ -293,3 +293,23 @@ func (s *MetricsSuite) TestSegmentWithTimeRangeWithFilter() {
 		snaps.WithConfig(snaps.Dir("SegmentWithTimeRange"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
 	}
 }
+
+func (s *MetricsSuite) TestFilters() {
+	for _, dialect := range DialectsToTest() {
+		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
+
+		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, []dwhsql.Expr{dwhsql.Star()})
+		queryBuilder = queryBuilder.WithFilter(dwhsql.Eq(dwhsql.Identifier("workspace"), dwhsql.String("synq-demo")))
+		queryBuilder = queryBuilder.WithFilter(
+			dwhsql.Or(
+				dwhsql.In(dwhsql.Identifier("status"), dwhsql.String("success"), dwhsql.String("failed")),
+				dwhsql.Eq(dwhsql.Identifier("skip"), dwhsql.String("true")),
+			),
+		)
+		sql, err := queryBuilder.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+
+		snaps.WithConfig(snaps.Dir("Filters"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
