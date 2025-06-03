@@ -12,11 +12,13 @@ import (
 type CompareFn string
 
 const (
-	COMPARE_EQ  CompareFn = "="
-	COMPARE_LT  CompareFn = "<"
-	COMPARE_GT  CompareFn = ">"
-	COMPARE_LTE CompareFn = "<="
-	COMPARE_GTE CompareFn = ">="
+	COMPARE_EQ     CompareFn = "="
+	COMPARE_LT     CompareFn = "<"
+	COMPARE_GT     CompareFn = ">"
+	COMPARE_LTE    CompareFn = "<="
+	COMPARE_GTE    CompareFn = ">="
+	COMPARE_IS     CompareFn = "is"
+	COMPARE_IS_NOT CompareFn = "is not"
 )
 
 type CompareExpr struct {
@@ -170,6 +172,14 @@ func Gte(a, b Expr) *CompareExpr {
 
 func Lte(a, b Expr) *CompareExpr {
 	return compare(a, COMPARE_LTE, b)
+}
+
+func IsNull(a Expr) *CompareExpr {
+	return compare(a, COMPARE_IS, Null())
+}
+
+func IsNotNull(a Expr) *CompareExpr {
+	return compare(a, COMPARE_IS_NOT, Null())
 }
 
 type OrExpr struct {

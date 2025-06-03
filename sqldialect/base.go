@@ -141,6 +141,7 @@ type Select struct {
 	where   []CondExpr
 	groupBy []Expr
 	orderBy []*OrderExpr
+	having  []CondExpr
 	limit   *LimitExpr
 }
 
@@ -183,6 +184,11 @@ func (s *Select) WithLimit(limit *LimitExpr) *Select {
 	return s
 }
 
+func (s *Select) Having(having ...CondExpr) *Select {
+	s.having = append(s.having, having...)
+	return s
+}
+
 func (s *Select) ToSql(dialect Dialect) (string, error) {
 	colsSql, err := exprsToSql(s.cols, dialect)
 	if err != nil {
@@ -214,6 +220,11 @@ func (s *Select) ToSql(dialect Dialect) (string, error) {
 		return "", err
 	}
 
+	havingSql, err := exprsToSql(s.having, dialect)
+	if err != nil {
+		return "", err
+	}
+
 	limitSql := ""
 	if s.limit != nil {
 		limitSql, err = s.limit.ToSql(dialect)
@@ -226,12 +237,14 @@ func (s *Select) ToSql(dialect Dialect) (string, error) {
 from %s %s
 %s
 %s
+%s
 %s %s`,
 		buildListSegment("select", ", ", colsSql),
 		tableSql,
 		strings.Join(joinsSql, " "),
 		buildListSegment("where", " and ", whereSql),
 		buildListSegment("group by", ", ", groupBySql),
+		buildListSegment("having", " and ", havingSql),
 		buildListSegment("order by", ", ", orderBySql),
 		limitSql,
 	), nil
@@ -279,6 +292,19 @@ func Star(except ...Expr) *StarExpr {
 
 func (s *StarExpr) ToSql(dialect Dialect) (string, error) {
 	return "*", nil
+}
+
+type NullExpr struct {
+}
+
+var _ Expr = (*NullExpr)(nil)
+
+func Null() *NullExpr {
+	return &NullExpr{}
+}
+
+func (e *NullExpr) ToSql(dialect Dialect) (string, error) {
+	return "null", nil
 }
 
 //
@@ -592,20 +618,20 @@ func (e *AsExpr) ToSql(dialect Dialect) (string, error) {
 var _ Expr = (*DistinctExpr)(nil)
 
 type DistinctExpr struct {
-	expr Expr
+	exprs []Expr
 }
 
-func Distinct(expr Expr) *DistinctExpr {
-	return &DistinctExpr{expr: expr}
+func Distinct(exprs ...Expr) *DistinctExpr {
+	return &DistinctExpr{exprs: exprs}
 }
 
 func (e *DistinctExpr) ToSql(dialect Dialect) (string, error) {
-	exprSql, err := e.expr.ToSql(dialect)
+	exprs, err := exprsToSql(e.exprs, dialect)
 	if err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("distinct %s", exprSql), nil
+	return fmt.Sprintf("distinct %s", strings.Join(exprs, ", ")), nil
 }
 
 //
