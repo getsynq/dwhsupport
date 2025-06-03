@@ -181,6 +181,10 @@ func Or(conds ...CondExpr) *OrExpr {
 }
 
 func (e *OrExpr) ToSql(dialect Dialect) (string, error) {
+	if len(e.conds) == 0 {
+		return "", nil
+	}
+
 	condsSql, err := exprsToSql(e.conds, dialect)
 	if err != nil {
 		return "", err
