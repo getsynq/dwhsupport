@@ -25,8 +25,6 @@ select
   min(created_at) as created_at$min, 
   max(created_at) as created_at$max
 from "db"."default"."runs" 
-
-
 order by num_rows desc limit 1000
 ---
 
@@ -57,7 +55,6 @@ select
   min(created_at) as created_at$min, 
   max(created_at) as created_at$max
 from "db"."default"."runs" 
-
 group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
@@ -91,7 +88,6 @@ select
   min(created_at) as created_at$min, 
   max(created_at) as created_at$max
 from "db"."default"."runs" 
-
 group by
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
@@ -126,7 +122,6 @@ select
   max(created_at) as created_at$max
 from "db"."default"."runs" 
 where (1=1)
-
 order by num_rows desc limit 1000
 ---
 
@@ -226,7 +221,6 @@ select
   max(created_at) as created_at$max
 from "db"."default"."runs" 
 where (run_status > 0) and (run_type > 0)
-
 order by num_rows desc limit 1000
 ---
 

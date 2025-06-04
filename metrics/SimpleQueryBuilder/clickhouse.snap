@@ -7,7 +7,5 @@ select
   toInt64(count(distinct workspace)) as num_unique, 
   toInt64(countIf(workspace = '')) as num_empty
 from default.runs 
-
-
  
 ---

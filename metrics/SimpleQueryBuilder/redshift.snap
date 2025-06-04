@@ -7,7 +7,5 @@ select
   count(distinct workspace) as num_unique, 
   SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as num_empty
 from "db"."default"."runs" 
-
-
  
 ---

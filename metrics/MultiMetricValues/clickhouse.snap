@@ -15,7 +15,6 @@ select
   toFloat64(median(run_type)) as run_type$median, 
   toFloat64(stddevSamp(run_type)) as run_type$stddev
 from default.runs 
-
 group by
   segment, 
   segment_2

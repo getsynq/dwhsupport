@@ -7,7 +7,5 @@ select
   count(distinct workspace) as "num_unique", 
   count_if(workspace = '') as "num_empty"
 from db.default.runs 
-
-
  
 ---
