@@ -26,8 +26,6 @@ select
   min(timestamp(created_at)) as created_at$min, 
   max(timestamp(created_at)) as created_at$max
 from `db.default.runs` 
-
-
 order by num_rows desc limit 1000
 ---
 
@@ -59,7 +57,6 @@ select
   min(timestamp(created_at)) as created_at$min, 
   max(timestamp(created_at)) as created_at$max
 from `db.default.runs` 
-
 group by SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
@@ -94,7 +91,6 @@ select
   min(timestamp(created_at)) as created_at$min, 
   max(timestamp(created_at)) as created_at$max
 from `db.default.runs` 
-
 group by
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
   SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
@@ -130,7 +126,6 @@ select
   max(timestamp(created_at)) as created_at$max
 from `db.default.runs` 
 where (1=1)
-
 order by num_rows desc limit 1000
 ---
 
@@ -233,7 +228,6 @@ select
   max(timestamp(created_at)) as created_at$max
 from `db.default.runs` 
 where (run_status > 0) and (run_type > 0)
-
 order by num_rows desc limit 1000
 ---
 

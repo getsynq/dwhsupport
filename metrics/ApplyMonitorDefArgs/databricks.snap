@@ -8,7 +8,6 @@ select
   min(ingested_at) as `min`, 
   max(ingested_at) as `max`
 from db.default.runs 
-
 group by `time_segment`
 order by `time_segment` 
 ---
@@ -21,8 +20,6 @@ select
   min(ingested_at) as `min`, 
   max(ingested_at) as `max`
 from db.default.runs 
-
-
  
 ---
 
@@ -36,7 +33,6 @@ select
   min(ingested_at) as `min`, 
   max(ingested_at) as `max`
 from db.default.runs 
-
 group by
   `time_segment`, 
   `segment`
@@ -54,7 +50,6 @@ select
   min(ingested_at) as `min`, 
   max(ingested_at) as `max`
 from db.default.runs 
-
 group by `segment`
 order by `segment` 
 ---
@@ -133,7 +128,6 @@ select
   max(ingested_at) as `max`
 from db.default.runs 
 where (1=1)
-
  
 ---
 
@@ -246,7 +240,6 @@ select
   max(ingested_at) as `max`
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
-
  
 ---
 

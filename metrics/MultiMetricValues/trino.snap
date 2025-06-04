@@ -15,7 +15,6 @@ select
   CAST(approx_percentile(run_type, 0.5) AS DOUBLE) as run_type$median, 
   CAST(STDDEV(run_type) AS DOUBLE) as run_type$stddev
 from db.default.runs 
-
 group by
   COALESCE(workspace, ''), 
   COALESCE(run_type, '')

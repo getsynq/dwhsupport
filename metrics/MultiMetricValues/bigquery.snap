@@ -15,7 +15,6 @@ select
   CAST(approx_quantiles(run_type, 2)[offset(1)] AS FLOAT64) as run_type$median, 
   CAST(stddev_samp(run_type) AS FLOAT64) as run_type$stddev
 from `db.default.runs` 
-
 group by
   COALESCE(workspace, ''), 
   COALESCE(run_type, '')

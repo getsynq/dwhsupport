@@ -8,7 +8,6 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from "db"."default"."runs" 
-
 group by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at))
 order by DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)) 
 ---
@@ -21,8 +20,6 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from "db"."default"."runs" 
-
-
  
 ---
 
@@ -36,7 +33,6 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from "db"."default"."runs" 
-
 group by
   DATEADD(HOUR, 1, DATE_TRUNC('HOUR', ingested_at)), 
   COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
@@ -54,7 +50,6 @@ select
   min(ingested_at) as min, 
   max(ingested_at) as max
 from "db"."default"."runs" 
-
 group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
@@ -133,7 +128,6 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where (1=1)
-
  
 ---
 
@@ -246,7 +240,6 @@ select
   max(ingested_at) as max
 from "db"."default"."runs" 
 where (run_status > 0) and (run_type > 0)
-
  
 ---
 

@@ -15,7 +15,6 @@ select
   CAST(median(run_type) AS FLOAT) as "run_type$median", 
   CAST(stddev(run_type) AS FLOAT) as "run_type$stddev"
 from db.default.runs 
-
 group by
   "segment", 
   "segment_2"

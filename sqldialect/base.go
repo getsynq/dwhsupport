@@ -725,31 +725,22 @@ func (e *DistinctExpr) ToSql(dialect Dialect) (string, error) {
 
 // var _ Expr = (*TrimExpr)(nil)
 
-type TrimType string
-
-const (
-	TrimTypeBoth  TrimType = "BOTH"
-	TrimTypeLeft  TrimType = "LEADING"
-	TrimTypeRight TrimType = "TRAILING"
-)
-
 type TrimExpr struct {
-	from     Expr
-	chars    *StringLitExpr
-	trimType TrimType
+	expr Expr
 }
 
-func Trim(from Expr, chars string, trimType TrimType) *TrimExpr {
-	expr := &TrimExpr{from: from, trimType: trimType}
-	if chars != "" {
-		expr.chars = String(chars)
+func Trim(expr Expr) *TrimExpr {
+	return &TrimExpr{expr: expr}
+}
+
+func (e *TrimExpr) ToSql(dialect Dialect) (string, error) {
+	exprSql, err := e.expr.ToSql(dialect)
+	if err != nil {
+		return "", err
 	}
-	return expr
-}
 
-// func (e *TrimExpr) ToSql(dialect Dialect) (string, error) {
-// 	return dialect.Trim(e.from, e.chars, e.trimType).ToSql(dialect)
-// }
+	return fmt.Sprintf("trim(%s)", exprSql), nil
+}
 
 //
 // CoalesceExpr

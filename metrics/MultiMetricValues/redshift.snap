@@ -14,7 +14,6 @@ select
   CAST(MEDIAN(run_type) AS FLOAT) as run_type$median, 
   CAST(STDDEV(run_type) AS FLOAT) as run_type$stddev
 from "db"."default"."runs" 
-
 group by
   COALESCE(workspace, ''), 
   COALESCE(run_type, '')
