@@ -2,9 +2,12 @@ package sqldialect
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 )
+
+var emptyLinesRegex = regexp.MustCompile(`(?m)^\s*\n`)
 
 //
 // Base
@@ -135,6 +138,7 @@ func (e *OrderExpr) ToSql(dialect Dialect) (string, error) {
 //
 
 type Select struct {
+	ctes    []*Cte
 	cols    []Expr
 	table   TableExpr
 	joins   []*JoinExpr
@@ -147,6 +151,26 @@ type Select struct {
 
 func NewSelect() *Select {
 	return &Select{}
+}
+
+func (s *Select) Cte(alias *CteAlieasExpr, sql *Select) *Select {
+	s.ctes = append(s.ctes, &Cte{
+		Alias:     alias,
+		Select:    sql,
+		Recursive: []string{},
+	})
+
+	return s
+}
+
+func (s *Select) RecursiveCte(alias *CteAlieasExpr, sql *Select, recursive ...string) *Select {
+	s.ctes = append(s.ctes, &Cte{
+		Alias:     alias,
+		Select:    sql,
+		Recursive: recursive,
+	})
+
+	return s
 }
 
 func (s *Select) From(table TableExpr) *Select {
@@ -233,12 +257,24 @@ func (s *Select) ToSql(dialect Dialect) (string, error) {
 		}
 	}
 
-	return fmt.Sprintf(`%s
+	// build cte sql
+	cteSqls := []string{}
+	for _, cte := range s.ctes {
+		expr, err := cte.ToSql(dialect)
+		if err != nil {
+			return "", err
+		}
+		cteSqls = append(cteSqls, expr)
+	}
+
+	selectSql := fmt.Sprintf(`%s
+%s
 from %s %s
 %s
 %s
 %s
 %s %s`,
+		buildListSegment("with", ",\n", cteSqls),
 		buildListSegment("select", ", ", colsSql),
 		tableSql,
 		strings.Join(joinsSql, " "),
@@ -247,7 +283,11 @@ from %s %s
 		buildListSegment("having", " and ", havingSql),
 		buildListSegment("order by", ", ", orderBySql),
 		limitSql,
-	), nil
+	)
+
+	selectSql = emptyLinesRegex.ReplaceAllString(selectSql, "")
+
+	return selectSql, nil
 }
 
 func buildListSegment(segmentId string, separator string, sqls []string) string {
@@ -274,6 +314,35 @@ func exprsToSql[T Expr](exprs []T, dialect Dialect) ([]string, error) {
 	}
 
 	return sqls, nil
+}
+
+// CteExpr
+type Cte struct {
+	Alias     *CteAlieasExpr
+	Select    *Select
+	Recursive []string
+}
+
+func (s *Cte) ToSql(dialect Dialect) (string, error) {
+	sql, err := s.Select.ToSql(dialect)
+	if err != nil {
+		return "", err
+	}
+
+	recursive := ""
+	recursiveParams := ""
+	if len(s.Recursive) > 0 {
+		recursive = "RECURSIVE "
+		recursiveParams = "(" + strings.Join(s.Recursive, ", ") + ")"
+	}
+
+	aliasSql, err := s.Alias.ToSql(dialect)
+	if err != nil {
+		return "", err
+	}
+
+	sql = fmt.Sprintf("%s%s%s AS (%s)", recursive, aliasSql, recursiveParams, sql)
+	return strings.TrimSpace(sql), nil
 }
 
 //
@@ -413,6 +482,22 @@ func (t *TableFqnExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (t *TableFqnExpr) IsTableExpr() {}
+
+var _ TableExpr = (*CteAlieasExpr)(nil)
+
+type CteAlieasExpr struct {
+	alias string
+}
+
+func CteFqn(alias string) *CteAlieasExpr {
+	return &CteAlieasExpr{alias: alias}
+}
+
+func (t *CteAlieasExpr) ToSql(dialect Dialect) (string, error) {
+	return t.alias, nil
+}
+
+func (t *CteAlieasExpr) IsTableExpr() {}
 
 //
 // JoinExpr
@@ -633,6 +718,38 @@ func (e *DistinctExpr) ToSql(dialect Dialect) (string, error) {
 
 	return fmt.Sprintf("distinct %s", strings.Join(exprs, ", ")), nil
 }
+
+//
+// TrimExpr
+//
+
+// var _ Expr = (*TrimExpr)(nil)
+
+type TrimType string
+
+const (
+	TrimTypeBoth  TrimType = "BOTH"
+	TrimTypeLeft  TrimType = "LEADING"
+	TrimTypeRight TrimType = "TRAILING"
+)
+
+type TrimExpr struct {
+	from     Expr
+	chars    *StringLitExpr
+	trimType TrimType
+}
+
+func Trim(from Expr, chars string, trimType TrimType) *TrimExpr {
+	expr := &TrimExpr{from: from, trimType: trimType}
+	if chars != "" {
+		expr.chars = String(chars)
+	}
+	return expr
+}
+
+// func (e *TrimExpr) ToSql(dialect Dialect) (string, error) {
+// 	return dialect.Trim(e.from, e.chars, e.trimType).ToSql(dialect)
+// }
 
 //
 // CoalesceExpr
