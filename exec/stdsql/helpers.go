@@ -132,6 +132,10 @@ func QueryMaps(ctx context.Context, conn *sqlx.DB, sql string) ([]exec.QueryMapR
 		results = append(results, result)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	return results, nil
 }
 
