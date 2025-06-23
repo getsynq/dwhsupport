@@ -2,6 +2,8 @@ package metrics
 
 import (
 	"time"
+
+	"cloud.google.com/go/bigquery"
 )
 
 type MetricResponseI interface {
@@ -243,6 +245,56 @@ func (metric *MetricFieldDistribution) ToDefault(timeSegment time.Time, segment 
 //
 // FIELD STATS
 //
+
+type MetricNumericFieldStatsBQ struct {
+	Field       string    `bigquery:"field"        json:"field"`
+	Segment     string    `bigquery:"segment"      json:"segment"`
+	TimeSegment time.Time `bigquery:"time_segment" json:"time_segment"`
+
+	NumTotal   int64              `bigquery:"num_rows"     json:"num_rows"`
+	NumUnique  bigquery.NullInt64 `bigquery:"num_unique"   json:"num_unique"`
+	NumNotNull int64              `bigquery:"num_not_null" json:"num_not_null"`
+	NumEmpty   int64              `bigquery:"num_empty"    json:"num_empty"`
+
+	PctUnique  *float64
+	PctNotNull float64
+	PctEmpty   float64
+
+	Min    bigquery.NullFloat64 `bigquery:"min"    json:"min"`
+	Max    bigquery.NullFloat64 `bigquery:"max"    json:"max"`
+	Mean   bigquery.NullFloat64 `bigquery:"mean"   json:"mean"`
+	Median bigquery.NullFloat64 `bigquery:"median" json:"median"`
+	Stddev bigquery.NullFloat64 `bigquery:"stddev" json:"stddev"`
+}
+
+func (stats *MetricNumericFieldStatsBQ) GetIdentity() MetricIdentity {
+	return MetricIdentity{
+		stats.TimeSegment,
+		stats.Segment,
+	}
+}
+
+func (stats *MetricNumericFieldStatsBQ) ToDefault(timeSegment time.Time, segment string) {
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+
+	stats.NumTotal = 0
+	stats.NumNotNull = 0
+	stats.NumEmpty = 0
+	stats.NumUnique = bigquery.NullInt64{}
+
+	stats.PctUnique = nil
+	stats.Min = bigquery.NullFloat64{}
+	stats.Max = bigquery.NullFloat64{}
+	stats.Mean = bigquery.NullFloat64{}
+	stats.Median = bigquery.NullFloat64{}
+	stats.Stddev = bigquery.NullFloat64{}
+}
+
+func (stats *MetricNumericFieldStatsBQ) WithPartition(timeSegment time.Time, segment string) {
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+}
 
 type MetricNumericFieldStats struct {
 	Field       string    `ch:"field"        bigquery:"field"        db:"field"        json:"field"`
