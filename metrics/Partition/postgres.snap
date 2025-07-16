@@ -6,7 +6,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from default.runs 
+from "default"."runs" 
 where
   ingested_at >= '2025-01-01T00:00:00Z' and 
   ingested_at < '2025-02-01T00:00:00Z'

@@ -1,7 +1,7 @@
 
 [TestBaseSuite/TestCte - 1]
 with cte AS (select *
-from default.users 
+from "default"."users" 
 order by created_at desc limit 10)
 select *
 from cte 
