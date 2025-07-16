@@ -3,6 +3,8 @@ package sqldialect
 import (
 	"fmt"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 //
@@ -18,7 +20,7 @@ func NewPostgresDialect() *PostgresDialect {
 }
 
 func (d *PostgresDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
-	return fmt.Sprintf("%s.%s", fqn.datasetId, fqn.tableId), nil
+	return fmt.Sprintf("%s.%s", pq.QuoteIdentifier(fqn.datasetId), pq.QuoteIdentifier(fqn.tableId)), nil
 }
 
 func (d *PostgresDialect) CountIf(expr Expr) Expr {
