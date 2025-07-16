@@ -1,6 +1,7 @@
 package sqldialect
 
 import (
+	"os"
 	"testing"
 
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -27,4 +28,12 @@ func (s *BaseSuite) TestCte() {
 	sql, err := cte.ToSql(dialect)
 	s.Require().NoError(err)
 	snaps.MatchSnapshot(s.T(), sql)
+}
+
+func TestMain(m *testing.M) {
+	v := m.Run()
+	
+	snaps.Clean(m, snaps.CleanOpts{Sort: true})
+
+	os.Exit(v)
 }

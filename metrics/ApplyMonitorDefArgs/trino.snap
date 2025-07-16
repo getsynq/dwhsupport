@@ -1,198 +1,5 @@
 
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_no_segmentation/partitioning - 1]
-select
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-group by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at))
-order by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_no_segmentation/no_partitioning - 1]
-select
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
- 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_single_segmentation_all/partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-group by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_single_segmentation_all/no_partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_multi_segmentation/partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment_3, 
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
-group by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_multi_segmentation/no_partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment_3, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
-group by
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_no_segmentation/partitioning - 1]
-select
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (1=1)
-group by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at))
-order by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_no_segmentation/no_partitioning - 1]
-select
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (1=1)
- 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_single_segmentation_all/partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (1=1)
-group by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_single_segmentation_all/no_partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (1=1)
-group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_multi_segmentation/partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment_3, 
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
-  (1=1)
-group by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_multi_segmentation/no_partitioning - 1]
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_multi_segmentation/no_partitioning - 1]
 select
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
@@ -206,7 +13,7 @@ from db.default.runs
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
-  (1=1)
+  (run_status > 0) and (run_type > 0)
 group by
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
@@ -215,65 +22,6 @@ order by
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_no_segmentation/partitioning - 1]
-select
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (run_status > 0) and (run_type > 0)
-group by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at))
-order by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_no_segmentation/no_partitioning - 1]
-select
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (run_status > 0) and (run_type > 0)
- 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_single_segmentation_all/partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (run_status > 0) and (run_type > 0)
-group by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by
-  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
----
-
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_single_segmentation_all/no_partitioning - 1]
-select
-  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
-  'ingested_at' as field, 
-  count(*) as num_rows, 
-  count(ingested_at) as num_not_null, 
-  min(ingested_at) as min, 
-  max(ingested_at) as max
-from db.default.runs 
-where (run_status > 0) and (run_type > 0)
-group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
-order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_multi_segmentation/partitioning - 1]
@@ -304,7 +52,172 @@ order by
   COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
 
-[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_multi_segmentation/no_partitioning - 1]
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (run_status > 0) and (run_type > 0)
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_no_segmentation/partitioning - 1]
+select
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (run_status > 0) and (run_type > 0)
+group by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at))
+order by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_single_segmentation_all/no_partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (run_status > 0) and (run_type > 0)
+group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_multi_condition_single_segmentation_all/partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (run_status > 0) and (run_type > 0)
+group by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_multi_segmentation/no_partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment_3, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
+group by
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_multi_segmentation/partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment_3, 
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
+group by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_no_segmentation/partitioning - 1]
+select
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+group by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at))
+order by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_single_segmentation_all/no_partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_no_conditions_single_segmentation_all/partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+group by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_multi_segmentation/no_partitioning - 1]
 select
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
@@ -318,7 +231,7 @@ from db.default.runs
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
-  (run_status > 0) and (run_type > 0)
+  (1=1)
 group by
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
@@ -326,5 +239,92 @@ group by
 order by
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_multi_segmentation/partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') as segment, 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') as segment_2, 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment_3, 
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
+  (1=1)
+group by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), ''), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (1=1)
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_no_segmentation/partitioning - 1]
+select
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (1=1)
+group by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at))
+order by DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_single_segmentation_all/no_partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (1=1)
+group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/trino_single_condition_single_segmentation_all/partitioning - 1]
+select
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') as segment, 
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)) as time_segment, 
+  'ingested_at' as field, 
+  count(*) as num_rows, 
+  count(ingested_at) as num_not_null, 
+  min(ingested_at) as min, 
+  max(ingested_at) as max
+from db.default.runs 
+where (1=1)
+group by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
+  COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
+order by
+  DATE_ADD('HOUR', 1, DATE_TRUNC('HOUR', ingested_at)), 
   COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---

@@ -1,67 +1,5 @@
 
-[TestProfileSuite/TestProfileColumns/bigquery_no_conditions_no_segmentation - 1]
-select
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  countif(workspace = '') as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  countif(meta = '') as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  countif(run_status = 0) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT64) as run_status$min, 
-  CAST(max(run_status) AS FLOAT64) as run_status$max, 
-  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
-  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
-  count(timestamp(created_at)) as created_at$num_not_null, 
-  min(timestamp(created_at)) as created_at$min, 
-  max(timestamp(created_at)) as created_at$max
-from `db.default.runs` 
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/bigquery_no_conditions_single_segmentation_all - 1]
-select
-  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment, 
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  countif(workspace = '') as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  countif(meta = '') as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  countif(run_status = 0) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT64) as run_status$min, 
-  CAST(max(run_status) AS FLOAT64) as run_status$max, 
-  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
-  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
-  count(timestamp(created_at)) as created_at$num_not_null, 
-  min(timestamp(created_at)) as created_at$min, 
-  max(timestamp(created_at)) as created_at$max
-from `db.default.runs` 
-group by SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/bigquery_no_conditions_multi_segmentation - 1]
+[TestProfileSuite/TestProfileColumns/bigquery_multi_condition_multi_segmentation - 1]
 select
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
   SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
@@ -91,108 +29,7 @@ select
   min(timestamp(created_at)) as created_at$min, 
   max(timestamp(created_at)) as created_at$max
 from `db.default.runs` 
-group by
-  SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
-  SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
-  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment3
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/bigquery_single_condition_no_segmentation - 1]
-select
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  countif(workspace = '') as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  countif(meta = '') as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  countif(run_status = 0) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT64) as run_status$min, 
-  CAST(max(run_status) AS FLOAT64) as run_status$max, 
-  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
-  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
-  count(timestamp(created_at)) as created_at$num_not_null, 
-  min(timestamp(created_at)) as created_at$min, 
-  max(timestamp(created_at)) as created_at$max
-from `db.default.runs` 
-where (1=1)
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/bigquery_single_condition_single_segmentation_all - 1]
-select
-  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment, 
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  countif(workspace = '') as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  countif(meta = '') as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  countif(run_status = 0) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT64) as run_status$min, 
-  CAST(max(run_status) AS FLOAT64) as run_status$max, 
-  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
-  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
-  count(timestamp(created_at)) as created_at$num_not_null, 
-  min(timestamp(created_at)) as created_at$min, 
-  max(timestamp(created_at)) as created_at$max
-from `db.default.runs` 
-where (1=1)
-group by SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/bigquery_single_condition_multi_segmentation - 1]
-select
-  SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
-  SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
-  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment3, 
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  countif(workspace = '') as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  countif(meta = '') as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  countif(run_status = 0) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT64) as run_status$min, 
-  CAST(max(run_status) AS FLOAT64) as run_status$max, 
-  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
-  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
-  count(timestamp(created_at)) as created_at$num_not_null, 
-  min(timestamp(created_at)) as created_at$min, 
-  max(timestamp(created_at)) as created_at$max
-from `db.default.runs` 
-where (1=1)
+where (run_status > 0) and (run_type > 0)
 group by
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
   SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
@@ -264,7 +101,7 @@ group by SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
 
-[TestProfileSuite/TestProfileColumns/bigquery_multi_condition_multi_segmentation - 1]
+[TestProfileSuite/TestProfileColumns/bigquery_no_conditions_multi_segmentation - 1]
 select
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
   SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
@@ -294,10 +131,173 @@ select
   min(timestamp(created_at)) as created_at$min, 
   max(timestamp(created_at)) as created_at$max
 from `db.default.runs` 
-where (run_status > 0) and (run_type > 0)
 group by
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
   SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
   SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment3
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/bigquery_no_conditions_no_segmentation - 1]
+select
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  countif(workspace = '') as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  countif(meta = '') as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  countif(run_status = 0) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT64) as run_status$min, 
+  CAST(max(run_status) AS FLOAT64) as run_status$max, 
+  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
+  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
+  count(timestamp(created_at)) as created_at$num_not_null, 
+  min(timestamp(created_at)) as created_at$min, 
+  max(timestamp(created_at)) as created_at$max
+from `db.default.runs` 
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/bigquery_no_conditions_single_segmentation_all - 1]
+select
+  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment, 
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  countif(workspace = '') as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  countif(meta = '') as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  countif(run_status = 0) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT64) as run_status$min, 
+  CAST(max(run_status) AS FLOAT64) as run_status$max, 
+  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
+  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
+  count(timestamp(created_at)) as created_at$num_not_null, 
+  min(timestamp(created_at)) as created_at$min, 
+  max(timestamp(created_at)) as created_at$max
+from `db.default.runs` 
+group by SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/bigquery_single_condition_multi_segmentation - 1]
+select
+  SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
+  SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
+  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment3, 
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  countif(workspace = '') as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  countif(meta = '') as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  countif(run_status = 0) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT64) as run_status$min, 
+  CAST(max(run_status) AS FLOAT64) as run_status$max, 
+  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
+  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
+  count(timestamp(created_at)) as created_at$num_not_null, 
+  min(timestamp(created_at)) as created_at$min, 
+  max(timestamp(created_at)) as created_at$max
+from `db.default.runs` 
+where (1=1)
+group by
+  SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
+  SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
+  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment3
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/bigquery_single_condition_no_segmentation - 1]
+select
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  countif(workspace = '') as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  countif(meta = '') as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  countif(run_status = 0) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT64) as run_status$min, 
+  CAST(max(run_status) AS FLOAT64) as run_status$max, 
+  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
+  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
+  count(timestamp(created_at)) as created_at$num_not_null, 
+  min(timestamp(created_at)) as created_at$min, 
+  max(timestamp(created_at)) as created_at$max
+from `db.default.runs` 
+where (1=1)
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/bigquery_single_condition_single_segmentation_all - 1]
+select
+  SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment, 
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  countif(workspace = '') as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT64) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT64) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT64) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  countif(meta = '') as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT64) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT64) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT64) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  countif(run_status = 0) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT64) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT64) as run_status$min, 
+  CAST(max(run_status) AS FLOAT64) as run_status$max, 
+  CAST(approx_quantiles(run_status, 2)[offset(1)] AS FLOAT64) as run_status$median, 
+  CAST(stddev_samp(run_status) AS FLOAT64) as run_status$stddev, 
+  count(timestamp(created_at)) as created_at$num_not_null, 
+  min(timestamp(created_at)) as created_at$min, 
+  max(timestamp(created_at)) as created_at$max
+from `db.default.runs` 
+where (1=1)
+group by SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
