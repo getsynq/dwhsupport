@@ -1,67 +1,5 @@
 
-[TestProfileSuite/TestProfileColumns/postgres_no_conditions_no_segmentation - 1]
-select
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT) as run_status$min, 
-  CAST(max(run_status) AS FLOAT) as run_status$max, 
-  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
-  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
-  count(created_at) as created_at$num_not_null, 
-  min(created_at) as created_at$min, 
-  max(created_at) as created_at$max
-from default.runs 
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/postgres_no_conditions_single_segmentation_all - 1]
-select
-  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment, 
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT) as run_status$min, 
-  CAST(max(run_status) AS FLOAT) as run_status$max, 
-  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
-  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
-  count(created_at) as created_at$num_not_null, 
-  min(created_at) as created_at$min, 
-  max(created_at) as created_at$max
-from default.runs 
-group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/postgres_no_conditions_multi_segmentation - 1]
+[TestProfileSuite/TestProfileColumns/postgres_multi_condition_multi_segmentation - 1]
 select
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
@@ -91,108 +29,7 @@ select
   min(created_at) as created_at$min, 
   max(created_at) as created_at$max
 from default.runs 
-group by
-  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
-  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
-  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/postgres_single_condition_no_segmentation - 1]
-select
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT) as run_status$min, 
-  CAST(max(run_status) AS FLOAT) as run_status$max, 
-  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
-  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
-  count(created_at) as created_at$num_not_null, 
-  min(created_at) as created_at$min, 
-  max(created_at) as created_at$max
-from default.runs 
-where (1=1)
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/postgres_single_condition_single_segmentation_all - 1]
-select
-  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment, 
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT) as run_status$min, 
-  CAST(max(run_status) AS FLOAT) as run_status$max, 
-  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
-  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
-  count(created_at) as created_at$num_not_null, 
-  min(created_at) as created_at$min, 
-  max(created_at) as created_at$max
-from default.runs 
-where (1=1)
-group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
-order by num_rows desc limit 1000
----
-
-[TestProfileSuite/TestProfileColumns/postgres_single_condition_multi_segmentation - 1]
-select
-  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
-  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
-  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3, 
-  count(*) as num_rows, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
-  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
-  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
-  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
-  count(meta) as meta$num_not_null, 
-  count(distinct meta) as meta$num_unique, 
-  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
-  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
-  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
-  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
-  count(run_status) as run_status$num_not_null, 
-  count(distinct run_status) as run_status$num_unique, 
-  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
-  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
-  CAST(min(run_status) AS FLOAT) as run_status$min, 
-  CAST(max(run_status) AS FLOAT) as run_status$max, 
-  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
-  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
-  count(created_at) as created_at$num_not_null, 
-  min(created_at) as created_at$min, 
-  max(created_at) as created_at$max
-from default.runs 
-where (1=1)
+where (run_status > 0) and (run_type > 0)
 group by
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
@@ -264,7 +101,7 @@ group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
 
-[TestProfileSuite/TestProfileColumns/postgres_multi_condition_multi_segmentation - 1]
+[TestProfileSuite/TestProfileColumns/postgres_no_conditions_multi_segmentation - 1]
 select
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
@@ -294,10 +131,173 @@ select
   min(created_at) as created_at$min, 
   max(created_at) as created_at$max
 from default.runs 
-where (run_status > 0) and (run_type > 0)
 group by
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
   SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/postgres_no_conditions_no_segmentation - 1]
+select
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT) as run_status$min, 
+  CAST(max(run_status) AS FLOAT) as run_status$max, 
+  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
+  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
+  count(created_at) as created_at$num_not_null, 
+  min(created_at) as created_at$min, 
+  max(created_at) as created_at$max
+from default.runs 
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/postgres_no_conditions_single_segmentation_all - 1]
+select
+  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment, 
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT) as run_status$min, 
+  CAST(max(run_status) AS FLOAT) as run_status$max, 
+  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
+  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
+  count(created_at) as created_at$num_not_null, 
+  min(created_at) as created_at$min, 
+  max(created_at) as created_at$max
+from default.runs 
+group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/postgres_single_condition_multi_segmentation - 1]
+select
+  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3, 
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT) as run_status$min, 
+  CAST(max(run_status) AS FLOAT) as run_status$max, 
+  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
+  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
+  count(created_at) as created_at$num_not_null, 
+  min(created_at) as created_at$min, 
+  max(created_at) as created_at$max
+from default.runs 
+where (1=1)
+group by
+  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
+  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
+  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/postgres_single_condition_no_segmentation - 1]
+select
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT) as run_status$min, 
+  CAST(max(run_status) AS FLOAT) as run_status$max, 
+  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
+  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
+  count(created_at) as created_at$num_not_null, 
+  min(created_at) as created_at$min, 
+  max(created_at) as created_at$max
+from default.runs 
+where (1=1)
+order by num_rows desc limit 1000
+---
+
+[TestProfileSuite/TestProfileColumns/postgres_single_condition_single_segmentation_all - 1]
+select
+  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment, 
+  count(*) as num_rows, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as workspace$num_empty, 
+  CAST(min(length(workspace)) AS FLOAT) as workspace$min_length, 
+  CAST(max(length(workspace)) AS FLOAT) as workspace$max_length, 
+  CAST(avg(length(workspace)) AS FLOAT) as workspace$mean_length, 
+  count(meta) as meta$num_not_null, 
+  count(distinct meta) as meta$num_unique, 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as meta$num_empty, 
+  CAST(min(length(meta)) AS FLOAT) as meta$min_length, 
+  CAST(max(length(meta)) AS FLOAT) as meta$max_length, 
+  CAST(avg(length(meta)) AS FLOAT) as meta$mean_length, 
+  count(run_status) as run_status$num_not_null, 
+  count(distinct run_status) as run_status$num_unique, 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as run_status$num_empty, 
+  CAST(avg(run_status) AS FLOAT) as run_status$mean, 
+  CAST(min(run_status) AS FLOAT) as run_status$min, 
+  CAST(max(run_status) AS FLOAT) as run_status$max, 
+  CAST(MEDIAN(run_status) AS FLOAT) as run_status$median, 
+  CAST(STDDEV(run_status) AS FLOAT) as run_status$stddev, 
+  count(created_at) as created_at$num_not_null, 
+  min(created_at) as created_at$min, 
+  max(created_at) as created_at$max
+from default.runs 
+where (1=1)
+group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
 order by num_rows desc limit 1000
 ---
