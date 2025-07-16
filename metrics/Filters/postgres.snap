@@ -1,7 +1,7 @@
 
 [TestMetricsSuite/TestFilters - 1]
 select *
-from default.runs 
+from "default"."runs" 
 where (workspace = 'synq-demo') and ((status in ('success', 'failed') or skip = 'true'))
  
 ---
