@@ -24,7 +24,7 @@ type ColumnToProfile struct {
 
 func ProfileColumns(
 	dialect Dialect,
-	tableFqn *TableFqnExpr,
+	tableFqn TableExpr,
 	columnsToProfile []*ColumnToProfile,
 	args *MonitorArgs,
 	partition *Partition,

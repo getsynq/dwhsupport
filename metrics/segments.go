@@ -16,7 +16,7 @@ type Partition struct {
 }
 
 func SegmentsListQuery(
-	tableFqn *TableFqnExpr,
+	tableFqn TableExpr,
 	args *MonitorArgs,
 	partition *Partition,
 	rowsLimit int64,
