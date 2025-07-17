@@ -12,7 +12,7 @@ import (
 // Query Builder
 //
 
-func NewQueryBuilder(table *TableFqnExpr, cols []Expr) *QueryBuilder {
+func NewQueryBuilder(table TableExpr, cols []Expr) *QueryBuilder {
 	return &QueryBuilder{
 		table: table,
 		cols:  cols,
@@ -35,7 +35,7 @@ type QueryBuilder struct {
 
 	filters []CondExpr
 
-	table   *TableFqnExpr
+	table   TableExpr
 	cols    []Expr
 	limit   *LimitExpr
 	orderBy []*OrderExpr
