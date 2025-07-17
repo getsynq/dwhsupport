@@ -20,7 +20,7 @@ func TestMetricsSuite(t *testing.T) {
 }
 
 func (s *MetricsSuite) TestSimpleQueryBuilder() {
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, TextMetricsCols("workspace"))
 		sql, err := queryBuilder.ToSql(dialect.Dialect)
@@ -33,7 +33,7 @@ func (s *MetricsSuite) TestSimpleQueryBuilder() {
 }
 
 func (s *MetricsSuite) TestMultiMetricValues() {
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, append(
 			TextMetricsValuesCols("workspace", WithPrefixForColumn("workspace")),
@@ -54,7 +54,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 
 		for _, cond := range []struct {
 			name       string
@@ -162,7 +162,7 @@ func (s *MetricsSuite) TestSegmentationRules() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 		for _, seg := range []struct {
 			name         string
 			segmentation []*Segmentation
@@ -220,7 +220,7 @@ func (s *MetricsSuite) TestPartition() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 
 		expressions := TimeMetricsCols("ingested_at")
 
@@ -245,7 +245,7 @@ func (s *MetricsSuite) TestPartitionWithTimeRange() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 
 		expressions := NumericMetricsCols("run_type", dialect.Dialect)
 
@@ -271,7 +271,7 @@ func (s *MetricsSuite) TestSegmentWithTimeRangeWithFilter() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 
 		expressions := NumericMetricsCols("run_type", dialect.Dialect)
 
@@ -295,7 +295,7 @@ func (s *MetricsSuite) TestSegmentWithTimeRangeWithFilter() {
 }
 
 func (s *MetricsSuite) TestFilters() {
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, []dwhsql.Expr{dwhsql.Star()})

@@ -18,7 +18,7 @@ func NewRedshiftDialect() *RedshiftDialect {
 }
 
 func (d *RedshiftDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
-	return fmt.Sprintf("%q.%q.%q", fqn.projectId, fqn.datasetId, fqn.tableId), nil
+	return fmt.Sprintf("%q.%q.%q", fqn.projectId, PqQuoteIdentifierIfUpper(fqn.datasetId), PqQuoteIdentifierIfUpper(fqn.tableId)), nil
 }
 
 func (d *RedshiftDialect) CountIf(expr Expr) Expr {
@@ -42,7 +42,7 @@ func (d *RedshiftDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *RedshiftDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return PqQuoteIdentifierIfUpper(expr.name), nil
 }
 
 func (d *RedshiftDialect) RoundTime(expr Expr, interval time.Duration) Expr {

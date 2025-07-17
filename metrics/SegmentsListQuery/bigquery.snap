@@ -7,8 +7,8 @@ select
   count(*) as num_rows
 from `db.default.runs` 
 where
-  timestamp(created_at) >= timestamp '1985-07-16T00:00:00Z' and 
-  timestamp(created_at) < timestamp '2025-03-16T00:00:00Z' and 
+  timestamp(createdAt) >= timestamp '1985-07-16T00:00:00Z' and 
+  timestamp(createdAt) < timestamp '2025-03-16T00:00:00Z' and 
   (1=1)
 group by
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100), 

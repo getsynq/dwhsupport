@@ -20,19 +20,7 @@ func TestSegmentsSuite(t *testing.T) {
 
 func (s *SegmentsSuite) TestSegmentQueries() {
 
-	for _, dialect := range []struct {
-		name    string
-		dialect dwhsql.Dialect
-	}{
-		{"clickhouse", dwhsql.NewClickHouseDialect()},
-		{"snowflake", dwhsql.NewSnowflakeDialect()},
-		{"redshift", dwhsql.NewRedshiftDialect()},
-		{"bigquery", dwhsql.NewBigQueryDialect()},
-		{"postgres", dwhsql.NewPostgresDialect()},
-		{"mysql", dwhsql.NewMySQLDialect()},
-		{"databricks", dwhsql.NewDatabricksDialect()},
-		{"duckdb", dwhsql.NewDuckDBDialect()},
-	} {
+	for _, dialect := range sqldialect.DialectsToTest() {
 
 		tableFqnExpr := sqldialect.TableFqn("db", "default", "runs")
 
@@ -57,25 +45,25 @@ func (s *SegmentsSuite) TestSegmentQueries() {
 		}
 
 		partition := &Partition{
-			Field: "created_at",
+			Field: "createdAt",
 			From:  time.Date(1985, 7, 16, 0, 0, 0, 0, time.UTC),
 			To:    time.Date(2025, 3, 16, 0, 0, 0, 0, time.UTC),
 		}
 		rowsLimit := int64(10)
 		segmentLengthLimit := int64(100)
 
-		s.Run(dialect.name, func() {
+		s.Run(dialect.Name, func() {
 
 			queryBuilder, err := SegmentsListQuery(tableFqnExpr, args, partition, rowsLimit, segmentLengthLimit)
 			s.Require().NoError(err)
 			s.Require().NotNil(queryBuilder)
 
-			sql, err := queryBuilder.ToSql(dialect.dialect)
+			sql, err := queryBuilder.ToSql(dialect.Dialect)
 			s.Require().NoError(err)
 			s.Require().NotEmpty(sql)
 			s.T().Log(sql)
 
-			snaps.WithConfig(snaps.Dir("SegmentsListQuery"), snaps.Filename(dialect.name)).MatchSnapshot(s.T(), sql)
+			snaps.WithConfig(snaps.Dir("SegmentsListQuery"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
 
 		})
 
