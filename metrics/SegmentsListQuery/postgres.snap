@@ -5,10 +5,10 @@ select
   SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
   SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3, 
   count(*) as num_rows
-from "default"."runs" 
+from default.runs 
 where
-  created_at >= '1985-07-16T00:00:00Z' and 
-  created_at < '2025-03-16T00:00:00Z' and 
+  "createdAt" >= '1985-07-16T00:00:00Z' and 
+  "createdAt" < '2025-03-16T00:00:00Z' and 
   (1=1)
 group by
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), 

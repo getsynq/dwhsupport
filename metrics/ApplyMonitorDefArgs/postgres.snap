@@ -9,7 +9,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
@@ -35,7 +35,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
@@ -59,7 +59,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (run_status > 0) and (run_type > 0)
  
 ---
@@ -72,7 +72,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (run_status > 0) and (run_type > 0)
 group by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
 order by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' 
@@ -86,7 +86,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (run_status > 0) and (run_type > 0)
 group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
@@ -101,7 +101,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (run_status > 0) and (run_type > 0)
 group by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
@@ -121,7 +121,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
@@ -146,7 +146,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4')
@@ -169,7 +169,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
  
 ---
 
@@ -181,7 +181,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 group by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
 order by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' 
 ---
@@ -194,7 +194,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
 ---
@@ -208,7 +208,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 group by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 
   COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
@@ -227,7 +227,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
@@ -253,7 +253,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where
   COALESCE(SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), '') in ('1', '2', '3', '4') and 
@@ -277,7 +277,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (1=1)
  
 ---
@@ -290,7 +290,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (1=1)
 group by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR'
 order by DATE_TRUNC('HOUR', ingested_at) + '1 HOUR' 
@@ -304,7 +304,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (1=1)
 group by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '')
 order by COALESCE(SUBSTRING(CAST(run_type AS VARCHAR), 1, 100), '') 
@@ -319,7 +319,7 @@ select
   count(ingested_at) as num_not_null, 
   min(ingested_at) as min, 
   max(ingested_at) as max
-from "default"."runs" 
+from default.runs 
 where (1=1)
 group by
   DATE_TRUNC('HOUR', ingested_at) + '1 HOUR', 

@@ -21,7 +21,7 @@ func (s *ProfileSuite) TestProfileColumns() {
 
 	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
-	for _, dialect := range DialectsToTest() {
+	for _, dialect := range dwhsql.DialectsToTest() {
 
 		for _, cond := range []struct {
 			name       string
