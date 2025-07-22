@@ -22,6 +22,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/trinodb/trino-go-client v0.323.0
 	github.com/xxjwxc/gowp v0.0.0-20240929033016-5be68d222389
+	go.uber.org/mock v0.5.2
 	golang.org/x/crypto v0.32.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 	google.golang.org/api v0.217.0
