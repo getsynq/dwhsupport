@@ -30,8 +30,9 @@ func (s *QueryDatabasesSuite) TestQueryDatabases() {
 		Port:     443,
 	}
 	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
-		TrinoConf: conf,
-		Catalogs:  []string{"iceberg_gcs"},
+		TrinoConf:              conf,
+		Catalogs:               []string{"iceberg_gcs"},
+		FetchMaterializedViews: false,
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)

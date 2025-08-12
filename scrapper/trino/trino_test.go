@@ -29,8 +29,9 @@ func (s *ValidateConfigSuite) newScrapperWithCatalogs(catalogs []string) *TrinoS
 		Port:     443,
 	}
 	scr, err := NewTrinoScrapper(ctx, &TrinoScrapperConf{
-		TrinoConf: conf,
-		Catalogs:  catalogs,
+		TrinoConf:              conf,
+		Catalogs:               catalogs,
+		FetchMaterializedViews: false,
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)
