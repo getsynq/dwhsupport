@@ -5,12 +5,14 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/jmoiron/sqlx"
 	"github.com/trinodb/trino-go-client/trino"
+	"golang.org/x/sync/errgroup"
 )
 
 type MetricsStrategy func(ctx context.Context, db *sqlx.DB, tableRow *scrapper.TableRow, tableMetricsRow *scrapper.TableMetricsRow) error
@@ -18,7 +20,9 @@ type MetricsStrategy func(ctx context.Context, db *sqlx.DB, tableRow *scrapper.T
 func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 
 	db := e.executor.GetDb()
-	var out []*scrapper.TableMetricsRow
+
+	var outMu sync.Mutex
+	var tableMetricsRows []*scrapper.TableMetricsRow
 
 	availableCatalogs, err := e.allAvailableCatalogs.Get()
 	if err != nil {
@@ -50,41 +54,53 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 			metricsStrategy = e.showStatsMetricsStrategy
 		}
 
-		for _, t := range tables {
+		if len(tables) > 0 {
+			pool, ctx := errgroup.WithContext(ctx)
+			pool.SetLimit(8)
 
-			if t.TableType == "VIEW" {
-				continue
-			}
+			for _, t := range tables {
 
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-			}
-
-			tableMetricsRow := &scrapper.TableMetricsRow{
-				Instance: t.Instance,
-				Database: t.Database,
-				Schema:   t.Schema,
-				Table:    t.Table,
-			}
-
-			if metricsStrategy != nil {
-				if err := metricsStrategy(ctx, db, t, tableMetricsRow); err != nil {
-					logging.GetLogger(ctx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
+				if t.TableType == "VIEW" {
 					continue
 				}
-			}
+				tableMetricsRow := &scrapper.TableMetricsRow{
+					Instance: t.Instance,
+					Database: t.Database,
+					Schema:   t.Schema,
+					Table:    t.Table,
+				}
 
-			if tableMetricsRow.SizeBytes == nil && tableMetricsRow.RowCount == nil && tableMetricsRow.UpdatedAt == nil {
-				logging.GetLogger(ctx).WithField("table_fqn", t.TableFqn()).WithField("table_type", t.TableType).Warnf("no metrics found")
-				continue
-			}
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				default:
+				}
 
-			out = append(out, tableMetricsRow)
+				if metricsStrategy != nil {
+					pool.Go(func() error {
+						if err := metricsStrategy(ctx, db, t, tableMetricsRow); err != nil {
+							logging.GetLogger(ctx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
+							return nil
+						}
+						if tableMetricsRow.SizeBytes == nil && tableMetricsRow.RowCount == nil && tableMetricsRow.UpdatedAt == nil {
+							logging.GetLogger(ctx).WithField("table_fqn", tableMetricsRow.TableFqn()).Warnf("no metrics found")
+							return nil
+						}
+						outMu.Lock()
+						tableMetricsRows = append(tableMetricsRows, tableMetricsRow)
+						outMu.Unlock()
+
+						return nil
+					})
+				}
+			}
+			err = pool.Wait()
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
-	return out, nil
+	return tableMetricsRows, nil
 }
 
 type trinoShowStatsRow struct {

@@ -9,7 +9,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed query_sql_definitions.sql
@@ -22,7 +22,8 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 	}
 
 	if len(basic) > 0 && (e.conf.UseShowCreateTable || e.conf.UseShowCreateView) {
-		pool := workpool.New(8)
+		pool, ctx := errgroup.WithContext(ctx)
+		pool.SetLimit(8)
 		for _, sqlDef := range basic {
 			sqlDef := sqlDef // Create a local copy of the loop variable
 
@@ -33,7 +34,7 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 			}
 
 			if (sqlDef.IsView && e.conf.UseShowCreateView) || (!sqlDef.IsView && e.conf.UseShowCreateTable) {
-				pool.Do(func() error {
+				pool.Go(func() error {
 					sql, err := e.showCreate(ctx, sqlDef.Database, sqlDef.Schema, sqlDef.Table, sqlDef.IsView, sqlDef.IsMaterializedView)
 					if err != nil {
 						return err
