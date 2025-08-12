@@ -2,134 +2,41 @@ package trino
 
 import (
 	"strings"
-	"testing"
-
-	"github.com/getsynq/dwhsupport/exec/trino"
-	"github.com/stretchr/testify/assert"
 )
 
-func TestQueryBuilding(t *testing.T) {
-	tests := []struct {
-		name                   string
-		fetchMaterializedViews bool
-		expectedTablesQuery    string
-		expectedSqlDefsQuery   string
-	}{
-		{
-			name:                   "MaterializedViews Disabled",
-			fetchMaterializedViews: false,
-			expectedTablesQuery: `SELECT 
-    t.table_catalog as database,
-    t.table_schema as schema,
-    t.table_name as "table",
-    t.table_type AS "table_type",
-    '' as description,
-    t.table_type = 'BASE TABLE' as is_table,
-    t.table_type = 'VIEW'  as is_view
-FROM test_catalog.information_schema.tables t
-
-WHERE t.table_schema NOT IN ('information_schema')`,
-			expectedSqlDefsQuery: `with tables as (
-    select
-        table_catalog as database,
-        table_schema as schema,
-        table_name,
-        table_type
-    from test_catalog.information_schema.tables
-    where table_schema not in ('information_schema')
-)
-select
-    t.database,
-    t.schema,
-    t.table_name as "table",
-    (t.table_type = 'VIEW' AND v.view_definition IS NOT NULL) as is_view,
-    false as is_materialized_view,
-    coalesce(v.view_definition, '') as sql
-from tables t
-left join test_catalog.information_schema.views v
-    on t.schema = v.table_schema and t.table_name = v.table_name
-
-order by t.database, t.schema, t.table_name`,
-		},
-		{
-			name:                   "MaterializedViews Enabled",
-			fetchMaterializedViews: true,
-			expectedTablesQuery: `SELECT 
-    t.table_catalog as database,
-    t.table_schema as schema,
-    t.table_name as "table",
-    (CASE WHEN mv.name IS NOT NULL THEN 'MATERIALIZED VIEW' ELSE t.table_type END) AS "table_type",
-    '' as description,
-    (CASE WHEN mv.name IS NOT NULL THEN 'MATERIALIZED VIEW' ELSE t.table_type END) = 'BASE TABLE' as is_table,
-    (CASE WHEN mv.name IS NOT NULL THEN 'MATERIALIZED VIEW' ELSE t.table_type END) = 'VIEW'  as is_view
-FROM test_catalog.information_schema.tables t
-LEFT JOIN system.metadata.materialized_views mv ON t.table_catalog = mv.catalog_name AND t.table_schema = mv.schema_name AND t.table_name = mv.name
-WHERE t.table_schema NOT IN ('information_schema')`,
-			expectedSqlDefsQuery: `with tables as (
-    select
-        table_catalog as database,
-        table_schema as schema,
-        table_name,
-        table_type
-    from test_catalog.information_schema.tables
-    where table_schema not in ('information_schema')
-)
-select
-    t.database,
-    t.schema,
-    t.table_name as "table",
-    (t.table_type = 'VIEW' AND v.view_definition IS NOT NULL) as is_view,
-    (mv.name IS NOT NULL) as is_materialized_view,
-    coalesce(mv.definition, v.view_definition, '') as sql
-from tables t
-left join test_catalog.information_schema.views v
-    on t.schema = v.table_schema and t.table_name = v.table_name
-LEFT JOIN system.metadata.materialized_views mv ON t.database = mv.catalog_name AND t.schema = mv.schema_name AND t.table_name = mv.name
-order by t.database, t.schema, t.table_name`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create scrapper configuration
-			conf := &TrinoScrapperConf{
-				TrinoConf: &trino.TrinoConf{
-					Host: "test-host",
-					Port: 443,
-				},
-				Catalogs:               []string{"test_catalog"},
-				FetchMaterializedViews: tt.fetchMaterializedViews,
-			}
-
-			scrapper := &TrinoScrapper{
-				conf: conf,
-			}
-
-			// Test tables query building
-			actualTablesQuery := scrapper.buildTablesQuery("test_catalog")
-			assert.Equal(t, tt.expectedTablesQuery, actualTablesQuery, "Tables query should match expected")
-
-			// Test SQL definitions query building
-			actualSqlDefsQuery := scrapper.buildSqlDefinitionsQuery("test_catalog")
-			assert.Equal(t, tt.expectedSqlDefsQuery, actualSqlDefsQuery, "SQL definitions query should match expected")
-		})
-	}
-}
+// NOTE: Query building validation is now handled by TestQuerySnapshotGeneration
+// using snapshot testing which is more maintainable than hardcoded string comparisons
 
 // Helper method to build tables query for testing
 func (e *TrinoScrapper) buildTablesQuery(catalogName string) string {
 	query := queryTablesSQL
 	catalogQuery := strings.Replace(query, "{{catalog}}", catalogName, -1)
 
+	// Conditionally add table comments JOIN based on feature flag
+	if e.conf.FetchTableComments {
+		catalogQuery = strings.Replace(catalogQuery, "{{table_comments_join}}",
+			"LEFT JOIN system.metadata.table_comments c\n  ON t.table_catalog = c.catalog_name\n  AND t.table_schema = c.schema_name\n  AND t.table_name = c.table_name", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{table_comment_expression}}", "c.comment", -1)
+	} else {
+		catalogQuery = strings.Replace(catalogQuery, "{{table_comments_join}}", "", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{table_comment_expression}}", "''", -1)
+	}
+
 	// Conditionally add materialized views JOIN based on feature flag
 	if e.conf.FetchMaterializedViews {
 		catalogQuery = strings.Replace(catalogQuery, "{{materialized_views_join}}",
-			"LEFT JOIN system.metadata.materialized_views mv ON t.table_catalog = mv.catalog_name AND t.table_schema = mv.schema_name AND t.table_name = mv.name", -1)
+			"LEFT JOIN system.metadata.materialized_views mv\n  ON t.table_catalog = mv.catalog_name\n    AND t.table_schema = mv.schema_name\n    AND t.table_name = mv.name", -1)
 		catalogQuery = strings.Replace(catalogQuery, "{{table_type_expression}}",
-			"(CASE WHEN mv.name IS NOT NULL THEN 'MATERIALIZED VIEW' ELSE t.table_type END)", -1)
+			"(CASE WHEN mv.name IS NOT NULL THEN 'MATERIALIZED VIEW'\n    ELSE t.table_type END)", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{is_table_expression}}",
+			"mv.name is null AND t.table_type = 'BASE TABLE'", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{is_view_expression}}",
+			"mv.name is not null OR t.table_type = 'VIEW'", -1)
 	} else {
 		catalogQuery = strings.Replace(catalogQuery, "{{materialized_views_join}}", "", -1)
 		catalogQuery = strings.Replace(catalogQuery, "{{table_type_expression}}", "t.table_type", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{is_table_expression}}", "t.table_type = 'BASE TABLE'", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{is_view_expression}}", "t.table_type = 'VIEW'", -1)
 	}
 
 	return catalogQuery

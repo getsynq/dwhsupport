@@ -32,6 +32,7 @@ func (s *ValidateConfigSuite) newScrapperWithCatalogs(catalogs []string) *TrinoS
 		TrinoConf:              conf,
 		Catalogs:               catalogs,
 		FetchMaterializedViews: false,
+		FetchTableComments:     false,
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)

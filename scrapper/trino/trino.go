@@ -21,6 +21,7 @@ type TrinoScrapperConf struct {
 	UseShowCreateView      bool
 	UseShowCreateTable     bool
 	FetchMaterializedViews bool
+	FetchTableComments     bool
 }
 
 var _ scrapper.Scrapper = &TrinoScrapper{}
