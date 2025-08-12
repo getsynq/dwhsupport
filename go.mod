@@ -1,6 +1,6 @@
 module github.com/getsynq/dwhsupport
 
-go 1.23
+go 1.24.5
 
 require (
 	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.6-20250516112206-28f4ae7297f9.1

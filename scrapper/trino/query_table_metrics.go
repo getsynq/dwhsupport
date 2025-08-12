@@ -56,6 +56,12 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 				continue
 			}
 
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
+
 			tableMetricsRow := &scrapper.TableMetricsRow{
 				Instance: t.Instance,
 				Database: t.Database,
