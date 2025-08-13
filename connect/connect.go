@@ -129,6 +129,7 @@ func Trino(ctx context.Context, trino *agentdwhv1.TrinoConf) (scrapper.Scrapper,
 		UseShowCreateView:      !trino.GetNoShowCreateView(),
 		UseShowCreateTable:     !trino.GetNoShowCreateTable(),
 		FetchMaterializedViews: !trino.GetNoMaterializedViews(),
+		FetchTableComments:     trino.GetFetchTableComments(),
 	})
 }
 

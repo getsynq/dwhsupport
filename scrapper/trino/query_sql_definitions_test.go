@@ -38,6 +38,7 @@ func (s *QuerySqlDefinitionsSuite) TestQuerySqlDefinitions() {
 		UseShowCreateTable:     true,
 		UseShowCreateView:      true,
 		FetchMaterializedViews: false, // Disable for now until permissions are verified
+		FetchTableComments:     false,
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)

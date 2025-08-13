@@ -35,6 +35,7 @@ func (s *QueryTablesSuite) TestQueryTables() {
 		TrinoConf:              conf,
 		Catalogs:               []string{"iceberg_gcs"},
 		FetchMaterializedViews: false,
+		FetchTableComments:     false,
 	})
 	s.Require().NoError(err)
 	s.Require().NotNil(scr)

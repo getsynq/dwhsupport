@@ -6,10 +6,11 @@ SELECT
     c.ordinal_position as position,
     c.data_type as type,
     c.comment as comment,
-    '' as table_comment
+    {{table_comment_expression}} as table_comment
 FROM {{catalog}}.information_schema.tables t
 JOIN {{catalog}}.information_schema.columns c
   ON t.table_catalog = c.table_catalog
   AND t.table_schema = c.table_schema
   AND t.table_name = c.table_name
+{{table_comments_join}}
 WHERE t.table_schema NOT IN ('information_schema')
