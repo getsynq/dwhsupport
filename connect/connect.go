@@ -125,9 +125,10 @@ func Trino(ctx context.Context, trino *agentdwhv1.TrinoConf) (scrapper.Scrapper,
 			Password:  trino.GetPassword(),
 			Source:    "SYNQ",
 		},
-		Catalogs:           trino.GetCatalogs(),
-		UseShowCreateView:  !trino.GetNoShowCreateView(),
-		UseShowCreateTable: !trino.GetNoShowCreateTable(),
+		Catalogs:               trino.GetCatalogs(),
+		UseShowCreateView:      !trino.GetNoShowCreateView(),
+		UseShowCreateTable:     !trino.GetNoShowCreateTable(),
+		FetchMaterializedViews: !trino.GetNoMaterializedViews(),
 	})
 }
 

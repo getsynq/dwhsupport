@@ -17,9 +17,10 @@ import (
 
 type TrinoScrapperConf struct {
 	*dwhexectrino.TrinoConf
-	Catalogs           []string
-	UseShowCreateView  bool
-	UseShowCreateTable bool
+	Catalogs               []string
+	UseShowCreateView      bool
+	UseShowCreateTable     bool
+	FetchMaterializedViews bool
 }
 
 var _ scrapper.Scrapper = &TrinoScrapper{}
