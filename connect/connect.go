@@ -20,6 +20,7 @@ import (
 	scrappersnowflake "github.com/getsynq/dwhsupport/scrapper/snowflake"
 	scrappertrino "github.com/getsynq/dwhsupport/scrapper/trino"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 )
 
 func BigQuery(ctx context.Context, t *agentdwhv1.BigQueryConf) (*scrapperbigquery.BigQueryScrapper, error) {
@@ -111,7 +112,8 @@ func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowf
 			Databases:  t.GetDatabases(),
 			Role:       t.GetRole(),
 		},
-		NoGetDll: !t.GetUseGetDdl(),
+		NoGetDll:       !t.GetUseGetDdl(),
+		AccountUsageDb: lo.EmptyableToPtr(t.GetAccountUsageDb()),
 	})
 }
 

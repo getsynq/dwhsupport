@@ -8,6 +8,7 @@ import (
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"golang.org/x/sync/errgroup"
 )
@@ -24,8 +25,12 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 	if len(basic) > 0 && (e.conf.UseShowCreateTable || e.conf.UseShowCreateView) {
 		pool, ctx := errgroup.WithContext(ctx)
 		pool.SetLimit(8)
-		for _, sqlDef := range basic {
+		for i, sqlDef := range basic {
 			sqlDef := sqlDef // Create a local copy of the loop variable
+
+			if i > 0 && i%100 == 0 {
+				logging.GetLogger(ctx).Infof("fetched SQL definitions for %d/%d", i, len(basic))
+			}
 
 			select {
 			case <-ctx.Done():
@@ -37,7 +42,8 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 				pool.Go(func() error {
 					sql, err := e.showCreate(ctx, sqlDef.Database, sqlDef.Schema, sqlDef.Table, sqlDef.IsView, sqlDef.IsMaterializedView)
 					if err != nil {
-						return err
+						logging.GetLogger(ctx).WithField("table_fqn", sqlDef.TableFqn()).WithError(err).Warnf("error getting sql definition")
+						return nil
 					}
 					sqlDef.Sql = sql
 
@@ -72,10 +78,16 @@ func (e *TrinoScrapper) showCreate(
 	query := fmt.Sprintf("SHOW CREATE %s %s.%s.%s", entity, database, schema, table)
 	var res []string
 	err := e.executor.GetDb().SelectContext(ctx, &res, query)
+	if err != nil {
+		if strings.Contains(err.Error(), "is a materialized view, not a table") {
+			return e.showCreate(ctx, database, schema, table, isView, true)
+		}
+		return "", err
+	}
 	if len(res) > 0 {
 		return res[0], nil
 	}
-	return "", err
+	return "", nil
 }
 
 func (e *TrinoScrapper) getBasicSqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
