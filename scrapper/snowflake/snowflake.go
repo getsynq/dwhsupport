@@ -24,7 +24,8 @@ func init() {
 
 type SnowflakeScrapperConf struct {
 	dwhexecsnowflake.SnowflakeConf
-	NoGetDll bool
+	NoGetDll       bool
+	AccountUsageDb *string
 }
 
 // FIXME: I couldn't make it work with `foo IN (?)` binding, so I'm using this

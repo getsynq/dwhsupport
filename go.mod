@@ -3,7 +3,7 @@ module github.com/getsynq/dwhsupport
 go 1.24.5
 
 require (
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.7-20250812232237-f8e6caaffb23.1
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.8-20250828220347-0888adb87f6c.1
 	cloud.google.com/go v0.116.0
 	cloud.google.com/go/bigquery v1.65.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.30.1
@@ -31,7 +31,7 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.7-20240508200655-46a4cf4ba109.1 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.8-20240508200655-46a4cf4ba109.1 // indirect
 	cloud.google.com/go/auth v0.14.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
@@ -147,7 +147,7 @@ require (
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250106144421-5f5ef82da422 // indirect
-	google.golang.org/protobuf v1.36.7 // indirect
+	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/eapache/queue.v1 v1.1.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

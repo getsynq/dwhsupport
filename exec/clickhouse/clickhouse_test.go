@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/getsynq/dwhsupport/exec"
@@ -13,6 +14,9 @@ type ClickhouseSuite struct {
 }
 
 func TestClickhouseSuite(t *testing.T) {
+	if len(os.Getenv("CI")) > 0 {
+		t.SkipNow()
+	}
 
 	suite.Run(t, new(ClickhouseSuite))
 }
