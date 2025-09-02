@@ -104,16 +104,23 @@ func (r CatalogColumnRow) GetTableComment() string {
 	return *r.TableComment
 }
 
+type Annotation struct {
+	AnnotationName  string `json:"annotation_name"`
+	AnnotationValue string `json:"annotation_value"`
+}
+
 type TableRow struct {
-	Instance    string  `db:"instance"    json:"instance"    ch:"instance"    bigquery:"instance"`
-	Database    string  `db:"database"    json:"database"    ch:"_database"   bigquery:"database"`
-	Schema      string  `db:"schema"      json:"schema"      ch:"schema"      bigquery:"schema"`
-	Table       string  `db:"table"       json:"table"       ch:"table"       bigquery:"table"`
-	TableType   string  `db:"table_type"  json:"table_type"  ch:"table_type"  bigquery:"table_type"`
-	Description *string `db:"description" json:"description" ch:"description" bigquery:"description"`
-	Tags        []*Tag  `db:"tags"        json:"tags"`
-	IsView      bool    `db:"is_view"     json:"is_view"     ch:"is_view"`
-	IsTable     bool    `db:"is_table"    json:"is_table"    ch:"is_table"`
+	Instance    string                 `db:"instance"    json:"instance"    ch:"instance"    bigquery:"instance"`
+	Database    string                 `db:"database"    json:"database"    ch:"_database"   bigquery:"database"`
+	Schema      string                 `db:"schema"      json:"schema"      ch:"schema"      bigquery:"schema"`
+	Table       string                 `db:"table"       json:"table"       ch:"table"       bigquery:"table"`
+	TableType   string                 `db:"table_type"  json:"table_type"  ch:"table_type"  bigquery:"table_type"`
+	Description *string                `db:"description" json:"description" ch:"description" bigquery:"description"`
+	Tags        []*Tag                 `db:"tags"        json:"tags"`
+	IsView      bool                   `db:"is_view"     json:"is_view"     ch:"is_view"`
+	IsTable     bool                   `db:"is_table"    json:"is_table"    ch:"is_table"`
+	Options     map[string]interface{} `db:"options"     json:"options"`
+	Annotations []*Annotation          `db:"annotations"  json:"annotations"`
 }
 
 func (r TableRow) TableFqn() DwhFqn {
