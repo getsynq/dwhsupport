@@ -152,6 +152,18 @@ func (e *SnowflakeScrapper) Close() error {
 	return e.executor.Close()
 }
 
+type DbDesc struct {
+	Name    string `db:"name" json:"name"`
+	Origin  string `db:"origin" json:"origin"`
+	Owner   string `db:"owner" json:"owner"`
+	Comment string `db:"comment" json:"comment"`
+	Kind    string `db:"kind" json:"kind"`
+}
+
+func (d *DbDesc) String() string {
+	return fmt.Sprintf("Name: %s, Origin: %s, Owner: %s, Comment: %s, Kind: %s", d.Name, d.Origin, d.Owner, d.Comment, d.Kind)
+}
+
 func (e *SnowflakeScrapper) allAllowedDatabases(ctx context.Context) ([]*DbDesc, error) {
 	return e.existingDbs.Get()
 }

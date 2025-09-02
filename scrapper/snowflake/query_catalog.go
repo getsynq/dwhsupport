@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/samber/lo"
+	"github.com/sirupsen/logrus"
 )
 
 var catalogQuery = `
@@ -29,40 +30,6 @@ var catalogQuery = `
 			and c.table_schema = t.table_schema
 	where UPPER(c.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
 	`
-
-type DbDesc struct {
-	Name    string `db:"name" json:"name"`
-	Origin  string `db:"origin" json:"origin"`
-	Owner   string `db:"owner" json:"owner"`
-	Comment string `db:"comment" json:"comment"`
-	Kind    string `db:"kind" json:"kind"`
-}
-
-func (d *DbDesc) String() string {
-	return fmt.Sprintf("Name: %s, Origin: %s, Owner: %s, Comment: %s, Kind: %s", d.Name, d.Origin, d.Owner, d.Comment, d.Kind)
-}
-
-type ShareObject struct {
-	Kind     string    `db:"kind" json:"kind"`
-	Name     string    `db:"name" json:"name"`
-	SharedOn time.Time `db:"shared_on" json:"shared_on"`
-}
-
-type ShareDesc struct {
-	Name              string         `db:"name" json:"name"`
-	Kind              string         `db:"kind" json:"kind"`
-	OwnerAccount      string         `db:"owner_account" json:"owner_account"`
-	DatabaseName      string         `db:"database_name" json:"database_name"`
-	To                string         `db:"to" json:"to"`
-	Owner             string         `db:"owner" json:"owner"`
-	Comment           string         `db:"comment" json:"comment"`
-	ListingGlobalName string         `db:"listing_global_name" json:"listing_global_name"`
-	Objects           []*ShareObject `json:"objects"`
-}
-
-func (d *ShareDesc) String() string {
-	return fmt.Sprintf("Name: %s, Kind: %s, OwnerAccount: %s, DatabaseName: %s, To: %s, Owner: %s, Comment: %s, ListingGlobalName: %s", d.Name, d.Kind, d.OwnerAccount, d.DatabaseName, d.To, d.Owner, d.Comment, d.ListingGlobalName)
-}
 
 func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	var results []*scrapper.CatalogColumnRow
@@ -98,54 +65,86 @@ func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catal
 
 	}
 
-	rows, err := e.executor.GetDb().QueryxContext(ctx, "SHOW SHARES")
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	shares := []*ShareDesc{}
-	for rows.Next() {
-		share := &ShareDesc{}
-		tmp := map[string]interface{}{}
-		if err := rows.MapScan(tmp); err != nil {
-			return nil, err
-		}
-		share.Name = tmp["name"].(string)
-		share.Kind = tmp["kind"].(string)
-		share.OwnerAccount = tmp["owner_account"].(string)
-		share.DatabaseName = tmp["database_name"].(string)
-		share.To = tmp["to"].(string)
-		share.Owner = tmp["owner"].(string)
-		share.Comment = tmp["comment"].(string)
-		share.ListingGlobalName = tmp["listing_global_name"].(string)
-
-		if share.OwnerAccount == "SNOWFLAKE" && share.Name == "ACCOUNT_USAGE" {
-			continue
-		}
-		if strings.HasPrefix(share.OwnerAccount, "SFSALESSHARED.") {
-			continue
-		}
-		if strings.HasPrefix(share.OwnerAccount, "WEATHERSOURCE.") {
+	for _, database := range e.conf.Databases {
+		if !existingDbs[database] {
 			continue
 		}
 
-		if share.Kind == "INBOUND" {
-			if err := e.executor.GetDb().SelectContext(ctx, &share.Objects, fmt.Sprintf("DESCRIBE SHARE %s.%s", share.OwnerAccount, share.Name)); err != nil {
-				return nil, err
+		streamRows, err := e.showStreamsInDatabase(ctx, database)
+		if err == nil {
+			for _, streamRow := range streamRows {
+				sourceTableParts := strings.Split(streamRow.TableName, ".")
+				if len(sourceTableParts) != 3 {
+					continue
+				}
+
+				var sourceTableColumns []*scrapper.CatalogColumnRow
+				for _, result := range results {
+					if result.Database == sourceTableParts[0] && result.Schema == sourceTableParts[1] && result.Table == sourceTableParts[2] {
+						sourceTableColumns = append(sourceTableColumns, result)
+					}
+				}
+
+				if len(sourceTableColumns) > 0 {
+					for _, sourceTableColumn := range sourceTableColumns {
+						results = append(results, &scrapper.CatalogColumnRow{
+							Instance:       sourceTableColumn.Instance,
+							Database:       streamRow.DatabaseName,
+							Schema:         streamRow.SchemaName,
+							Table:          streamRow.TableName,
+							Column:         sourceTableColumn.Column,
+							Type:           sourceTableColumn.Type,
+							Position:       sourceTableColumn.Position,
+							Comment:        sourceTableColumn.Comment,
+							TableComment:   sourceTableColumn.TableComment,
+							ColumnTags:     sourceTableColumn.ColumnTags,
+							TableTags:      sourceTableColumn.TableTags,
+							IsStructColumn: sourceTableColumn.IsStructColumn,
+							IsArrayColumn:  sourceTableColumn.IsArrayColumn,
+							FieldSchemas:   sourceTableColumn.FieldSchemas,
+						})
+					}
+
+					results = append(results, &scrapper.CatalogColumnRow{
+						Instance: sourceTableColumns[0].Instance,
+						Database: streamRow.DatabaseName,
+						Schema:   streamRow.SchemaName,
+						Table:    streamRow.TableName,
+						Column:   "METADATA$ACTION",
+						Type:     "VARCHAR",
+						Position: int32(len(sourceTableColumns) + 1),
+						Comment:  lo.ToPtr("Specifies the action (INSERT or DELETE)."),
+					})
+					results = append(results, &scrapper.CatalogColumnRow{
+						Instance: sourceTableColumns[0].Instance,
+						Database: streamRow.DatabaseName,
+						Schema:   streamRow.SchemaName,
+						Table:    streamRow.TableName,
+						Column:   "METADATA$ISUPDATE",
+						Type:     "BOOLEAN",
+						Position: int32(len(sourceTableColumns) + 2),
+						Comment:  lo.ToPtr("Specifies whether the action recorded (INSERT or DELETE) is part of an UPDATE applied to the rows in the source table or view."),
+					})
+					results = append(results, &scrapper.CatalogColumnRow{
+						Instance: sourceTableColumns[0].Instance,
+						Database: streamRow.DatabaseName,
+						Schema:   streamRow.SchemaName,
+						Table:    streamRow.TableName,
+						Column:   "METADATA$ROW_ID",
+						Type:     "ROWID",
+						Position: int32(len(sourceTableColumns) + 3),
+						Comment:  lo.ToPtr("Specifies the unique and immutable ID for the row, which can be used to track changes to specific rows over time."),
+					})
+				} else {
+					logging.GetLogger(ctx).WithFields(logrus.Fields{
+						"stream_table_name": streamRow.TableName,
+					}).Warn("Failed to get columns of the STREAM")
+				}
 			}
-		}
-		if share.Kind == "OUTBOUND" {
-			if err := e.executor.GetDb().SelectContext(ctx, &share.Objects, fmt.Sprintf("DESCRIBE SHARE %s", share.Name)); err != nil {
-				return nil, err
-			}
+		} else {
+			logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 		}
 
-		shares = append(shares, share)
-	}
-	if len(shares) > 0 {
-		logging.GetLogger(ctx).WithField("shares", shares).Info("show shares")
-	} else {
-		logging.GetLogger(ctx).Info("no shares")
 	}
 
 	return results, nil
