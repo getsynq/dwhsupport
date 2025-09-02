@@ -29,7 +29,7 @@ var tablesQuery = `
 func (e *SnowflakeScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
 	var results []*scrapper.TableRow
 
-	allDatabases, err := e.allAllowedDatabases(ctx)
+	allDatabases, err := e.GetExistingDbs(ctx)
 	if err != nil {
 		return nil, err
 	}
