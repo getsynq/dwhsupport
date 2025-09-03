@@ -3,6 +3,8 @@ package scrapper
 import (
 	"fmt"
 	"time"
+
+	"github.com/samber/lo"
 )
 
 type DwhFqn struct {
@@ -130,6 +132,21 @@ func (r TableRow) TableFqn() DwhFqn {
 		SchemaName:   r.Schema,
 		ObjectName:   r.Table,
 	}
+}
+
+func GetTableRowOption[T any](tableRow *TableRow, optionName string) T {
+	def := lo.Empty[T]()
+	if tableRow != nil {
+		if tableRow.Options != nil && len(tableRow.Options) > 0 {
+			if v, found := tableRow.Options[optionName]; found {
+				if v, ok := v.(T); ok {
+					return v
+				}
+			}
+		}
+	}
+
+	return def
 }
 
 type SqlDefinitionRow struct {
