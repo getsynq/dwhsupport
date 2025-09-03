@@ -34,7 +34,7 @@ var catalogQuery = `
 func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	var results []*scrapper.CatalogColumnRow
 
-	allDatabases, err := e.allAllowedDatabases(ctx)
+	allDatabases, err := e.GetExistingDbs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +91,7 @@ func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catal
 							Instance:       sourceTableColumn.Instance,
 							Database:       streamRow.DatabaseName,
 							Schema:         streamRow.SchemaName,
-							Table:          streamRow.TableName,
+							Table:          streamRow.Name,
 							Column:         sourceTableColumn.Column,
 							Type:           sourceTableColumn.Type,
 							Position:       sourceTableColumn.Position,
@@ -109,7 +109,7 @@ func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catal
 						Instance: sourceTableColumns[0].Instance,
 						Database: streamRow.DatabaseName,
 						Schema:   streamRow.SchemaName,
-						Table:    streamRow.TableName,
+						Table:    streamRow.Name,
 						Column:   "METADATA$ACTION",
 						Type:     "VARCHAR",
 						Position: int32(len(sourceTableColumns) + 1),
@@ -119,7 +119,7 @@ func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catal
 						Instance: sourceTableColumns[0].Instance,
 						Database: streamRow.DatabaseName,
 						Schema:   streamRow.SchemaName,
-						Table:    streamRow.TableName,
+						Table:    streamRow.Name,
 						Column:   "METADATA$ISUPDATE",
 						Type:     "BOOLEAN",
 						Position: int32(len(sourceTableColumns) + 2),
@@ -129,7 +129,7 @@ func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catal
 						Instance: sourceTableColumns[0].Instance,
 						Database: streamRow.DatabaseName,
 						Schema:   streamRow.SchemaName,
-						Table:    streamRow.TableName,
+						Table:    streamRow.Name,
 						Column:   "METADATA$ROW_ID",
 						Type:     "ROWID",
 						Position: int32(len(sourceTableColumns) + 3),

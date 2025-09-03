@@ -8,7 +8,7 @@ import (
 )
 
 func (e *SnowflakeScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {
-	dbs, err := e.allAllowedDatabases(ctx)
+	dbs, err := e.GetExistingDbs(ctx)
 	if err != nil {
 		return nil, err
 	}

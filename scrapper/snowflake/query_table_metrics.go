@@ -25,7 +25,7 @@ var tableMetricsSql = `
 func (e *SnowflakeScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 	var results []*scrapper.TableMetricsRow
 
-	allDatabases, err := e.allAllowedDatabases(ctx)
+	allDatabases, err := e.GetExistingDbs(ctx)
 	if err != nil {
 		return nil, err
 	}

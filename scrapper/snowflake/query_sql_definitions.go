@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/xxjwxc/gowp/workpool"
 )
@@ -34,7 +35,7 @@ AND table_type !='MATERIALIZED VIEW'
 func (e *SnowflakeScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	var results []*scrapper.SqlDefinitionRow
 
-	allDatabases, err := e.allAllowedDatabases(ctx)
+	allDatabases, err := e.GetExistingDbs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -61,6 +62,24 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrappe
 			result.Instance = e.conf.Account
 			results = append(results, &result)
 		}
+		streamRows, err := e.showStreamsInDatabase(ctx, database)
+		if err == nil {
+			for _, streamRow := range streamRows {
+
+				results = append(results, &scrapper.SqlDefinitionRow{
+					Instance:           e.conf.Account,
+					Database:           streamRow.DatabaseName,
+					Schema:             streamRow.SchemaName,
+					Table:              streamRow.Name,
+					IsView:             false,
+					IsMaterializedView: false,
+					Sql:                fmt.Sprintf("SELECT * FROM %s", streamRow.TableName),
+				})
+
+			}
+		} else {
+			logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+		}
 	}
 
 	ignoreDbDdls := map[string]bool{}
@@ -80,11 +99,11 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrappe
 			}
 			pool.Do(func() error {
 				if sqlDef.IsView {
-					if sql, err := e.showCreateView(ctx, sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
+					if sql, err := e.getDdl(ctx, "VIEW", sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
 						sqlDef.Sql = sql
 					}
 				} else {
-					if sql, err := e.showCreateTable(ctx, sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
+					if sql, err := e.getDdl(ctx, "TABLE", sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
 						sqlDef.Sql = sql
 					}
 				}
@@ -101,18 +120,9 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrappe
 	return results, nil
 }
 
-func (e *SnowflakeScrapper) showCreateTable(ctx context.Context, database string, schema string, table string) (string, error) {
+func (e *SnowflakeScrapper) getDdl(ctx context.Context, kind string, database string, schema string, table string) (string, error) {
 	var res []string
-	var err = e.executor.GetDb().Select(&res, fmt.Sprintf("SELECT GET_DDL('TABLE', '%s.%s.%s', TRUE)", database, schema, table))
-	if len(res) > 0 {
-		return fixDdl(res[0]), nil
-	}
-	return "", err
-}
-
-func (e *SnowflakeScrapper) showCreateView(ctx context.Context, database string, schema string, table string) (string, error) {
-	var res []string
-	var err = e.executor.GetDb().Select(&res, fmt.Sprintf("SELECT GET_DDL('VIEW', '%s.%s.%s', TRUE)", database, schema, table))
+	var err = e.executor.GetDb().SelectContext(ctx, &res, fmt.Sprintf("SELECT GET_DDL('%s', '%s.%s.%s', TRUE)", kind, database, schema, table))
 	if len(res) > 0 {
 		return fixDdl(res[0]), nil
 	}

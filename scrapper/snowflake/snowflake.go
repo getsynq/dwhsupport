@@ -118,14 +118,14 @@ func (e *SnowflakeScrapper) SqlDialect() sqldialect.Dialect {
 	return sqldialect.NewSnowflakeDialect()
 }
 
-func (e *SnowflakeScrapper) GetExistingDbs() ([]*DbDesc, error) {
+func (e *SnowflakeScrapper) GetExistingDbs(ctx context.Context) ([]*DbDesc, error) {
 	return e.existingDbs.Get()
 }
 
 func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
 	var warnings []string
 
-	allDatabases, err := e.allAllowedDatabases(ctx)
+	allDatabases, err := e.GetExistingDbs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -162,10 +162,6 @@ type DbDesc struct {
 
 func (d *DbDesc) String() string {
 	return fmt.Sprintf("Name: %s, Origin: %s, Owner: %s, Comment: %s, Kind: %s", d.Name, d.Origin, d.Owner, d.Comment, d.Kind)
-}
-
-func (e *SnowflakeScrapper) allAllowedDatabases(ctx context.Context) ([]*DbDesc, error) {
-	return e.existingDbs.Get()
 }
 
 func (e *SnowflakeScrapper) Executor() *dwhexecsnowflake.SnowflakeExecutor {
