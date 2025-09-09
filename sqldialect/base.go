@@ -851,7 +851,38 @@ func Fn(name string, ops ...Expr) *FnExpr {
 }
 
 func (e *FnExpr) ToSql(dialect Dialect) (string, error) {
-	ops := []string{}
+	var ops []string
+	for _, op := range e.ops {
+		opSql, err := op.ToSql(dialect)
+		if err != nil {
+			return "", err
+		}
+
+		ops = append(ops, opSql)
+	}
+
+	return fmt.Sprintf("%s(%s)", e.name, strings.Join(ops, ", ")), nil
+}
+
+//
+// FnCondExpr
+//
+
+type FnCondExpr struct {
+	name string
+	ops  []Expr
+}
+
+var _ CondExpr = (*FnCondExpr)(nil)
+
+func (e *FnCondExpr) IsCondExpr() {}
+
+func FnCond(name string, ops ...Expr) *FnCondExpr {
+	return &FnCondExpr{name: name, ops: ops}
+}
+
+func (e *FnCondExpr) ToSql(dialect Dialect) (string, error) {
+	var ops []string
 	for _, op := range e.ops {
 		opSql, err := op.ToSql(dialect)
 		if err != nil {
@@ -880,7 +911,7 @@ func WrapSql(sql string, wrapped ...Expr) *WrapSqlExpr {
 }
 
 func (e *WrapSqlExpr) ToSql(dialect Dialect) (string, error) {
-	anySql := []interface{}{}
+	var anySql []interface{}
 	for _, expr := range e.wrapped {
 		exprSql, err := expr.ToSql(dialect)
 		if err != nil {
