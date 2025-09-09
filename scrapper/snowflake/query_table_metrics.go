@@ -19,7 +19,7 @@ var tableMetricsSql = `
 	from 
 		%s.information_schema.tables
 	where 
-		row_count is not null
+		row_count is not null and table_schema not in ('INFORMATION_SCHEMA')
 	`
 
 func (e *SnowflakeScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
