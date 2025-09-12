@@ -1,0 +1,6 @@
+
+[TestBaseSuite/TestTableFn/mysql - 1]
+select *
+from SNOWFLAKE.CORE.GET_LINEAGE('my_database.sch.table_a', 'TABLE', 'DOWNSTREAM', 2) 
+order by created_at desc limit 10
+---

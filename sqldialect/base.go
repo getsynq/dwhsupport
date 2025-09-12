@@ -485,6 +485,26 @@ func (t *TableFqnExpr) IsTableExpr() {}
 
 var _ TableExpr = (*CteAlieasExpr)(nil)
 
+type TableFnExpr struct {
+	name string
+	ops  []Expr
+}
+
+func (t *TableFnExpr) ToSql(dialect Dialect) (string, error) {
+	return dialect.ResolveTableFunction(t)
+}
+
+func (t *TableFnExpr) IsTableExpr() {}
+
+var _ TableExpr = (*TableFnExpr)(nil)
+
+func TableFn(name string, ops ...Expr) *TableFnExpr {
+	return &TableFnExpr{
+		name: name,
+		ops:  ops,
+	}
+}
+
 type CteAlieasExpr struct {
 	alias string
 }

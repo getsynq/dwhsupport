@@ -26,6 +26,13 @@ func (d *ClickHouseDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
 	return fmt.Sprintf("%s.%s", fqn.datasetId, fqn.tableId), nil
 }
 
+func (d *ClickHouseDialect) ResolveTableFunction(t *TableFnExpr) (string, error) {
+	if t == nil {
+		return "", errors.New("table_fn is nil")
+	}
+	return Fn(t.name, t.ops...).ToSql(d)
+}
+
 func (d *ClickHouseDialect) CountIf(expr Expr) Expr {
 	return Fn("toInt64", Fn("countIf", expr))
 }

@@ -3,6 +3,8 @@ package sqldialect
 import (
 	"fmt"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 //
@@ -18,7 +20,17 @@ func NewTrinoDialect() *TrinoDialect {
 }
 
 func (d *TrinoDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
+	if fqn == nil {
+		return "", errors.New("fqn is nil")
+	}
 	return fmt.Sprintf("%s.%s.%s", fqn.projectId, fqn.datasetId, fqn.tableId), nil
+}
+
+func (d *TrinoDialect) ResolveTableFunction(t *TableFnExpr) (string, error) {
+	if t == nil {
+		return "", errors.New("table_fn is nil")
+	}
+	return Fn("TABLE", Fn(t.name, t.ops...)).ToSql(d)
 }
 
 func (d *TrinoDialect) CountIf(expr Expr) Expr {
