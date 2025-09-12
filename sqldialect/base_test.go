@@ -33,6 +33,27 @@ func (s *BaseSuite) TestCte() {
 	}
 }
 
+func (s *BaseSuite) TestTableFn() {
+	for _, dialect := range DialectsToTest() {
+		s.Run(dialect.Name, func() {
+			sel := NewSelect().Cols(Star()).
+				From(TableFn(
+					"SNOWFLAKE.CORE.GET_LINEAGE",
+					String("my_database.sch.table_a"),
+					String("TABLE"),
+					String("DOWNSTREAM"),
+					Int64(2),
+				)).
+				OrderBy(Desc(Identifier("created_at"))).
+				WithLimit(Limit(Int64(10)))
+
+			sql, err := sel.ToSql(dialect.Dialect)
+			s.Require().NoError(err)
+			snaps.WithConfig(snaps.Dir("TableFn"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+		})
+	}
+}
+
 func (s *BaseSuite) TestPqQuoteIdentifierIfUpper() {
 	tests := []struct {
 		name     string

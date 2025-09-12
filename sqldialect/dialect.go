@@ -29,6 +29,7 @@ type Dialect interface {
 	ResolveTime(time.Time) (string, error)
 	ResolveTimeColumn(col *TimeColExpr) (string, error)
 	AggregationColumnReference(expression Expr, alias string) Expr
+	ResolveTableFunction(t *TableFnExpr) (string, error)
 }
 
 // utils

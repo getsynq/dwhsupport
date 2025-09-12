@@ -3,6 +3,8 @@ package sqldialect
 import (
 	"fmt"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 //
@@ -18,7 +20,17 @@ func NewDuckDBDialect() *DuckDBDialect {
 }
 
 func (d *DuckDBDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
+	if fqn == nil {
+		return "", errors.New("fqn is nil")
+	}
 	return fmt.Sprintf("%s.%s", fqn.datasetId, fqn.tableId), nil
+}
+
+func (d *DuckDBDialect) ResolveTableFunction(t *TableFnExpr) (string, error) {
+	if t == nil {
+		return "", errors.New("table_fn is nil")
+	}
+	return Fn(t.name, t.ops...).ToSql(d)
 }
 
 func (d *DuckDBDialect) CountIf(expr Expr) Expr {
