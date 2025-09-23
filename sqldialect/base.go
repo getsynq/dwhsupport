@@ -46,6 +46,11 @@ type TableExpr interface {
 	IsTableExpr()
 }
 
+type CteExpr interface {
+	Expr
+	IsCteExpr()
+}
+
 type LimitExpr struct {
 	rows *IntLitExpr
 }
@@ -153,22 +158,28 @@ func NewSelect() *Select {
 	return &Select{}
 }
 
-func (s *Select) Cte(alias *CteAlieasExpr, sql *Select) *Select {
-	s.ctes = append(s.ctes, &Cte{
-		Alias:     alias,
-		Select:    sql,
-		Recursive: []string{},
-	})
+func (s *Select) IsCteExpr() {}
+
+func (s *Select) Cte(alias *CteAliasExpr, sql CteExpr) *Select {
+	s.ctes = append(
+		s.ctes, &Cte{
+			Alias:     alias,
+			Select:    sql,
+			Recursive: []string{},
+		},
+	)
 
 	return s
 }
 
-func (s *Select) RecursiveCte(alias *CteAlieasExpr, sql *Select, recursive ...string) *Select {
-	s.ctes = append(s.ctes, &Cte{
-		Alias:     alias,
-		Select:    sql,
-		Recursive: recursive,
-	})
+func (s *Select) RecursiveCte(alias *CteAliasExpr, sql *Select, recursive ...string) *Select {
+	s.ctes = append(
+		s.ctes, &Cte{
+			Alias:     alias,
+			Select:    sql,
+			Recursive: recursive,
+		},
+	)
 
 	return s
 }
@@ -267,7 +278,8 @@ func (s *Select) ToSql(dialect Dialect) (string, error) {
 		cteSqls = append(cteSqls, expr)
 	}
 
-	selectSql := fmt.Sprintf(`%s
+	selectSql := fmt.Sprintf(
+		`%s
 %s
 from %s %s
 %s
@@ -318,8 +330,8 @@ func exprsToSql[T Expr](exprs []T, dialect Dialect) ([]string, error) {
 
 // CteExpr
 type Cte struct {
-	Alias     *CteAlieasExpr
-	Select    *Select
+	Alias     *CteAliasExpr
+	Select    CteExpr
 	Recursive []string
 }
 
@@ -400,6 +412,7 @@ func (s *SqlExpr) IsTimeExpr()    {}
 func (s *SqlExpr) IsCondExpr()    {}
 func (s *SqlExpr) IsTableExpr()   {}
 func (s *SqlExpr) IsJoinExpr()    {}
+func (s *SqlExpr) IsCteExpr()     {}
 
 //
 // Col
@@ -483,7 +496,7 @@ func (t *TableFqnExpr) ToSql(dialect Dialect) (string, error) {
 
 func (t *TableFqnExpr) IsTableExpr() {}
 
-var _ TableExpr = (*CteAlieasExpr)(nil)
+var _ TableExpr = (*CteAliasExpr)(nil)
 
 type TableFnExpr struct {
 	name string
@@ -505,19 +518,19 @@ func TableFn(name string, ops ...Expr) *TableFnExpr {
 	}
 }
 
-type CteAlieasExpr struct {
+type CteAliasExpr struct {
 	alias string
 }
 
-func CteFqn(alias string) *CteAlieasExpr {
-	return &CteAlieasExpr{alias: alias}
+func CteFqn(alias string) *CteAliasExpr {
+	return &CteAliasExpr{alias: alias}
 }
 
-func (t *CteAlieasExpr) ToSql(dialect Dialect) (string, error) {
+func (t *CteAliasExpr) ToSql(dialect Dialect) (string, error) {
 	return t.alias, nil
 }
 
-func (t *CteAlieasExpr) IsTableExpr() {}
+func (t *CteAliasExpr) IsTableExpr() {}
 
 //
 // JoinExpr
