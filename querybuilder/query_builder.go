@@ -39,6 +39,9 @@ type QueryBuilder struct {
 	cols    []Expr
 	limit   *LimitExpr
 	orderBy []*OrderExpr
+
+	cteNames   []string
+	cteQueries []CteExpr
 }
 
 func (b *QueryBuilder) WithSegment(segment TextExpr) *QueryBuilder {
@@ -134,6 +137,11 @@ func (b *QueryBuilder) WithGroupBy(groupBy ...Expr) *QueryBuilder {
 
 func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	q := NewSelect().From(b.table)
+
+	for i, cteQuery := range b.cteQueries {
+		cteName := b.cteNames[i]
+		q = q.Cte(CteFqn(cteName), cteQuery)
+	}
 
 	var timeExpr Expr
 
@@ -233,4 +241,10 @@ func (b *QueryBuilder) segmentColumnName(i int) string {
 		return "segment"
 	}
 	return fmt.Sprintf("segment_%d", i+1)
+}
+
+func (b *QueryBuilder) WithCte(name string, query CteExpr) *QueryBuilder {
+	b.cteNames = append(b.cteNames, name)
+	b.cteQueries = append(b.cteQueries, query)
+	return b
 }
