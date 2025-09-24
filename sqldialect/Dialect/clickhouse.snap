@@ -1,0 +1,8 @@
+
+[TestBaseSuite/TestDialect/clickhouse - 1]
+select
+  *, 
+  timestamp_add(now(), interval 1 DAY) as tomorrow
+from default.users 
+order by created_at desc limit 10
+---

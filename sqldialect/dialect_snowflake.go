@@ -79,6 +79,10 @@ func (d *SnowflakeDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("TIMESTAMPADD(%s, %s, %s)", timeUnitSql(unit), Int64(interval), expr)
 }
 
+func (d *SnowflakeDialect) CurrentTimestamp() Expr {
+	return Fn("CURRENT_TIMESTAMP")
+}
+
 func (d *SnowflakeDialect) Identifier(identifier string) string {
 	return fmt.Sprintf("%q", identifier)
 }

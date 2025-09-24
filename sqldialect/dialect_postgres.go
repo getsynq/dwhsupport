@@ -79,6 +79,10 @@ func (d *PostgresDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("%s + '%s %s'", expr, Int64(interval), timeUnitSql(unit))
 }
 
+func (d *PostgresDialect) CurrentTimestamp() Expr {
+	return Sql("CURRENT_TIMESTAMP")
+}
+
 func (d *PostgresDialect) Identifier(identifier string) string {
 	return identifier
 }

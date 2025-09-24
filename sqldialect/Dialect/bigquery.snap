@@ -1,0 +1,8 @@
+
+[TestBaseSuite/TestDialect/bigquery - 1]
+select
+  *, 
+  TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 1 DAY) as tomorrow
+from `proj.default.users` 
+order by created_at desc limit 10
+---

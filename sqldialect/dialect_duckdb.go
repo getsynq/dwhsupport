@@ -79,6 +79,10 @@ func (d *DuckDBDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("%s + '%s %s'", expr, Int64(interval), timeUnitSql(unit))
 }
 
+func (d *DuckDBDialect) CurrentTimestamp() Expr {
+	return Fn("now")
+}
+
 func (d *DuckDBDialect) Identifier(identifier string) string {
 	return identifier
 }

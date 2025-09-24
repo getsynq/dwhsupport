@@ -19,6 +19,7 @@ type Dialect interface {
 	CeilTime(Expr, time.Duration) Expr
 	SubTime(Expr, time.Duration) Expr
 	AddTime(Expr, time.Duration) Expr
+	CurrentTimestamp() Expr
 
 	Identifier(string) string
 	ToString(Expr) Expr

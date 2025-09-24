@@ -79,6 +79,10 @@ func (d *TrinoDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("DATE_ADD(%s, %s, %s)", timeUnitString(unit), Int64(interval), expr)
 }
 
+func (d *TrinoDialect) CurrentTimestamp() Expr {
+	return Sql("CURRENT_TIMESTAMP")
+}
+
 func (d *TrinoDialect) Identifier(identifier string) string {
 	return identifier
 }

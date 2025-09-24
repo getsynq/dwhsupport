@@ -1,0 +1,8 @@
+
+[TestBaseSuite/TestDialect/databricks - 1]
+select
+  *, 
+  TIMESTAMPADD(DAY, 1, CURRENT_TIMESTAMP()) as `tomorrow`
+from proj.default.users 
+order by `created_at` desc limit 10
+---

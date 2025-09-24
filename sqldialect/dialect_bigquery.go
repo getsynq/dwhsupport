@@ -79,6 +79,10 @@ func (d *BigQueryDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("TIMESTAMP_ADD(%s, INTERVAL %s %s)", expr, Int64(interval), timeUnitSql(unit))
 }
 
+func (d *BigQueryDialect) CurrentTimestamp() Expr {
+	return Fn("CURRENT_TIMESTAMP")
+}
+
 func (d *BigQueryDialect) Identifier(identifier string) string {
 	return identifier
 }
