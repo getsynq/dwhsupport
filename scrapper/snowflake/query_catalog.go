@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 )
 
 var catalogQuery = `
@@ -17,13 +20,13 @@ var catalogQuery = `
 		c.table_catalog as "database",
         c.table_schema as "schema",
         c.table_name as "table",
-        (t.table_type = 'MATERIALIZED VIEW' OR t.table_type = 'VIEW') as "is_view",
+        coalesce((t.table_type = 'MATERIALIZED VIEW' OR t.table_type = 'VIEW'), false) as "is_view",
         c.column_name as "column",
         c.data_type as "type",
         c.ordinal_position as "position"
 	from 
 		%[1]s.information_schema.columns as c
-	left join 
+	join 
 		%[1]s.information_schema.tables as t on 
 		    c.table_catalog = t.table_catalog
 			and c.table_name = t.table_name
@@ -31,10 +34,11 @@ var catalogQuery = `
 	where UPPER(c.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
 	`
 
-func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-	var results []*scrapper.CatalogColumnRow
+func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.CatalogColumnRow, error) {
+	var finalResults []*scrapper.CatalogColumnRow
+	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(ctx)
+	allDatabases, err := e.GetExistingDbs(origCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -43,109 +47,130 @@ func (e *SnowflakeScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catal
 	for _, database := range allDatabases {
 		existingDbs[database.Name] = true
 	}
+
+	g, ctx := errgroup.WithContext(origCtx)
+	g.SetLimit(4)
+
 	for _, database := range e.conf.Databases {
+		database := database
 		if !existingDbs[database] {
 			continue
 		}
-
-		rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(catalogQuery, database))
-		if err != nil {
-			return nil, err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			result := scrapper.CatalogColumnRow{}
-			if err := rows.StructScan(&result); err != nil {
-				return nil, err
-			}
-			result.Instance = e.conf.Account
-			results = append(results, &result)
-		}
-
-	}
-
-	for _, database := range e.conf.Databases {
-		if !existingDbs[database] {
-			continue
-		}
-
-		streamRows, err := e.showStreamsInDatabase(ctx, database)
-		if err == nil {
-			for _, streamRow := range streamRows {
-				sourceTableParts := strings.Split(streamRow.TableName, ".")
-				if len(sourceTableParts) != 3 {
-					continue
+		g.Go(
+			func() error {
+				rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(catalogQuery, database))
+				if err != nil {
+					return errors.Wrapf(err, "failed to query catalog for database %s", database)
+				}
+				defer rows.Close()
+				var tmpResults []*scrapper.CatalogColumnRow
+				for rows.Next() {
+					result := scrapper.CatalogColumnRow{}
+					if err := rows.StructScan(&result); err != nil {
+						return errors.Wrapf(err, "failed to scan catalog row for database %s", database)
+					}
+					result.Instance = e.conf.Account
+					tmpResults = append(tmpResults, &result)
 				}
 
-				var sourceTableColumns []*scrapper.CatalogColumnRow
-				for _, result := range results {
-					if result.Database == sourceTableParts[0] && result.Schema == sourceTableParts[1] && result.Table == sourceTableParts[2] {
-						sourceTableColumns = append(sourceTableColumns, result)
-					}
-				}
+				streamRows, err := e.showStreamsInDatabase(ctx, database)
+				if err == nil {
+					for _, streamRow := range streamRows {
+						sourceTableParts := strings.Split(streamRow.TableName, ".")
+						if len(sourceTableParts) != 3 {
+							continue
+						}
 
-				if len(sourceTableColumns) > 0 {
-					for _, sourceTableColumn := range sourceTableColumns {
-						results = append(results, &scrapper.CatalogColumnRow{
-							Instance:       sourceTableColumn.Instance,
-							Database:       streamRow.DatabaseName,
-							Schema:         streamRow.SchemaName,
-							Table:          streamRow.Name,
-							Column:         sourceTableColumn.Column,
-							Type:           sourceTableColumn.Type,
-							Position:       sourceTableColumn.Position,
-							Comment:        sourceTableColumn.Comment,
-							TableComment:   sourceTableColumn.TableComment,
-							ColumnTags:     sourceTableColumn.ColumnTags,
-							TableTags:      sourceTableColumn.TableTags,
-							IsStructColumn: sourceTableColumn.IsStructColumn,
-							IsArrayColumn:  sourceTableColumn.IsArrayColumn,
-							FieldSchemas:   sourceTableColumn.FieldSchemas,
-						})
-					}
+						var sourceTableColumns []*scrapper.CatalogColumnRow
+						for _, result := range tmpResults {
+							if result.Database == sourceTableParts[0] && result.Schema == sourceTableParts[1] && result.Table == sourceTableParts[2] {
+								sourceTableColumns = append(sourceTableColumns, result)
+							}
+						}
 
-					results = append(results, &scrapper.CatalogColumnRow{
-						Instance: sourceTableColumns[0].Instance,
-						Database: streamRow.DatabaseName,
-						Schema:   streamRow.SchemaName,
-						Table:    streamRow.Name,
-						Column:   "METADATA$ACTION",
-						Type:     "VARCHAR",
-						Position: int32(len(sourceTableColumns) + 1),
-						Comment:  lo.ToPtr("Specifies the action (INSERT or DELETE)."),
-					})
-					results = append(results, &scrapper.CatalogColumnRow{
-						Instance: sourceTableColumns[0].Instance,
-						Database: streamRow.DatabaseName,
-						Schema:   streamRow.SchemaName,
-						Table:    streamRow.Name,
-						Column:   "METADATA$ISUPDATE",
-						Type:     "BOOLEAN",
-						Position: int32(len(sourceTableColumns) + 2),
-						Comment:  lo.ToPtr("Specifies whether the action recorded (INSERT or DELETE) is part of an UPDATE applied to the rows in the source table or view."),
-					})
-					results = append(results, &scrapper.CatalogColumnRow{
-						Instance: sourceTableColumns[0].Instance,
-						Database: streamRow.DatabaseName,
-						Schema:   streamRow.SchemaName,
-						Table:    streamRow.Name,
-						Column:   "METADATA$ROW_ID",
-						Type:     "ROWID",
-						Position: int32(len(sourceTableColumns) + 3),
-						Comment:  lo.ToPtr("Specifies the unique and immutable ID for the row, which can be used to track changes to specific rows over time."),
-					})
+						if len(sourceTableColumns) > 0 {
+							for _, sourceTableColumn := range sourceTableColumns {
+								tmpResults = append(
+									tmpResults, &scrapper.CatalogColumnRow{
+										Instance:       sourceTableColumn.Instance,
+										Database:       streamRow.DatabaseName,
+										Schema:         streamRow.SchemaName,
+										Table:          streamRow.Name,
+										Column:         sourceTableColumn.Column,
+										Type:           sourceTableColumn.Type,
+										Position:       sourceTableColumn.Position,
+										Comment:        sourceTableColumn.Comment,
+										TableComment:   sourceTableColumn.TableComment,
+										ColumnTags:     sourceTableColumn.ColumnTags,
+										TableTags:      sourceTableColumn.TableTags,
+										IsStructColumn: sourceTableColumn.IsStructColumn,
+										IsArrayColumn:  sourceTableColumn.IsArrayColumn,
+										FieldSchemas:   sourceTableColumn.FieldSchemas,
+									},
+								)
+							}
+
+							tmpResults = append(
+								tmpResults, &scrapper.CatalogColumnRow{
+									Instance: sourceTableColumns[0].Instance,
+									Database: streamRow.DatabaseName,
+									Schema:   streamRow.SchemaName,
+									Table:    streamRow.Name,
+									Column:   "METADATA$ACTION",
+									Type:     "VARCHAR",
+									Position: int32(len(sourceTableColumns) + 1),
+									Comment:  lo.ToPtr("Specifies the action (INSERT or DELETE)."),
+								},
+							)
+							tmpResults = append(
+								tmpResults, &scrapper.CatalogColumnRow{
+									Instance: sourceTableColumns[0].Instance,
+									Database: streamRow.DatabaseName,
+									Schema:   streamRow.SchemaName,
+									Table:    streamRow.Name,
+									Column:   "METADATA$ISUPDATE",
+									Type:     "BOOLEAN",
+									Position: int32(len(sourceTableColumns) + 2),
+									Comment:  lo.ToPtr("Specifies whether the action recorded (INSERT or DELETE) is part of an UPDATE applied to the rows in the source table or view."),
+								},
+							)
+							tmpResults = append(
+								tmpResults, &scrapper.CatalogColumnRow{
+									Instance: sourceTableColumns[0].Instance,
+									Database: streamRow.DatabaseName,
+									Schema:   streamRow.SchemaName,
+									Table:    streamRow.Name,
+									Column:   "METADATA$ROW_ID",
+									Type:     "ROWID",
+									Position: int32(len(sourceTableColumns) + 3),
+									Comment:  lo.ToPtr("Specifies the unique and immutable ID for the row, which can be used to track changes to specific rows over time."),
+								},
+							)
+						} else {
+							logging.GetLogger(ctx).WithFields(
+								logrus.Fields{
+									"stream_table_name": streamRow.TableName,
+									"database":          database,
+								},
+							).Warn("Failed to get columns of the STREAM")
+						}
+					}
 				} else {
-					logging.GetLogger(ctx).WithFields(logrus.Fields{
-						"stream_table_name": streamRow.TableName,
-					}).Warn("Failed to get columns of the STREAM")
+					logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 				}
-			}
-		} else {
-			logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
-		}
 
+				m.Lock()
+				defer m.Unlock()
+				finalResults = append(finalResults, tmpResults...)
+				return nil
+			},
+		)
 	}
 
-	return results, nil
+	err = g.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	return finalResults, nil
 }

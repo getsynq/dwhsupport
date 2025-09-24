@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 )
 
 var tablesQuery = `
@@ -26,10 +29,11 @@ var tablesQuery = `
 		UPPER(t.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
 	`
 
-func (e *SnowflakeScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
-	var results []*scrapper.TableRow
+func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.TableRow, error) {
+	var finalResults []*scrapper.TableRow
+	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(ctx)
+	allDatabases, err := e.GetExistingDbs(origCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -38,66 +42,92 @@ func (e *SnowflakeScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableR
 	for _, database := range allDatabases {
 		existingDbs[database.Name] = true
 	}
+
+	g, ctx := errgroup.WithContext(origCtx)
+	g.SetLimit(8)
+
 	for _, database := range e.conf.Databases {
+		database := database
 		if !existingDbs[database] {
 			continue
 		}
-		rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(tablesQuery, database))
-		if err != nil {
-			return nil, err
-		}
+		g.Go(
+			func() error {
 
-		for rows.Next() {
-			result := scrapper.TableRow{}
-			if err := rows.StructScan(&result); err != nil {
-				return nil, err
-			}
-			result.Instance = e.conf.Account
-			if result.Description != nil && *result.Description == "" {
-				result.Description = nil
-			}
-			results = append(results, &result)
-		}
+				var tmpResults []*scrapper.TableRow
 
-		streamRows, err := e.showStreamsInDatabase(ctx, database)
-		if err == nil {
-			for _, streamRow := range streamRows {
+				rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(tablesQuery, database))
+				if err != nil {
+					return errors.Wrapf(err, "failed to query tables for database %s", database)
+				}
+				defer rows.Close()
 
-				results = append(results, &scrapper.TableRow{
-					Instance:  e.conf.Account,
-					Database:  streamRow.DatabaseName,
-					Schema:    streamRow.SchemaName,
-					Table:     streamRow.Name,
-					TableType: "STREAM",
-					IsView:    false,
-					IsTable:   true,
-					Options: map[string]interface{}{
-						"table_name": streamRow.TableName,
-					},
-					Description: lo.EmptyableToPtr(streamRow.Comment),
-					Annotations: []*scrapper.Annotation{
-						{
-							AnnotationName:  "stream_type",
-							AnnotationValue: streamRow.Type,
-						},
-						{
-							AnnotationName:  "stream_mode",
-							AnnotationValue: streamRow.Mode,
-						},
-						{
-							AnnotationName:  "stream_stale",
-							AnnotationValue: streamRow.Stale,
-						},
-					},
-				})
+				for rows.Next() {
+					result := scrapper.TableRow{}
+					if err := rows.StructScan(&result); err != nil {
+						return errors.Wrapf(err, "failed to scan table row for database %s", database)
+					}
+					result.Instance = e.conf.Account
+					if result.Description != nil && *result.Description == "" {
+						result.Description = nil
+					}
+					tmpResults = append(tmpResults, &result)
+				}
 
-			}
-		} else {
-			logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
-		}
+				streamRows, err := e.showStreamsInDatabase(ctx, database)
+				if err == nil {
+					for _, streamRow := range streamRows {
+
+						tmpResults = append(
+							tmpResults, &scrapper.TableRow{
+								Instance:  e.conf.Account,
+								Database:  streamRow.DatabaseName,
+								Schema:    streamRow.SchemaName,
+								Table:     streamRow.Name,
+								TableType: "STREAM",
+								IsView:    false,
+								IsTable:   true,
+								Options: map[string]interface{}{
+									"table_name": streamRow.TableName,
+								},
+								Description: lo.EmptyableToPtr(streamRow.Comment),
+								Annotations: []*scrapper.Annotation{
+									{
+										AnnotationName:  "stream_type",
+										AnnotationValue: streamRow.Type,
+									},
+									{
+										AnnotationName:  "stream_mode",
+										AnnotationValue: streamRow.Mode,
+									},
+									{
+										AnnotationName:  "stream_stale",
+										AnnotationValue: streamRow.Stale,
+									},
+								},
+							},
+						)
+
+					}
+				} else {
+					logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+				}
+
+				m.Lock()
+				defer m.Unlock()
+				finalResults = append(finalResults, tmpResults...)
+
+				return nil
+			},
+		)
 	}
 
-	return results, nil
+	err = g.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	return finalResults, nil
 }
 
 // ShowStreamsRow represents the structure of a row returned by SHOW STREAMS command
@@ -187,7 +217,9 @@ func (e *SnowflakeScrapper) showShares(ctx context.Context) ([]*ShareDesc, error
 		}
 
 		if share.Kind == "INBOUND" {
-			if err := e.executor.GetDb().SelectContext(ctx, &share.Objects, fmt.Sprintf("DESCRIBE SHARE %s.%s", share.OwnerAccount, share.Name)); err != nil {
+			if err := e.executor.GetDb().SelectContext(
+				ctx, &share.Objects, fmt.Sprintf("DESCRIBE SHARE %s.%s", share.OwnerAccount, share.Name),
+			); err != nil {
 				return nil, err
 			}
 		}
@@ -226,5 +258,8 @@ type ShareDesc struct {
 }
 
 func (d *ShareDesc) String() string {
-	return fmt.Sprintf("Name: %s, Kind: %s, OwnerAccount: %s, DatabaseName: %s, To: %s, Owner: %s, Comment: %s, ListingGlobalName: %s", d.Name, d.Kind, d.OwnerAccount, d.DatabaseName, d.To, d.Owner, d.Comment, d.ListingGlobalName)
+	return fmt.Sprintf(
+		"Name: %s, Kind: %s, OwnerAccount: %s, DatabaseName: %s, To: %s, Owner: %s, Comment: %s, ListingGlobalName: %s", d.Name, d.Kind,
+		d.OwnerAccount, d.DatabaseName, d.To, d.Owner, d.Comment, d.ListingGlobalName,
+	)
 }
