@@ -79,6 +79,10 @@ func (d *ClickHouseDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("timestamp_add(%s, interval %s %s)", expr, Int64(interval), timeUnitSql(unit))
 }
 
+func (d *ClickHouseDialect) CurrentTimestamp() Expr {
+	return Fn("now")
+}
+
 func (d *ClickHouseDialect) Identifier(identifier string) string {
 	return identifier
 }

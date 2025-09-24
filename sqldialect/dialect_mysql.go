@@ -90,6 +90,10 @@ func (d *MySQLDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("DATEADD(%s, %s, %s)", timeUnitSql(unit), Int64(interval), expr)
 }
 
+func (d *MySQLDialect) CurrentTimestamp() Expr {
+	return Fn("CURRENT_TIMESTAMP")
+}
+
 func (d *MySQLDialect) Identifier(identifier string) string {
 	return identifier
 }

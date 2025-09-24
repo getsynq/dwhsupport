@@ -79,6 +79,10 @@ func (d *RedshiftDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("DATEADD(%s, %s, %s)", timeUnitSql(unit), Int64(interval), expr)
 }
 
+func (d *RedshiftDialect) CurrentTimestamp() Expr {
+	return Sql("CURRENT_TIMESTAMP")
+}
+
 func (d *RedshiftDialect) Identifier(identifier string) string {
 	return identifier
 }

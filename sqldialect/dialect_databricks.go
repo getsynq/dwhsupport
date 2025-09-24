@@ -79,6 +79,10 @@ func (d *DatabricksDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	return WrapSql("TIMESTAMPADD(%s, %s, %s)", timeUnitSql(unit), Int64(interval), expr)
 }
 
+func (d *DatabricksDialect) CurrentTimestamp() Expr {
+	return Fn("CURRENT_TIMESTAMP")
+}
+
 func (d *DatabricksDialect) Identifier(identifier string) string {
 	return fmt.Sprintf("`%s`", identifier)
 }

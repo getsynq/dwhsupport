@@ -3,6 +3,7 @@ package sqldialect
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gkampitakis/go-snaps/snaps"
 	"github.com/stretchr/testify/suite"
@@ -50,6 +51,24 @@ func (s *BaseSuite) TestTableFn() {
 			sql, err := sel.ToSql(dialect.Dialect)
 			s.Require().NoError(err)
 			snaps.WithConfig(snaps.Dir("TableFn"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+		})
+	}
+}
+
+func (s *BaseSuite) TestDialect() {
+	for _, dialect := range DialectsToTest() {
+		s.Run(dialect.Name, func() {
+			sel := NewSelect().Cols(
+				Star(),
+				As(dialect.Dialect.AddTime(dialect.Dialect.CurrentTimestamp(), 24*time.Hour), Identifier("tomorrow")),
+			).
+				From(TableFqn("proj", "default", "users")).
+				OrderBy(Desc(Identifier("created_at"))).
+				WithLimit(Limit(Int64(10)))
+
+			sql, err := sel.ToSql(dialect.Dialect)
+			s.Require().NoError(err)
+			snaps.WithConfig(snaps.Dir("Dialect"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
 		})
 	}
 }
