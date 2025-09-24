@@ -3,9 +3,12 @@ package snowflake
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 var tableMetricsSql = `
@@ -22,10 +25,11 @@ var tableMetricsSql = `
 		row_count is not null and table_schema not in ('INFORMATION_SCHEMA')
 	`
 
-func (e *SnowflakeScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	var results []*scrapper.TableMetricsRow
+func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
+	var finalResults []*scrapper.TableMetricsRow
+	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(ctx)
+	allDatabases, err := e.GetExistingDbs(origCtx)
 	if err != nil {
 		return nil, err
 	}
@@ -34,30 +38,53 @@ func (e *SnowflakeScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFe
 	for _, database := range allDatabases {
 		existingDbs[database.Name] = true
 	}
+
+	g, ctx := errgroup.WithContext(origCtx)
+	g.SetLimit(8)
+
 	for _, database := range e.conf.Databases {
+		database := database
 		if !existingDbs[database] {
 			continue
 		}
 
-		rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(tableMetricsSql, database))
-		if err != nil {
-			return nil, err
-		}
+		g.Go(
+			func() error {
 
-		for rows.Next() {
-			result := scrapper.TableMetricsRow{}
+				var tmpResults []*scrapper.TableMetricsRow
 
-			if err := rows.StructScan(&result); err != nil {
-				return nil, err
-			}
-			result.Instance = e.conf.Account
-			if result.UpdatedAt != nil {
-				normalized := result.UpdatedAt.UTC()
-				result.UpdatedAt = &normalized
-			}
-			results = append(results, &result)
-		}
+				rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(tableMetricsSql, database))
+				if err != nil {
+					return errors.Wrapf(err, "failed to query metrics for database %s", database)
+				}
+				defer rows.Close()
+
+				for rows.Next() {
+					result := scrapper.TableMetricsRow{}
+
+					if err := rows.StructScan(&result); err != nil {
+						return errors.Wrapf(err, "failed to scan metrics row for database %s", database)
+					}
+					result.Instance = e.conf.Account
+					if result.UpdatedAt != nil {
+						normalized := result.UpdatedAt.UTC()
+						result.UpdatedAt = &normalized
+					}
+					tmpResults = append(tmpResults, &result)
+				}
+
+				m.Lock()
+				defer m.Unlock()
+				finalResults = append(finalResults, tmpResults...)
+				return nil
+			},
+		)
 	}
 
-	return results, nil
+	err = g.Wait()
+	if err != nil {
+		return nil, err
+	}
+
+	return finalResults, nil
 }
