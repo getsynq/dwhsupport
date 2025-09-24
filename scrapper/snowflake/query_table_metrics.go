@@ -39,7 +39,7 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 		existingDbs[database.Name] = true
 	}
 
-	g, ctx := errgroup.WithContext(origCtx)
+	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 
 	for _, database := range e.conf.Databases {
@@ -48,12 +48,18 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 			continue
 		}
 
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
+
 		g.Go(
 			func() error {
 
 				var tmpResults []*scrapper.TableMetricsRow
 
-				rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(tableMetricsSql, database))
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(tableMetricsSql, database))
 				if err != nil {
 					return errors.Wrapf(err, "failed to query metrics for database %s", database)
 				}

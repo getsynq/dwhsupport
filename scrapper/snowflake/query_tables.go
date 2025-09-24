@@ -43,7 +43,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.Ta
 		existingDbs[database.Name] = true
 	}
 
-	g, ctx := errgroup.WithContext(origCtx)
+	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 
 	for _, database := range e.conf.Databases {
@@ -51,12 +51,19 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.Ta
 		if !existingDbs[database] {
 			continue
 		}
+
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
+
 		g.Go(
 			func() error {
 
 				var tmpResults []*scrapper.TableRow
 
-				rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(tablesQuery, database))
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(tablesQuery, database))
 				if err != nil {
 					return errors.Wrapf(err, "failed to query tables for database %s", database)
 				}
@@ -74,7 +81,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.Ta
 					tmpResults = append(tmpResults, &result)
 				}
 
-				streamRows, err := e.showStreamsInDatabase(ctx, database)
+				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
 				if err == nil {
 					for _, streamRow := range streamRows {
 
@@ -110,7 +117,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.Ta
 
 					}
 				} else {
-					logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+					logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 				}
 
 				m.Lock()

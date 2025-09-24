@@ -10,8 +10,8 @@ import (
 
 func TestTableCommentsFeatureFlag(t *testing.T) {
 	tests := []struct {
-		name                  string
-		fetchTableComments    bool
+		name                      string
+		fetchTableComments        bool
 		shouldIncludeCommentsJoin bool
 		shouldUsCommentsLogic     bool
 	}{
@@ -47,9 +47,9 @@ func TestTableCommentsFeatureFlag(t *testing.T) {
 
 			// Test tables query
 			tablesQuery := scrapper.buildTablesQuery("test_catalog")
-			
+
 			if tt.shouldIncludeCommentsJoin {
-				assert.Contains(t, tablesQuery, "LEFT JOIN system.metadata.table_comments", 
+				assert.Contains(t, tablesQuery, "LEFT JOIN system.metadata.table_comments",
 					"Tables query should include table comments join when feature is enabled")
 				assert.Contains(t, tablesQuery, "c.comment as description",
 					"Tables query should use c.comment for description when feature is enabled")
@@ -62,9 +62,9 @@ func TestTableCommentsFeatureFlag(t *testing.T) {
 
 			// Test catalog query
 			catalogQuery := scrapper.buildCatalogQuery("test_catalog")
-			
+
 			if tt.shouldIncludeCommentsJoin {
-				assert.Contains(t, catalogQuery, "LEFT JOIN system.metadata.table_comments", 
+				assert.Contains(t, catalogQuery, "LEFT JOIN system.metadata.table_comments",
 					"Catalog query should include table comments join when feature is enabled")
 				assert.Contains(t, catalogQuery, "coalesce(tc.comment, '')",
 					"Catalog query should use coalesce for table comments when feature is enabled")
@@ -98,9 +98,9 @@ func TestTableCommentsBackwardCompatibility(t *testing.T) {
 	catalogQuery := scrapper.buildCatalogQuery("test_catalog")
 
 	// Verify that with backward compatibility, table comments are fetched by default
-	assert.Contains(t, tablesQuery, "LEFT JOIN system.metadata.table_comments", 
+	assert.Contains(t, tablesQuery, "LEFT JOIN system.metadata.table_comments",
 		"With backward compatibility, tables query should include table comments join")
-	assert.Contains(t, catalogQuery, "LEFT JOIN system.metadata.table_comments", 
+	assert.Contains(t, catalogQuery, "LEFT JOIN system.metadata.table_comments",
 		"With backward compatibility, catalog query should include table comments join")
 }
 
