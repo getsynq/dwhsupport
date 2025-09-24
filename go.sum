@@ -1,7 +1,5 @@
 buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.8-20240508200655-46a4cf4ba109.1 h1:7JbSS7TE2PJR4d/qRtynipwLl/CBFoTB69pX7xlhcJM=
 buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.8-20240508200655-46a4cf4ba109.1/go.mod h1:8EQ5GzyGJQ5tEIwMSxCl8RKJYsjCpAwkdcENoioXT6g=
-buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.8-20250827222747-86c2330d3cc2.1 h1:AViKw6N4a5ZdSFnlLD+yRM4h8l4bL4trl8E4916va5k=
-buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.8-20250827222747-86c2330d3cc2.1/go.mod h1:eIpCixT9OMBuEWJSnctrMKFH1BW2dHjH0Vaj+yC4t2E=
 buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.8-20250828220347-0888adb87f6c.1 h1:ncd0L42G7unJu98bAIp5OxSR2s/Tmtm+a7IjirA1Wiw=
 buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.8-20250828220347-0888adb87f6c.1/go.mod h1:eIpCixT9OMBuEWJSnctrMKFH1BW2dHjH0Vaj+yC4t2E=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
@@ -54,6 +52,8 @@ github.com/ClickHouse/ch-go v0.63.1 h1:s2JyZvWLTCSAGdtjMBBmAgQQHMco6pawLJMOXi0FO
 github.com/ClickHouse/ch-go v0.63.1/go.mod h1:I1kJJCL3WJcBMGe1m+HVK0+nREaG+JOYYBWjrDrF3R0=
 github.com/ClickHouse/clickhouse-go/v2 v2.30.1 h1:Dy0n0l+cMbPXs8hFkeeWGaPKrB+MDByUNQBSmRO3W6k=
 github.com/ClickHouse/clickhouse-go/v2 v2.30.1/go.mod h1:szk8BMoQV/NgHXZ20ZbwDyvPWmpfhRKjFkc6wzASGxM=
+github.com/DataDog/go-sqllexer v0.1.8 h1:ku9DpghFHeyyviR28W/3R4cCJwzpsuC08YIoltnx5ds=
+github.com/DataDog/go-sqllexer v0.1.8/go.mod h1:GGpo1h9/BVSN+6NJKaEcJ9Jn44Hqc63Rakeb+24Mjgo=
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c h1:RGWPOewvKIROun94nF7v2cua9qP+thov/7M50KEoeSU=
 github.com/JohnCGriffin/overflow v0.0.0-20211019200055-46fa312c352c/go.mod h1:X0CRv0ky0k6m906ixxpzmDRLvX58TFUKS2eePweuyxk=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=

@@ -3,12 +3,17 @@ package snowflake
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/DataDog/go-sqllexer"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqlparser"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
+	"github.com/sirupsen/logrus"
 	"github.com/xxjwxc/gowp/workpool"
 	"golang.org/x/sync/errgroup"
 )
@@ -117,24 +122,59 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	}
 
 	if len(finalResults) > 0 {
-		pool := workpool.New(8)
-		for _, sqlDef := range finalResults {
-			sqlDef := sqlDef
-			if sqlDef.Sql != "" {
+		perSchema := lo.GroupBy(
+			finalResults, func(r *scrapper.SqlDefinitionRow) DatabaseAndSchema {
+				return DatabaseAndSchema{DatabaseName: r.Database, SchemaName: r.Schema}
+			},
+		)
+
+		pool := workpool.New(4)
+
+		for databaseAndSchema, rows := range perSchema {
+			databaseAndSchema := databaseAndSchema
+			rowsPerName := lo.GroupBy(
+				rows, func(r *scrapper.SqlDefinitionRow) string {
+					return strings.ToUpper(r.Table)
+				},
+			)
+
+			if ignoreDbDdls[databaseAndSchema.DatabaseName] {
 				continue
 			}
-			if ignoreDbDdls[sqlDef.Database] {
-				continue
-			}
+
 			pool.Do(
 				func() error {
-					if sqlDef.IsView {
-						if sql, err := e.getDdl(origCtx, "VIEW", sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
-							sqlDef.Sql = sql
-						}
+					ddls, err := e.getDdl(origCtx, "SCHEMA", databaseAndSchema.DatabaseName, databaseAndSchema.SchemaName)
+					if err != nil {
+						logging.GetLogger(ctx).WithError(err).WithFields(
+							logrus.Fields{
+								"database": databaseAndSchema.DatabaseName,
+								"schema":   databaseAndSchema.SchemaName,
+							},
+						).Error("failed to get ddl for schema")
+						return nil
+					}
+
+					perFqn, err := ParseCreateStatementsPerObject(ctx, ddls)
+					if err != nil {
+						logging.GetLogger(ctx).WithError(err).WithFields(
+							logrus.Fields{
+								"database": databaseAndSchema.DatabaseName,
+								"schema":   databaseAndSchema.SchemaName,
+							},
+						).Error("failed to parse ddl for schema")
 					} else {
-						if sql, err := e.getDdl(origCtx, "TABLE", sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
-							sqlDef.Sql = sql
+						for fqn, ddl := range perFqn {
+							objectName := GetObjectNameFromFqn(fqn)
+
+							if sqlDefRow, found := rowsPerName[strings.ToUpper(objectName)]; found {
+								for _, sqlDefRow := range sqlDefRow {
+									if sqlDefRow.Sql != "" {
+										continue
+									}
+									sqlDefRow.Sql = ddl
+								}
+							}
 						}
 					}
 					return nil
@@ -146,14 +186,92 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		if err != nil {
 			return nil, err
 		}
+
 	}
 
 	return finalResults, nil
 }
 
-func (e *SnowflakeScrapper) getDdl(ctx context.Context, kind string, database string, schema string, table string) (string, error) {
+func GetObjectNameFromFqn(fqn string) string {
+	parts := strings.Split(fqn, ".")
+	objectName := parts[len(parts)-1]
+	return strings.ToUpper(UnQuote(objectName))
+}
+
+func ParseCreateStatementsPerObject(ctx context.Context, ddls string) (map[string]string, error) {
+
+	logger := logging.GetLogger(ctx)
+
+	lexer := sqllexer.New(ddls, sqllexer.WithDBMS(sqllexer.DBMSSnowflake))
+	tokens := sqlparser.ScanAllTokens(lexer)
+	statements := sqlparser.SplitTokensIntoStatements(tokens)
+
+	res := map[string]string{}
+	for _, statement := range statements {
+		plainSql := sqlparser.PrintTokens(statement)
+		if plainSql == "" || plainSql == ";" {
+			continue
+		}
+
+		if created := parseCreatedFromStatement(logger, statement); created != nil {
+			res[*created] = plainSql
+		}
+
+	}
+	return res, nil
+}
+
+func parseCreatedFromStatement(logger logrus.FieldLogger, tokens []*sqllexer.Token) *string {
+	parser := sqlparser.BaseParser{
+		Tokens: tokens,
+	}
+	if !parser.ParseToken(sqllexer.Token{Type: sqllexer.COMMAND, Value: "CREATE"}) {
+		return nil
+	}
+
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.KEYWORD, Value: "OR"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.KEYWORD, Value: "REPLACE"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "TRANSIENT"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "TEMPORARY"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "DYNAMIC"})
+
+	ind, nextToken := parser.PeekToken()
+	switch strings.ToUpper(nextToken.Value) {
+	case "SCHEMA", "PROCEDURE", "TASK", "STAGE", "FUNCTION", "TAG":
+		return nil
+	case "TABLE", "VIEW", "STREAM":
+		parser.Index = ind
+		id, err := parser.ParseIdentifier()
+		if err != nil {
+			logger.WithError(err).Warnf("failed to parse identifier")
+			return nil
+		}
+		return lo.ToPtr(id)
+
+	default:
+		logger.Warnf("expected supported object kind but got %s", sqlparser.DumpToken(nextToken))
+		return nil
+	}
+}
+
+type DatabaseAndSchema struct {
+	DatabaseName string
+	SchemaName   string
+}
+
+func UnQuote(key string) string {
+	if str, err := strconv.Unquote(key); err == nil {
+		key = str
+	}
+	if strings.HasPrefix(key, "'") {
+		key = strings.Trim(key, "'")
+	}
+	return key
+}
+
+func (e *SnowflakeScrapper) getDdl(ctx context.Context, kind string, parts ...string) (string, error) {
 	var res []string
-	var err = e.executor.GetDb().SelectContext(ctx, &res, fmt.Sprintf("SELECT GET_DDL('%s', '%s.%s.%s', TRUE)", kind, database, schema, table))
+	var err = e.executor.GetDb().SelectContext(ctx, &res, fmt.Sprintf("SELECT GET_DDL('%s', '%s', TRUE)", kind, strings.Join(parts, ".")))
 	if len(res) > 0 {
 		return fixDdl(res[0]), nil
 	}
