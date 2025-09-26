@@ -27,7 +27,7 @@ func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogCo
 			continue
 		}
 		query := strings.Replace(queryCatalogSQL, "{{catalog}}", catalog.CatalogName, -1)
-		
+
 		// Conditionally add table comments JOIN based on feature flag
 		if e.conf.FetchTableComments {
 			query = strings.Replace(query, "{{table_comments_join}}",

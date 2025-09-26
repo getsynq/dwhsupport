@@ -14,7 +14,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
-	"github.com/xxjwxc/gowp/workpool"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -54,7 +53,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		existingDbs[database.Name] = true
 	}
 
-	g, ctx := errgroup.WithContext(origCtx)
+	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 	for _, database := range e.conf.Databases {
 		database := database
@@ -62,12 +61,18 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 			continue
 		}
 
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
+
 		g.Go(
 			func() error {
 
 				var tmpResults []*scrapper.SqlDefinitionRow
 
-				rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(sqlDefinitionsQuery, database))
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(sqlDefinitionsQuery, database))
 				if err != nil {
 					return errors.Wrapf(err, "failed to query sql definitions for database %s", database)
 				}
@@ -82,7 +87,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 					tmpResults = append(tmpResults, &result)
 				}
 
-				streamRows, err := e.showStreamsInDatabase(ctx, database)
+				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
 				if err == nil {
 					for _, streamRow := range streamRows {
 
@@ -116,9 +121,14 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		return nil, err
 	}
 
+	if e.conf.NoGetDll {
+		logging.GetLogger(origCtx).Info("skipping get ddl in sql definitions")
+		return finalResults, nil
+	}
+
 	ignoreDbDdls := map[string]bool{}
 	for _, db := range allDatabases {
-		ignoreDbDdls[db.Name] = e.conf.NoGetDll || db.Kind == "IMPORTED DATABASE"
+		ignoreDbDdls[db.Name] = db.Kind == "IMPORTED DATABASE"
 	}
 
 	if len(finalResults) > 0 {
@@ -128,13 +138,13 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 			},
 		)
 
-		pool := workpool.New(4)
+		g, groupCtx = errgroup.WithContext(origCtx)
 
 		for databaseAndSchema, rows := range perSchema {
 			databaseAndSchema := databaseAndSchema
-			rowsPerName := lo.GroupBy(
-				rows, func(r *scrapper.SqlDefinitionRow) string {
-					return strings.ToUpper(r.Table)
+			rowsPerName := lo.Associate(
+				rows, func(r *scrapper.SqlDefinitionRow) (string, *scrapper.SqlDefinitionRow) {
+					return strings.ToUpper(r.Table), r
 				},
 			)
 
@@ -142,11 +152,17 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 				continue
 			}
 
-			pool.Do(
+			select {
+			case <-groupCtx.Done():
+				return nil, groupCtx.Err()
+			default:
+			}
+
+			g.Go(
 				func() error {
-					ddls, err := e.getDdl(origCtx, "SCHEMA", databaseAndSchema.DatabaseName, databaseAndSchema.SchemaName)
+					ddls, err := e.getDdl(groupCtx, "SCHEMA", databaseAndSchema.DatabaseName, databaseAndSchema.SchemaName)
 					if err != nil {
-						logging.GetLogger(ctx).WithError(err).WithFields(
+						logging.GetLogger(groupCtx).WithError(err).WithFields(
 							logrus.Fields{
 								"database": databaseAndSchema.DatabaseName,
 								"schema":   databaseAndSchema.SchemaName,
@@ -155,9 +171,9 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 						return nil
 					}
 
-					perFqn, err := ParseCreateStatementsPerObject(ctx, ddls)
+					perFqn, err := ParseCreateStatementsPerObject(groupCtx, ddls)
 					if err != nil {
-						logging.GetLogger(ctx).WithError(err).WithFields(
+						logging.GetLogger(groupCtx).WithError(err).WithFields(
 							logrus.Fields{
 								"database": databaseAndSchema.DatabaseName,
 								"schema":   databaseAndSchema.SchemaName,
@@ -168,12 +184,10 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 							objectName := GetObjectNameFromFqn(fqn)
 
 							if sqlDefRow, found := rowsPerName[strings.ToUpper(objectName)]; found {
-								for _, sqlDefRow := range sqlDefRow {
-									if sqlDefRow.Sql != "" {
-										continue
-									}
-									sqlDefRow.Sql = ddl
+								if sqlDefRow.Sql != "" {
+									continue
 								}
+								sqlDefRow.Sql = ddl
 							}
 						}
 					}
@@ -182,7 +196,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 			)
 		}
 
-		err = pool.Wait()
+		err = g.Wait()
 		if err != nil {
 			return nil, err
 		}
@@ -234,10 +248,13 @@ func parseCreatedFromStatement(logger logrus.FieldLogger, tokens []*sqllexer.Tok
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "TRANSIENT"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "TEMPORARY"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "DYNAMIC"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "HYBRID"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "MATERIALIZED"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.KEYWORD, Value: "RECURSIVE"})
 
 	ind, nextToken := parser.PeekToken()
 	switch strings.ToUpper(nextToken.Value) {
-	case "SCHEMA", "PROCEDURE", "TASK", "STAGE", "FUNCTION", "TAG":
+	case "SCHEMA", "PROCEDURE", "TASK", "STAGE", "FUNCTION", "TAG", "STREAMLIT":
 		return nil
 	case "TABLE", "VIEW", "STREAM":
 		parser.Index = ind

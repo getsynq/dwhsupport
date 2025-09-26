@@ -48,7 +48,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 		existingDbs[database.Name] = true
 	}
 
-	g, ctx := errgroup.WithContext(origCtx)
+	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(4)
 
 	for _, database := range e.conf.Databases {
@@ -56,9 +56,15 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 		if !existingDbs[database] {
 			continue
 		}
+
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
 		g.Go(
 			func() error {
-				rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf(catalogQuery, database))
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(catalogQuery, database))
 				if err != nil {
 					return errors.Wrapf(err, "failed to query catalog for database %s", database)
 				}
@@ -73,7 +79,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 					tmpResults = append(tmpResults, &result)
 				}
 
-				streamRows, err := e.showStreamsInDatabase(ctx, database)
+				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
 				if err == nil {
 					for _, streamRow := range streamRows {
 						sourceTableParts := strings.Split(streamRow.TableName, ".")
@@ -147,7 +153,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 								},
 							)
 						} else {
-							logging.GetLogger(ctx).WithFields(
+							logging.GetLogger(groupCtx).WithFields(
 								logrus.Fields{
 									"stream_table_name": streamRow.TableName,
 									"database":          database,
@@ -156,7 +162,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 						}
 					}
 				} else {
-					logging.GetLogger(ctx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+					logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 				}
 
 				m.Lock()
