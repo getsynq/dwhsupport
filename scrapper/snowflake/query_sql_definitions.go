@@ -250,7 +250,7 @@ func parseCreatedFromStatement(logger logrus.FieldLogger, tokens []*sqllexer.Tok
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "DYNAMIC"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "HYBRID"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "MATERIALIZED"})
-	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "RECURSIVE"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.KEYWORD, Value: "RECURSIVE"})
 
 	ind, nextToken := parser.PeekToken()
 	switch strings.ToUpper(nextToken.Value) {
