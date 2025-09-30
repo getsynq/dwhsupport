@@ -16,6 +16,7 @@ type MetricVal[T MetricType] struct {
 	MetricId             MetricId
 	At                   time.Time
 	IngestedAt           time.Time
+	SnapshottedAt        time.Time
 	Value                T
 	MetricsVersion       int32
 	IsAnomaly            bool
