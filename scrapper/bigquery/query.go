@@ -38,7 +38,13 @@ func QueryMany[T any](ctx context.Context, conn Executor, sql string, opts ...dw
 	return results, nil
 }
 
-func QueryAndProcessMany[T any](ctx context.Context, conn Executor, sql string, handler func(ctx context.Context, rows []*T) error, opts ...dwhexec.QueryManyOpt[T]) error {
+func QueryAndProcessMany[T any](
+	ctx context.Context,
+	conn Executor,
+	sql string,
+	handler func(ctx context.Context, rows []*T) error,
+	opts ...dwhexec.QueryManyOpt[T],
+) error {
 	q := dwhexec.NewQueryMany[T](sql)
 	for _, opt := range opts {
 		opt(q)

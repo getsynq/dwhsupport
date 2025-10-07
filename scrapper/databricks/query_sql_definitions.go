@@ -44,7 +44,10 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 				continue
 			}
 
-			tables, err := e.client.Tables.ListAll(ctx, servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitColumns: true, OmitProperties: true})
+			tables, err := e.client.Tables.ListAll(
+				ctx,
+				servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitColumns: true, OmitProperties: true},
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -100,7 +103,13 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 	return sqlDefs, nil
 }
 
-func (e *DatabricksScrapper) showCreateTable(ctx context.Context, sqlClient *dwhexecdatabricks.DatabricksExecutor, catalog string, schema string, table string) (string, error) {
+func (e *DatabricksScrapper) showCreateTable(
+	ctx context.Context,
+	sqlClient *dwhexecdatabricks.DatabricksExecutor,
+	catalog string,
+	schema string,
+	table string,
+) (string, error) {
 	var res []string
 	sql := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`.`%s`", catalog, schema, table)
 	var err = sqlClient.GetDb().SelectContext(ctx, &res, sql)

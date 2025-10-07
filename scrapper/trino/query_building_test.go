@@ -14,8 +14,12 @@ func (e *TrinoScrapper) buildTablesQuery(catalogName string) string {
 
 	// Conditionally add table comments JOIN based on feature flag
 	if e.conf.FetchTableComments {
-		catalogQuery = strings.Replace(catalogQuery, "{{table_comments_join}}",
-			"LEFT JOIN system.metadata.table_comments c\n  ON t.table_catalog = c.catalog_name\n  AND t.table_schema = c.schema_name\n  AND t.table_name = c.table_name", -1)
+		catalogQuery = strings.Replace(
+			catalogQuery,
+			"{{table_comments_join}}",
+			"LEFT JOIN system.metadata.table_comments c\n  ON t.table_catalog = c.catalog_name\n  AND t.table_schema = c.schema_name\n  AND t.table_name = c.table_name",
+			-1,
+		)
 		catalogQuery = strings.Replace(catalogQuery, "{{table_comment_expression}}", "c.comment", -1)
 	} else {
 		catalogQuery = strings.Replace(catalogQuery, "{{table_comments_join}}", "", -1)
@@ -24,8 +28,12 @@ func (e *TrinoScrapper) buildTablesQuery(catalogName string) string {
 
 	// Conditionally add materialized views JOIN based on feature flag
 	if e.conf.FetchMaterializedViews {
-		catalogQuery = strings.Replace(catalogQuery, "{{materialized_views_join}}",
-			"LEFT JOIN system.metadata.materialized_views mv\n  ON t.table_catalog = mv.catalog_name\n    AND t.table_schema = mv.schema_name\n    AND t.table_name = mv.name", -1)
+		catalogQuery = strings.Replace(
+			catalogQuery,
+			"{{materialized_views_join}}",
+			"LEFT JOIN system.metadata.materialized_views mv\n  ON t.table_catalog = mv.catalog_name\n    AND t.table_schema = mv.schema_name\n    AND t.table_name = mv.name",
+			-1,
+		)
 		catalogQuery = strings.Replace(catalogQuery, "{{table_type_expression}}",
 			"(CASE WHEN mv.name IS NOT NULL THEN 'MATERIALIZED VIEW'\n    ELSE t.table_type END)", -1)
 		catalogQuery = strings.Replace(catalogQuery, "{{is_table_expression}}",
@@ -49,8 +57,12 @@ func (e *TrinoScrapper) buildSqlDefinitionsQuery(catalogName string) string {
 
 	// Conditionally add materialized views JOIN based on feature flag
 	if e.conf.FetchMaterializedViews {
-		catalogQuery = strings.Replace(catalogQuery, "{{materialized_views_join}}",
-			"LEFT JOIN system.metadata.materialized_views mv ON t.database = mv.catalog_name AND t.schema = mv.schema_name AND t.table_name = mv.name", -1)
+		catalogQuery = strings.Replace(
+			catalogQuery,
+			"{{materialized_views_join}}",
+			"LEFT JOIN system.metadata.materialized_views mv ON t.database = mv.catalog_name AND t.schema = mv.schema_name AND t.table_name = mv.name",
+			-1,
+		)
 		catalogQuery = strings.Replace(catalogQuery, "{{is_materialized_view_expression}}",
 			"(mv.name IS NOT NULL)", -1)
 		catalogQuery = strings.Replace(catalogQuery, "{{sql_expression}}",

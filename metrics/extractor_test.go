@@ -70,7 +70,13 @@ func (s *MetricExtractorSuite) TestExtractGrowthsFromMetricSeries() {
 	})
 }
 
-func createMetrics(val int64, lastLoaded time.Time, at time.Time, valSeries []*MetricVal[int64], loadSeries []*MetricVal[time.Time]) ([]*MetricVal[int64], []*MetricVal[time.Time]) {
+func createMetrics(
+	val int64,
+	lastLoaded time.Time,
+	at time.Time,
+	valSeries []*MetricVal[int64],
+	loadSeries []*MetricVal[time.Time],
+) ([]*MetricVal[int64], []*MetricVal[time.Time]) {
 	valSeries = append(valSeries, &MetricVal[int64]{Value: val, At: at})
 	loadSeries = append(loadSeries, &MetricVal[time.Time]{Value: lastLoaded, At: at})
 

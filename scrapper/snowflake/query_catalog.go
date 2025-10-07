@@ -137,7 +137,9 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 									Column:   "METADATA$ISUPDATE",
 									Type:     "BOOLEAN",
 									Position: int32(len(sourceTableColumns) + 2),
-									Comment:  lo.ToPtr("Specifies whether the action recorded (INSERT or DELETE) is part of an UPDATE applied to the rows in the source table or view."),
+									Comment: lo.ToPtr(
+										"Specifies whether the action recorded (INSERT or DELETE) is part of an UPDATE applied to the rows in the source table or view.",
+									),
 								},
 							)
 							tmpResults = append(
@@ -149,7 +151,9 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 									Column:   "METADATA$ROW_ID",
 									Type:     "ROWID",
 									Position: int32(len(sourceTableColumns) + 3),
-									Comment:  lo.ToPtr("Specifies the unique and immutable ID for the row, which can be used to track changes to specific rows over time."),
+									Comment: lo.ToPtr(
+										"Specifies the unique and immutable ID for the row, which can be used to track changes to specific rows over time.",
+									),
 								},
 							)
 						} else {

@@ -7,7 +7,13 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func QueryAndProcessMany[T any](ctx context.Context, conn *sqlx.DB, sql string, handler func(ctx context.Context, rows []*T) error, opts ...exec.QueryManyOpt[T]) error {
+func QueryAndProcessMany[T any](
+	ctx context.Context,
+	conn *sqlx.DB,
+	sql string,
+	handler func(ctx context.Context, rows []*T) error,
+	opts ...exec.QueryManyOpt[T],
+) error {
 
 	queryMany := exec.NewQueryMany[T](sql)
 	for _, opt := range opts {
