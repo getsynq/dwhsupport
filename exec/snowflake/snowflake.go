@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/pem"
 	"fmt"
+	"os"
 
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
@@ -24,6 +25,7 @@ type SnowflakeConf struct {
 	User                 string
 	Password             string
 	PrivateKey           []byte
+	PrivateKeyFile       string
 	PrivateKeyPassphrase string
 	Account              string
 	Warehouse            string
@@ -100,8 +102,20 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 		DisableConsoleLogin: gosnowflake.ConfigBoolTrue,
 	}
 
+	// Load private key from either inline bytes or file
+	var privateKeyPEM []byte
 	if len(conf.PrivateKey) > 0 {
-		privKey, err := parsePrivateKey(conf.PrivateKey, conf.PrivateKeyPassphrase)
+		privateKeyPEM = conf.PrivateKey
+	} else if len(conf.PrivateKeyFile) > 0 {
+		keyData, err := os.ReadFile(conf.PrivateKeyFile)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to read private key file")
+		}
+		privateKeyPEM = keyData
+	}
+
+	if len(privateKeyPEM) > 0 {
+		privKey, err := parsePrivateKey(privateKeyPEM, conf.PrivateKeyPassphrase)
 		if err != nil {
 			return nil, err
 		}
