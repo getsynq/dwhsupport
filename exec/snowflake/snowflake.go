@@ -14,19 +14,21 @@ import (
 	"github.com/pkg/errors"
 	"github.com/snowflakedb/gosnowflake"
 	_ "github.com/snowflakedb/gosnowflake"
+	"github.com/youmark/pkcs8"
 )
 
 // https://github.com/snowflakedb/gosnowflake/blob/099708d318689634a558f705ccc19b3b7b278972/doc.go#L107
 const SPNApplicationId = "SYNQ_Platform"
 
 type SnowflakeConf struct {
-	User       string
-	Password   string
-	PrivateKey []byte
-	Account    string
-	Warehouse  string
-	Databases  []string
-	Role       string
+	User                 string
+	Password             string
+	PrivateKey           []byte
+	PrivateKeyPassphrase string
+	Account              string
+	Warehouse            string
+	Databases            []string
+	Role                 string
 }
 
 type Executor interface {
@@ -66,13 +68,28 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 
 	if len(conf.PrivateKey) > 0 {
 		block, _ := pem.Decode(conf.PrivateKey)
-		if block == nil || block.Type != "PRIVATE KEY" {
+		if block == nil {
 			return nil, errors.New("failed to decode PEM block containing private key")
 		}
-		privKey, err := x509.ParsePKCS8PrivateKey(block.Bytes)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to parse private key")
+
+		var privKey interface{}
+		var err error
+
+		// Handle encrypted private keys
+		if block.Type == "ENCRYPTED PRIVATE KEY" && conf.PrivateKeyPassphrase != "" {
+			privKey, err = pkcs8.ParsePKCS8PrivateKey(block.Bytes, []byte(conf.PrivateKeyPassphrase))
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to parse encrypted private key")
+			}
+		} else if block.Type == "PRIVATE KEY" {
+			privKey, err = x509.ParsePKCS8PrivateKey(block.Bytes)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to parse private key")
+			}
+		} else {
+			return nil, errors.Errorf("unsupported PEM block type: %s", block.Type)
 		}
+
 		c.PrivateKey = privKey.(*rsa.PrivateKey)
 		c.Authenticator = gosnowflake.AuthTypeJwt
 	}
