@@ -32,8 +32,8 @@ func (e *ClickhouseScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 
 	pool := workpool.New(4)
 
-	for _, sqlDef := range sqlDefs {
-		sqlDef := sqlDef
+	for i := range sqlDefs {
+		sqlDef := sqlDefs[i]
 		pool.Do(func() error {
 			if sqlDef.IsView {
 				if sql, err := e.showCreateView(ctx, sqlDef.Schema, sqlDef.Table); err == nil {

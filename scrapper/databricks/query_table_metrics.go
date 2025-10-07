@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
@@ -22,6 +23,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 
 	var res []*scrapper.TableMetricsRow
 	var errorMessages []string
+	var mutex sync.Mutex
 
 	noScan := " NOSCAN"
 	if e.conf.RefreshTableMetricsUseScan {
@@ -106,7 +108,9 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 							if err != nil {
 								err = errors.Wrapf(err, "failed to %s", sql)
 								log.Warn(err)
+								mutex.Lock()
 								errorMessages = append(errorMessages, err.Error())
+								mutex.Unlock()
 							}
 						}
 
@@ -117,7 +121,9 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 						if err != nil {
 							err = errors.Wrapf(err, "failed to get properties of %s", tableInfo.FullName)
 							log.Warn(err)
+							mutex.Lock()
 							errorMessages = append(errorMessages, err.Error())
+							mutex.Unlock()
 						}
 						if r != nil {
 							if extractedRowCount, ok := extractNumericProperty(r.Properties, "spark.sql.statistics.numRows"); ok {
