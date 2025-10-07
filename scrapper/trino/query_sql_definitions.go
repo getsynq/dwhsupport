@@ -108,8 +108,12 @@ func (e *TrinoScrapper) getBasicSqlDefinitions(ctx context.Context) ([]*scrapper
 
 		// Conditionally add materialized views JOIN based on feature flag
 		if e.conf.FetchMaterializedViews {
-			catalogQuery = strings.Replace(catalogQuery, "{{materialized_views_join}}",
-				"LEFT JOIN system.metadata.materialized_views mv ON t.database = mv.catalog_name AND t.schema = mv.schema_name AND t.table_name = mv.name", -1)
+			catalogQuery = strings.Replace(
+				catalogQuery,
+				"{{materialized_views_join}}",
+				"LEFT JOIN system.metadata.materialized_views mv ON t.database = mv.catalog_name AND t.schema = mv.schema_name AND t.table_name = mv.name",
+				-1,
+			)
 			catalogQuery = strings.Replace(catalogQuery, "{{is_materialized_view_expression}}",
 				"(mv.name IS NOT NULL)", -1)
 			catalogQuery = strings.Replace(catalogQuery, "{{sql_expression}}",

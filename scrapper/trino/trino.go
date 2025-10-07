@@ -33,10 +33,10 @@ type TrinoScrapper struct {
 }
 
 type TrinoCatalog struct {
-	CatalogName   string `db:"catalog_name" json:"catalog_name"`
-	ConnectorId   string `db:"connector_id" json:"connector_id"`
+	CatalogName   string `db:"catalog_name"   json:"catalog_name"`
+	ConnectorId   string `db:"connector_id"   json:"connector_id"`
 	ConnectorName string `db:"connector_name" json:"connector_name"`
-	IsAccepted    bool   `db:"-" json:"is_accepted"`
+	IsAccepted    bool   `db:"-"              json:"is_accepted"`
 }
 
 func (c *TrinoCatalog) String() string {

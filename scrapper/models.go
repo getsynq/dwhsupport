@@ -122,7 +122,7 @@ type TableRow struct {
 	IsView      bool                   `db:"is_view"     json:"is_view"     ch:"is_view"`
 	IsTable     bool                   `db:"is_table"    json:"is_table"    ch:"is_table"`
 	Options     map[string]interface{} `db:"options"     json:"options"`
-	Annotations []*Annotation          `db:"annotations"  json:"annotations"`
+	Annotations []*Annotation          `db:"annotations" json:"annotations"`
 }
 
 func (r TableRow) TableFqn() DwhFqn {

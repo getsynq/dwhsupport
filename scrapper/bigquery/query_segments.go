@@ -12,7 +12,7 @@ import (
 
 type dwhBigquerySegmentResponse struct {
 	Segment bigquery.NullString `ch:"segment" bigquery:"segment" db:"segment"`
-	Count   bigquery.NullInt64  `ch:"count" bigquery:"count" db:"count"`
+	Count   bigquery.NullInt64  `ch:"count"   bigquery:"count"   db:"count"`
 }
 
 func (r *dwhBigquerySegmentResponse) GetSegment() string {

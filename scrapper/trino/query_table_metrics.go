@@ -113,7 +113,12 @@ type trinoShowStatsRow struct {
 	HighValue          sql.NullString  `db:"high_value"`
 }
 
-func (e *TrinoScrapper) showStatsMetricsStrategy(ctx context.Context, db *sqlx.DB, tableRow *scrapper.TableRow, tableMetricsRow *scrapper.TableMetricsRow) error {
+func (e *TrinoScrapper) showStatsMetricsStrategy(
+	ctx context.Context,
+	db *sqlx.DB,
+	tableRow *scrapper.TableRow,
+	tableMetricsRow *scrapper.TableMetricsRow,
+) error {
 	if tableRow.TableType == "VIEW" {
 		return nil
 	}
@@ -164,7 +169,12 @@ type trinoIcebergSnapshotsRow struct {
 	Summary      trino.NullMap  `db:"summary"`
 }
 
-func (e *TrinoScrapper) icebergMetricsStrategy(ctx context.Context, db *sqlx.DB, tableRow *scrapper.TableRow, tableMetricsRow *scrapper.TableMetricsRow) error {
+func (e *TrinoScrapper) icebergMetricsStrategy(
+	ctx context.Context,
+	db *sqlx.DB,
+	tableRow *scrapper.TableRow,
+	tableMetricsRow *scrapper.TableMetricsRow,
+) error {
 
 	// Let's reuse SHOW STATS
 	if err := e.showStatsMetricsStrategy(ctx, db, tableRow, tableMetricsRow); err != nil {

@@ -30,8 +30,12 @@ func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogCo
 
 		// Conditionally add table comments JOIN based on feature flag
 		if e.conf.FetchTableComments {
-			query = strings.Replace(query, "{{table_comments_join}}",
-				"LEFT JOIN system.metadata.table_comments tc ON t.table_catalog = tc.catalog_name AND t.table_schema = tc.schema_name AND t.table_name = tc.table_name", -1)
+			query = strings.Replace(
+				query,
+				"{{table_comments_join}}",
+				"LEFT JOIN system.metadata.table_comments tc ON t.table_catalog = tc.catalog_name AND t.table_schema = tc.schema_name AND t.table_name = tc.table_name",
+				-1,
+			)
 			query = strings.Replace(query, "{{table_comment_expression}}",
 				"coalesce(tc.comment, '')", -1)
 		} else {

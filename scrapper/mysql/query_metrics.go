@@ -14,7 +14,9 @@ import (
 var tableMetricsSql string
 
 func (e *MySQLScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	return dwhexecmysql.NewQuerier[scrapper.TableMetricsRow](e.executor).QueryMany(ctx, tableMetricsSql, dwhexec.WithPostProcessors(func(row *scrapper.TableMetricsRow) (*scrapper.TableMetricsRow, error) {
+	return dwhexecmysql.NewQuerier[scrapper.TableMetricsRow](
+		e.executor,
+	).QueryMany(ctx, tableMetricsSql, dwhexec.WithPostProcessors(func(row *scrapper.TableMetricsRow) (*scrapper.TableMetricsRow, error) {
 		row.Database = e.conf.Host
 		return row, nil
 	}))

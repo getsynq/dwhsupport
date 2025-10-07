@@ -88,7 +88,12 @@ func (q *Querier[T]) QueryMany(
 	return results, nil
 }
 
-func (q *Querier[T]) QueryAndProcessMany(ctx context.Context, sql string, handler func(ctx context.Context, batch []*T) error, opts ...exec.QueryManyOpt[T]) error {
+func (q *Querier[T]) QueryAndProcessMany(
+	ctx context.Context,
+	sql string,
+	handler func(ctx context.Context, batch []*T) error,
+	opts ...exec.QueryManyOpt[T],
+) error {
 	qq := exec.NewQueryMany[T](sql)
 	for _, opt := range opts {
 		opt(qq)

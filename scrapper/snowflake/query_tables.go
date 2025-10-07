@@ -247,21 +247,21 @@ func (e *SnowflakeScrapper) showShares(ctx context.Context) ([]*ShareDesc, error
 }
 
 type ShareObject struct {
-	Kind     string    `db:"kind" json:"kind"`
-	Name     string    `db:"name" json:"name"`
+	Kind     string    `db:"kind"      json:"kind"`
+	Name     string    `db:"name"      json:"name"`
 	SharedOn time.Time `db:"shared_on" json:"shared_on"`
 }
 
 type ShareDesc struct {
-	Name              string         `db:"name" json:"name"`
-	Kind              string         `db:"kind" json:"kind"`
-	OwnerAccount      string         `db:"owner_account" json:"owner_account"`
-	DatabaseName      string         `db:"database_name" json:"database_name"`
-	To                string         `db:"to" json:"to"`
-	Owner             string         `db:"owner" json:"owner"`
-	Comment           string         `db:"comment" json:"comment"`
+	Name              string         `db:"name"                json:"name"`
+	Kind              string         `db:"kind"                json:"kind"`
+	OwnerAccount      string         `db:"owner_account"       json:"owner_account"`
+	DatabaseName      string         `db:"database_name"       json:"database_name"`
+	To                string         `db:"to"                  json:"to"`
+	Owner             string         `db:"owner"               json:"owner"`
+	Comment           string         `db:"comment"             json:"comment"`
 	ListingGlobalName string         `db:"listing_global_name" json:"listing_global_name"`
-	Objects           []*ShareObject `json:"objects"`
+	Objects           []*ShareObject `                         json:"objects"`
 }
 
 func (d *ShareDesc) String() string {

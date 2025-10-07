@@ -111,8 +111,12 @@ func (e *TrinoScrapper) buildCatalogQuery(catalogName string) string {
 
 	// Conditionally add table comments JOIN based on feature flag
 	if e.conf.FetchTableComments {
-		catalogQuery = strings.Replace(catalogQuery, "{{table_comments_join}}",
-			"LEFT JOIN system.metadata.table_comments tc ON t.table_catalog = tc.catalog_name AND t.table_schema = tc.schema_name AND t.table_name = tc.table_name", -1)
+		catalogQuery = strings.Replace(
+			catalogQuery,
+			"{{table_comments_join}}",
+			"LEFT JOIN system.metadata.table_comments tc ON t.table_catalog = tc.catalog_name AND t.table_schema = tc.schema_name AND t.table_name = tc.table_name",
+			-1,
+		)
 		catalogQuery = strings.Replace(catalogQuery, "{{table_comment_expression}}",
 			"coalesce(tc.comment, '')", -1)
 	} else {

@@ -153,11 +153,11 @@ func (e *SnowflakeScrapper) Close() error {
 }
 
 type DbDesc struct {
-	Name    string `db:"name" json:"name"`
-	Origin  string `db:"origin" json:"origin"`
-	Owner   string `db:"owner" json:"owner"`
+	Name    string `db:"name"    json:"name"`
+	Origin  string `db:"origin"  json:"origin"`
+	Owner   string `db:"owner"   json:"owner"`
 	Comment string `db:"comment" json:"comment"`
-	Kind    string `db:"kind" json:"kind"`
+	Kind    string `db:"kind"    json:"kind"`
 }
 
 func (d *DbDesc) String() string {

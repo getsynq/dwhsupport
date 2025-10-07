@@ -56,7 +56,15 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 				continue
 			}
 
-			tables, err := e.client.Tables.ListAll(ctx, servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitColumns: true, IncludeDeltaMetadata: true})
+			tables, err := e.client.Tables.ListAll(
+				ctx,
+				servicecatalog.ListTablesRequest{
+					CatalogName:          catalogInfo.Name,
+					SchemaName:           schemaInfo.Name,
+					OmitColumns:          true,
+					IncludeDeltaMetadata: true,
+				},
+			)
 			if err != nil {
 				return nil, err
 			}

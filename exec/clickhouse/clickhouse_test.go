@@ -42,7 +42,11 @@ func (s *ClickhouseSuite) TestSomething() {
 	defer execer.Close()
 
 	q := NewQuerier[res](execer)
-	res, err := q.QueryMany(ctx, "SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables WHERE table_catalog = ?", exec.WithArgs[res]("system"))
+	res, err := q.QueryMany(
+		ctx,
+		"SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables WHERE table_catalog = ?",
+		exec.WithArgs[res]("system"),
+	)
 	s.Require().NoError(err)
 	s.Require().NotEmpty(res)
 

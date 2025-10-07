@@ -103,7 +103,11 @@ func (e *BigQueryScrapper) queryRows(ctx context.Context, q string, args ...inte
 }
 
 func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
-	crm, err := cloudresourcemanager.NewService(ctx, option.WithCredentialsJSON([]byte(e.conf.CredentialsJson)), option.WithUserAgent("synq-bq-client-v1.0.0"))
+	crm, err := cloudresourcemanager.NewService(
+		ctx,
+		option.WithCredentialsJSON([]byte(e.conf.CredentialsJson)),
+		option.WithUserAgent("synq-bq-client-v1.0.0"),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +125,13 @@ func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string,
 		missingPermissions, _ := lo.Difference(expectedPermissions, gotPermissions)
 		if len(missingPermissions) > 0 {
 			logging.GetLogger(ctx).WithField("missing_permissions", missingPermissions).Info("missing BigQuery permissions")
-			warnings = append(warnings, fmt.Sprintf("Some permissions are missing, this might cause not all features to work properly: %s", strings.Join(missingPermissions, ", ")))
+			warnings = append(
+				warnings,
+				fmt.Sprintf(
+					"Some permissions are missing, this might cause not all features to work properly: %s",
+					strings.Join(missingPermissions, ", "),
+				),
+			)
 		}
 	} else {
 		logging.GetLogger(ctx).WithError(err).Error("failed to test BigQuery permissions")

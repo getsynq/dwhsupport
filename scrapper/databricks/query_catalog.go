@@ -15,11 +15,11 @@ import (
 
 type Tags struct {
 	CatalogName string `db:"catalog_name" json:"catalog_name"`
-	SchemaName  string `db:"schema_name" json:"schema_name"`
-	TableName   string `db:"table_name" json:"table_name"`
-	ColumnName  string `db:"column_name" json:"column_name"`
-	TagName     string `db:"tag_name" json:"tag_name"`
-	TagValue    string `db:"tag_value" json:"tag_value"`
+	SchemaName  string `db:"schema_name"  json:"schema_name"`
+	TableName   string `db:"table_name"   json:"table_name"`
+	ColumnName  string `db:"column_name"  json:"column_name"`
+	TagName     string `db:"tag_name"     json:"tag_name"`
+	TagValue    string `db:"tag_value"    json:"tag_value"`
 }
 
 func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
@@ -56,7 +56,10 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 				continue
 			}
 
-			tables, err := e.client.Tables.ListAll(ctx, servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitProperties: true})
+			tables, err := e.client.Tables.ListAll(
+				ctx,
+				servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitProperties: true},
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -72,11 +75,12 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 				tableTags := getTableTags(tagsLookup, tableInfo.CatalogName, tableInfo.SchemaName, tableInfo.Name)
 				for _, columnInfo := range tableInfo.Columns {
 					catalogRow := &scrapper.CatalogColumnRow{
-						Instance:     e.conf.WorkspaceUrl,
-						Database:     tableInfo.CatalogName,
-						Schema:       tableInfo.SchemaName,
-						Table:        tableInfo.Name,
-						IsView:       tableInfo.TableType == servicecatalog.TableTypeMaterializedView || tableInfo.TableType == servicecatalog.TableTypeView,
+						Instance: e.conf.WorkspaceUrl,
+						Database: tableInfo.CatalogName,
+						Schema:   tableInfo.SchemaName,
+						Table:    tableInfo.Name,
+						IsView: tableInfo.TableType == servicecatalog.TableTypeMaterializedView ||
+							tableInfo.TableType == servicecatalog.TableTypeView,
 						Column:       columnInfo.Name,
 						Type:         columnInfo.TypeText,
 						Position:     int32(columnInfo.Position + 1),
