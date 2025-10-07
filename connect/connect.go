@@ -104,13 +104,14 @@ func Redshift(ctx context.Context, t *agentdwhv1.RedshiftConf) (*scrapperredshif
 func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowflake.SnowflakeScrapper, error) {
 	return scrappersnowflake.NewSnowflakeScrapper(ctx, &scrappersnowflake.SnowflakeScrapperConf{
 		SnowflakeConf: dwhexecsnowflake.SnowflakeConf{
-			User:       t.GetUsername(),
-			Password:   t.GetPassword(),
-			PrivateKey: []byte(t.GetPrivateKey()),
-			Account:    t.GetAccount(),
-			Warehouse:  t.GetWarehouse(),
-			Databases:  t.GetDatabases(),
-			Role:       t.GetRole(),
+			User:                 t.GetUsername(),
+			Password:             t.GetPassword(),
+			PrivateKey:           []byte(t.GetPrivateKey()),
+			PrivateKeyPassphrase: t.GetPrivateKeyPassphrase(),
+			Account:              t.GetAccount(),
+			Warehouse:            t.GetWarehouse(),
+			Databases:            t.GetDatabases(),
+			Role:                 t.GetRole(),
 		},
 		NoGetDll:       !t.GetUseGetDdl(),
 		AccountUsageDb: lo.EmptyableToPtr(t.GetAccountUsageDb()),
