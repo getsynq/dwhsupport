@@ -61,10 +61,14 @@ func parsePrivateKey(privateKeyPEM []byte, passphrase string) (*rsa.PrivateKey, 
 	var err error
 
 	// Handle encrypted private keys
-	if block.Type == "ENCRYPTED PRIVATE KEY" && passphrase != "" {
-		privKey, err = pkcs8.ParsePKCS8PrivateKey(block.Bytes, []byte(passphrase))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to parse encrypted private key")
+	if block.Type == "ENCRYPTED PRIVATE KEY" {
+		if passphrase == "" {
+			return nil, errors.New("encrypted private key is provided but no passphrase is set")
+		} else {
+			privKey, err = pkcs8.ParsePKCS8PrivateKey(block.Bytes, []byte(passphrase))
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to parse encrypted private key")
+			}
 		}
 	} else if block.Type == "PRIVATE KEY" {
 		privKey, err = x509.ParsePKCS8PrivateKey(block.Bytes)
