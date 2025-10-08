@@ -52,7 +52,6 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 	g.SetLimit(4)
 
 	for _, database := range e.conf.Databases {
-		database := database
 		if !existingDbs[database] {
 			continue
 		}

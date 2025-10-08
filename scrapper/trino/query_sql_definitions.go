@@ -26,8 +26,6 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 		pool, ctx := errgroup.WithContext(ctx)
 		pool.SetLimit(8)
 		for i, sqlDef := range basic {
-			sqlDef := sqlDef // Create a local copy of the loop variable
-
 			if i > 0 && i%100 == 0 {
 				logging.GetLogger(ctx).Infof("fetched SQL definitions for %d/%d", i, len(basic))
 			}

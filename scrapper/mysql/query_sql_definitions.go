@@ -28,8 +28,7 @@ func (e *MySQLScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 
 	pool := workpool.New(4)
 
-	for i := range sqlDefs {
-		sqlDef := sqlDefs[i]
+	for _, sqlDef := range sqlDefs {
 		if len(sqlDef.Sql) > 0 {
 			continue
 		}

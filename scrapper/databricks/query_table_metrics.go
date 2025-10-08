@@ -76,7 +76,6 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 					log.Infof("table %s excluded by blocklist", tableInfo.FullName)
 					continue
 				}
-				tableInfo := tableInfo
 				updatedAt := time.UnixMilli(tableInfo.UpdatedAt)
 				metricsRow := &scrapper.TableMetricsRow{
 					Instance:  e.conf.WorkspaceUrl,
