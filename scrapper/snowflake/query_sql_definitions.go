@@ -56,7 +56,6 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 	for _, database := range e.conf.Databases {
-		database := database
 		if !existingDbs[database] {
 			continue
 		}
@@ -141,7 +140,6 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		g, groupCtx = errgroup.WithContext(origCtx)
 
 		for databaseAndSchema, rows := range perSchema {
-			databaseAndSchema := databaseAndSchema
 			rowsPerName := lo.Associate(
 				rows, func(r *scrapper.SqlDefinitionRow) (string, *scrapper.SqlDefinitionRow) {
 					return strings.ToUpper(r.Table), r

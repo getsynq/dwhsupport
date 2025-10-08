@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
@@ -46,6 +47,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 	datasets.ListHidden = true
 
 	var rows []*scrapper.SqlDefinitionRow
+	var mutex sync.Mutex
 
 	pool := workpool.New(50)
 
@@ -129,6 +131,9 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 					}
 					return err
 				}
+
+				mutex.Lock()
+				defer mutex.Unlock()
 
 				if meta.MaterializedView != nil {
 					if meta.MaterializedView.Query != "" {

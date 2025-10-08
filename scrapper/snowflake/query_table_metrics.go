@@ -43,7 +43,6 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 	g.SetLimit(8)
 
 	for _, database := range e.conf.Databases {
-		database := database
 		if !existingDbs[database] {
 			continue
 		}

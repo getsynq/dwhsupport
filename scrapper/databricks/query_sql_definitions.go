@@ -83,7 +83,6 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 		}
 
 		for _, sqlDef := range sqlDefs {
-			sqlDef := sqlDef
 			pool.Do(func() error {
 				if !sqlDef.IsView {
 
