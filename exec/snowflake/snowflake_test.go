@@ -50,7 +50,7 @@ func (s *SnowflakePrivateKeyTestSuite) TestParseEncryptedPKCS8PrivateKeyWithoutP
 
 	_, err = parsePrivateKey(keyBytes, "")
 	s.Error(err)
-	s.Contains(err.Error(), "unsupported PEM block type")
+	s.Contains(err.Error(), "encrypted private key is provided but no passphrase is set")
 }
 
 func (s *SnowflakePrivateKeyTestSuite) TestParseInvalidPEMData() {
@@ -63,4 +63,13 @@ func (s *SnowflakePrivateKeyTestSuite) TestParseEmptyPEMData() {
 	_, err := parsePrivateKey([]byte(""), "")
 	s.Error(err)
 	s.Contains(err.Error(), "failed to decode PEM block")
+}
+
+func (s *SnowflakePrivateKeyTestSuite) TestParseUnencryptedPKCS8PrivateKeyWithPassphrase() {
+	keyBytes, err := os.ReadFile("test_rsa_key_unencrypted.pem")
+	s.Require().NoError(err)
+
+	_, err = parsePrivateKey(keyBytes, "somepassphrase")
+	s.Error(err)
+	s.Contains(err.Error(), "passphrase provided but private key is not encrypted")
 }
