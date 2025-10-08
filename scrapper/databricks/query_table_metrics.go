@@ -93,7 +93,6 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 					RowCount:  nil,
 					UpdatedAt: &updatedAt,
 				}
-				res = append(res, metricsRow)
 
 				if extractedRowCount, ok := extractNumericProperty(tableInfo.Properties, "spark.sql.statistics.numRows"); ok {
 					metricsRow.RowCount = &extractedRowCount
@@ -102,6 +101,10 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 				if extractedByteSize, ok := extractNumericProperty(tableInfo.Properties, "spark.sql.statistics.totalSize"); ok {
 					metricsRow.SizeBytes = &extractedByteSize
 				}
+
+				mutex.Lock()
+				res = append(res, metricsRow)
+				mutex.Unlock()
 
 				if e.shouldRefreshTableInfo(lastMetricsFetchTime, tableInfo) {
 					// Capture variables in loop
@@ -136,6 +139,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 							mutex.Unlock()
 						}
 						if r != nil {
+							mutex.Lock()
 							if extractedRowCount, ok := extractNumericProperty(r.Properties, "spark.sql.statistics.numRows"); ok {
 								metricsRow.RowCount = &extractedRowCount
 							}
@@ -143,6 +147,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 							if extractedByteSize, ok := extractNumericProperty(r.Properties, "spark.sql.statistics.totalSize"); ok {
 								metricsRow.SizeBytes = &extractedByteSize
 							}
+							mutex.Unlock()
 						}
 						return nil
 					})
