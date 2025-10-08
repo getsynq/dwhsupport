@@ -12,7 +12,7 @@ import (
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/getsynq/dwhsupport/scrapper"
 )
@@ -30,7 +30,8 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 		noScan = ""
 	}
 
-	pool := workpool.New(16)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(16)
 
 	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})
 	if err != nil {
@@ -76,6 +77,13 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 					log.Infof("table %s excluded by blocklist", tableInfo.FullName)
 					continue
 				}
+
+				select {
+				case <-groupCtx.Done():
+					return nil, groupCtx.Err()
+				default:
+				}
+
 				updatedAt := time.UnixMilli(tableInfo.UpdatedAt)
 				metricsRow := &scrapper.TableMetricsRow{
 					Instance:  e.conf.WorkspaceUrl,
@@ -96,14 +104,17 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 				}
 
 				if e.shouldRefreshTableInfo(lastMetricsFetchTime, tableInfo) {
-					pool.Do(func() error {
+					// Capture variables in loop
+					tableInfo := tableInfo
+					metricsRow := metricsRow
+					g.Go(func() error {
 						sql := fmt.Sprintf("ANALYZE TABLE %s COMPUTE STATISTICS%s", tableInfo.FullName, noScan)
 						log.WithField("sql", sql).WithFields(logrus.Fields{
 							"table_updated_at": time.UnixMilli(tableInfo.UpdatedAt).Format(time.RFC3339),
 							"last_analyzed_at": lastMetricsFetchTime.Format(time.RFC3339),
 						}).Infof("Analyzing table %s", tableInfo.FullName)
 						if sqlClient, err := e.lazyExecutor.Get(); err == nil {
-							_, err := sqlClient.GetDb().ExecContext(ctx, sql)
+							_, err := sqlClient.GetDb().ExecContext(groupCtx, sql)
 							if err != nil {
 								err = errors.Wrapf(err, "failed to %s", sql)
 								log.Warn(err)
@@ -113,7 +124,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 							}
 						}
 
-						r, err := e.client.Tables.Get(ctx, servicecatalog.GetTableRequest{
+						r, err := e.client.Tables.Get(groupCtx, servicecatalog.GetTableRequest{
 							FullName:             tableInfo.FullName,
 							IncludeDeltaMetadata: true,
 						})
@@ -140,7 +151,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 		}
 	}
 
-	err = pool.Wait()
+	err = g.Wait()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to process metrics of a table")
 	}

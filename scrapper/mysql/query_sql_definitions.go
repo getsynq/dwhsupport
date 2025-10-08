@@ -9,7 +9,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed query_sql_definitions.sql
@@ -26,19 +26,27 @@ func (e *MySQLScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 		return nil, err
 	}
 
-	pool := workpool.New(4)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(4)
 
 	for _, sqlDef := range sqlDefs {
 		if len(sqlDef.Sql) > 0 {
 			continue
 		}
-		pool.Do(func() error {
+
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
+
+		g.Go(func() error {
 			if sqlDef.IsView {
-				if sql, err := e.showCreateView(ctx, sqlDef.Schema, sqlDef.Table); err == nil && len(sql) > 0 {
+				if sql, err := e.showCreateView(groupCtx, sqlDef.Schema, sqlDef.Table); err == nil && len(sql) > 0 {
 					sqlDef.Sql = sql
 				}
 			} else {
-				if sql, err := e.showCreateTable(ctx, sqlDef.Schema, sqlDef.Table); err == nil && len(sql) > 0 {
+				if sql, err := e.showCreateTable(groupCtx, sqlDef.Schema, sqlDef.Table); err == nil && len(sql) > 0 {
 					sqlDef.Sql = removeDynamicPartsOfSql(sql)
 				}
 			}
@@ -46,7 +54,7 @@ func (e *MySQLScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 		})
 	}
 
-	err = pool.Wait()
+	err = g.Wait()
 	if err != nil {
 		return nil, err
 	}

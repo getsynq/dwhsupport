@@ -10,7 +10,7 @@ import (
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
 )
 
@@ -49,7 +49,8 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 	var rows []*scrapper.SqlDefinitionRow
 	var mutex sync.Mutex
 
-	pool := workpool.New(50)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(50)
 
 	numTablesTotal := 0
 	for {
@@ -80,7 +81,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 
 		log = log.WithField("dataset", dataset.DatasetID)
 
-		tables := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Tables(ctx)
+		tables := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Tables(groupCtx)
 		numTables := 0
 
 		// Collect table IDs
@@ -122,8 +123,14 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 
 			numTables++
 
-			pool.Do(func() error {
-				meta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
+			select {
+			case <-groupCtx.Done():
+				return nil, groupCtx.Err()
+			default:
+			}
+
+			g.Go(func() error {
+				meta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
 
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
@@ -165,7 +172,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 		log.Infof("found %d tables, %d total so far", numTables, numTablesTotal)
 	}
 
-	if err := pool.Wait(); err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
