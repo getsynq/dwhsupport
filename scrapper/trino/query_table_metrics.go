@@ -17,7 +17,7 @@ import (
 
 type MetricsStrategy func(ctx context.Context, db *sqlx.DB, tableRow *scrapper.TableRow, tableMetricsRow *scrapper.TableMetricsRow) error
 
-func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
+func (e *TrinoScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 
 	db := e.executor.GetDb()
 
@@ -34,7 +34,7 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 			continue
 		}
 
-		tables, err := e.queryTables(ctx, catalog.CatalogName)
+		tables, err := e.queryTables(origCtx, catalog.CatalogName)
 		if err != nil {
 			return nil, err
 		}
@@ -43,11 +43,11 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 
 		switch catalog.ConnectorName {
 		case "iceberg", "galaxy_objectstore":
-			logging.GetLogger(ctx).Infof("using iceberg metrics strategy for catalog %s", catalog.CatalogName)
+			logging.GetLogger(origCtx).Infof("using iceberg metrics strategy for catalog %s", catalog.CatalogName)
 			metricsStrategy = e.icebergMetricsStrategy
 
 		default:
-			logging.GetLogger(ctx).Warnf(
+			logging.GetLogger(origCtx).Warnf(
 				"unknown connector %s for catalog %s, falling back to SHOW STATS",
 				catalog.ConnectorName, catalog.CatalogName,
 			)
@@ -55,8 +55,8 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 		}
 
 		if len(tables) > 0 {
-			pool, ctx := errgroup.WithContext(ctx)
-			pool.SetLimit(8)
+			g, groupCtx := errgroup.WithContext(origCtx)
+			g.SetLimit(8)
 
 			for _, t := range tables {
 
@@ -71,19 +71,19 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 				}
 
 				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
+				case <-groupCtx.Done():
+					return nil, groupCtx.Err()
 				default:
 				}
 
 				if metricsStrategy != nil {
-					pool.Go(func() error {
-						if err := metricsStrategy(ctx, db, t, tableMetricsRow); err != nil {
-							logging.GetLogger(ctx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
+					g.Go(func() error {
+						if err := metricsStrategy(groupCtx, db, t, tableMetricsRow); err != nil {
+							logging.GetLogger(groupCtx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
 							return nil
 						}
 						if tableMetricsRow.SizeBytes == nil && tableMetricsRow.RowCount == nil && tableMetricsRow.UpdatedAt == nil {
-							logging.GetLogger(ctx).WithField("table_fqn", tableMetricsRow.TableFqn()).Warnf("no metrics found")
+							logging.GetLogger(groupCtx).WithField("table_fqn", tableMetricsRow.TableFqn()).Warnf("no metrics found")
 							return nil
 						}
 						outMu.Lock()
@@ -94,7 +94,7 @@ func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchT
 					})
 				}
 			}
-			err = pool.Wait()
+			err = g.Wait()
 			if err != nil {
 				return nil, err
 			}

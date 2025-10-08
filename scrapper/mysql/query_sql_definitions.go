@@ -5,11 +5,12 @@ import (
 	_ "embed"
 	"fmt"
 	"regexp"
+	"sync"
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed query_sql_definitions.sql
@@ -26,27 +27,46 @@ func (e *MySQLScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 		return nil, err
 	}
 
-	pool := workpool.New(4)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(4)
+
+	var mutex sync.Mutex
 
 	for _, sqlDef := range sqlDefs {
 		if len(sqlDef.Sql) > 0 {
 			continue
 		}
-		pool.Do(func() error {
+
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
+
+		g.Go(func() error {
+			var sql string
+			var err error
+
 			if sqlDef.IsView {
-				if sql, err := e.showCreateView(ctx, sqlDef.Schema, sqlDef.Table); err == nil && len(sql) > 0 {
-					sqlDef.Sql = sql
-				}
+				sql, err = e.showCreateView(groupCtx, sqlDef.Schema, sqlDef.Table)
 			} else {
-				if sql, err := e.showCreateTable(ctx, sqlDef.Schema, sqlDef.Table); err == nil && len(sql) > 0 {
-					sqlDef.Sql = removeDynamicPartsOfSql(sql)
+				sql, err = e.showCreateTable(groupCtx, sqlDef.Schema, sqlDef.Table)
+				if err == nil && len(sql) > 0 {
+					sql = removeDynamicPartsOfSql(sql)
 				}
 			}
+
+			if err == nil && len(sql) > 0 {
+				mutex.Lock()
+				sqlDef.Sql = sql
+				mutex.Unlock()
+			}
+
 			return nil
 		})
 	}
 
-	err = pool.Wait()
+	err = g.Wait()
 	if err != nil {
 		return nil, err
 	}

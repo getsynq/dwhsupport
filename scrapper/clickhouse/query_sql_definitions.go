@@ -8,7 +8,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed query_sql_definitions.sql
@@ -30,16 +30,23 @@ func (e *ClickhouseScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 		return nil, err
 	}
 
-	pool := workpool.New(4)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(4)
 
 	for _, sqlDef := range sqlDefs {
-		pool.Do(func() error {
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
+
+		g.Go(func() error {
 			if sqlDef.IsView {
-				if sql, err := e.showCreateView(ctx, sqlDef.Schema, sqlDef.Table); err == nil {
+				if sql, err := e.showCreateView(groupCtx, sqlDef.Schema, sqlDef.Table); err == nil {
 					sqlDef.Sql = sql
 				}
 			} else {
-				if sql, err := e.showCreateTable(ctx, sqlDef.Schema, sqlDef.Table); err == nil {
+				if sql, err := e.showCreateTable(groupCtx, sqlDef.Schema, sqlDef.Table); err == nil {
 					sqlDef.Sql = sql
 				}
 			}
@@ -47,7 +54,7 @@ func (e *ClickhouseScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 		})
 	}
 
-	err = pool.Wait()
+	err = g.Wait()
 	if err != nil {
 		return nil, err
 	}

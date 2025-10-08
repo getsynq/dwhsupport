@@ -138,6 +138,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		)
 
 		g, groupCtx = errgroup.WithContext(origCtx)
+		g.SetLimit(8)
 
 		for databaseAndSchema, rows := range perSchema {
 			rowsPerName := lo.Associate(

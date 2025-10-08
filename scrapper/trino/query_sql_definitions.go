@@ -16,31 +16,31 @@ import (
 //go:embed query_sql_definitions.sql
 var querySqlDefinitionsSQL string
 
-func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	basic, err := e.getBasicSqlDefinitions(ctx)
+func (e *TrinoScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
+	basic, err := e.getBasicSqlDefinitions(origCtx)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(basic) > 0 && (e.conf.UseShowCreateTable || e.conf.UseShowCreateView) {
-		pool, ctx := errgroup.WithContext(ctx)
-		pool.SetLimit(8)
+		g, groupCtx := errgroup.WithContext(origCtx)
+		g.SetLimit(8)
 		for i, sqlDef := range basic {
 			if i > 0 && i%100 == 0 {
-				logging.GetLogger(ctx).Infof("fetched SQL definitions for %d/%d", i, len(basic))
+				logging.GetLogger(groupCtx).Infof("fetched SQL definitions for %d/%d", i, len(basic))
 			}
 
 			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
+			case <-groupCtx.Done():
+				return nil, groupCtx.Err()
 			default:
 			}
 
 			if (sqlDef.IsView && e.conf.UseShowCreateView) || (!sqlDef.IsView && e.conf.UseShowCreateTable) {
-				pool.Go(func() error {
-					sql, err := e.showCreate(ctx, sqlDef.Database, sqlDef.Schema, sqlDef.Table, sqlDef.IsView, sqlDef.IsMaterializedView)
+				g.Go(func() error {
+					sql, err := e.showCreate(groupCtx, sqlDef.Database, sqlDef.Schema, sqlDef.Table, sqlDef.IsView, sqlDef.IsMaterializedView)
 					if err != nil {
-						logging.GetLogger(ctx).WithField("table_fqn", sqlDef.TableFqn()).WithError(err).Warnf("error getting sql definition")
+						logging.GetLogger(groupCtx).WithField("table_fqn", sqlDef.TableFqn()).WithError(err).Warnf("error getting sql definition")
 						return nil
 					}
 					sqlDef.Sql = sql
@@ -50,7 +50,7 @@ func (e *TrinoScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sq
 			}
 		}
 
-		err = pool.Wait()
+		err = g.Wait()
 		if err != nil {
 			return nil, err
 		}

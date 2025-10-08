@@ -10,7 +10,7 @@ import (
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
 )
 
@@ -36,7 +36,8 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 	var mutex sync.Mutex
 	var results []*scrapper.TableMetricsRow
 
-	pool := workpool.New(8)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(8)
 
 	for {
 		dataset, err := datasets.Next()
@@ -59,12 +60,18 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 			continue
 		}
 
-		pool.Do(func() error {
+		select {
+		case <-groupCtx.Done():
+			return nil, groupCtx.Err()
+		default:
+		}
+
+		g.Go(func() error {
 			var datasetResults []*scrapper.TableMetricsRow
 			log.Infof("querying dataset %s", dataset.DatasetID)
 
 			q := fmt.Sprintf(tableMetricsSql, quoteTable(dataset.ProjectID), quoteTable(dataset.DatasetID))
-			rows, err := e.queryRows(ctx, q)
+			rows, err := e.queryRows(groupCtx, q)
 			if err != nil {
 				return err
 			}
@@ -124,7 +131,7 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 		})
 	}
 
-	err := pool.Wait()
+	err := g.Wait()
 	if err != nil {
 		return nil, err
 	}

@@ -9,7 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"github.com/xxjwxc/gowp/workpool"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/iterator"
 )
 
@@ -25,7 +25,8 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRo
 	var rows []*scrapper.TableRow
 	var mutex sync.Mutex
 
-	pool := workpool.New(50)
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(50)
 
 	numTablesTotal := 0
 
@@ -52,14 +53,14 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRo
 
 		log = log.WithField("dataset", dataset.DatasetID)
 
-		datasetMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(ctx)
+		datasetMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(groupCtx)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get dataset metadata")
 		}
 		datasetTags := labelsToTags(datasetMeta.Labels)
 
 		numTables := 0
-		tables := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Tables(ctx)
+		tables := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Tables(groupCtx)
 
 		// Collect table IDs
 		tableIds := make([]string, 0)
@@ -100,11 +101,17 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRo
 
 			numTables++
 
-			pool.Do(func() error {
+			select {
+			case <-groupCtx.Done():
+				return nil, groupCtx.Err()
+			default:
+			}
+
+			g.Go(func() error {
 				log = log.WithField("table", tableId)
 				log.Debugf("processing table %s", tableId)
 
-				tableMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
+				tableMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
 						return nil
@@ -135,7 +142,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRo
 		numTablesTotal += numTables
 	}
 
-	if err := pool.Wait(); err != nil {
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 

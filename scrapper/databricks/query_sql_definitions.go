@@ -3,13 +3,13 @@ package databricks
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/logging"
-	"github.com/xxjwxc/gowp/workpool"
-
 	"github.com/getsynq/dwhsupport/scrapper"
+	"golang.org/x/sync/errgroup"
 )
 
 func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
@@ -75,7 +75,9 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 	if e.conf.UseShowCreateTable {
 		log.Infof("Found %d tables in total, fetching SqlDefinitions for them using SHOW CREATE TABLE", tablesFound)
 
-		pool := workpool.New(32)
+		var m sync.Mutex
+		g, groupCtx := errgroup.WithContext(ctx)
+		g.SetLimit(32)
 
 		sqlClient, err := e.lazyExecutor.Get()
 		if err != nil {
@@ -83,17 +85,26 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 		}
 
 		for _, sqlDef := range sqlDefs {
-			pool.Do(func() error {
-				if !sqlDef.IsView {
+			sqlDef := sqlDef
 
-					if sql, err := e.showCreateTable(ctx, sqlClient, sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
+			select {
+			case <-groupCtx.Done():
+				return nil, groupCtx.Err()
+			default:
+			}
+
+			g.Go(func() error {
+				if !sqlDef.IsView {
+					if sql, err := e.showCreateTable(groupCtx, sqlClient, sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
+						m.Lock()
 						sqlDef.Sql = sql
+						m.Unlock()
 					}
 				}
 				return nil
 			})
 		}
-		err = pool.Wait()
+		err = g.Wait()
 		if err != nil {
 			return nil, err
 		}
