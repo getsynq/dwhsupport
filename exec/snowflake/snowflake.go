@@ -35,7 +35,7 @@ type SnowflakeConf struct {
 
 type Executor interface {
 	stdsql.StdSqlExecutor
-	QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error)
+	QueryRows(ctx context.Context, q string, args ...any) (*sqlx.Rows, error)
 }
 
 var _ stdsql.StdSqlExecutor = &SnowflakeExecutor{}
@@ -57,11 +57,11 @@ func parsePrivateKey(privateKeyPEM []byte, passphrase string) (*rsa.PrivateKey, 
 		return nil, errors.New("failed to decode PEM block containing private key")
 	}
 
-	var privKey interface{}
+	var privKey any
 	var err error
 
-	// Handle encrypted private keys
-	if block.Type == "ENCRYPTED PRIVATE KEY" {
+	switch block.Type {
+	case "ENCRYPTED PRIVATE KEY":
 		if passphrase == "" {
 			return nil, errors.New("encrypted private key is provided but no passphrase is set")
 		}
@@ -69,7 +69,7 @@ func parsePrivateKey(privateKeyPEM []byte, passphrase string) (*rsa.PrivateKey, 
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to parse encrypted private key")
 		}
-	} else if block.Type == "PRIVATE KEY" {
+	case "PRIVATE KEY":
 		if passphrase != "" {
 			return nil, errors.New("passphrase provided but private key is not encrypted")
 		}
@@ -77,7 +77,7 @@ func parsePrivateKey(privateKeyPEM []byte, passphrase string) (*rsa.PrivateKey, 
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to parse private key")
 		}
-	} else {
+	default:
 		return nil, errors.Errorf("unsupported PEM block type: %s", block.Type)
 	}
 
@@ -115,7 +115,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	} else if len(conf.PrivateKeyFile) > 0 {
 		keyData, err := os.ReadFile(conf.PrivateKeyFile)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to read private key file")
+			return nil, exec.NewAuthError(errors.Wrap(err, "failed to read private key file"))
 		}
 		privateKeyPEM = keyData
 	}
@@ -123,7 +123,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	if len(privateKeyPEM) > 0 {
 		privKey, err := parsePrivateKey(privateKeyPEM, conf.PrivateKeyPassphrase)
 		if err != nil {
-			return nil, err
+			return nil, exec.NewAuthError(err)
 		}
 		c.PrivateKey = privKey
 		c.Authenticator = gosnowflake.AuthTypeJwt
@@ -141,7 +141,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	return &SnowflakeExecutor{conf: conf, db: db}, nil
 }
 
-func (e *SnowflakeExecutor) QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error) {
+func (e *SnowflakeExecutor) QueryRows(ctx context.Context, q string, args ...any) (*sqlx.Rows, error) {
 	return e.db.QueryxContext(ctx, q, args...)
 }
 
@@ -159,7 +159,7 @@ type Mock struct {
 	queryRowsReturns func() (*sqlx.Rows, error)
 }
 
-func (bq *Mock) QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error) {
+func (bq *Mock) QueryRows(ctx context.Context, q string, args ...any) (*sqlx.Rows, error) {
 	if bq.queryRowsReturns == nil {
 		return nil, fmt.Errorf("no return defined in query rows mock")
 	}
