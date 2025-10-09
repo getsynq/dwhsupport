@@ -80,7 +80,7 @@ func (d *RedshiftDialect) AddTime(expr Expr, duration time.Duration) Expr {
 }
 
 func (d *RedshiftDialect) CurrentTimestamp() Expr {
-	return Sql("CURRENT_TIMESTAMP")
+	return Sql("CURRENT_TIMESTAMP::timestamp")
 }
 
 func (d *RedshiftDialect) Identifier(identifier string) string {

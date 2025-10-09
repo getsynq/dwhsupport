@@ -2,7 +2,7 @@
 [TestBaseSuite/TestDialect/redshift - 1]
 select
   *, 
-  DATEADD(DAY, 1, CURRENT_TIMESTAMP) as tomorrow
+  DATEADD(DAY, 1, CURRENT_TIMESTAMP::timestamp) as tomorrow
 from "proj"."default"."users" 
 order by created_at desc limit 10
 ---
