@@ -65,6 +65,11 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 			func() error {
 				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(catalogQuery, database))
 				if err != nil {
+					if isSharedDatabaseUnavailableError(err) {
+						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
+							Warn("Shared database is no longer available, skipping")
+						return nil
+					}
 					return errors.Wrapf(err, "failed to query catalog for database %s", database)
 				}
 				defer rows.Close()

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -60,6 +61,11 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 
 				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(tableMetricsSql, database))
 				if err != nil {
+					if isSharedDatabaseUnavailableError(err) {
+						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
+							Warn("Shared database is no longer available, skipping")
+						return nil
+					}
 					return errors.Wrapf(err, "failed to query metrics for database %s", database)
 				}
 				defer rows.Close()

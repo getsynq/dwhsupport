@@ -10,6 +10,7 @@ import (
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
 )
@@ -134,15 +135,46 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 	for _, database := range allDatabases {
 		existingDbs[database.Name] = true
 	}
+
 	var missingDbs []string
+	var unavailableSharedDbs []string
+
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
 			missingDbs = append(missingDbs, database)
+			continue
+		}
+
+		// Probe the database to check if it's an unavailable shared database
+		// We use a simple query against information_schema which will fail if the shared database is unavailable
+		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.tables LIMIT 1", database)
+		_, probeErr := e.executor.GetDb().QueryContext(ctx, probeQuery)
+		if probeErr != nil {
+			if isSharedDatabaseUnavailableError(probeErr) {
+				logging.GetLogger(ctx).WithField("database", database).WithError(probeErr).
+					Warn("Shared database is no longer available")
+				unavailableSharedDbs = append(unavailableSharedDbs, database)
+			} else {
+				// For other errors, log but don't fail validation
+				logging.GetLogger(ctx).WithField("database", database).WithError(probeErr).
+					Debug("Database probe query failed")
+			}
 		}
 	}
 
 	if len(missingDbs) > 0 {
-		warnings = append(warnings, fmt.Sprintf("Database not found or no permissions to access %s", strings.Join(missingDbs, ", ")))
+		warnings = append(warnings, fmt.Sprintf("Database not found or no permissions to access: %s", strings.Join(missingDbs, ", ")))
+	}
+
+	if len(unavailableSharedDbs) > 0 {
+		warnings = append(
+			warnings,
+			fmt.Sprintf(
+				"Shared database(s) no longer available and will be skipped during data extraction: %s. "+
+					"These databases need to be re-created if and when the publisher makes them available again.",
+				strings.Join(unavailableSharedDbs, ", "),
+			),
+		)
 	}
 
 	return warnings, nil
@@ -180,6 +212,19 @@ func ignoreShare(ownerAccount string) bool {
 	}
 	if strings.HasPrefix(ownerAccount, "KNOEMA.") {
 		return true
+	}
+	return false
+}
+
+// isSharedDatabaseUnavailableError checks if the error is a Snowflake shared database unavailable error
+func isSharedDatabaseUnavailableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var snowflakeErr *gosnowflake.SnowflakeError
+	if errors.As(err, &snowflakeErr) {
+		// Error code 003030 with SQL state 02000 indicates shared database is unavailable
+		return snowflakeErr.Number == 3030 || strings.Contains(snowflakeErr.Message, "Shared database is no longer available")
 	}
 	return false
 }

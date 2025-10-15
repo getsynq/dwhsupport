@@ -35,7 +35,7 @@ false as "is_view",
 
 FROM %[1]s.information_schema.tables
 where UPPER(table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
-AND table_type !='VIEW' 
+AND table_type !='VIEW'
 AND table_type !='MATERIALIZED VIEW'
 `
 
@@ -73,6 +73,11 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 
 				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(sqlDefinitionsQuery, database))
 				if err != nil {
+					if isSharedDatabaseUnavailableError(err) {
+						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
+							Warn("Shared database is no longer available, skipping")
+						return nil
+					}
 					return errors.Wrapf(err, "failed to query sql definitions for database %s", database)
 				}
 				defer rows.Close()

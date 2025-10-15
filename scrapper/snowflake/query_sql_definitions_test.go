@@ -3,6 +3,8 @@ package snowflake
 import (
 	"testing"
 
+	"github.com/pkg/errors"
+	gosnowflake "github.com/snowflakedb/gosnowflake"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -157,10 +159,10 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlsPerObjectRecursiveView() {
         WHERE title = 'President'
       UNION ALL
       -- ... and work our way down one level at a time.
-      SELECT employees.title, 
-             employees.employee_ID, 
-             employees.manager_ID, 
-             employee_hierarchy_02.employee_id AS "MGR_EMP_ID (SHOULD BE SAME)", 
+      SELECT employees.title,
+             employees.employee_ID,
+             employees.manager_ID,
+             employee_hierarchy_02.employee_id AS "MGR_EMP_ID (SHOULD BE SAME)",
              employee_hierarchy_02.title AS "MGR TITLE"
         FROM employees INNER JOIN employee_hierarchy_02
         WHERE employee_hierarchy_02.employee_ID = employees.manager_ID
@@ -174,4 +176,41 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlsPerObjectRecursiveView() {
 		s.NotEmpty(ddl)
 	}
 
+}
+
+func (s *QuerySqlDefinitionsSuite) TestIsSharedDatabaseUnavailableError() {
+	// Test with nil error
+	s.False(isSharedDatabaseUnavailableError(nil))
+
+	// Test with Snowflake error code 3030
+	snowflakeErr := &gosnowflake.SnowflakeError{
+		Number:   3030,
+		SQLState: "02000",
+		Message:  "Shared database is no longer available for use. It will need to be re-created if and when the publisher makes it available again.",
+	}
+	s.True(isSharedDatabaseUnavailableError(snowflakeErr))
+
+	// Test with wrapped Snowflake error
+	wrappedErr := errors.Wrap(snowflakeErr, "failed to query database")
+	s.True(isSharedDatabaseUnavailableError(wrappedErr))
+
+	// Test with Snowflake error with message containing the text
+	snowflakeErrWithMsg := &gosnowflake.SnowflakeError{
+		Number:   123,
+		SQLState: "99999",
+		Message:  "Some error: Shared database is no longer available for use",
+	}
+	s.True(isSharedDatabaseUnavailableError(snowflakeErrWithMsg))
+
+	// Test with different Snowflake error
+	differentErr := &gosnowflake.SnowflakeError{
+		Number:   1234,
+		SQLState: "42000",
+		Message:  "Some other error",
+	}
+	s.False(isSharedDatabaseUnavailableError(differentErr))
+
+	// Test with regular error
+	regularErr := errors.New("regular error")
+	s.False(isSharedDatabaseUnavailableError(regularErr))
 }
