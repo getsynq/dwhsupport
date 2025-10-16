@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/getsynq/dwhsupport/exec/trino"
 	"github.com/stretchr/testify/suite"
@@ -57,6 +58,47 @@ func (s *ValidateConfigSuite) TestValidateConfiguration_MissingCatalogs() {
 	s.Require().NoError(err)
 	s.NotEmpty(msgs)
 	s.Contains(msgs[0], "definitely_missing_catalog")
+}
+
+func (s *ValidateConfigSuite) TestValidateConfiguration_UnavailableCatalog() {
+	scr := s.newScrapperWithCatalogs([]string{"iceberg_gcs", "kernel_ext_dbt_pg"})
+	defer scr.Close()
+	ctx := context.TODO()
+	msgs, err := scr.ValidateConfiguration(ctx)
+	s.Require().NoError(err)
+	s.NotEmpty(msgs, "Should have warnings about unavailable catalog")
+
+	// Check that we got a warning about kernel_ext_dbt_pg being unavailable
+	foundWarning := false
+	for _, msg := range msgs {
+		if s.Contains(msg, "kernel_ext_dbt_pg") && s.Contains(msg, "no longer available") {
+			foundWarning = true
+			break
+		}
+	}
+	s.True(foundWarning, "Should warn about kernel_ext_dbt_pg being unavailable")
+}
+
+func (s *ValidateConfigSuite) TestQueryTableMetrics_WithUnavailableCatalog() {
+	scr := s.newScrapperWithCatalogs([]string{"iceberg_gcs", "tpch", "kernel_ext_dbt_pg"})
+	defer scr.Close()
+	ctx := context.TODO()
+
+	// First validate to see warnings
+	msgs, err := scr.ValidateConfiguration(ctx)
+	s.Require().NoError(err)
+	if len(msgs) > 0 {
+		s.T().Logf("Validation warnings: %v", msgs)
+	}
+
+	// Try to fetch metrics - should succeed even with unavailable catalog
+	metrics, err := scr.QueryTableMetrics(ctx, time.Time{})
+	s.Require().NoError(err, "QueryTableMetrics should succeed despite unavailable catalog")
+	s.NotNil(metrics)
+
+	// We should have metrics from working catalogs (iceberg_gcs, tpch)
+	// but not fail due to kernel_ext_dbt_pg
+	s.T().Logf("Successfully fetched %d table metrics", len(metrics))
 }
 
 type ErrorDetectionSuite struct {
