@@ -167,18 +167,27 @@ func (e *TrinoScrapper) fqn(row scrapper.HasTableFqn, dollarTable ...string) int
 }
 
 // isCatalogUnavailableError checks if the error indicates a catalog is unavailable or inaccessible
+//
+// This function detects when Trino cannot access a catalog's underlying data source.
+// The typical error chain is:
+//  1. Go wrapper: "failed to fetch metrics: failed to query metrics"
+//  2. Trino driver: "trino: query failed (200 OK)"
+//  3. Trino server: "EXTERNAL: Error listing tables for catalog xyz: The connection attempt failed"
+//
+// Note: Trino responds with HTTP 200 OK but includes an error message when it cannot
+// connect to the external database backing a catalog (e.g., PostgreSQL, MySQL).
+// The "EXTERNAL" prefix indicates the error is with the external data source, not Trino itself.
 func isCatalogUnavailableError(err error) bool {
 	if err == nil {
 		return false
 	}
 	errMsg := strings.ToLower(err.Error())
 	// Common patterns for unavailable Trino catalogs:
-	// - "catalog 'xyz' not found"
-	// - "catalog 'xyz' does not exist"
-	// - "line 1:15: catalog 'xyz' not registered"
-	// - "EXTERNAL: Error listing tables for catalog xyz: The connection attempt failed."
-	// - Connection failures to the catalog's data source
-	// - "schema does not exist" when probing a catalog
+	// - "catalog 'xyz' not found" - catalog not registered in Trino
+	// - "catalog 'xyz' does not exist" - catalog doesn't exist
+	// - "line 1:15: catalog 'xyz' not registered" - catalog not registered
+	// - "EXTERNAL: Error listing tables for catalog xyz: The connection attempt failed" - external DB unreachable
+	// - Other connection/listing errors from external data sources
 	return strings.Contains(errMsg, "catalog") &&
 		(strings.Contains(errMsg, "not found") ||
 			strings.Contains(errMsg, "does not exist") ||
