@@ -130,6 +130,11 @@ func (e *TrinoScrapper) getBasicSqlDefinitions(ctx context.Context) ([]*scrapper
 			}),
 		)
 		if err != nil {
+			if isCatalogUnavailableError(err) {
+				logging.GetLogger(ctx).WithField("catalog", catalog.CatalogName).WithError(err).
+					Warn("Catalog is no longer available, skipping")
+				continue
+			}
 			return nil, err
 		}
 		out = append(out, res...)

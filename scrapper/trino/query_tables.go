@@ -7,6 +7,7 @@ import (
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
@@ -82,6 +83,11 @@ func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]
 		}),
 	)
 	if err != nil {
+		if isCatalogUnavailableError(err) {
+			logging.GetLogger(ctx).WithField("catalog", catalogName).WithError(err).
+				Warn("Catalog is no longer available, skipping")
+			return nil, nil
+		}
 		return nil, err
 	}
 	return res, nil
