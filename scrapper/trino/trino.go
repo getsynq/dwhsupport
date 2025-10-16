@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
@@ -92,24 +93,56 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 	if err != nil {
 		return nil, err
 	}
+
+	existingCatalogs := map[string]bool{}
+	for _, catalog := range availableCatalogs {
+		existingCatalogs[catalog.CatalogName] = true
+	}
+
 	var missingCatalogs []string
+	var unavailableCatalogs []string
+
 	for _, catalog := range e.conf.Catalogs {
-		found := false
-		for _, availableCatalog := range availableCatalogs {
-			if catalog == availableCatalog.CatalogName {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !existingCatalogs[catalog] {
 			missingCatalogs = append(missingCatalogs, catalog)
+			continue
+		}
+
+		// Probe the catalog to check if it's accessible with a 5 second timeout
+		// We use a simple query against information_schema which will fail if the catalog is unavailable
+		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.schemata LIMIT 1", catalog)
+		_, probeErr := e.executor.GetDb().QueryContext(probeCtx, probeQuery)
+		cancel()
+
+		if probeErr != nil {
+			if isCatalogUnavailableError(probeErr) || probeErr == context.DeadlineExceeded {
+				logging.GetLogger(ctx).WithField("catalog", catalog).WithError(probeErr).
+					Warn("Catalog is no longer available")
+				unavailableCatalogs = append(unavailableCatalogs, catalog)
+			} else {
+				// For other errors, log but don't fail validation
+				logging.GetLogger(ctx).WithField("catalog", catalog).WithError(probeErr).
+					Debug("Catalog probe query failed")
+			}
 		}
 	}
 
 	var messages []string
 
 	if len(missingCatalogs) > 0 {
-		messages = append(messages, fmt.Sprintf("The following catalogs are not available: %s", strings.Join(missingCatalogs, ", ")))
+		messages = append(messages, fmt.Sprintf("Catalog not found or no permissions to access: %s", strings.Join(missingCatalogs, ", ")))
+	}
+
+	if len(unavailableCatalogs) > 0 {
+		messages = append(
+			messages,
+			fmt.Sprintf(
+				"Catalog(s) no longer available and will be skipped during data extraction: %s. "+
+					"These catalogs may need to be reconfigured or reconnected.",
+				strings.Join(unavailableCatalogs, ", "),
+			),
+		)
 	}
 
 	return messages, nil
@@ -131,4 +164,27 @@ func (e *TrinoScrapper) fqn(row scrapper.HasTableFqn, dollarTable ...string) int
 	}
 
 	return fmt.Sprintf("%q.%q.%q", fqn.DatabaseName, fqn.SchemaName, table)
+}
+
+// isCatalogUnavailableError checks if the error indicates a catalog is unavailable or inaccessible
+func isCatalogUnavailableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	// Common patterns for unavailable Trino catalogs:
+	// - "catalog 'xyz' not found"
+	// - "catalog 'xyz' does not exist"
+	// - "line 1:15: catalog 'xyz' not registered"
+	// - "EXTERNAL: Error listing tables for catalog xyz: The connection attempt failed."
+	// - Connection failures to the catalog's data source
+	// - "schema does not exist" when probing a catalog
+	return strings.Contains(errMsg, "catalog") &&
+		(strings.Contains(errMsg, "not found") ||
+			strings.Contains(errMsg, "does not exist") ||
+			strings.Contains(errMsg, "not registered") ||
+			strings.Contains(errMsg, "connection") ||
+			strings.Contains(errMsg, "unreachable") ||
+			strings.Contains(errMsg, "unavailable") ||
+			strings.Contains(errMsg, "error listing"))
 }
