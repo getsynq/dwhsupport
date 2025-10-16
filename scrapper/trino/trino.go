@@ -108,9 +108,9 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 			continue
 		}
 
-		// Probe the catalog to check if it's accessible with a 5 second timeout
+		// Probe the catalog to check if it's accessible with a 15 second timeout
 		// We use a simple query against information_schema which will fail if the catalog is unavailable
-		probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.schemata LIMIT 1", catalog)
 		_, probeErr := e.executor.GetDb().QueryContext(probeCtx, probeQuery)
 		cancel()
