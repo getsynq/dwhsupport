@@ -70,10 +70,13 @@ func Databricks(ctx context.Context, t *agentdwhv1.DatabricksConf) (*scrapperdat
 
 func MySQL(ctx context.Context, t *agentdwhv1.MySQLConf) (*scrappermysql.MySQLScrapper, error) {
 	return scrappermysql.NewMySQLScrapper(ctx, &scrappermysql.MySQLScrapperConf{
-		User:     t.GetUsername(),
-		Password: t.GetPassword(),
-		Host:     t.GetHost(),
-		Port:     int(t.GetPort()),
+		User:          t.GetUsername(),
+		Password:      t.GetPassword(),
+		Host:          t.GetHost(),
+		Port:          int(t.GetPort()),
+		Database:      t.GetDatabase(),
+		AllowInsecure: t.GetAllowInsecure(),
+		Params:        t.GetParams(),
 	})
 }
 
@@ -107,6 +110,7 @@ func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowf
 			User:                 t.GetUsername(),
 			Password:             t.GetPassword(),
 			PrivateKey:           []byte(t.GetPrivateKey()),
+			PrivateKeyFile:       t.GetPrivateKeyFile(),
 			PrivateKeyPassphrase: t.GetPrivateKeyPassphrase(),
 			Account:              t.GetAccount(),
 			Warehouse:            t.GetWarehouse(),

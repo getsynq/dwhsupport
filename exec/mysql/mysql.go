@@ -12,10 +12,13 @@ import (
 )
 
 type MySQLConf struct {
-	User     string
-	Password string
-	Host     string
-	Port     int
+	User          string
+	Password      string
+	Host          string
+	Port          int
+	Database      string
+	AllowInsecure bool
+	Params        map[string]string
 }
 
 type Executor interface {
@@ -39,14 +42,24 @@ func NewMySQLExecutor(ctx context.Context, conf *MySQLConf) (*MySQLExecutor, err
 	}
 
 	params := map[string]string{}
+	// Merge custom params from configuration
+	for k, v := range conf.Params {
+		params[k] = v
+	}
 
 	config := mysql.NewConfig()
 	config.User = conf.User
 	config.Net = "tcp"
 	config.Passwd = conf.Password
 	config.Addr = fmt.Sprintf("%s:%d", conf.Host, conf.Port)
+	config.DBName = conf.Database
 	config.Params = params
 	config.ParseTime = true
+
+	// Handle AllowInsecure flag
+	if conf.AllowInsecure {
+		config.TLSConfig = "false"
+	}
 
 	db, err := sqlx.Open("mysql", config.FormatDSN())
 	if err != nil {
