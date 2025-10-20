@@ -62,7 +62,9 @@ func (d *SshTunnelDialer) DialTimeout(network, address string, timeout time.Dura
 	if d.client == nil {
 		return nil, errors.New("dialer is closed")
 	}
-	return d.client.Dial(network, address)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return d.client.DialContext(ctx, network, address)
 }
 
 func NewSshTunnelDialer(tunnel *SshTunnel) (*SshTunnelDialer, error) {
@@ -79,6 +81,7 @@ func NewSshTunnelDialer(tunnel *SshTunnel) (*SshTunnelDialer, error) {
 		User:            tunnel.User,
 		Auth:            []ssh.AuthMethod{},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         30 * time.Second,
 	}
 	sshConfig.Auth = append(sshConfig.Auth, ssh.PublicKeys(privateKey))
 
