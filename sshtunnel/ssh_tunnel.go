@@ -16,6 +16,7 @@ type SshTunnel struct {
 	Port       int
 	User       string
 	PrivateKey []byte
+	Timeout    time.Duration
 }
 
 func (r *SshTunnel) IsEnabled() bool {
@@ -62,7 +63,9 @@ func (d *SshTunnelDialer) DialTimeout(network, address string, timeout time.Dura
 	if d.client == nil {
 		return nil, errors.New("dialer is closed")
 	}
-	return d.client.Dial(network, address)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return d.client.DialContext(ctx, network, address)
 }
 
 func NewSshTunnelDialer(tunnel *SshTunnel) (*SshTunnelDialer, error) {
@@ -75,10 +78,16 @@ func NewSshTunnelDialer(tunnel *SshTunnel) (*SshTunnelDialer, error) {
 		return nil, errors.Wrap(err, "failed to parse private key")
 	}
 
+	timeout := tunnel.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+
 	sshConfig := &ssh.ClientConfig{
 		User:            tunnel.User,
 		Auth:            []ssh.AuthMethod{},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         timeout,
 	}
 	sshConfig.Auth = append(sshConfig.Auth, ssh.PublicKeys(privateKey))
 
