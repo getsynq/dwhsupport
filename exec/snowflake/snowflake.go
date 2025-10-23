@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -96,8 +97,29 @@ func parsePrivateKey(privateKeyPEM []byte, passphrase string) (*rsa.PrivateKey, 
 
 // cleanAccountName removes the .snowflakecomputing.com suffix from the account name if present.
 // The Snowflake driver automatically appends this suffix, so we need to ensure it's not duplicated.
-// For example, "myaccount.snowflakecomputing.com" becomes "myaccount".
+// It also handles URLs by extracting the hostname first.
+//
+// Examples:
+//   - "myaccount" -> "myaccount"
+//   - "myaccount.snowflakecomputing.com" -> "myaccount"
+//   - "https://myaccount.snowflakecomputing.com" -> "myaccount"
+//   - "https://myaccount.snowflakecomputing.com/" -> "myaccount"
+//   - "myaccount.us-east-1" -> "myaccount.us-east-1"
 func cleanAccountName(account string) string {
+	account = strings.TrimSpace(account)
+
+	// If it looks like a URL, parse it and extract the hostname
+	if strings.HasPrefix(account, "http://") || strings.HasPrefix(account, "https://") {
+		parsed, err := url.Parse(account)
+		if err == nil && parsed.Host != "" {
+			account = parsed.Host
+		}
+	}
+
+	// Remove trailing slash if present
+	account = strings.TrimSuffix(account, "/")
+
+	// Remove the .snowflakecomputing.com suffix
 	return strings.TrimSuffix(account, ".snowflakecomputing.com")
 }
 
