@@ -7,7 +7,10 @@ import (
 	"database/sql"
 	"encoding/pem"
 	"fmt"
+	"net/http"
 	"os"
+	"strings"
+	"time"
 
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
@@ -31,6 +34,8 @@ type SnowflakeConf struct {
 	Warehouse            string
 	Databases            []string
 	Role                 string
+	// Transporter is an optional http.RoundTripper to use for the underlying HTTP client. Use [gosnowflake.SnowflakeTransport] as a base.
+	Transporter http.RoundTripper
 }
 
 type Executor interface {
@@ -89,6 +94,13 @@ func parsePrivateKey(privateKeyPEM []byte, passphrase string) (*rsa.PrivateKey, 
 	return rsaKey, nil
 }
 
+// cleanAccountName removes the .snowflakecomputing.com suffix from the account name if present.
+// The Snowflake driver automatically appends this suffix, so we need to ensure it's not duplicated.
+// For example, "myaccount.snowflakecomputing.com" becomes "myaccount".
+func cleanAccountName(account string) string {
+	return strings.TrimSuffix(account, ".snowflakecomputing.com")
+}
+
 func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeExecutor, error) {
 
 	database := ""
@@ -97,7 +109,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	}
 
 	c := &gosnowflake.Config{
-		Account:             conf.Account,
+		Account:             cleanAccountName(conf.Account),
 		User:                conf.User,
 		Password:            conf.Password,
 		Warehouse:           conf.Warehouse,
@@ -106,6 +118,8 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 		Application:         SPNApplicationId,
 		Params:              map[string]*string{},
 		DisableConsoleLogin: gosnowflake.ConfigBoolTrue,
+		LoginTimeout:        30 * time.Second, // Timeout for JWT token authentication exchange
+		Transporter:         conf.Transporter,
 	}
 
 	// Load private key from either inline bytes or file
