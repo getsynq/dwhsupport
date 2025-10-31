@@ -1,24 +1,24 @@
 
 [TestMetricsSuite/TestMultiMetricValues - 1]
 select
-  COALESCE("workspace", '') as "segment", 
-  COALESCE("run_type", '') as "segment_2", 
-  count(workspace) as "workspace$num_not_null", 
-  count(distinct workspace) as "workspace$num_unique", 
-  count_if(workspace = '') as "workspace$num_empty", 
-  count(run_type) as "run_type$num_not_null", 
-  count(distinct run_type) as "run_type$num_unique", 
-  count_if(run_type = 0) as "run_type$num_empty", 
-  CAST(avg(run_type) AS FLOAT) as "run_type$mean", 
-  CAST(min(run_type) AS FLOAT) as "run_type$min", 
-  CAST(max(run_type) AS FLOAT) as "run_type$max", 
-  CAST(median(run_type) AS FLOAT) as "run_type$median", 
-  CAST(stddev(run_type) AS FLOAT) as "run_type$stddev"
+  COALESCE(workspace, '') as segment, 
+  COALESCE(run_type, '') as segment_2, 
+  count(workspace) as workspace$num_not_null, 
+  count(distinct workspace) as workspace$num_unique, 
+  count_if(workspace = '') as workspace$num_empty, 
+  count(run_type) as run_type$num_not_null, 
+  count(distinct run_type) as run_type$num_unique, 
+  count_if(run_type = 0) as run_type$num_empty, 
+  CAST(avg(run_type) AS FLOAT) as run_type$mean, 
+  CAST(min(run_type) AS FLOAT) as run_type$min, 
+  CAST(max(run_type) AS FLOAT) as run_type$max, 
+  CAST(median(run_type) AS FLOAT) as run_type$median, 
+  CAST(stddev(run_type) AS FLOAT) as run_type$stddev
 from db.default.runs 
 group by
-  "segment", 
-  "segment_2"
+  segment, 
+  segment_2
 order by
-  "segment", 
-  "segment_2" 
+  segment, 
+  segment_2 
 ---
