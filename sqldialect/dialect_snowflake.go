@@ -84,7 +84,7 @@ func (d *SnowflakeDialect) CurrentTimestamp() Expr {
 }
 
 func (d *SnowflakeDialect) Identifier(identifier string) string {
-	return identifier
+	return fmt.Sprintf("%q", identifier)
 }
 
 func (d *SnowflakeDialect) ToString(expr Expr) Expr {

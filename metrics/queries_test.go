@@ -299,11 +299,11 @@ func (s *MetricsSuite) TestFilters() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, []dwhsql.Expr{dwhsql.Star()})
-		queryBuilder = queryBuilder.WithFilter(dwhsql.Eq(dwhsql.Identifier("workspace"), dwhsql.String("synq-demo")))
+		queryBuilder = queryBuilder.WithFilter(dwhsql.Eq(dwhsql.TextCol("workspace"), dwhsql.String("synq-demo")))
 		queryBuilder = queryBuilder.WithFilter(
 			dwhsql.Or(
-				dwhsql.In(dwhsql.Identifier("status"), dwhsql.String("success"), dwhsql.String("failed")),
-				dwhsql.Eq(dwhsql.Identifier("skip"), dwhsql.String("true")),
+				dwhsql.In(dwhsql.TextCol("status"), dwhsql.String("success"), dwhsql.String("failed")),
+				dwhsql.Eq(dwhsql.TextCol("skip"), dwhsql.String("true")),
 			),
 		)
 		sql, err := queryBuilder.ToSql(dialect.Dialect)
