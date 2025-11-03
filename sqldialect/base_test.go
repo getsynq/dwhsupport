@@ -22,7 +22,7 @@ func (s *BaseSuite) TestCte() {
 		s.Run(dialect.Name, func() {
 			cteSelect := NewSelect().Cols(Star()).
 				From(TableFqn("proj", "default", "users")).
-				OrderBy(Desc(Identifier("created_at"))).
+				OrderBy(Desc(TextCol("created_at"))).
 				WithLimit(Limit(Int64(10)))
 			cteFqn := CteFqn("cte")
 
@@ -45,7 +45,7 @@ func (s *BaseSuite) TestTableFn() {
 					String("DOWNSTREAM"),
 					Int64(2),
 				)).
-				OrderBy(Desc(Identifier("created_at"))).
+				OrderBy(Desc(TextCol("created_at"))).
 				WithLimit(Limit(Int64(10)))
 
 			sql, err := sel.ToSql(dialect.Dialect)
@@ -63,7 +63,7 @@ func (s *BaseSuite) TestDialect() {
 				As(dialect.Dialect.AddTime(dialect.Dialect.CurrentTimestamp(), 24*time.Hour), Identifier("tomorrow")),
 			).
 				From(TableFqn("proj", "default", "users")).
-				OrderBy(Desc(Identifier("created_at"))).
+				OrderBy(Desc(TextCol("created_at"))).
 				WithLimit(Limit(Int64(10)))
 
 			sql, err := sel.ToSql(dialect.Dialect)

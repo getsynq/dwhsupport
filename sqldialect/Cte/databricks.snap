@@ -2,7 +2,7 @@
 [TestBaseSuite/TestCte/databricks - 1]
 with cte AS (select *
 from proj.default.users 
-order by `created_at` desc limit 10)
+order by created_at desc limit 10)
 select *
 from cte 
  
