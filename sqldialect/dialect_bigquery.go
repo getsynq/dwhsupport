@@ -87,6 +87,10 @@ func (d *BigQueryDialect) Identifier(identifier string) string {
 	return identifier
 }
 
+func (d *BigQueryDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *BigQueryDialect) ToString(expr Expr) Expr {
 	return WrapSql("SAFE_CAST(%s AS STRING)", expr)
 }

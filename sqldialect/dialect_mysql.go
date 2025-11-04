@@ -98,6 +98,10 @@ func (d *MySQLDialect) Identifier(identifier string) string {
 	return identifier
 }
 
+func (d *MySQLDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *MySQLDialect) ToString(expr Expr) Expr {
 	return WrapSql("CAST(%s AS CHAR)", expr)
 }

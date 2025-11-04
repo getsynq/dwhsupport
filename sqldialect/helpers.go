@@ -1,6 +1,8 @@
 package sqldialect
 
 import (
+	"fmt"
+	"strings"
 	"unicode"
 
 	"github.com/lib/pq"
@@ -29,4 +31,13 @@ func IsUpper(s string) bool {
 		}
 	}
 	return true
+}
+
+// StandardSQLStringLiteral implements the standard SQL string literal escaping
+// where single quotes are escaped by doubling them ('').
+// This is used by most SQL dialects: Snowflake, BigQuery, Postgres, Redshift,
+// Databricks, DuckDB, Trino, and MySQL.
+func StandardSQLStringLiteral(s string) string {
+	escaped := strings.ReplaceAll(s, "'", "''")
+	return fmt.Sprintf("'%s'", escaped)
 }

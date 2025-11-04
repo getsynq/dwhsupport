@@ -87,6 +87,10 @@ func (d *ClickHouseDialect) Identifier(identifier string) string {
 	return identifier
 }
 
+func (d *ClickHouseDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *ClickHouseDialect) ToString(expr Expr) Expr {
 	return Fn("toString", expr)
 }

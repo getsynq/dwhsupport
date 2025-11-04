@@ -87,6 +87,10 @@ func (d *TrinoDialect) Identifier(identifier string) string {
 	return identifier
 }
 
+func (d *TrinoDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *TrinoDialect) ToString(expr Expr) Expr {
 	return WrapSql("CAST(%s AS VARCHAR)", expr)
 }

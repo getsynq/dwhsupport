@@ -165,6 +165,83 @@ func (s *BaseSuite) TestIsUpper() {
 	}
 }
 
+func (s *BaseSuite) TestStringLiteral() {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "simple string",
+			input:    "hello",
+			expected: "'hello'",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "''",
+		},
+		{
+			name:     "string with single quote",
+			input:    "it's",
+			expected: "'it''s'",
+		},
+		{
+			name:     "string with multiple single quotes",
+			input:    "it's a 'test'",
+			expected: "'it''s a ''test'''",
+		},
+		{
+			name:     "string with only single quote",
+			input:    "'",
+			expected: "''''",
+		},
+		{
+			name:     "string with double quotes (no escaping needed)",
+			input:    `he said "hello"`,
+			expected: `'he said "hello"'`,
+		},
+		{
+			name:     "string with backslash",
+			input:    `path\to\file`,
+			expected: `'path\to\file'`,
+		},
+		{
+			name:     "string with newline",
+			input:    "line1\nline2",
+			expected: "'line1\nline2'",
+		},
+	}
+
+	for _, dialect := range DialectsToTest() {
+		s.Run(dialect.Name, func() {
+			for _, tc := range testCases {
+				s.Run(tc.name, func() {
+					result := dialect.Dialect.StringLiteral(tc.input)
+					s.Equal(tc.expected, result, "Failed for input: %q", tc.input)
+				})
+			}
+		})
+	}
+}
+
+func (s *BaseSuite) TestStringExprWithEscaping() {
+	for _, dialect := range DialectsToTest() {
+		s.Run(dialect.Name, func() {
+			sel := NewSelect().Cols(
+				Star(),
+				As(String("it's a test"), Identifier("test_col")),
+			).
+				From(TableFqn("proj", "default", "users")).
+				Where(Eq(TextCol("name"), String("O'Brien")))
+
+			sql, err := sel.ToSql(dialect.Dialect)
+			s.Require().NoError(err)
+			snaps.WithConfig(snaps.Dir("StringExprWithEscaping"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	v := m.Run()
 
