@@ -655,7 +655,7 @@ func Stringf(format string, val ...any) *StringLitExpr {
 }
 
 func (e *StringLitExpr) ToSql(dialect Dialect) (string, error) {
-	return fmt.Sprintf("'%v'", e.val), nil
+	return dialect.StringLiteral(e.val), nil
 }
 
 func (e *StringLitExpr) IsTextExpr() {}

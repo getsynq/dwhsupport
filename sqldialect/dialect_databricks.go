@@ -87,6 +87,10 @@ func (d *DatabricksDialect) Identifier(identifier string) string {
 	return fmt.Sprintf("`%s`", identifier)
 }
 
+func (d *DatabricksDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *DatabricksDialect) ToString(expr Expr) Expr {
 	return WrapSql("CAST(%s AS STRING)", expr)
 }

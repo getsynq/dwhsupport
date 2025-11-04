@@ -87,6 +87,10 @@ func (d *RedshiftDialect) Identifier(identifier string) string {
 	return identifier
 }
 
+func (d *RedshiftDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *RedshiftDialect) ToString(expr Expr) Expr {
 	return WrapSql("CAST(%s AS VARCHAR)", expr)
 }

@@ -87,6 +87,10 @@ func (d *PostgresDialect) Identifier(identifier string) string {
 	return identifier
 }
 
+func (d *PostgresDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *PostgresDialect) ToString(expr Expr) Expr {
 	return WrapSql("CAST(%s AS VARCHAR)", expr)
 }

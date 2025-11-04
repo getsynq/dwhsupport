@@ -87,6 +87,10 @@ func (d *DuckDBDialect) Identifier(identifier string) string {
 	return identifier
 }
 
+func (d *DuckDBDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *DuckDBDialect) ToString(expr Expr) Expr {
 	return WrapSql("CAST(%s AS VARCHAR)", expr)
 }

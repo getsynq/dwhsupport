@@ -87,6 +87,10 @@ func (d *SnowflakeDialect) Identifier(identifier string) string {
 	return fmt.Sprintf("%q", identifier)
 }
 
+func (d *SnowflakeDialect) StringLiteral(s string) string {
+	return StandardSQLStringLiteral(s)
+}
+
 func (d *SnowflakeDialect) ToString(expr Expr) Expr {
 	return Fn("to_varchar", expr)
 }
