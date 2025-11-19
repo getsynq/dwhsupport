@@ -2,31 +2,69 @@ package querylogs
 
 import (
 	"context"
+	"io"
 	"time"
 )
 
+// QueryLogIterator provides sequential access to query logs.
+// Implementations should fetch from the data warehouse as fast as possible
+// and buffer internally to minimize warehouse connection time.
+type QueryLogIterator interface {
+	// Next returns the next query log from the iterator.
+	//
+	// Returns:
+	//   - The next QueryLog and nil error on success
+	//   - nil and io.EOF when no more logs are available
+	//   - nil and an error if fetching fails
+	//
+	// Implementation notes:
+	//   - Should fetch from warehouse in optimal batch sizes internally
+	//   - Should buffer results to minimize warehouse connection time
+	//   - Must respect context cancellation
+	//   - Safe to call multiple times after io.EOF
+	Next(ctx context.Context) (*QueryLog, error)
+
+	// Close releases any resources held by the iterator.
+	// Should be called when iteration is complete or abandoned.
+	// Safe to call multiple times.
+	Close() error
+}
+
 // QueryLogsProvider defines the interface for fetching query logs from data warehouse platforms.
-// Implementations should stream query logs in batches to the provided receiver function.
 type QueryLogsProvider interface {
-	// FetchQueryLogs retrieves query logs within the specified time range and streams them to the receiver.
+	// FetchQueryLogs returns an iterator for query logs within the specified time range.
 	//
 	// Parameters:
 	//   - ctx: Context for cancellation and deadlines
 	//   - from: Start of the time range (inclusive)
 	//   - to: End of the time range (exclusive)
-	//   - receiver: Callback function that receives batches of query logs
 	//
-	// The receiver function is called multiple times with batches of query logs. It should return an error
-	// if processing fails, which will stop the iteration and return the error from FetchQueryLogs.
+	// Returns:
+	//   - An iterator for sequential access to query logs
+	//   - The caller is responsible for calling Close() on the iterator
 	//
 	// Implementation notes:
-	//   - Query logs should be ordered by CreatedAt timestamp
-	//   - Batch size is implementation-specific but should balance memory usage and callback overhead
-	//   - The receiver may be called with empty slices in some implementations
-	//   - Context cancellation should be respected and stop the fetching process
-	FetchQueryLogs(
-		ctx context.Context,
-		from, to time.Time,
-		receiver func(ctx context.Context, logs []*QueryLog) error,
-	) error
+	//   - Iterator should fetch from warehouse as fast as possible
+	//   - Platform-specific optimizations (batch sizes, parallel fetching) should happen inside the iterator
+	//   - Query logs should be ordered by CreatedAt timestamp when possible
+	//   - Context cancellation should be respected throughout iteration
+	//
+	// Example usage:
+	//   iter, err := provider.FetchQueryLogs(ctx, from, to)
+	//   if err != nil {
+	//       return err
+	//   }
+	//   defer iter.Close()
+	//
+	//   for {
+	//       log, err := iter.Next(ctx)
+	//       if err == io.EOF {
+	//           break
+	//       }
+	//       if err != nil {
+	//           return err
+	//       }
+	//       // Process log...
+	//   }
+	FetchQueryLogs(ctx context.Context, from, to time.Time) (QueryLogIterator, error)
 }
