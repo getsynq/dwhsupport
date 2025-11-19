@@ -9,6 +9,9 @@ import (
 // QueryLogIterator provides sequential access to query logs.
 // Implementations should fetch from the data warehouse as fast as possible
 // and buffer internally to minimize warehouse connection time.
+//
+// IMPORTANT: Implementations MUST automatically close resources when returning io.EOF
+// from Next(). This ensures no resource leaks even if caller forgets to call Close().
 type QueryLogIterator interface {
 	// Next returns the next query log from the iterator.
 	//
@@ -21,11 +24,13 @@ type QueryLogIterator interface {
 	//   - Should fetch from warehouse in optimal batch sizes internally
 	//   - Should buffer results to minimize warehouse connection time
 	//   - Must respect context cancellation
+	//   - MUST auto-close all resources before returning io.EOF (defensive programming)
 	//   - Safe to call multiple times after io.EOF
 	Next(ctx context.Context) (*QueryLog, error)
 
 	// Close releases any resources held by the iterator.
-	// Should be called when iteration is complete or abandoned.
+	// Should be called when iteration is complete or abandoned, but implementations
+	// MUST also auto-close when Next() returns io.EOF to prevent resource leaks.
 	// Safe to call multiple times.
 	Close() error
 }
