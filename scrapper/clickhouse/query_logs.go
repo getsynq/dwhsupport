@@ -8,10 +8,9 @@ import (
 	"strings"
 	"time"
 
-	dwhexec "github.com/getsynq/dwhsupport/exec"
-	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/jmoiron/sqlx"
 )
 
 //go:embed query_logs.sql
@@ -63,50 +62,20 @@ type ClickhouseQueryLogSchema struct {
 }
 
 type clickhouseQueryLogIterator struct {
-	buffer   []*querylogs.QueryLog
-	index    int
-	rowsChan chan *ClickhouseQueryLogSchema
-	errChan  chan error
-	closed   bool
+	rows   *sqlx.Rows
+	closed bool
 }
 
 func (s *ClickhouseScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time) (querylogs.QueryLogIterator, error) {
-	iter := &clickhouseQueryLogIterator{
-		rowsChan: make(chan *ClickhouseQueryLogSchema, 100), // Buffer for performance
-		errChan:  make(chan error, 1),
+	// Use native QueryRows - returns sqlx.Rows iterator
+	rows, err := s.Executor().QueryRows(ctx, queryLogsSql, from, to)
+	if err != nil {
+		return nil, err
 	}
 
-	// Start fetching in background
-	go func() {
-		defer close(iter.rowsChan)
-		defer close(iter.errChan)
-
-		querier := dwhexecclickhouse.NewQuerier[ClickhouseQueryLogSchema](s.Executor())
-		err := querier.QueryAndProcessMany(
-			ctx,
-			queryLogsSql,
-			func(ctx context.Context, rows []*ClickhouseQueryLogSchema) error {
-				for _, row := range rows {
-					select {
-					case iter.rowsChan <- row:
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				}
-				return nil
-			},
-			dwhexec.WithArgs[ClickhouseQueryLogSchema](from, to),
-		)
-
-		if err != nil {
-			select {
-			case iter.errChan <- err:
-			default:
-			}
-		}
-	}()
-
-	return iter, nil
+	return &clickhouseQueryLogIterator{
+		rows: rows,
+	}, nil
 }
 
 func (it *clickhouseQueryLogIterator) Next(ctx context.Context) (*querylogs.QueryLog, error) {
@@ -114,46 +83,42 @@ func (it *clickhouseQueryLogIterator) Next(ctx context.Context) (*querylogs.Quer
 		return nil, io.EOF
 	}
 
-	// Return from buffer first
-	if it.index < len(it.buffer) {
-		log := it.buffer[it.index]
-		it.index++
-		return log, nil
-	}
-
-	// Reset buffer
-	it.buffer = nil
-	it.index = 0
-
-	// Try to get next row
+	// Check context cancellation
 	select {
-	case row, ok := <-it.rowsChan:
-		if !ok {
-			// Channel closed - check for error
-			select {
-			case err := <-it.errChan:
-				// Don't auto-close on error - caller might want to retry
-				return nil, err
-			default:
-				// Normal completion - auto-close
-				it.Close()
-				return nil, io.EOF
-			}
-		}
-
-		log, err := convertClickhouseRowToQueryLog(row)
-		if err != nil {
-			// Defensive: log conversion error but continue (don't crash entire ingestion)
-			// Return the error so caller can decide whether to continue
-			return nil, err
-		}
-
-		return log, nil
-
 	case <-ctx.Done():
 		it.Close()
 		return nil, ctx.Err()
+	default:
 	}
+
+	// Use native rows.Next() iteration
+	if !it.rows.Next() {
+		// No more rows - check for error
+		if err := it.rows.Err(); err != nil {
+			// Don't auto-close on error - caller might want to inspect
+			return nil, err
+		}
+		// Normal completion - auto-close
+		it.Close()
+		return nil, io.EOF
+	}
+
+	// Scan into struct
+	var row ClickhouseQueryLogSchema
+	if err := it.rows.StructScan(&row); err != nil {
+		// Defensive: scan error, but don't crash entire ingestion
+		// Caller can decide whether to continue
+		return nil, err
+	}
+
+	// Convert to QueryLog
+	log, err := convertClickhouseRowToQueryLog(&row)
+	if err != nil {
+		// Defensive: conversion error
+		return nil, err
+	}
+
+	return log, nil
 }
 
 func (it *clickhouseQueryLogIterator) Close() error {
@@ -161,15 +126,7 @@ func (it *clickhouseQueryLogIterator) Close() error {
 		return nil
 	}
 	it.closed = true
-
-	// Drain channels to prevent goroutine leaks
-	go func() {
-		for range it.rowsChan {
-			// Drain
-		}
-	}()
-
-	return nil
+	return it.rows.Close()
 }
 
 func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema) (*querylogs.QueryLog, error) {
@@ -217,7 +174,7 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema) (*querylogs.Q
 	}
 
 	// Build metadata with all ClickHouse-specific fields
-	metadata := map[string]interface{}{
+	metadata := map[string]any{
 		"query_type":        row.QueryType,
 		"read_rows":         row.ReadRows,
 		"read_bytes":        row.ReadBytes,
