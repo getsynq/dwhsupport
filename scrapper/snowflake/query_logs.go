@@ -119,45 +119,52 @@ func (s *SnowflakeScrapper) FetchQueryLogs(ctx context.Context, from, to time.Ti
 }
 
 func (it *snowflakeQueryLogIterator) Next(ctx context.Context) (*querylogs.QueryLog, error) {
-	if it.closed {
-		return nil, io.EOF
-	}
+	for {
+		if it.closed {
+			return nil, io.EOF
+		}
 
-	// Check context cancellation
-	select {
-	case <-ctx.Done():
-		it.Close()
-		return nil, ctx.Err()
-	default:
-	}
+		// Check context cancellation
+		select {
+		case <-ctx.Done():
+			it.Close()
+			return nil, ctx.Err()
+		default:
+		}
 
-	// Use native rows.Next() iteration
-	if !it.rows.Next() {
-		// No more rows - check for error
-		if err := it.rows.Err(); err != nil {
-			// Don't auto-close on error - caller might want to inspect
+		// Use native rows.Next() iteration
+		if !it.rows.Next() {
+			// No more rows - check for error
+			if err := it.rows.Err(); err != nil {
+				// Don't auto-close on error - caller might want to inspect
+				return nil, err
+			}
+			// Normal completion - auto-close
+			it.Close()
+			return nil, io.EOF
+		}
+
+		// Scan into struct
+		var row SnowflakeQueryLogSchema
+		if err := it.rows.StructScan(&row); err != nil {
+			// Defensive: scan error, but don't crash entire ingestion
 			return nil, err
 		}
-		// Normal completion - auto-close
-		it.Close()
-		return nil, io.EOF
-	}
 
-	// Scan into struct
-	var row SnowflakeQueryLogSchema
-	if err := it.rows.StructScan(&row); err != nil {
-		// Defensive: scan error, but don't crash entire ingestion
-		return nil, err
-	}
+		// Convert to QueryLog
+		log, err := convertSnowflakeRowToQueryLog(&row)
+		if err != nil {
+			// Defensive: conversion error
+			return nil, err
+		}
 
-	// Convert to QueryLog
-	log, err := convertSnowflakeRowToQueryLog(&row)
-	if err != nil {
-		// Defensive: conversion error
-		return nil, err
-	}
+		// If nil is returned, it means we should skip this query (running queries)
+		if log == nil {
+			continue
+		}
 
-	return log, nil
+		return log, nil
+	}
 }
 
 func (it *snowflakeQueryLogIterator) Close() error {
@@ -219,11 +226,16 @@ func (s *SnowflakeScrapper) buildQueryLogsSql(ctx context.Context, from time.Tim
 }
 
 func convertSnowflakeRowToQueryLog(row *SnowflakeQueryLogSchema) (*querylogs.QueryLog, error) {
+	// Skip running queries (following original implementation)
+	switch strings.ToLower(row.ExecutionStatus) {
+	case "resuming_warehouse", "running", "queued", "blocked":
+		// Return nil to indicate this query should be skipped
+		return nil, nil
+	}
+
 	// Determine status from execution_status
 	status := "UNKNOWN"
 	switch strings.ToLower(row.ExecutionStatus) {
-	case "resuming_warehouse", "running", "queued", "blocked":
-		status = "RUNNING"
 	case "success":
 		status = "SUCCESS"
 	case "failed_with_error", "fail":
