@@ -6,6 +6,23 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
+// ObfuscationMode represents the level of SQL obfuscation applied to query logs.
+// This is critical for on-premise deployments where customers want to prevent
+// sensitive data in SQL queries from being sent to SYNQ backend.
+type ObfuscationMode int
+
+const (
+	// ObfuscationNone indicates no obfuscation was applied
+	ObfuscationNone ObfuscationMode = 0
+
+	// ObfuscationLiteralsOnly indicates string and numeric literals were replaced
+	// with placeholders while preserving query structure for SQL parsing
+	ObfuscationLiteralsOnly ObfuscationMode = 1
+
+	// ObfuscationFull indicates fully anonymized SQL (future feature)
+	ObfuscationFull ObfuscationMode = 2
+)
+
 // QueryLog represents a standardized query log entry from any data warehouse platform.
 // It provides a common structure while preserving platform-specific details in Metadata.
 type QueryLog struct {
@@ -15,8 +32,11 @@ type QueryLog struct {
 	// QueryID is the native query identifier or computed hash
 	QueryID string
 
-	// SQL is the query text
+	// SQL is the query text (may be obfuscated based on SqlObfuscationMode)
 	SQL string
+
+	// SqlHash is a hash of the original SQL for deduplication and caching
+	SqlHash string
 
 	// DwhContext contains structured context information (database, schema, warehouse, user, role, etc.)
 	DwhContext *DwhContext
@@ -29,6 +49,18 @@ type QueryLog struct {
 
 	// Metadata contains platform-specific fields that don't fit into the standard structure
 	Metadata map[string]interface{}
+
+	// SqlObfuscationMode indicates how the SQL was obfuscated (if at all)
+	SqlObfuscationMode ObfuscationMode
+
+	// IsParsable is a quick hint indicating whether the SQL can be parsed by CLL.
+	// This helps the backend decide whether to attempt SQL parsing for lineage extraction.
+	IsParsable bool
+
+	// HasCompleteNativeLineage indicates that NativeLineage contains complete lineage information
+	// and SQL parsing can be skipped entirely. When true, the backend should trust the native
+	// lineage and avoid expensive SQL parsing.
+	HasCompleteNativeLineage bool
 
 	// NativeLineage contains table lineage information when provided natively by the platform
 	// (e.g., BigQuery, ClickHouse). For other platforms, this will be nil and SQL parsing is required.
