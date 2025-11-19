@@ -153,8 +153,8 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema) (*querylogs.Q
 			}
 
 			inputTables = append(inputTables, scrapper.DwhFqn{
-				DatabaseName: schema,
-				SchemaName:   "",     // ClickHouse doesn't have schema concept in the same way
+				DatabaseName: "",     // ClickHouse doesn't have a separate database/instance concept
+				SchemaName:   schema, // ClickHouse "database" is equivalent to "schema"
 				ObjectName:   table,
 			})
 		}
@@ -206,7 +206,8 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema) (*querylogs.Q
 		QueryID:   row.InitialQueryId,
 		SQL:       row.Query,
 		DwhContext: &querylogs.DwhContext{
-			Database: row.CurrentDatabase,
+			Database: "", // ClickHouse doesn't have a separate database/instance concept
+			Schema:   row.CurrentDatabase, // ClickHouse "database" is equivalent to "schema" in other systems
 			User:     row.InitialUser,
 		},
 		QueryType:                row.QueryKind,
