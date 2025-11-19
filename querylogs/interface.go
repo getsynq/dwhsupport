@@ -2,7 +2,6 @@ package querylogs
 
 import (
 	"context"
-	"io"
 	"time"
 )
 
