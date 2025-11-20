@@ -396,13 +396,13 @@ func convertSnowflakeRowToQueryLog(row *SnowflakeQueryLogSchema, obfuscator quer
 	finishedAt := row.EndTime
 
 	return &querylogs.QueryLog{
-		CreatedAt:                row.EndTime,    // Use EndTime as CreatedAt (when query finished)
-		StartedAt:                &startedAt,     // When query execution started
-		FinishedAt:               &finishedAt,    // When query execution finished
-		QueryID:                  row.QueryID,
-		SQL:                      queryText,
-		QueryHash:                row.QueryParameterizedHash, // Native Snowflake parameterized query hash
-		SqlDialect:               sqlDialect,
+		CreatedAt:           row.EndTime,   // Use EndTime as CreatedAt (when query finished)
+		StartedAt:           &startedAt,    // When query execution started
+		FinishedAt:          &finishedAt,   // When query execution finished
+		QueryID:             row.QueryID,
+		SQL:                 queryText,
+		NormalizedQueryHash: row.QueryParameterizedHash, // Native Snowflake parameterized query hash
+		SqlDialect:          sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.QueryType,
 		Status:                   status,

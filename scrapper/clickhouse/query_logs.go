@@ -219,18 +219,18 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator qu
 	startedAt := row.QueryStartTimeMicroseconds
 	finishedAt := row.EventTimeMicroseconds
 
-	// Query hash (from normalizeQuery)
-	queryHash := fmt.Sprintf("%d", row.QueryHash)
+	// Normalized query hash (from cityHash64(normalizeQuery))
+	normalizedQueryHash := fmt.Sprintf("%d", row.QueryHash)
 
 	return &querylogs.QueryLog{
 		// Use EventTimeMicroseconds (when query finished) to match old implementation
-		CreatedAt:  row.EventTimeMicroseconds,
-		StartedAt:  &startedAt,
-		FinishedAt: &finishedAt,
-		QueryID:    row.InitialQueryId,
-		SQL:        queryText,
-		QueryHash:  &queryHash,
-		SqlDialect: sqlDialect,
+		CreatedAt:           row.EventTimeMicroseconds,
+		StartedAt:           &startedAt,
+		FinishedAt:          &finishedAt,
+		QueryID:             row.InitialQueryId,
+		SQL:                 queryText,
+		NormalizedQueryHash: &normalizedQueryHash,
+		SqlDialect:          sqlDialect,
 		DwhContext: &querylogs.DwhContext{
 			Database: "", // ClickHouse doesn't have a separate database/instance concept
 			Schema:   row.CurrentDatabase, // ClickHouse "database" is equivalent to "schema" in other systems

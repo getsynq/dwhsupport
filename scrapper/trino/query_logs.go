@@ -67,14 +67,14 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 		status = "FAILED"
 	}
 
-	// Use created as CreatedAt, fall back to started if not available
+	// Timing information - use end as CreatedAt (when query finished/logged)
 	var createdAt time.Time
-	if row.Created != nil {
-		createdAt = *row.Created
-	} else if row.Started != nil {
-		createdAt = *row.Started
-	} else if row.End != nil {
+	if row.End != nil {
 		createdAt = *row.End
+	} else if row.Started != nil {
+		createdAt = *row.Started // Fallback to started if end not available
+	} else if row.Created != nil {
+		createdAt = *row.Created // Fallback to created if neither available
 	} else {
 		createdAt = time.Now() // Defensive fallback
 	}
@@ -130,8 +130,11 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 
 	return &querylogs.QueryLog{
 		CreatedAt:                createdAt,
+		StartedAt:                row.Started, // When query execution started
+		FinishedAt:               row.End,     // When query execution finished
 		QueryID:                  row.QueryId,
 		SQL:                      queryText,
+		NormalizedQueryHash:      nil, // Trino doesn't provide normalized query hash
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                "", // Trino doesn't provide query type in this table

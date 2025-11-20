@@ -200,7 +200,9 @@ func convertDatabricksQueryInfoToQueryLog(queryInfo *servicesql.QueryInfo, obfus
 		queryText = obfuscator.Obfuscate(queryInfo.QueryText)
 	}
 
+	// Timing information
 	startedAt := time.UnixMilli(int64(queryInfo.QueryStartTimeMs))
+	finishedAt := time.UnixMilli(int64(queryInfo.QueryEndTimeMs))
 
 	// Build metadata with all Databricks-specific fields
 	metadata := map[string]any{
@@ -303,9 +305,12 @@ func convertDatabricksQueryInfoToQueryLog(queryInfo *servicesql.QueryInfo, obfus
 	// Databricks doesn't provide database/schema in QueryHistory API
 
 	return &querylogs.QueryLog{
-		CreatedAt:                startedAt,
+		CreatedAt:                finishedAt, // Use QueryEndTimeMs as CreatedAt (when query finished/logged)
+		StartedAt:                &startedAt, // When query execution started
+		FinishedAt:               &finishedAt, // When query execution finished
 		QueryID:                  queryInfo.QueryId,
 		SQL:                      queryText,
+		NormalizedQueryHash:      nil, // Databricks doesn't provide normalized query hash
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                queryInfo.StatementType.String(),

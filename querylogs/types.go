@@ -45,13 +45,11 @@ type QueryLog struct {
 	// SQL is the query text (may be obfuscated based on SqlObfuscationMode)
 	SQL string
 
-	// SqlHash is a hash of the original SQL for deduplication and caching
-	SqlHash string
-
-	// QueryHash is a hash of the normalized/parameterized query (without literal values)
-	// Used to identify queries that differ only in literal values
-	// Available for: Snowflake (QUERY_PARAMETERIZED_HASH), ClickHouse (computed from normalizeQuery)
-	QueryHash *string
+	// NormalizedQueryHash is a hash of the normalized/parameterized query (without literal values)
+	// Used for lineage caching - queries that differ only in literal values share the same lineage
+	// Available for: Snowflake (QUERY_PARAMETERIZED_HASH), ClickHouse (cityHash64(normalizeQuery))
+	// For platforms without native support, this field is nil
+	NormalizedQueryHash *string
 
 	// SqlDialect is the SQL dialect from Scrapper.DialectType() (snowflake, bigquery, databricks, etc.)
 	SqlDialect string
