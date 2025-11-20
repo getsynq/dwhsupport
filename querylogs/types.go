@@ -26,7 +26,9 @@ const (
 // QueryLog represents a standardized query log entry from any data warehouse platform.
 // It provides a common structure while preserving platform-specific details in Metadata.
 type QueryLog struct {
-	// CreatedAt is the timestamp when the query log was recorded (typically when query finished)
+	// CreatedAt is the timestamp when the query log was recorded (when query finished and results committed).
+	// This is the time when query results became available for other queries to use.
+	// Should be set to FinishedAt/EndTime across all platforms for consistency.
 	CreatedAt time.Time
 
 	// StartedAt is when query execution started (optional, nil if unknown).
@@ -34,7 +36,7 @@ type QueryLog struct {
 	// Duration is computed as FinishedAt - StartedAt.
 	StartedAt *time.Time
 
-	// FinishedAt is when query execution finished (optional, nil if unknown).
+	// FinishedAt is when query execution finished and results were committed (optional, nil if unknown).
 	// Platform scrappers should set this to the actual query end time.
 	// Duration is computed as FinishedAt - StartedAt.
 	FinishedAt *time.Time

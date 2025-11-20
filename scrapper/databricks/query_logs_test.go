@@ -220,8 +220,17 @@ func TestConvertDatabricksQueryInfoToQueryLog(t *testing.T) {
 
 			require.NotNil(t, log)
 
-			// Verify basic fields
-			require.Equal(t, time.UnixMilli(int64(tt.queryInfo.QueryStartTimeMs)), log.CreatedAt)
+			// Verify basic fields - CreatedAt should use QueryEndTimeMs (when query finished)
+			require.Equal(t, time.UnixMilli(int64(tt.queryInfo.QueryEndTimeMs)), log.CreatedAt)
+
+			// Verify timing fields
+			expectedStartedAt := time.UnixMilli(int64(tt.queryInfo.QueryStartTimeMs))
+			expectedFinishedAt := time.UnixMilli(int64(tt.queryInfo.QueryEndTimeMs))
+			require.NotNil(t, log.StartedAt)
+			require.Equal(t, expectedStartedAt, *log.StartedAt)
+			require.NotNil(t, log.FinishedAt)
+			require.Equal(t, expectedFinishedAt, *log.FinishedAt)
+
 			require.Equal(t, tt.queryInfo.QueryId, log.QueryID)
 			require.Equal(t, tt.expectedSQL, log.SQL)
 			require.Equal(t, "databricks", log.SqlDialect)

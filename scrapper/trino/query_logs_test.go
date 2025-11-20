@@ -194,14 +194,19 @@ func TestConvertTrinoRowToQueryLog(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, log)
 
-			// Verify basic fields
-			if tt.row.Created != nil {
-				require.Equal(t, *tt.row.Created, log.CreatedAt)
+			// Verify basic fields - CreatedAt should use End time (when query finished)
+			// Fallback order: End → Started → Created
+			if tt.row.End != nil {
+				require.Equal(t, *tt.row.End, log.CreatedAt)
 			} else if tt.row.Started != nil {
 				require.Equal(t, *tt.row.Started, log.CreatedAt)
-			} else if tt.row.End != nil {
-				require.Equal(t, *tt.row.End, log.CreatedAt)
+			} else if tt.row.Created != nil {
+				require.Equal(t, *tt.row.Created, log.CreatedAt)
 			}
+
+			// Verify timing fields
+			require.Equal(t, tt.row.Started, log.StartedAt)
+			require.Equal(t, tt.row.End, log.FinishedAt)
 
 			require.Equal(t, tt.row.QueryId, log.QueryID)
 			require.Equal(t, tt.expectedSQL, log.SQL)
