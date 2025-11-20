@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/databricks/databricks-sdk-go"
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
@@ -26,6 +27,11 @@ type DatabricksScrapperConf struct {
 	RefreshTableMetricsUseScan bool
 	FetchTableTags             bool
 	UseShowCreateTable         bool
+	// QueryLogsStartTimeBuffer is the time buffer to add before the 'from' timestamp when fetching query logs.
+	// This is needed because Databricks API filters by query start time, but we want queries that finished
+	// in the target time range. A query that started before 'from' might finish after 'from'.
+	// Default: 2 hours. Set to 0 to disable the buffer (use exact 'from' time).
+	QueryLogsStartTimeBuffer *time.Duration
 }
 
 var _ scrapper.Scrapper = &DatabricksScrapper{}
