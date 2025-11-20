@@ -12,51 +12,54 @@ import (
 )
 
 type databricksQueryLogIterator struct {
-	ctx        context.Context
-	from       time.Time
-	to         time.Time
-	obfuscator querylogs.QueryObfuscator
-	sqlDialect string
-	closed     bool
-	results    []servicesql.QueryInfo
-	currentIdx int
+	scrapper      *DatabricksScrapper
+	ctx           context.Context
+	from          time.Time
+	to            time.Time
+	fromAdjusted  time.Time
+	obfuscator    querylogs.QueryObfuscator
+	sqlDialect    string
+	closed        bool
+	results       []servicesql.QueryInfo
+	currentIdx    int
+	nextPageToken string
+	hasNextPage   bool
 }
+
+const (
+	defaultQueryLogsStartTimeBuffer = 2 * time.Hour
+	maxResultsPerPage               = 1000 // Databricks max is 1000
+)
 
 func (s *DatabricksScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time, obfuscator querylogs.QueryObfuscator) (querylogs.QueryLogIterator, error) {
 	// Validate obfuscator is provided
 	if obfuscator == nil {
 		return nil, errors.New("obfuscator is required")
 	}
-	// Databricks API requires a slightly wider time range to account for clock skew
-	fromAdjusted := from.Add(-2 * time.Hour)
 
-	// Use the List method which returns a response with Res field
-	resp, err := s.client.QueryHistory.List(ctx, servicesql.ListQueryHistoryRequest{
-		FilterBy: &servicesql.QueryFilter{
-			QueryStartTimeRange: &servicesql.TimeRange{
-				EndTimeMs:   to.UnixMilli(),
-				StartTimeMs: fromAdjusted.UnixMilli(),
-			},
-			Statuses: []servicesql.QueryStatus{
-				servicesql.QueryStatusFinished,
-				servicesql.QueryStatusCanceled,
-				servicesql.QueryStatusFailed,
-			},
-		},
-		IncludeMetrics: true,
-	})
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to get query history")
+	// Get time buffer from config or use default
+	startTimeBuffer := defaultQueryLogsStartTimeBuffer
+	if s.conf.QueryLogsStartTimeBuffer != nil {
+		startTimeBuffer = *s.conf.QueryLogsStartTimeBuffer
 	}
 
-	return &databricksQueryLogIterator{
-		ctx:        ctx,
-		from:       from,
-		to:         to,
-		obfuscator: obfuscator,
-		sqlDialect: s.DialectType(),
-		results:    resp.Res,
-	}, nil
+	// Adjust 'from' time to catch queries that started earlier but finished in the target range
+	// This is needed because Databricks API filters by query start time, not end time
+	fromAdjusted := from.Add(-startTimeBuffer)
+
+	// Create iterator that will fetch first page lazily
+	iter := &databricksQueryLogIterator{
+		scrapper:     s,
+		ctx:          ctx,
+		from:         from,
+		to:           to,
+		fromAdjusted: fromAdjusted,
+		obfuscator:   obfuscator,
+		sqlDialect:   s.DialectType(),
+		hasNextPage:  true, // Assume there's at least one page to fetch
+	}
+
+	return iter, nil
 }
 
 func (it *databricksQueryLogIterator) Next(ctx context.Context) (*querylogs.QueryLog, error) {
@@ -73,11 +76,25 @@ func (it *databricksQueryLogIterator) Next(ctx context.Context) (*querylogs.Quer
 		default:
 		}
 
-		// Check if we've reached the end of results
+		// Check if we need to fetch more results
 		if it.currentIdx >= len(it.results) {
-			// No more results
-			it.Close()
-			return nil, io.EOF
+			// Try to fetch next page if available
+			if it.hasNextPage {
+				if err := it.fetchNextPage(ctx); err != nil {
+					// Don't auto-close on error - let caller handle it
+					return nil, err
+				}
+				// After fetching, check if we got any results
+				if len(it.results) == 0 {
+					// No more results
+					it.Close()
+					return nil, io.EOF
+				}
+			} else {
+				// No more pages to fetch
+				it.Close()
+				return nil, io.EOF
+			}
 		}
 
 		// Get next query info
@@ -94,6 +111,7 @@ func (it *databricksQueryLogIterator) Next(ctx context.Context) (*querylogs.Quer
 		// Convert to QueryLog
 		log, err := convertDatabricksQueryInfoToQueryLog(&queryInfo, it.obfuscator, it.sqlDialect)
 		if err != nil {
+			// Don't auto-close on conversion error
 			return nil, err
 		}
 
@@ -104,6 +122,43 @@ func (it *databricksQueryLogIterator) Next(ctx context.Context) (*querylogs.Quer
 
 		return log, nil
 	}
+}
+
+// fetchNextPage fetches the next page of results from Databricks API
+func (it *databricksQueryLogIterator) fetchNextPage(ctx context.Context) error {
+	req := servicesql.ListQueryHistoryRequest{
+		FilterBy: &servicesql.QueryFilter{
+			QueryStartTimeRange: &servicesql.TimeRange{
+				EndTimeMs:   it.to.UnixMilli(),
+				StartTimeMs: it.fromAdjusted.UnixMilli(),
+			},
+			Statuses: []servicesql.QueryStatus{
+				servicesql.QueryStatusFinished,
+				servicesql.QueryStatusCanceled,
+				servicesql.QueryStatusFailed,
+			},
+		},
+		IncludeMetrics: true,
+		MaxResults:     maxResultsPerPage,
+	}
+
+	// Add page token if this is not the first page
+	if it.nextPageToken != "" {
+		req.PageToken = it.nextPageToken
+	}
+
+	resp, err := it.scrapper.client.QueryHistory.List(ctx, req)
+	if err != nil {
+		return errors.Wrap(err, "failed to get query history page")
+	}
+
+	// Update iterator state with new page
+	it.results = resp.Res
+	it.currentIdx = 0
+	it.nextPageToken = resp.NextPageToken
+	it.hasNextPage = resp.HasNextPage
+
+	return nil
 }
 
 func (it *databricksQueryLogIterator) Close() error {
