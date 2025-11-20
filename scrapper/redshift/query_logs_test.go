@@ -203,12 +203,17 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, log)
 
-			// Verify basic fields
-			if tt.row.StartTime != nil {
-				require.Equal(t, *tt.row.StartTime, log.CreatedAt)
-			} else if tt.row.EndTime != nil {
+			// Verify basic fields - CreatedAt should use EndTime (when query finished)
+			// Fallback order: EndTime → StartTime
+			if tt.row.EndTime != nil {
 				require.Equal(t, *tt.row.EndTime, log.CreatedAt)
+			} else if tt.row.StartTime != nil {
+				require.Equal(t, *tt.row.StartTime, log.CreatedAt)
 			}
+
+			// Verify timing fields
+			require.Equal(t, tt.row.StartTime, log.StartedAt)
+			require.Equal(t, tt.row.EndTime, log.FinishedAt)
 
 			// QueryID should be generic hash if available, otherwise string of query_id
 			if tt.row.GenericQueryHash != nil && *tt.row.GenericQueryHash != "" {
