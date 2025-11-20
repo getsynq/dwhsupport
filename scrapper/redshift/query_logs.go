@@ -68,12 +68,12 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 		status = strings.ToUpper(*row.Status)
 	}
 
-	// Use start_time as CreatedAt, fall back to end_time if not available
+	// Timing information - use end_time as CreatedAt (when query finished/logged)
 	var createdAt time.Time
-	if row.StartTime != nil {
-		createdAt = *row.StartTime
-	} else if row.EndTime != nil {
+	if row.EndTime != nil {
 		createdAt = *row.EndTime
+	} else if row.StartTime != nil {
+		createdAt = *row.StartTime // Fallback to start if end not available
 	} else {
 		createdAt = time.Now() // Defensive fallback
 	}
@@ -178,8 +178,11 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 
 	return &querylogs.QueryLog{
 		CreatedAt:                createdAt,
+		StartedAt:                row.StartTime,  // When query execution started
+		FinishedAt:               row.EndTime,    // When query execution finished
 		QueryID:                  queryID,
 		SQL:                      queryText,
+		NormalizedQueryHash:      nil, // Redshift doesn't provide normalized query hash
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                queryType,

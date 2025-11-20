@@ -34,6 +34,7 @@ type ClickhouseQueryLogSchema struct {
 	MemoryUsage     uint64   `db:"memory_usage"`
 	CurrentDatabase string   `db:"current_database"`
 	Query           string   `db:"normalized_query"`
+	QueryHash       uint64   `db:"query_hash"` // cityHash64 of normalizeQuery(query)
 	QueryKind       string   `db:"query_kind"`
 	Databases       []string `db:"databases"`
 	Tables          []string `db:"tables"`
@@ -79,10 +80,13 @@ func (s *ClickhouseScrapper) FetchQueryLogs(ctx context.Context, from, to time.T
 }
 
 func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) string {
-	// Conditionally use normalizeQuery based on obfuscation mode
-	// If mode is None, select raw query; otherwise use normalizeQuery()
-	queryColumn := "query as normalized_query"
-	if mode != querylogs.ObfuscationNone {
+	// Choose query column based on obfuscation mode
+	var queryColumn string
+	if mode == querylogs.ObfuscationNone {
+		// No obfuscation - return raw query with actual literal values
+		queryColumn = "query as normalized_query"
+	} else {
+		// ObfuscationRedactLiterals - use ClickHouse's normalizeQuery to replace literals with ?
 		queryColumn = "normalizeQuery(query) as normalized_query"
 	}
 
@@ -119,7 +123,8 @@ func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) s
        client_version_minor,
        client_version_patch,
        distributed_depth,
-       ` + queryColumn + `
+       ` + queryColumn + `,
+       cityHash64(normalizeQuery(query)) as query_hash
 
 FROM
     clusterAllReplicas(default, system.query_log)
@@ -177,40 +182,55 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator qu
 
 	// Build metadata with all ClickHouse-specific fields
 	metadata := map[string]any{
-		"query_type":        row.QueryType,
-		"read_rows":         row.ReadRows,
-		"read_bytes":        row.ReadBytes,
-		"written_rows":      row.WrittenRows,
-		"written_bytes":     row.WrittenBytes,
-		"result_rows":       row.ResultRows,
-		"result_bytes":      row.ResultBytes,
-		"memory_usage":      row.MemoryUsage,
-		"databases":         row.Databases,
-		"columns":           row.Columns,
-		"projections":       row.Projections,
-		"views":             row.Views,
-		"exception_code":    row.ExceptionCode,
-		"stack_trace":       row.StackTrace,
-		"os_user":           row.OsUser,
-		"client_hostname":   row.ClientHostname,
-		"client_name":       row.ClientName,
-		"client_revision":   row.ClientRevision,
-		"distributed_depth": row.DistributedDepth,
+		"query_type":           row.QueryType,
+		"read_rows":            row.ReadRows,
+		"read_bytes":           row.ReadBytes,
+		"written_rows":         row.WrittenRows,
+		"written_bytes":        row.WrittenBytes,
+		"result_rows":          row.ResultRows,
+		"result_bytes":         row.ResultBytes,
+		"memory_usage":         row.MemoryUsage,
+		"databases":            row.Databases,
+		"columns":              row.Columns,
+		"projections":          row.Projections,
+		"views":                row.Views,
+		"exception_code":       row.ExceptionCode,
+		"stack_trace":          row.StackTrace,
+		"os_user":              row.OsUser,
+		"client_hostname":      row.ClientHostname,
+		"client_name":          row.ClientName,
+		"client_revision":      row.ClientRevision,
+		"client_version_major": row.ClientRevisionMajor,
+		"client_version_minor": row.ClientRevisionMinor,
+		"client_version_patch": row.ClientRevisionPatch,
+		"distributed_depth":    row.DistributedDepth,
 	}
 
+	// Always add initial_port (some queries may not have an address)
+	metadata["initial_port"] = row.InitialPort
 	if row.InitialAddress != nil {
 		metadata["initial_address"] = row.InitialAddress.String()
-		metadata["initial_port"] = row.InitialPort
 	}
 
 	// Apply obfuscation (may be no-op if already normalized by ClickHouse)
 	queryText := obfuscator.Obfuscate(row.Query)
 
+	// Timing information
+	startedAt := row.QueryStartTimeMicroseconds
+	finishedAt := row.EventTimeMicroseconds
+
+	// Normalized query hash (from cityHash64(normalizeQuery))
+	normalizedQueryHash := fmt.Sprintf("%d", row.QueryHash)
+
 	return &querylogs.QueryLog{
-		CreatedAt:  row.QueryStartTimeMicroseconds,
-		QueryID:    row.InitialQueryId,
-		SQL:        queryText,
-		SqlDialect: sqlDialect,
+		// Use EventTimeMicroseconds (when query finished) to match old implementation
+		CreatedAt:           row.EventTimeMicroseconds,
+		StartedAt:           &startedAt,
+		FinishedAt:          &finishedAt,
+		QueryID:             row.InitialQueryId,
+		SQL:                 queryText,
+		NormalizedQueryHash: &normalizedQueryHash,
+		SqlDialect:          sqlDialect,
 		DwhContext: &querylogs.DwhContext{
 			Database: "", // ClickHouse doesn't have a separate database/instance concept
 			Schema:   row.CurrentDatabase, // ClickHouse "database" is equivalent to "schema" in other systems

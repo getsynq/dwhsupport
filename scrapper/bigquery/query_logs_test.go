@@ -137,8 +137,13 @@ func TestConvertBigQueryRowToQueryLog(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, log)
 
-			// Verify basic fields
-			require.Equal(t, tt.row.StartTime, log.CreatedAt)
+			// Verify basic fields - CreatedAt should use EndTime (when query finished)
+			require.Equal(t, tt.row.EndTime, log.CreatedAt)
+
+			// Verify timing fields
+			require.Equal(t, &tt.row.StartTime, log.StartedAt)
+			require.Equal(t, &tt.row.EndTime, log.FinishedAt)
+
 			require.Equal(t, tt.row.JobId.StringVal, log.QueryID)
 			require.Equal(t, tt.expectedSQL, log.SQL)
 			require.Equal(t, "bigquery", log.SqlDialect)

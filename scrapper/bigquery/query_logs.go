@@ -278,10 +278,17 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 	}
 	// BigQuery doesn't have a default schema/dataset context in INFORMATION_SCHEMA.JOBS
 
+	// Timing information
+	startedAt := row.StartTime
+	finishedAt := row.EndTime
+
 	return &querylogs.QueryLog{
-		CreatedAt:                row.StartTime,
+		CreatedAt:                row.EndTime, // Use EndTime as CreatedAt (when query finished/logged)
+		StartedAt:                &startedAt,  // When query execution started
+		FinishedAt:               &finishedAt, // When query execution finished
 		QueryID:                  row.JobId.StringVal,
 		SQL:                      queryText,
+		NormalizedQueryHash:      nil, // BigQuery doesn't provide normalized query hash
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.StatementType.StringVal,
