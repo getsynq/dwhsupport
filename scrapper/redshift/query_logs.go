@@ -58,10 +58,10 @@ func (s *RedshiftScrapper) FetchQueryLogs(ctx context.Context, from, to time.Tim
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[RedshiftQueryLogSchema](rows, obfuscator, convertRedshiftRowToQueryLog), nil
+	return querylogs.NewSqlxRowsIterator[RedshiftQueryLogSchema](rows, obfuscator, s.DialectType(), convertRedshiftRowToQueryLog), nil
 }
 
-func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator) (*querylogs.QueryLog, error) {
+func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
 	// Determine status - Redshift provides it directly
 	status := "UNKNOWN"
 	if row.Status != nil {
@@ -180,6 +180,7 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 		CreatedAt:                createdAt,
 		QueryID:                  queryID,
 		SQL:                      queryText,
+		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                queryType,
 		Status:                   status,

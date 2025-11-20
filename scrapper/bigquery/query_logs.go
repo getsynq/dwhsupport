@@ -62,6 +62,7 @@ type BigQueryQueryLogSchema struct {
 type bigqueryQueryLogIterator struct {
 	iter       *bigquery.RowIterator
 	obfuscator querylogs.QueryObfuscator
+	sqlDialect string
 	closed     bool
 }
 
@@ -84,6 +85,7 @@ func (s *BigQueryScrapper) FetchQueryLogs(ctx context.Context, from, to time.Tim
 	return &bigqueryQueryLogIterator{
 		iter:       iter,
 		obfuscator: obfuscator,
+		sqlDialect: s.DialectType(),
 	}, nil
 }
 
@@ -114,7 +116,7 @@ func (it *bigqueryQueryLogIterator) Next(ctx context.Context) (*querylogs.QueryL
 	}
 
 	// Convert to QueryLog
-	log, err := convertBigQueryRowToQueryLog(&row, it.obfuscator)
+	log, err := convertBigQueryRowToQueryLog(&row, it.obfuscator, it.sqlDialect)
 	if err != nil {
 		// Defensive: conversion error
 		return nil, err
@@ -171,7 +173,7 @@ func (s *BigQueryScrapper) buildQueryLogsSql(from, to time.Time) (string, error)
 	return sql, nil
 }
 
-func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator querylogs.QueryObfuscator) (*querylogs.QueryLog, error) {
+func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
 	// Determine status
 	status := "SUCCESS"
 	if row.ErrorResult != nil {
@@ -280,6 +282,7 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		CreatedAt:                row.StartTime,
 		QueryID:                  row.JobId.StringVal,
 		SQL:                      queryText,
+		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.StatementType.StringVal,
 		Status:                   status,

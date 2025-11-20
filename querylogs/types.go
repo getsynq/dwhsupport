@@ -38,6 +38,9 @@ type QueryLog struct {
 	// SqlHash is a hash of the original SQL for deduplication and caching
 	SqlHash string
 
+	// SqlDialect is the SQL dialect from Scrapper.DialectType() (snowflake, bigquery, databricks, etc.)
+	SqlDialect string
+
 	// DwhContext contains structured context information (database, schema, warehouse, user, role, etc.)
 	DwhContext *DwhContext
 

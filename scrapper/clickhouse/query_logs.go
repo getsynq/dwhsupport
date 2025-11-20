@@ -75,7 +75,7 @@ func (s *ClickhouseScrapper) FetchQueryLogs(ctx context.Context, from, to time.T
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[ClickhouseQueryLogSchema](rows, obfuscator, convertClickhouseRowToQueryLog), nil
+	return querylogs.NewSqlxRowsIterator[ClickhouseQueryLogSchema](rows, obfuscator, s.DialectType(), convertClickhouseRowToQueryLog), nil
 }
 
 func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) string {
@@ -131,7 +131,7 @@ WHERE type in ('QueryFinish', 'ExceptionBeforeStart', 'ExceptionWhileProcessing'
 `
 }
 
-func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator querylogs.QueryObfuscator) (*querylogs.QueryLog, error) {
+func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
 	// Parse tables array into native lineage
 	var nativeLineage *querylogs.NativeLineage
 	if len(row.Tables) > 0 {
@@ -207,9 +207,10 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator qu
 	queryText := obfuscator.Obfuscate(row.Query)
 
 	return &querylogs.QueryLog{
-		CreatedAt: row.QueryStartTimeMicroseconds,
-		QueryID:   row.InitialQueryId,
-		SQL:       queryText,
+		CreatedAt:  row.QueryStartTimeMicroseconds,
+		QueryID:    row.InitialQueryId,
+		SQL:        queryText,
+		SqlDialect: sqlDialect,
 		DwhContext: &querylogs.DwhContext{
 			Database: "", // ClickHouse doesn't have a separate database/instance concept
 			Schema:   row.CurrentDatabase, // ClickHouse "database" is equivalent to "schema" in other systems

@@ -16,6 +16,7 @@ type databricksQueryLogIterator struct {
 	from       time.Time
 	to         time.Time
 	obfuscator querylogs.QueryObfuscator
+	sqlDialect string
 	closed     bool
 	results    []servicesql.QueryInfo
 	currentIdx int
@@ -53,6 +54,7 @@ func (s *DatabricksScrapper) FetchQueryLogs(ctx context.Context, from, to time.T
 		from:       from,
 		to:         to,
 		obfuscator: obfuscator,
+		sqlDialect: s.DialectType(),
 		results:    resp.Res,
 	}, nil
 }
@@ -90,7 +92,7 @@ func (it *databricksQueryLogIterator) Next(ctx context.Context) (*querylogs.Quer
 		}
 
 		// Convert to QueryLog
-		log, err := convertDatabricksQueryInfoToQueryLog(&queryInfo, it.obfuscator)
+		log, err := convertDatabricksQueryInfoToQueryLog(&queryInfo, it.obfuscator, it.sqlDialect)
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +115,7 @@ func (it *databricksQueryLogIterator) Close() error {
 	return nil
 }
 
-func convertDatabricksQueryInfoToQueryLog(queryInfo *servicesql.QueryInfo, obfuscator querylogs.QueryObfuscator) (*querylogs.QueryLog, error) {
+func convertDatabricksQueryInfoToQueryLog(queryInfo *servicesql.QueryInfo, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
 	// Skip SHOW and USE statements
 	switch queryInfo.StatementType {
 	case servicesql.QueryStatementTypeShow, servicesql.QueryStatementTypeUse:
@@ -249,6 +251,7 @@ func convertDatabricksQueryInfoToQueryLog(queryInfo *servicesql.QueryInfo, obfus
 		CreatedAt:                startedAt,
 		QueryID:                  queryInfo.QueryId,
 		SQL:                      queryText,
+		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                queryInfo.StatementType.String(),
 		Status:                   status,

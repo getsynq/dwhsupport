@@ -43,10 +43,10 @@ func (s *TrinoScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time, 
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[TrinoQueryLogSchema](rows, obfuscator, convertTrinoRowToQueryLog), nil
+	return querylogs.NewSqlxRowsIterator[TrinoQueryLogSchema](rows, obfuscator, s.DialectType(), convertTrinoRowToQueryLog), nil
 }
 
-func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator) (*querylogs.QueryLog, error) {
+func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
 	// Determine status from state and error fields
 	status := "UNKNOWN"
 	if row.State != nil {
@@ -132,6 +132,7 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 		CreatedAt:                createdAt,
 		QueryID:                  row.QueryId,
 		SQL:                      queryText,
+		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                "", // Trino doesn't provide query type in this table
 		Status:                   status,

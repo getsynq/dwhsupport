@@ -117,7 +117,7 @@ func (s *SnowflakeScrapper) FetchQueryLogs(ctx context.Context, from, to time.Ti
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](rows, obfuscator, convertSnowflakeRowToQueryLog), nil
+	return querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](rows, obfuscator, s.DialectType(), convertSnowflakeRowToQueryLog), nil
 }
 
 // findTableColumns queries the table to find available columns
@@ -286,7 +286,7 @@ func (s *SnowflakeScrapper) buildQueryLogsSql(ctx context.Context, from time.Tim
 		ToSql(sqldialect.NewSnowflakeDialect())
 }
 
-func convertSnowflakeRowToQueryLog(row *SnowflakeQueryLogSchema, obfuscator querylogs.QueryObfuscator) (*querylogs.QueryLog, error) {
+func convertSnowflakeRowToQueryLog(row *SnowflakeQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
 	// Skip running queries (following original implementation)
 	switch strings.ToLower(row.ExecutionStatus) {
 	case "resuming_warehouse", "running", "queued", "blocked":
@@ -395,6 +395,7 @@ func convertSnowflakeRowToQueryLog(row *SnowflakeQueryLogSchema, obfuscator quer
 		CreatedAt:                row.StartTime,
 		QueryID:                  row.QueryID,
 		SQL:                      queryText,
+		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.QueryType,
 		Status:                   status,
