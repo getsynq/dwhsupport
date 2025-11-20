@@ -190,6 +190,22 @@ func (e *SnowflakeExecutor) Close() error {
 	return e.db.Close()
 }
 
+// IsNotFoundOrNoPermissionError checks if the error is a Snowflake "does not exist or not authorized" error
+func IsNotFoundOrNoPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "does not exist or not authorized")
+}
+
+// IsUnsupportedFeatureDataLineageError checks if the error is a Snowflake "Unsupported feature 'Data Lineage'" error
+func IsUnsupportedFeatureDataLineageError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "Unsupported feature 'Data Lineage'")
+}
+
 type Mock struct {
 	SnowflakeExecutor
 	queryRowsReturns func() (*sqlx.Rows, error)

@@ -1,0 +1,100 @@
+
+[TestQueryLogsSuite/TestBuildQueryLogsSql/no_database_filtering - 1]
+select
+  "QUERY_ID", 
+  "QUERY_TEXT", 
+  "DATABASE_NAME", 
+  "SCHEMA_NAME", 
+  "QUERY_TYPE", 
+  "START_TIME", 
+  "END_TIME", 
+  "EXECUTION_STATUS"
+from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
+where END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z')
+ 
+---
+
+[TestQueryLogsSuite/TestBuildQueryLogsSql/single_database - 1]
+select
+  "QUERY_ID", 
+  "QUERY_TEXT", 
+  "DATABASE_NAME", 
+  "SCHEMA_NAME", 
+  "QUERY_TYPE", 
+  "START_TIME", 
+  "END_TIME", 
+  "EXECUTION_STATUS"
+from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
+where
+  END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
+  (DATABASE_NAME in ('NYC_TAXI') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(NYC_TAXI)[\"'' \\t\\n\\r]*[.].*', 'is'))
+ 
+---
+
+[TestQueryLogsSuite/TestBuildQueryLogsSql/multiple_databases - 1]
+select
+  "QUERY_ID", 
+  "QUERY_TEXT", 
+  "DATABASE_NAME", 
+  "SCHEMA_NAME", 
+  "QUERY_TYPE", 
+  "START_TIME", 
+  "END_TIME", 
+  "EXECUTION_STATUS"
+from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
+where
+  END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
+  (DATABASE_NAME in ('NYC_TAXI', 'PRODUCTION_DB', 'DEV_DB') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(NYC_TAXI|PRODUCTION_DB|DEV_DB)[\"'' \\t\\n\\r]*[.].*', 'is'))
+ 
+---
+
+[TestQueryLogsSuite/TestBuildQueryLogsSql/query_logs_databases_overrides_databases - 1]
+select
+  "QUERY_ID", 
+  "QUERY_TEXT", 
+  "DATABASE_NAME", 
+  "SCHEMA_NAME", 
+  "QUERY_TYPE", 
+  "START_TIME", 
+  "END_TIME", 
+  "EXECUTION_STATUS"
+from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
+where
+  END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
+  (DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(ANALYTICS)[\"'' \\t\\n\\r]*[.].*', 'is'))
+ 
+---
+
+[TestQueryLogsSuite/TestBuildQueryLogsSql/custom_account_usage_db - 1]
+select
+  "QUERY_ID", 
+  "QUERY_TEXT", 
+  "DATABASE_NAME", 
+  "SCHEMA_NAME", 
+  "QUERY_TYPE", 
+  "START_TIME", 
+  "END_TIME", 
+  "EXECUTION_STATUS"
+from CUSTOM_SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
+where
+  END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
+  (DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(ANALYTICS)[\"'' \\t\\n\\r]*[.].*', 'is'))
+ 
+---
+
+[TestQueryLogsSuite/TestBuildQueryLogsSql/database_with_special_chars - 1]
+select
+  "QUERY_ID", 
+  "QUERY_TEXT", 
+  "DATABASE_NAME", 
+  "SCHEMA_NAME", 
+  "QUERY_TYPE", 
+  "START_TIME", 
+  "END_TIME", 
+  "EXECUTION_STATUS"
+from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
+where
+  END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
+  (DATABASE_NAME in ('DATA_WAREHOUSE', 'DB-WITH-DASH') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(DATA_WAREHOUSE|DB-WITH-DASH)[\"'' \\t\\n\\r]*[.].*', 'is'))
+ 
+---
