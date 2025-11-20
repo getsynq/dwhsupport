@@ -153,3 +153,21 @@ type NativeLineage struct {
 	// OutputTables are the tables written by the query
 	OutputTables []scrapper.DwhFqn
 }
+
+// GetInputTables returns the input tables, handling nil NativeLineage safely.
+// Returns an empty slice if NativeLineage is nil or InputTables is nil.
+func (nl *NativeLineage) GetInputTables() []scrapper.DwhFqn {
+	if nl == nil || nl.InputTables == nil {
+		return []scrapper.DwhFqn{}
+	}
+	return nl.InputTables
+}
+
+// GetOutputTables returns the output tables, handling nil NativeLineage safely.
+// Returns an empty slice if NativeLineage is nil or OutputTables is nil.
+func (nl *NativeLineage) GetOutputTables() []scrapper.DwhFqn {
+	if nl == nil || nl.OutputTables == nil {
+		return []scrapper.DwhFqn{}
+	}
+	return nl.OutputTables
+}

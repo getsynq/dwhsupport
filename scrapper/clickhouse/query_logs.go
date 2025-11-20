@@ -20,6 +20,10 @@ type ClickhouseQueryLogSchema struct {
 	EventTimeMicroseconds      time.Time `db:"event_time_microseconds"`
 	QueryStartTimeMicroseconds time.Time `db:"query_start_time_microseconds"`
 
+	// Performance Information
+	QueryDurationMs  uint64 `db:"query_duration_ms"`
+	PeakThreadsUsage uint64 `db:"peak_threads_usage"`
+
 	// IO Information
 	ReadRows  uint64 `db:"read_rows"`
 	ReadBytes uint64 `db:"read_bytes"`
@@ -31,19 +35,25 @@ type ClickhouseQueryLogSchema struct {
 	ResultBytes uint64 `db:"result_bytes"`
 
 	// Query Information
-	MemoryUsage     uint64   `db:"memory_usage"`
-	CurrentDatabase string   `db:"current_database"`
-	Query           string   `db:"normalized_query"`
-	QueryHash       uint64   `db:"query_hash"` // cityHash64 of normalizeQuery(query)
-	QueryKind       string   `db:"query_kind"`
-	Databases       []string `db:"databases"`
-	Tables          []string `db:"tables"`
-	Columns         []string `db:"columns"`
-	Projections     []string `db:"projections"`
-	Views           []string `db:"views"`
-	ExceptionCode   int32    `db:"exception_code"`
-	Exception       string   `db:"exception"`
-	StackTrace      string   `db:"stack_trace"`
+	MemoryUsage            uint64   `db:"memory_usage"`
+	CurrentDatabase        string   `db:"current_database"`
+	Query                  string   `db:"normalized_query"`
+	NormalizedQueryHash    uint64   `db:"normalized_query_hash"`
+	QueryKind              string   `db:"query_kind"`
+	Databases              []string `db:"databases"`
+	Tables                 []string `db:"tables"`
+	Columns                []string `db:"columns"`
+	Partitions             []string `db:"partitions"`
+	Projections            []string `db:"projections"`
+	Views                  []string `db:"views"`
+	UsedFunctions          []string `db:"used_functions"`
+	UsedAggregateFunctions []string `db:"used_aggregate_functions"`
+	ExceptionCode          int32    `db:"exception_code"`
+	Exception              string   `db:"exception"`
+	StackTrace             string   `db:"stack_trace"`
+
+	// Server Information
+	Hostname string `db:"hostname"`
 
 	// Client Information
 	InitialUser                       string    `db:"initial_user"`
@@ -59,9 +69,23 @@ type ClickhouseQueryLogSchema struct {
 	ClientRevisionMinor               uint32    `db:"client_version_minor"`
 	ClientRevisionPatch               uint32    `db:"client_version_patch"`
 	DistributedDepth                  uint64    `db:"distributed_depth"`
+
+	// HTTP Client Information
+	HttpMethod    uint8  `db:"http_method"`
+	HttpUserAgent string `db:"http_user_agent"`
+	HttpReferer   string `db:"http_referer"`
+	ForwardedFor  string `db:"forwarded_for"`
+
+	// Script Information
+	ScriptQueryNumber uint32 `db:"script_query_number"`
+	ScriptLineNumber  uint32 `db:"script_line_number"`
 }
 
-func (s *ClickhouseScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time, obfuscator querylogs.QueryObfuscator) (querylogs.QueryLogIterator, error) {
+func (s *ClickhouseScrapper) FetchQueryLogs(
+	ctx context.Context,
+	from, to time.Time,
+	obfuscator querylogs.QueryObfuscator,
+) (querylogs.QueryLogIterator, error) {
 	// Validate obfuscator is provided
 	if obfuscator == nil {
 		return nil, fmt.Errorf("obfuscator is required")
@@ -93,6 +117,8 @@ func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) s
 	return `SELECT type,
        event_time_microseconds,
        query_start_time_microseconds,
+       query_duration_ms,
+       peak_threads_usage,
        read_rows,
        read_bytes,
        written_rows,
@@ -105,11 +131,15 @@ func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) s
        databases,
        tables,
        columns,
+       partitions,
        projections,
        views,
+       used_functions,
+       used_aggregate_functions,
        exception_code,
        exception,
        stack_trace,
+       hostname,
        initial_user,
        initial_query_id,
        initial_address,
@@ -123,8 +153,14 @@ func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) s
        client_version_minor,
        client_version_patch,
        distributed_depth,
+       http_method,
+       http_user_agent,
+       http_referer,
+       forwarded_for,
+       script_query_number,
+       script_line_number,
        ` + queryColumn + `,
-       cityHash64(normalizeQuery(query)) as query_hash
+       normalized_query_hash
 
 FROM
     clusterAllReplicas(default, system.query_log)
@@ -136,7 +172,11 @@ WHERE type in ('QueryFinish', 'ExceptionBeforeStart', 'ExceptionWhileProcessing'
 `
 }
 
-func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+func convertClickhouseRowToQueryLog(
+	row *ClickhouseQueryLogSchema,
+	obfuscator querylogs.QueryObfuscator,
+	sqlDialect string,
+) (*querylogs.QueryLog, error) {
 	// Parse tables array into native lineage
 	var nativeLineage *querylogs.NativeLineage
 	if len(row.Tables) > 0 {
@@ -182,28 +222,40 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator qu
 
 	// Build metadata with all ClickHouse-specific fields
 	metadata := map[string]any{
-		"query_type":           row.QueryType,
-		"read_rows":            row.ReadRows,
-		"read_bytes":           row.ReadBytes,
-		"written_rows":         row.WrittenRows,
-		"written_bytes":        row.WrittenBytes,
-		"result_rows":          row.ResultRows,
-		"result_bytes":         row.ResultBytes,
-		"memory_usage":         row.MemoryUsage,
-		"databases":            row.Databases,
-		"columns":              row.Columns,
-		"projections":          row.Projections,
-		"views":                row.Views,
-		"exception_code":       row.ExceptionCode,
-		"stack_trace":          row.StackTrace,
-		"os_user":              row.OsUser,
-		"client_hostname":      row.ClientHostname,
-		"client_name":          row.ClientName,
-		"client_revision":      row.ClientRevision,
-		"client_version_major": row.ClientRevisionMajor,
-		"client_version_minor": row.ClientRevisionMinor,
-		"client_version_patch": row.ClientRevisionPatch,
-		"distributed_depth":    row.DistributedDepth,
+		"query_type":               row.QueryType,
+		"query_duration_ms":        row.QueryDurationMs,
+		"peak_threads_usage":       row.PeakThreadsUsage,
+		"read_rows":                row.ReadRows,
+		"read_bytes":               row.ReadBytes,
+		"written_rows":             row.WrittenRows,
+		"written_bytes":            row.WrittenBytes,
+		"result_rows":              row.ResultRows,
+		"result_bytes":             row.ResultBytes,
+		"memory_usage":             row.MemoryUsage,
+		"databases":                row.Databases,
+		"columns":                  row.Columns,
+		"partitions":               row.Partitions,
+		"projections":              row.Projections,
+		"views":                    row.Views,
+		"used_functions":           row.UsedFunctions,
+		"used_aggregate_functions": row.UsedAggregateFunctions,
+		"exception_code":           row.ExceptionCode,
+		"stack_trace":              row.StackTrace,
+		"hostname":                 row.Hostname,
+		"os_user":                  row.OsUser,
+		"client_hostname":          row.ClientHostname,
+		"client_name":              row.ClientName,
+		"client_revision":          row.ClientRevision,
+		"client_version_major":     row.ClientRevisionMajor,
+		"client_version_minor":     row.ClientRevisionMinor,
+		"client_version_patch":     row.ClientRevisionPatch,
+		"distributed_depth":        row.DistributedDepth,
+		"http_method":              row.HttpMethod,
+		"http_user_agent":          row.HttpUserAgent,
+		"http_referer":             row.HttpReferer,
+		"forwarded_for":            row.ForwardedFor,
+		"script_query_number":      row.ScriptQueryNumber,
+		"script_line_number":       row.ScriptLineNumber,
 	}
 
 	// Always add initial_port (some queries may not have an address)
@@ -219,8 +271,8 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator qu
 	startedAt := row.QueryStartTimeMicroseconds
 	finishedAt := row.EventTimeMicroseconds
 
-	// Normalized query hash (from cityHash64(normalizeQuery))
-	normalizedQueryHash := fmt.Sprintf("%d", row.QueryHash)
+	// Use native normalized_query_hash from ClickHouse
+	normalizedQueryHash := fmt.Sprintf("%d", row.NormalizedQueryHash)
 
 	return &querylogs.QueryLog{
 		// Use EventTimeMicroseconds (when query finished) to match old implementation
@@ -232,7 +284,7 @@ func convertClickhouseRowToQueryLog(row *ClickhouseQueryLogSchema, obfuscator qu
 		NormalizedQueryHash: &normalizedQueryHash,
 		SqlDialect:          sqlDialect,
 		DwhContext: &querylogs.DwhContext{
-			Database: "", // ClickHouse doesn't have a separate database/instance concept
+			Database: "",                  // ClickHouse doesn't have a separate database/instance concept
 			Schema:   row.CurrentDatabase, // ClickHouse "database" is equivalent to "schema" in other systems
 			User:     row.InitialUser,
 		},
