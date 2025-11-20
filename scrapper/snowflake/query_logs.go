@@ -391,10 +391,17 @@ func convertSnowflakeRowToQueryLog(row *SnowflakeQueryLogSchema, obfuscator quer
 	// Apply obfuscation to query text
 	queryText := obfuscator.Obfuscate(row.QueryText)
 
+	// Timing information
+	startedAt := row.StartTime
+	finishedAt := row.EndTime
+
 	return &querylogs.QueryLog{
-		CreatedAt:                row.StartTime,
+		CreatedAt:                row.EndTime,    // Use EndTime as CreatedAt (when query finished)
+		StartedAt:                &startedAt,     // When query execution started
+		FinishedAt:               &finishedAt,    // When query execution finished
 		QueryID:                  row.QueryID,
 		SQL:                      queryText,
+		QueryHash:                row.QueryParameterizedHash, // Native Snowflake parameterized query hash
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.QueryType,

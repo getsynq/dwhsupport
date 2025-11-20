@@ -26,8 +26,18 @@ const (
 // QueryLog represents a standardized query log entry from any data warehouse platform.
 // It provides a common structure while preserving platform-specific details in Metadata.
 type QueryLog struct {
-	// CreatedAt is the timestamp when the query was executed
+	// CreatedAt is the timestamp when the query log was recorded (typically when query finished)
 	CreatedAt time.Time
+
+	// StartedAt is when query execution started (optional, nil if unknown).
+	// Platform scrappers should set this to the actual query start time.
+	// Duration is computed as FinishedAt - StartedAt.
+	StartedAt *time.Time
+
+	// FinishedAt is when query execution finished (optional, nil if unknown).
+	// Platform scrappers should set this to the actual query end time.
+	// Duration is computed as FinishedAt - StartedAt.
+	FinishedAt *time.Time
 
 	// QueryID is the native query identifier or computed hash
 	QueryID string
@@ -37,6 +47,11 @@ type QueryLog struct {
 
 	// SqlHash is a hash of the original SQL for deduplication and caching
 	SqlHash string
+
+	// QueryHash is a hash of the normalized/parameterized query (without literal values)
+	// Used to identify queries that differ only in literal values
+	// Available for: Snowflake (QUERY_PARAMETERIZED_HASH), ClickHouse (computed from normalizeQuery)
+	QueryHash *string
 
 	// SqlDialect is the SQL dialect from Scrapper.DialectType() (snowflake, bigquery, databricks, etc.)
 	SqlDialect string
