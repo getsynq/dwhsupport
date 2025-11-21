@@ -14,24 +14,28 @@ import (
 var queryLogsSql string
 
 type TrinoQueryLogSchema struct {
-	QueryId           string     `db:"query_id"`
-	State             *string    `db:"state"`
-	User              *string    `db:"user"`
-	Source            *string    `db:"source"`
-	Query             *string    `db:"query"`
-	ResourceGroupId   *string    `db:"resource_group_id"`
-	QueuedTimeMs      *int64     `db:"queued_time_ms"`
-	AnalysisTimeMs    *int64     `db:"analysis_time_ms"`
-	PlanningTimeMs    *int64     `db:"planning_time_ms"`
-	Created           *time.Time `db:"created"`
-	Started           *time.Time `db:"started"`
-	LastHeartbeat     *time.Time `db:"last_heartbeat"`
-	End               *time.Time `db:"end"`
-	ErrorType         *string    `db:"error_type"`
-	ErrorCode         *string    `db:"error_code"`
+	QueryId         string     `db:"query_id"`
+	State           *string    `db:"state"`
+	User            *string    `db:"user"`
+	Source          *string    `db:"source"`
+	Query           *string    `db:"query"`
+	ResourceGroupId *string    `db:"resource_group_id"`
+	QueuedTimeMs    *int64     `db:"queued_time_ms"`
+	AnalysisTimeMs  *int64     `db:"analysis_time_ms"`
+	PlanningTimeMs  *int64     `db:"planning_time_ms"`
+	Created         *time.Time `db:"created"`
+	Started         *time.Time `db:"started"`
+	LastHeartbeat   *time.Time `db:"last_heartbeat"`
+	End             *time.Time `db:"end"`
+	ErrorType       *string    `db:"error_type"`
+	ErrorCode       *string    `db:"error_code"`
 }
 
-func (s *TrinoScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time, obfuscator querylogs.QueryObfuscator) (querylogs.QueryLogIterator, error) {
+func (s *TrinoScrapper) FetchQueryLogs(
+	ctx context.Context,
+	from, to time.Time,
+	obfuscator querylogs.QueryObfuscator,
+) (querylogs.QueryLogIterator, error) {
 	// Validate obfuscator is provided
 	if obfuscator == nil {
 		return nil, fmt.Errorf("obfuscator is required")

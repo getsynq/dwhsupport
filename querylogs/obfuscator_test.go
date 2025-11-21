@@ -208,9 +208,9 @@ func (s *ObfuscatorSuite) TestPreserveLiteralsMatchingDates() {
 func (s *ObfuscatorSuite) TestPreserveLiteralsMatchingMultipleTypes() {
 	// Patterns for dates, UUIDs, and booleans
 	patterns := []string{
-		`^\d{4}-\d{2}-\d{2}$`,                                                   // Date: YYYY-MM-DD
-		`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,       // UUID
-		`^(true|false)$`,                                                         // Boolean
+		`^\d{4}-\d{2}-\d{2}$`, // Date: YYYY-MM-DD
+		`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`, // UUID
+		`^(true|false)$`, // Boolean
 	}
 
 	obfuscator, err := NewQueryObfuscator(
@@ -266,7 +266,7 @@ func (s *ObfuscatorSuite) TestPreserveLiteralsMatchingEmpty() {
 func (s *ObfuscatorSuite) TestPreserveLiteralsMatchingInvalidRegex() {
 	// Invalid regex pattern should return error
 	invalidPatterns := []string{
-		`[invalid(`,  // Unclosed bracket
+		`[invalid(`, // Unclosed bracket
 	}
 
 	obfuscator, err := NewQueryObfuscator(

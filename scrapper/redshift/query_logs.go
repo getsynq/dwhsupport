@@ -14,39 +14,43 @@ import (
 var queryLogsSql string
 
 type RedshiftQueryLogSchema struct {
-	UserId                  *int64     `db:"user_id"`
-	QueryId                 int64      `db:"query_id"`
-	QueryLabel              *string    `db:"query_label"`
-	TransactionId           *int64     `db:"transaction_id"`
-	SessionId               *int64     `db:"session_id"`
-	DatabaseName            *string    `db:"database_name"`
-	QueryType               *string    `db:"query_type"`
-	Status                  *string    `db:"status"`
-	ResultCacheHit          *bool      `db:"result_cache_hit"`
-	StartTime               *time.Time `db:"start_time"`
-	EndTime                 *time.Time `db:"end_time"`
-	ElapsedTime             *int64     `db:"elapsed_time"`
-	QueueTime               *int64     `db:"queue_time"`
-	ExecutionTime           *int64     `db:"execution_time"`
-	ErrorMessage            *string    `db:"error_message"`
-	ReturnedRows            *int64     `db:"returned_rows"`
-	ReturnedBytes           *int64     `db:"returned_bytes"`
-	QueryText               *string    `db:"query_text"`
-	RedshiftVersion         *string    `db:"redshift_version"`
-	UsageLimit              *string    `db:"usage_limit"`
-	ComputeType             *string    `db:"compute_type"`
-	CompileTime             *int64     `db:"compile_time"`
-	PlanningTime            *int64     `db:"planning_time"`
-	LockWaitTime            *int64     `db:"lock_wait_time"`
-	ServiceClassId          *int64     `db:"service_class_id"`
-	ServiceClassName        *string    `db:"service_class_name"`
-	QueryPriority           *string    `db:"query_priority"`
-	ShortQueryAccelerated   *bool      `db:"short_query_accelerated"`
-	GenericQueryHash        *string    `db:"generic_query_hash"`
-	UserQueryHash           *string    `db:"user_query_hash"`
+	UserId                *int64     `db:"user_id"`
+	QueryId               int64      `db:"query_id"`
+	QueryLabel            *string    `db:"query_label"`
+	TransactionId         *int64     `db:"transaction_id"`
+	SessionId             *int64     `db:"session_id"`
+	DatabaseName          *string    `db:"database_name"`
+	QueryType             *string    `db:"query_type"`
+	Status                *string    `db:"status"`
+	ResultCacheHit        *bool      `db:"result_cache_hit"`
+	StartTime             *time.Time `db:"start_time"`
+	EndTime               *time.Time `db:"end_time"`
+	ElapsedTime           *int64     `db:"elapsed_time"`
+	QueueTime             *int64     `db:"queue_time"`
+	ExecutionTime         *int64     `db:"execution_time"`
+	ErrorMessage          *string    `db:"error_message"`
+	ReturnedRows          *int64     `db:"returned_rows"`
+	ReturnedBytes         *int64     `db:"returned_bytes"`
+	QueryText             *string    `db:"query_text"`
+	RedshiftVersion       *string    `db:"redshift_version"`
+	UsageLimit            *string    `db:"usage_limit"`
+	ComputeType           *string    `db:"compute_type"`
+	CompileTime           *int64     `db:"compile_time"`
+	PlanningTime          *int64     `db:"planning_time"`
+	LockWaitTime          *int64     `db:"lock_wait_time"`
+	ServiceClassId        *int64     `db:"service_class_id"`
+	ServiceClassName      *string    `db:"service_class_name"`
+	QueryPriority         *string    `db:"query_priority"`
+	ShortQueryAccelerated *bool      `db:"short_query_accelerated"`
+	GenericQueryHash      *string    `db:"generic_query_hash"`
+	UserQueryHash         *string    `db:"user_query_hash"`
 }
 
-func (s *RedshiftScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time, obfuscator querylogs.QueryObfuscator) (querylogs.QueryLogIterator, error) {
+func (s *RedshiftScrapper) FetchQueryLogs(
+	ctx context.Context,
+	from, to time.Time,
+	obfuscator querylogs.QueryObfuscator,
+) (querylogs.QueryLogIterator, error) {
 	// Validate obfuscator is provided
 	if obfuscator == nil {
 		return nil, fmt.Errorf("obfuscator is required")
@@ -178,8 +182,8 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 
 	return &querylogs.QueryLog{
 		CreatedAt:                createdAt,
-		StartedAt:                row.StartTime,  // When query execution started
-		FinishedAt:               row.EndTime,    // When query execution finished
+		StartedAt:                row.StartTime, // When query execution started
+		FinishedAt:               row.EndTime,   // When query execution finished
 		QueryID:                  queryID,
 		SQL:                      queryText,
 		NormalizedQueryHash:      nil, // Redshift doesn't provide normalized query hash

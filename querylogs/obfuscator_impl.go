@@ -18,13 +18,13 @@ import (
 )
 
 type obfuscatorConfig struct {
-	PreserveNumbers            bool     `json:"preserve_numbers"`            // if true, keep numeric literals (123, 45.67) unchanged
+	PreserveNumbers            bool     `json:"preserve_numbers"`             // if true, keep numeric literals (123, 45.67) unchanged
 	ReplacePositionalParameter bool     `json:"replace_positional_parameter"` // PostgreSQL $1, $2 style parameters
-	ReplaceBoolean             bool     `json:"replace_boolean"`             // true/false literals
-	ReplaceNull                bool     `json:"replace_null"`                // NULL literals
-	KeepJsonPath               bool     `json:"keep_json_path"`              // preserve JSON path expressions like $.field
-	ReplaceBindParameter       bool     `json:"replace_bind_parameter"`      // Oracle :name style parameters
-	PreserveLiteralPatterns    []string `json:"preserve_literal_patterns"`   // regex patterns for literals to preserve unchanged (e.g., dates, UUIDs)
+	ReplaceBoolean             bool     `json:"replace_boolean"`              // true/false literals
+	ReplaceNull                bool     `json:"replace_null"`                 // NULL literals
+	KeepJsonPath               bool     `json:"keep_json_path"`               // preserve JSON path expressions like $.field
+	ReplaceBindParameter       bool     `json:"replace_bind_parameter"`       // Oracle :name style parameters
+	PreserveLiteralPatterns    []string `json:"preserve_literal_patterns"`    // regex patterns for literals to preserve unchanged (e.g., dates, UUIDs)
 }
 
 type sqlObfuscator struct {

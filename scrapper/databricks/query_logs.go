@@ -31,7 +31,11 @@ const (
 	maxResultsPerPage               = 1000 // Databricks max is 1000
 )
 
-func (s *DatabricksScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time, obfuscator querylogs.QueryObfuscator) (querylogs.QueryLogIterator, error) {
+func (s *DatabricksScrapper) FetchQueryLogs(
+	ctx context.Context,
+	from, to time.Time,
+	obfuscator querylogs.QueryObfuscator,
+) (querylogs.QueryLogIterator, error) {
 	// Validate obfuscator is provided
 	if obfuscator == nil {
 		return nil, errors.New("obfuscator is required")
@@ -170,7 +174,11 @@ func (it *databricksQueryLogIterator) Close() error {
 	return nil
 }
 
-func convertDatabricksQueryInfoToQueryLog(queryInfo *servicesql.QueryInfo, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+func convertDatabricksQueryInfoToQueryLog(
+	queryInfo *servicesql.QueryInfo,
+	obfuscator querylogs.QueryObfuscator,
+	sqlDialect string,
+) (*querylogs.QueryLog, error) {
 	// Skip SHOW and USE statements
 	switch queryInfo.StatementType {
 	case servicesql.QueryStatementTypeShow, servicesql.QueryStatementTypeUse:
@@ -305,8 +313,8 @@ func convertDatabricksQueryInfoToQueryLog(queryInfo *servicesql.QueryInfo, obfus
 	// Databricks doesn't provide database/schema in QueryHistory API
 
 	return &querylogs.QueryLog{
-		CreatedAt:                finishedAt, // Use QueryEndTimeMs as CreatedAt (when query finished/logged)
-		StartedAt:                &startedAt, // When query execution started
+		CreatedAt:                finishedAt,  // Use QueryEndTimeMs as CreatedAt (when query finished/logged)
+		StartedAt:                &startedAt,  // When query execution started
 		FinishedAt:               &finishedAt, // When query execution finished
 		QueryID:                  queryInfo.QueryId,
 		SQL:                      queryText,
