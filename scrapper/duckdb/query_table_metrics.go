@@ -8,7 +8,6 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecduckdb "github.com/getsynq/dwhsupport/exec/duckdb"
 	"github.com/getsynq/dwhsupport/scrapper"
-	_ "github.com/marcboeker/go-duckdb"
 )
 
 //go:embed query_table_metrics.sql

@@ -7,7 +7,6 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
-	_ "github.com/marcboeker/go-duckdb"
 )
 
 //go:embed query_databases.sql

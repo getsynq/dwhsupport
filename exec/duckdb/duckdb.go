@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"net/url"
 
+	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/marcboeker/go-duckdb"
 )
 
 type DuckDBConf struct {
