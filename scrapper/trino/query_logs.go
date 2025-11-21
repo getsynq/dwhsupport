@@ -143,7 +143,7 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 		DwhContext:               dwhContext,
 		QueryType:                "", // Trino doesn't provide query type in this table
 		Status:                   status,
-		Metadata:                 metadata,
+		Metadata:                 querylogs.SanitizeMetadata(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Trino doesn't provide lineage in system.runtime.queries
 		NativeLineage:            nil,

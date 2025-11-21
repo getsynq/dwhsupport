@@ -191,7 +191,7 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 		DwhContext:               dwhContext,
 		QueryType:                queryType,
 		Status:                   status,
-		Metadata:                 metadata,
+		Metadata:                 querylogs.SanitizeMetadata(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Redshift doesn't provide lineage in SYS_QUERY_HISTORY
 		NativeLineage:            nil,
