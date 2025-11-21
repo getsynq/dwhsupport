@@ -50,8 +50,9 @@ func WithPreserveNumbers(preserve bool) ObfuscatorOption {
 //   - UUID: `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$` (matches UUID strings)
 //
 // Example:
-//   SQL: "WHERE created_at > '2023-10-01' AND email = 'user@example.com'"
-//   With date pattern: "WHERE created_at > '2023-10-01' AND email = ?"
+//
+//	SQL: "WHERE created_at > '2023-10-01' AND email = 'user@example.com'"
+//	With date pattern: "WHERE created_at > '2023-10-01' AND email = ?"
 //
 // Default: no patterns (all literals are replaced)
 func WithPreserveLiteralsMatching(patterns []string) ObfuscatorOption {
@@ -82,13 +83,15 @@ type queryObfuscatorImpl struct {
 //   - Preserves JSON paths ($.field) by default
 //
 // Example for cloud service (no obfuscation):
-//   obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+//
+//	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
 //
 // Example for on-premise (redact literals):
-//   obfuscator, err := querylogs.NewQueryObfuscator(
-//       querylogs.ObfuscationRedactLiterals,
-//       querylogs.WithKeepJsonPath(true),
-//   )
+//
+//	obfuscator, err := querylogs.NewQueryObfuscator(
+//	    querylogs.ObfuscationRedactLiterals,
+//	    querylogs.WithKeepJsonPath(true),
+//	)
 func NewQueryObfuscator(mode ObfuscationMode, opts ...ObfuscatorOption) (QueryObfuscator, error) {
 	var sqlObf *sqlObfuscator
 	if mode != ObfuscationNone {

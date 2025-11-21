@@ -18,7 +18,12 @@ type SqlxRowsIterator[T any] struct {
 
 // NewSqlxRowsIterator creates a new iterator for sqlx.Rows with a conversion function.
 // The conversion function should return nil to skip a row, or an error to stop iteration.
-func NewSqlxRowsIterator[T any](rows *sqlx.Rows, obfuscator QueryObfuscator, sqlDialect string, convertFn func(*T, QueryObfuscator, string) (*QueryLog, error)) QueryLogIterator {
+func NewSqlxRowsIterator[T any](
+	rows *sqlx.Rows,
+	obfuscator QueryObfuscator,
+	sqlDialect string,
+	convertFn func(*T, QueryObfuscator, string) (*QueryLog, error),
+) QueryLogIterator {
 	return &SqlxRowsIterator[T]{
 		rows:       rows,
 		convertFn:  func(row *T) (*QueryLog, error) { return convertFn(row, obfuscator, sqlDialect) },

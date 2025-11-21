@@ -66,7 +66,11 @@ type bigqueryQueryLogIterator struct {
 	closed     bool
 }
 
-func (s *BigQueryScrapper) FetchQueryLogs(ctx context.Context, from, to time.Time, obfuscator querylogs.QueryObfuscator) (querylogs.QueryLogIterator, error) {
+func (s *BigQueryScrapper) FetchQueryLogs(
+	ctx context.Context,
+	from, to time.Time,
+	obfuscator querylogs.QueryObfuscator,
+) (querylogs.QueryLogIterator, error) {
 	// Validate obfuscator is provided
 	if obfuscator == nil {
 		return nil, fmt.Errorf("obfuscator is required")
@@ -197,7 +201,8 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 	}
 
 	// Convert destination table (output table)
-	if row.DestinationTable != nil && row.DestinationTable.ProjectId.Valid && row.DestinationTable.DatasetId.Valid && row.DestinationTable.TableId.Valid {
+	if row.DestinationTable != nil && row.DestinationTable.ProjectId.Valid && row.DestinationTable.DatasetId.Valid &&
+		row.DestinationTable.TableId.Valid {
 		outputTables = append(outputTables, scrapper.DwhFqn{
 			DatabaseName: row.DestinationTable.ProjectId.StringVal,
 			SchemaName:   row.DestinationTable.DatasetId.StringVal,
