@@ -298,7 +298,7 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		DwhContext:               dwhContext,
 		QueryType:                row.StatementType.StringVal,
 		Status:                   status,
-		Metadata:                 metadata,
+		Metadata:                 querylogs.SanitizeMetadata(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: nativeLineage != nil && len(nativeLineage.OutputTables) > 0, // BigQuery provides complete lineage
 		NativeLineage:            nativeLineage,

@@ -258,11 +258,9 @@ func convertClickhouseRowToQueryLog(
 		"script_line_number":       row.ScriptLineNumber,
 	}
 
-	// Always add initial_port (some queries may not have an address)
+	// Always add initial_port and initial_address (sanitization will handle net.IP -> string)
 	metadata["initial_port"] = row.InitialPort
-	if row.InitialAddress != nil {
-		metadata["initial_address"] = row.InitialAddress.String()
-	}
+	metadata["initial_address"] = row.InitialAddress
 
 	// Apply obfuscation (may be no-op if already normalized by ClickHouse)
 	queryText := obfuscator.Obfuscate(row.Query)
@@ -290,7 +288,7 @@ func convertClickhouseRowToQueryLog(
 		},
 		QueryType:                row.QueryKind,
 		Status:                   status,
-		Metadata:                 metadata,
+		Metadata:                 querylogs.SanitizeMetadata(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // ClickHouse only provides input tables, not complete lineage
 		NativeLineage:            nativeLineage,

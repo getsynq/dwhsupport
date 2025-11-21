@@ -418,7 +418,7 @@ func convertSnowflakeRowToQueryLog(
 		DwhContext:               dwhContext,
 		QueryType:                row.QueryType,
 		Status:                   status,
-		Metadata:                 metadata,
+		Metadata:                 querylogs.SanitizeMetadata(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Snowflake doesn't provide lineage in QUERY_HISTORY
 		NativeLineage:            nil,

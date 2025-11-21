@@ -323,7 +323,7 @@ func convertDatabricksQueryInfoToQueryLog(
 		DwhContext:               dwhContext,
 		QueryType:                queryInfo.StatementType.String(),
 		Status:                   status,
-		Metadata:                 metadata,
+		Metadata:                 querylogs.SanitizeMetadata(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Databricks doesn't provide lineage in QueryHistory
 		NativeLineage:            nil,
