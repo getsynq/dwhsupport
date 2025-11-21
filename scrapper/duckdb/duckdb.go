@@ -3,10 +3,11 @@ package duckdb
 import (
 	"context"
 
+	_ "github.com/duckdb/duckdb-go/v2"
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	dwhexecduckdb "github.com/getsynq/dwhsupport/exec/duckdb"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
-	duckdb "github.com/marcboeker/go-duckdb"
 	"github.com/pkg/errors"
 )
 
