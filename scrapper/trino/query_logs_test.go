@@ -1,12 +1,23 @@
 package trino
 
 import (
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/stretchr/testify/require"
+	"github.com/trinodb/trino-go-client/trino"
 )
+
+// Helper to create trino.NullSliceString from strings
+func nullSliceString(vals ...string) trino.NullSliceString {
+	slice := make([]sql.NullString, len(vals))
+	for i, v := range vals {
+		slice[i] = sql.NullString{String: v, Valid: true}
+	}
+	return trino.NullSliceString{SliceString: slice}
+}
 
 func TestConvertTrinoRowToQueryLog(t *testing.T) {
 	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
@@ -36,7 +47,7 @@ func TestConvertTrinoRowToQueryLog(t *testing.T) {
 				User:            strPtr("admin"),
 				Source:          strPtr("trino-cli"),
 				Query:           strPtr("SELECT * FROM users WHERE age > 25"),
-				ResourceGroupId: strPtr("global"),
+				ResourceGroupId: nullSliceString("global"),
 				QueuedTimeMs:    int64Ptr(100),
 				AnalysisTimeMs:  int64Ptr(50),
 				PlanningTimeMs:  int64Ptr(200),
@@ -96,7 +107,7 @@ func TestConvertTrinoRowToQueryLog(t *testing.T) {
 				User:            strPtr("admin"),
 				Source:          strPtr("trino-cli"),
 				Query:           strPtr("SELECT COUNT(*) FROM large_table"),
-				ResourceGroupId: strPtr("global"),
+				ResourceGroupId: nullSliceString("global"),
 				QueuedTimeMs:    int64Ptr(200),
 				AnalysisTimeMs:  int64Ptr(100),
 				PlanningTimeMs:  int64Ptr(300),
@@ -116,7 +127,7 @@ func TestConvertTrinoRowToQueryLog(t *testing.T) {
 				User:            strPtr("user1"),
 				Source:          strPtr("jdbc"),
 				Query:           strPtr("SELECT * FROM orders"),
-				ResourceGroupId: strPtr("limited"),
+				ResourceGroupId: nullSliceString("limited"),
 				QueuedTimeMs:    int64Ptr(5000),
 				Created:         &createdTime,
 			},
@@ -250,7 +261,7 @@ func TestConvertTrinoRowToQueryLog(t *testing.T) {
 			if tt.row.Source != nil {
 				require.Contains(t, log.Metadata, "source")
 			}
-			if tt.row.ResourceGroupId != nil {
+			if len(tt.row.ResourceGroupId.SliceString) > 0 {
 				require.Contains(t, log.Metadata, "resource_group_id")
 			}
 			if tt.row.QueuedTimeMs != nil {

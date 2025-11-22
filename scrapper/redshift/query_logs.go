@@ -41,7 +41,7 @@ type RedshiftQueryLogSchema struct {
 	ServiceClassId        *int64     `db:"service_class_id"`
 	ServiceClassName      *string    `db:"service_class_name"`
 	QueryPriority         *string    `db:"query_priority"`
-	ShortQueryAccelerated *bool      `db:"short_query_accelerated"`
+	ShortQueryAccelerated *string    `db:"short_query_accelerated"`
 	GenericQueryHash      *string    `db:"generic_query_hash"`
 	UserQueryHash         *string    `db:"user_query_hash"`
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/querylogs"
+	"github.com/trinodb/trino-go-client/trino"
 )
 
 //go:embed query_logs.sql
@@ -19,7 +20,7 @@ type TrinoQueryLogSchema struct {
 	User            *string    `db:"user"`
 	Source          *string    `db:"source"`
 	Query           *string    `db:"query"`
-	ResourceGroupId *string    `db:"resource_group_id"`
+	ResourceGroupId trino.NullSliceString `db:"resource_group_id"`
 	QueuedTimeMs    *int64     `db:"queued_time_ms"`
 	AnalysisTimeMs  *int64     `db:"analysis_time_ms"`
 	PlanningTimeMs  *int64     `db:"planning_time_ms"`
@@ -91,8 +92,16 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 	if row.Source != nil {
 		metadata["source"] = *row.Source
 	}
-	if row.ResourceGroupId != nil {
-		metadata["resource_group_id"] = *row.ResourceGroupId
+	if len(row.ResourceGroupId.SliceString) > 0 {
+		var resourceGroupIds []string
+		for _, nullString := range row.ResourceGroupId.SliceString {
+			if nullString.Valid {
+				resourceGroupIds = append(resourceGroupIds, nullString.String)
+			}
+		}
+		if len(resourceGroupIds) > 0 {
+			metadata["resource_group_id"] = resourceGroupIds
+		}
 	}
 	if row.QueuedTimeMs != nil {
 		metadata["queued_time_ms"] = *row.QueuedTimeMs
