@@ -144,7 +144,7 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 				ElapsedTime:           int64Ptr(50),
 				ExecutionTime:         int64Ptr(45),
 				QueryText:             strPtr("SELECT version()"),
-				ShortQueryAccelerated: boolPtr(true),
+				ShortQueryAccelerated: strPtr("t"),
 				ReturnedRows:          int64Ptr(1),
 			},
 			obfuscator:   obfuscator,
