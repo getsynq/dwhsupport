@@ -258,7 +258,7 @@ func parseCreatedFromStatement(logger logrus.FieldLogger, tokens []*sqllexer.Tok
 
 	ind, nextToken := parser.PeekToken()
 	switch strings.ToUpper(nextToken.Value) {
-	case "SCHEMA", "PROCEDURE", "TASK", "STAGE", "FUNCTION", "TAG", "STREAMLIT":
+	case "SCHEMA", "PROCEDURE", "TASK", "STAGE", "FUNCTION", "TAG", "STREAMLIT", "PIPE":
 		return nil
 	case "TABLE", "VIEW", "STREAM":
 		parser.Index = ind
