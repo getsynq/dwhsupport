@@ -262,8 +262,9 @@ func convertClickhouseRowToQueryLog(
 	metadata["initial_port"] = row.InitialPort
 	metadata["initial_address"] = row.InitialAddress
 
-	// Apply obfuscation (may be no-op if already normalized by ClickHouse)
-	queryText := obfuscator.Obfuscate(row.Query)
+	// Sanitize and apply obfuscation (may be no-op if already normalized by ClickHouse)
+	queryText := strings.TrimSpace(strings.ToValidUTF8(row.Query, ""))
+	queryText = obfuscator.Obfuscate(queryText)
 
 	// Timing information
 	startedAt := row.QueryStartTimeMicroseconds

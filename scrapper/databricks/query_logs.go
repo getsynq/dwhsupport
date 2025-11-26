@@ -201,11 +201,12 @@ func convertDatabricksQueryInfoToQueryLog(
 		status = strings.ToUpper(string(queryInfo.Status))
 	}
 
-	// Get query text and apply obfuscation
+	// Get query text, sanitize and apply obfuscation
 	// Skip for INSERT statements (can be huge) and limit size
 	queryText := ""
 	if queryInfo.StatementType != servicesql.QueryStatementTypeInsert && len(queryInfo.QueryText) <= 1*1024*1024 {
-		queryText = obfuscator.Obfuscate(queryInfo.QueryText)
+		queryText = strings.TrimSpace(strings.ToValidUTF8(queryInfo.QueryText, ""))
+		queryText = obfuscator.Obfuscate(queryText)
 	}
 
 	// Timing information
