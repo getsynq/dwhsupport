@@ -154,10 +154,11 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 		metadata["user_query_hash"] = *row.UserQueryHash
 	}
 
-	// Get query text and apply obfuscation
+	// Get query text, sanitize and apply obfuscation
 	queryText := ""
 	if row.QueryText != nil {
-		queryText = obfuscator.Obfuscate(*row.QueryText)
+		queryText = strings.TrimSpace(strings.ToValidUTF8(*row.QueryText, ""))
+		queryText = obfuscator.Obfuscate(queryText)
 	}
 
 	// Get query type

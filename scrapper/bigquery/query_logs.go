@@ -267,10 +267,11 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		}
 	}
 
-	// Get query text and apply obfuscation
+	// Get query text, sanitize and apply obfuscation
 	queryText := ""
 	if row.Query.Valid {
-		queryText = obfuscator.Obfuscate(row.Query.StringVal)
+		queryText = strings.TrimSpace(strings.ToValidUTF8(row.Query.StringVal, ""))
+		queryText = obfuscator.Obfuscate(queryText)
 	}
 
 	// Build DwhContext

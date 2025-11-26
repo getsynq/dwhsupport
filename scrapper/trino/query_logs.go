@@ -128,10 +128,11 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 		metadata["error_code"] = *row.ErrorCode
 	}
 
-	// Get query text and apply obfuscation
+	// Get query text, sanitize and apply obfuscation
 	queryText := ""
 	if row.Query != nil {
-		queryText = obfuscator.Obfuscate(*row.Query)
+		queryText = strings.TrimSpace(strings.ToValidUTF8(*row.Query, ""))
+		queryText = obfuscator.Obfuscate(queryText)
 	}
 
 	// Build DwhContext

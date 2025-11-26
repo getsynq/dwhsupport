@@ -400,8 +400,9 @@ func convertSnowflakeRowToQueryLog(
 		dwhContext.Role = *row.RoleName
 	}
 
-	// Apply obfuscation to query text
-	queryText := obfuscator.Obfuscate(row.QueryText)
+	// Sanitize and apply obfuscation to query text
+	queryText := strings.TrimSpace(strings.ToValidUTF8(row.QueryText, ""))
+	queryText = obfuscator.Obfuscate(queryText)
 
 	// Timing information
 	startedAt := row.StartTime
