@@ -204,7 +204,7 @@ func TestConvertDatabricksQueryInfoToQueryLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := convertDatabricksQueryInfoToQueryLog(tt.queryInfo, tt.obfuscator, "databricks")
+			log, err := convertDatabricksQueryInfoToQueryLog(tt.queryInfo, tt.obfuscator, "databricks", "https://test.cloud.databricks.com")
 
 			if tt.expectedError {
 				require.Error(t, err)

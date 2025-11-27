@@ -195,7 +195,7 @@ func TestConvertTrinoRowToQueryLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := convertTrinoRowToQueryLog(tt.row, tt.obfuscator, "trino")
+			log, err := convertTrinoRowToQueryLog(tt.row, tt.obfuscator, "trino", "test-trino-host.example.com")
 
 			if tt.expectedError {
 				require.Error(t, err)

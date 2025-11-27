@@ -121,7 +121,10 @@ func (s *SnowflakeScrapper) FetchQueryLogs(
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](rows, obfuscator, s.DialectType(), convertSnowflakeRowToQueryLog), nil
+	account := s.conf.Account
+	return querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](rows, obfuscator, s.DialectType(), func(row *SnowflakeQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+		return convertSnowflakeRowToQueryLog(row, obfuscator, sqlDialect, account)
+	}), nil
 }
 
 // findTableColumns queries the table to find available columns
@@ -298,6 +301,7 @@ func convertSnowflakeRowToQueryLog(
 	row *SnowflakeQueryLogSchema,
 	obfuscator querylogs.QueryObfuscator,
 	sqlDialect string,
+	account string,
 ) (*querylogs.QueryLog, error) {
 	// Skip running queries (following original implementation)
 	switch strings.ToLower(row.ExecutionStatus) {
@@ -385,18 +389,19 @@ func convertSnowflakeRowToQueryLog(
 
 	// Build DwhContext
 	dwhContext := &querylogs.DwhContext{
-		User: row.UserName,
+		Instance: account,
+		User:     row.UserName,
 	}
-	if row.DatabaseName != nil {
+	if row.DatabaseName != nil && *row.DatabaseName != "" {
 		dwhContext.Database = *row.DatabaseName
 	}
-	if row.SchemaName != nil {
+	if row.SchemaName != nil && *row.SchemaName != "" {
 		dwhContext.Schema = *row.SchemaName
 	}
-	if row.WarehouseName != nil {
+	if row.WarehouseName != nil && *row.WarehouseName != "" {
 		dwhContext.Warehouse = *row.WarehouseName
 	}
-	if row.RoleName != nil {
+	if row.RoleName != nil && *row.RoleName != "" {
 		dwhContext.Role = *row.RoleName
 	}
 

@@ -62,10 +62,14 @@ func (s *RedshiftScrapper) FetchQueryLogs(
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[RedshiftQueryLogSchema](rows, obfuscator, s.DialectType(), convertRedshiftRowToQueryLog), nil
+	host := s.conf.Host
+	database := s.conf.Database
+	return querylogs.NewSqlxRowsIterator[RedshiftQueryLogSchema](rows, obfuscator, s.DialectType(), func(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+		return convertRedshiftRowToQueryLog(row, obfuscator, sqlDialect, host, database)
+	}), nil
 }
 
-func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string, host string, configDatabase string) (*querylogs.QueryLog, error) {
 	// Determine status - Redshift provides it directly
 	status := "UNKNOWN"
 	if row.Status != nil {
@@ -168,9 +172,14 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 	}
 
 	// Build DwhContext
-	dwhContext := &querylogs.DwhContext{}
-	if row.DatabaseName != nil {
+	dwhContext := &querylogs.DwhContext{
+		Instance: host,
+	}
+	if row.DatabaseName != nil && *row.DatabaseName != "" {
 		dwhContext.Database = *row.DatabaseName
+	} else {
+		// Fall back to config database if not in row data
+		dwhContext.Database = configDatabase
 	}
 	// Redshift doesn't provide user in SYS_QUERY_HISTORY, but we have user_id
 	// We'll leave User empty for now
