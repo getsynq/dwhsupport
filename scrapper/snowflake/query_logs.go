@@ -401,7 +401,8 @@ func convertSnowflakeRowToQueryLog(
 	}
 
 	// Sanitize and apply obfuscation to query text
-	queryText := strings.TrimSpace(strings.ToValidUTF8(row.QueryText, ""))
+	// Replace $$$$ with '' (Snowflake-specific escaping) and clean up whitespace/invalid UTF-8
+	queryText := strings.ReplaceAll(strings.TrimSpace(strings.ToValidUTF8(row.QueryText, "")), "$$$$", "''")
 	queryText = obfuscator.Obfuscate(queryText)
 
 	// Timing information
