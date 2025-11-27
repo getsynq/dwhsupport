@@ -113,7 +113,7 @@ func (it *databricksQueryLogIterator) Next(ctx context.Context) (*querylogs.Quer
 		}
 
 		// Convert to QueryLog
-		log, err := convertDatabricksQueryInfoToQueryLog(&queryInfo, it.obfuscator, it.sqlDialect)
+		log, err := convertDatabricksQueryInfoToQueryLog(&queryInfo, it.obfuscator, it.sqlDialect, it.scrapper.conf.WorkspaceUrl)
 		if err != nil {
 			// Don't auto-close on conversion error
 			return nil, err
@@ -178,6 +178,7 @@ func convertDatabricksQueryInfoToQueryLog(
 	queryInfo *servicesql.QueryInfo,
 	obfuscator querylogs.QueryObfuscator,
 	sqlDialect string,
+	workspaceUrl string,
 ) (*querylogs.QueryLog, error) {
 	// Skip SHOW and USE statements
 	switch queryInfo.StatementType {
@@ -309,7 +310,8 @@ func convertDatabricksQueryInfoToQueryLog(
 
 	// Build DwhContext
 	dwhContext := &querylogs.DwhContext{
-		User: queryInfo.UserName,
+		Instance: workspaceUrl,
+		User:     queryInfo.UserName,
 	}
 	// Databricks doesn't provide database/schema in QueryHistory API
 

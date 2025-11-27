@@ -48,10 +48,13 @@ func (s *TrinoScrapper) FetchQueryLogs(
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[TrinoQueryLogSchema](rows, obfuscator, s.DialectType(), convertTrinoRowToQueryLog), nil
+	host := s.conf.Host
+	return querylogs.NewSqlxRowsIterator[TrinoQueryLogSchema](rows, obfuscator, s.DialectType(), func(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+		return convertTrinoRowToQueryLog(row, obfuscator, sqlDialect, host)
+	}), nil
 }
 
-func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string, host string) (*querylogs.QueryLog, error) {
 	// Determine status from state and error fields
 	status := "UNKNOWN"
 	if row.State != nil {
@@ -136,7 +139,9 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 	}
 
 	// Build DwhContext
-	dwhContext := &querylogs.DwhContext{}
+	dwhContext := &querylogs.DwhContext{
+		Instance: host,
+	}
 	if row.User != nil {
 		dwhContext.User = *row.User
 	}

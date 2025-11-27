@@ -193,7 +193,7 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := convertRedshiftRowToQueryLog(tt.row, tt.obfuscator, "redshift")
+			log, err := convertRedshiftRowToQueryLog(tt.row, tt.obfuscator, "redshift", "test-host.redshift.amazonaws.com", "test_database")
 
 			if tt.expectedError {
 				require.Error(t, err)
