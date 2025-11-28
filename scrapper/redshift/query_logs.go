@@ -74,6 +74,16 @@ func (s *RedshiftScrapper) FetchQueryLogs(
 	), nil
 }
 
+// trimStringPtr trims whitespace from a string pointer and returns it
+// Returns nil if input is nil
+func trimStringPtr(s *string) *string {
+	if s == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*s)
+	return &trimmed
+}
+
 func convertRedshiftRowToQueryLog(
 	row *RedshiftQueryLogSchema,
 	obfuscator querylogs.QueryObfuscator,
@@ -84,7 +94,7 @@ func convertRedshiftRowToQueryLog(
 	// Determine status - Redshift provides it directly
 	status := "UNKNOWN"
 	if row.Status != nil {
-		status = strings.ToUpper(*row.Status)
+		status = strings.ToUpper(strings.TrimSpace(*row.Status))
 	}
 
 	// Timing information - use end_time as CreatedAt (when query finished/logged)
@@ -103,14 +113,14 @@ func convertRedshiftRowToQueryLog(
 
 	// Fields also mapped to higher-level QueryLog fields
 	metadata["query_id"] = row.QueryId
-	if row.DatabaseName != nil {
-		metadata["database_name"] = *row.DatabaseName
+	if trimmed := trimStringPtr(row.DatabaseName); trimmed != nil {
+		metadata["database_name"] = *trimmed
 	}
-	if row.QueryType != nil {
-		metadata["query_type"] = *row.QueryType
+	if trimmed := trimStringPtr(row.QueryType); trimmed != nil {
+		metadata["query_type"] = *trimmed
 	}
-	if row.Status != nil {
-		metadata["status"] = *row.Status
+	if trimmed := trimStringPtr(row.Status); trimmed != nil {
+		metadata["status"] = *trimmed
 	}
 	if row.StartTime != nil {
 		metadata["start_time"] = *row.StartTime
@@ -123,8 +133,8 @@ func convertRedshiftRowToQueryLog(
 	if row.UserId != nil {
 		metadata["user_id"] = *row.UserId
 	}
-	if row.QueryLabel != nil {
-		metadata["query_label"] = *row.QueryLabel
+	if trimmed := trimStringPtr(row.QueryLabel); trimmed != nil {
+		metadata["query_label"] = *trimmed
 	}
 	if row.TransactionId != nil {
 		metadata["transaction_id"] = *row.TransactionId
@@ -144,8 +154,8 @@ func convertRedshiftRowToQueryLog(
 	if row.ExecutionTime != nil {
 		metadata["execution_time"] = *row.ExecutionTime
 	}
-	if row.ErrorMessage != nil {
-		metadata["error_message"] = *row.ErrorMessage
+	if trimmed := trimStringPtr(row.ErrorMessage); trimmed != nil {
+		metadata["error_message"] = *trimmed
 	}
 	if row.ReturnedRows != nil {
 		metadata["returned_rows"] = *row.ReturnedRows
@@ -153,14 +163,14 @@ func convertRedshiftRowToQueryLog(
 	if row.ReturnedBytes != nil {
 		metadata["returned_bytes"] = *row.ReturnedBytes
 	}
-	if row.RedshiftVersion != nil {
-		metadata["redshift_version"] = *row.RedshiftVersion
+	if trimmed := trimStringPtr(row.RedshiftVersion); trimmed != nil {
+		metadata["redshift_version"] = *trimmed
 	}
-	if row.UsageLimit != nil {
-		metadata["usage_limit"] = *row.UsageLimit
+	if trimmed := trimStringPtr(row.UsageLimit); trimmed != nil {
+		metadata["usage_limit"] = *trimmed
 	}
-	if row.ComputeType != nil {
-		metadata["compute_type"] = *row.ComputeType
+	if trimmed := trimStringPtr(row.ComputeType); trimmed != nil {
+		metadata["compute_type"] = *trimmed
 	}
 	if row.CompileTime != nil {
 		metadata["compile_time"] = *row.CompileTime
@@ -174,20 +184,20 @@ func convertRedshiftRowToQueryLog(
 	if row.ServiceClassId != nil {
 		metadata["service_class_id"] = *row.ServiceClassId
 	}
-	if row.ServiceClassName != nil {
-		metadata["service_class_name"] = *row.ServiceClassName
+	if trimmed := trimStringPtr(row.ServiceClassName); trimmed != nil {
+		metadata["service_class_name"] = *trimmed
 	}
-	if row.QueryPriority != nil {
-		metadata["query_priority"] = *row.QueryPriority
+	if trimmed := trimStringPtr(row.QueryPriority); trimmed != nil {
+		metadata["query_priority"] = *trimmed
 	}
-	if row.ShortQueryAccelerated != nil {
-		metadata["short_query_accelerated"] = *row.ShortQueryAccelerated
+	if trimmed := trimStringPtr(row.ShortQueryAccelerated); trimmed != nil {
+		metadata["short_query_accelerated"] = *trimmed
 	}
-	if row.GenericQueryHash != nil {
-		metadata["generic_query_hash"] = *row.GenericQueryHash
+	if trimmed := trimStringPtr(row.GenericQueryHash); trimmed != nil {
+		metadata["generic_query_hash"] = *trimmed
 	}
-	if row.UserQueryHash != nil {
-		metadata["user_query_hash"] = *row.UserQueryHash
+	if trimmed := trimStringPtr(row.UserQueryHash); trimmed != nil {
+		metadata["user_query_hash"] = *trimmed
 	}
 
 	// Get query text, sanitize and apply obfuscation
@@ -197,18 +207,18 @@ func convertRedshiftRowToQueryLog(
 		queryText = obfuscator.Obfuscate(queryText)
 	}
 
-	// Get query type
+	// Get query type - trim whitespace
 	queryType := ""
-	if row.QueryType != nil {
-		queryType = *row.QueryType
+	if trimmed := trimStringPtr(row.QueryType); trimmed != nil {
+		queryType = *trimmed
 	}
 
 	// Build DwhContext
 	dwhContext := &querylogs.DwhContext{
 		Instance: host,
 	}
-	if row.DatabaseName != nil && *row.DatabaseName != "" {
-		dwhContext.Database = *row.DatabaseName
+	if trimmed := trimStringPtr(row.DatabaseName); trimmed != nil && *trimmed != "" {
+		dwhContext.Database = *trimmed
 	} else {
 		// Fall back to config database if not in row data
 		dwhContext.Database = configDatabase
@@ -216,10 +226,10 @@ func convertRedshiftRowToQueryLog(
 	// Redshift doesn't provide user in SYS_QUERY_HISTORY, but we have user_id
 	// We'll leave User empty for now
 
-	// Use query_id as QueryID
+	// Use query_id as QueryID - trim whitespace from generic hash
 	queryID := fmt.Sprintf("%d", row.QueryId)
-	if row.GenericQueryHash != nil && *row.GenericQueryHash != "" {
-		queryID = *row.GenericQueryHash // Prefer generic hash if available
+	if trimmed := trimStringPtr(row.GenericQueryHash); trimmed != nil && *trimmed != "" {
+		queryID = *trimmed // Prefer generic hash if available
 	}
 
 	return &querylogs.QueryLog{
