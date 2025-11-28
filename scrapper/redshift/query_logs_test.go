@@ -189,6 +189,33 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 			expectedSQL:  "SELECT * FROM table1",
 			expectedMode: querylogs.ObfuscationNone,
 		},
+		{
+			name: "query_with_trailing_whitespace_in_char_fields",
+			row: &RedshiftQueryLogSchema{
+				UserId:                &userId,
+				QueryId:               queryId,
+				DatabaseName:          strPtr("analytics                "), // CHAR field with padding
+				QueryType:             strPtr("COPY      "),                // CHAR field with padding
+				Status:                strPtr("SUCCESS   "),                // CHAR field with padding
+				StartTime:             &startTime,
+				EndTime:               &endTime,
+				ElapsedTime:           &elapsedTime,
+				ExecutionTime:         &executionTime,
+				QueryText:             strPtr("COPY table FROM 's3://bucket/data'"),
+				RedshiftVersion:       strPtr("1.0.162991                      "),         // CHAR field with padding
+				ComputeType:           strPtr("primary          "),                        // CHAR field with padding
+				ServiceClassName:      strPtr("priority_0                              "), // CHAR field with padding
+				QueryPriority:         strPtr("Highest             "),                     // CHAR field with padding
+				ShortQueryAccelerated: strPtr("false     "),                               // CHAR field with padding
+				GenericQueryHash:      strPtr("8t9wfhBxtpU=                            "), // CHAR field with padding
+				UserQueryHash:         strPtr("8t9wfhBxtpU=                            "), // CHAR field with padding
+				QueryLabel:            strPtr("default         "),                         // CHAR field with padding
+				ErrorMessage:          strPtr(""),                                         // Empty error message
+			},
+			obfuscator:   obfuscator,
+			expectedSQL:  "COPY table FROM 's3://bucket/data'",
+			expectedMode: querylogs.ObfuscationNone,
+		},
 	}
 
 	for _, tt := range tests {
@@ -215,9 +242,9 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 			require.Equal(t, tt.row.StartTime, log.StartedAt)
 			require.Equal(t, tt.row.EndTime, log.FinishedAt)
 
-			// QueryID should be generic hash if available, otherwise string of query_id
-			if tt.row.GenericQueryHash != nil && *tt.row.GenericQueryHash != "" {
-				require.Equal(t, *tt.row.GenericQueryHash, log.QueryID)
+			// QueryID should be generic hash if available (trimmed), otherwise string of query_id
+			if tt.row.GenericQueryHash != nil && strings.TrimSpace(*tt.row.GenericQueryHash) != "" {
+				require.Equal(t, strings.TrimSpace(*tt.row.GenericQueryHash), log.QueryID)
 			} else {
 				require.Contains(t, log.QueryID, "12345")
 			}
@@ -227,18 +254,18 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 			require.Equal(t, tt.expectedMode, log.SqlObfuscationMode)
 
 			if tt.row.QueryType != nil {
-				require.Equal(t, *tt.row.QueryType, log.QueryType)
+				require.Equal(t, strings.TrimSpace(*tt.row.QueryType), log.QueryType)
 			}
 
-			// Verify status (converted to uppercase)
+			// Verify status (converted to uppercase and trimmed)
 			if tt.row.Status != nil {
-				require.Equal(t, strings.ToUpper(*tt.row.Status), log.Status)
+				require.Equal(t, strings.ToUpper(strings.TrimSpace(*tt.row.Status)), log.Status)
 			}
 
 			// Verify DwhContext
 			require.NotNil(t, log.DwhContext)
 			if tt.row.DatabaseName != nil {
-				require.Equal(t, *tt.row.DatabaseName, log.DwhContext.Database)
+				require.Equal(t, strings.TrimSpace(*tt.row.DatabaseName), log.DwhContext.Database)
 			}
 
 			// Redshift doesn't provide native lineage
@@ -277,6 +304,34 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 			}
 			if tt.row.SessionId != nil {
 				require.Contains(t, log.Metadata, "session_id")
+			}
+
+			// Additional assertions for whitespace trimming test
+			if tt.name == "query_with_trailing_whitespace_in_char_fields" {
+				// Verify that metadata string fields are trimmed
+				require.Equal(t, "analytics", log.Metadata["database_name"])
+				require.Equal(t, "COPY", log.Metadata["query_type"])
+				require.Equal(t, "SUCCESS", log.Metadata["status"])
+				require.Equal(t, "1.0.162991", log.Metadata["redshift_version"])
+				require.Equal(t, "primary", log.Metadata["compute_type"])
+				require.Equal(t, "priority_0", log.Metadata["service_class_name"])
+				require.Equal(t, "Highest", log.Metadata["query_priority"])
+				require.Equal(t, "false", log.Metadata["short_query_accelerated"])
+				require.Equal(t, "8t9wfhBxtpU=", log.Metadata["generic_query_hash"])
+				require.Equal(t, "8t9wfhBxtpU=", log.Metadata["user_query_hash"])
+				require.Equal(t, "default", log.Metadata["query_label"])
+
+				// Verify QueryID is trimmed
+				require.Equal(t, "8t9wfhBxtpU=", log.QueryID)
+
+				// Verify QueryType is trimmed
+				require.Equal(t, "COPY", log.QueryType)
+
+				// Verify Status is uppercase and trimmed
+				require.Equal(t, "SUCCESS", log.Status)
+
+				// Verify DwhContext.Database is trimmed
+				require.Equal(t, "analytics", log.DwhContext.Database)
 			}
 		})
 	}
