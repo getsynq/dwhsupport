@@ -15,21 +15,21 @@ import (
 var queryLogsSql string
 
 type TrinoQueryLogSchema struct {
-	QueryId         string     `db:"query_id"`
-	State           *string    `db:"state"`
-	User            *string    `db:"user"`
-	Source          *string    `db:"source"`
-	Query           *string    `db:"query"`
+	QueryId         string                `db:"query_id"`
+	State           *string               `db:"state"`
+	User            *string               `db:"user"`
+	Source          *string               `db:"source"`
+	Query           *string               `db:"query"`
 	ResourceGroupId trino.NullSliceString `db:"resource_group_id"`
-	QueuedTimeMs    *int64     `db:"queued_time_ms"`
-	AnalysisTimeMs  *int64     `db:"analysis_time_ms"`
-	PlanningTimeMs  *int64     `db:"planning_time_ms"`
-	Created         *time.Time `db:"created"`
-	Started         *time.Time `db:"started"`
-	LastHeartbeat   *time.Time `db:"last_heartbeat"`
-	End             *time.Time `db:"end"`
-	ErrorType       *string    `db:"error_type"`
-	ErrorCode       *string    `db:"error_code"`
+	QueuedTimeMs    *int64                `db:"queued_time_ms"`
+	AnalysisTimeMs  *int64                `db:"analysis_time_ms"`
+	PlanningTimeMs  *int64                `db:"planning_time_ms"`
+	Created         *time.Time            `db:"created"`
+	Started         *time.Time            `db:"started"`
+	LastHeartbeat   *time.Time            `db:"last_heartbeat"`
+	End             *time.Time            `db:"end"`
+	ErrorType       *string               `db:"error_type"`
+	ErrorCode       *string               `db:"error_code"`
 }
 
 func (s *TrinoScrapper) FetchQueryLogs(
@@ -49,12 +49,22 @@ func (s *TrinoScrapper) FetchQueryLogs(
 	}
 
 	host := s.conf.Host
-	return querylogs.NewSqlxRowsIterator[TrinoQueryLogSchema](rows, obfuscator, s.DialectType(), func(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
-		return convertTrinoRowToQueryLog(row, obfuscator, sqlDialect, host)
-	}), nil
+	return querylogs.NewSqlxRowsIterator[TrinoQueryLogSchema](
+		rows,
+		obfuscator,
+		s.DialectType(),
+		func(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+			return convertTrinoRowToQueryLog(row, obfuscator, sqlDialect, host)
+		},
+	), nil
 }
 
-func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string, host string) (*querylogs.QueryLog, error) {
+func convertTrinoRowToQueryLog(
+	row *TrinoQueryLogSchema,
+	obfuscator querylogs.QueryObfuscator,
+	sqlDialect string,
+	host string,
+) (*querylogs.QueryLog, error) {
 	// Determine status from state and error fields
 	status := "UNKNOWN"
 	if row.State != nil {

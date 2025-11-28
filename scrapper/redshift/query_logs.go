@@ -64,12 +64,23 @@ func (s *RedshiftScrapper) FetchQueryLogs(
 
 	host := s.conf.Host
 	database := s.conf.Database
-	return querylogs.NewSqlxRowsIterator[RedshiftQueryLogSchema](rows, obfuscator, s.DialectType(), func(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
-		return convertRedshiftRowToQueryLog(row, obfuscator, sqlDialect, host, database)
-	}), nil
+	return querylogs.NewSqlxRowsIterator[RedshiftQueryLogSchema](
+		rows,
+		obfuscator,
+		s.DialectType(),
+		func(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+			return convertRedshiftRowToQueryLog(row, obfuscator, sqlDialect, host, database)
+		},
+	), nil
 }
 
-func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string, host string, configDatabase string) (*querylogs.QueryLog, error) {
+func convertRedshiftRowToQueryLog(
+	row *RedshiftQueryLogSchema,
+	obfuscator querylogs.QueryObfuscator,
+	sqlDialect string,
+	host string,
+	configDatabase string,
+) (*querylogs.QueryLog, error) {
 	// Determine status - Redshift provides it directly
 	status := "UNKNOWN"
 	if row.Status != nil {

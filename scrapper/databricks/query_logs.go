@@ -218,12 +218,12 @@ func convertDatabricksQueryInfoToQueryLog(
 	// Include ALL available fields, even those mapped to higher-level QueryLog fields
 	metadata := map[string]any{
 		// Fields also mapped to higher-level QueryLog fields
-		"query_id":          queryInfo.QueryId,
-		"user_name":         queryInfo.UserName,
-		"status":            queryInfo.Status.String(),
-		"query_start_time":  time.UnixMilli(int64(queryInfo.QueryStartTimeMs)),
-		"query_end_time":    time.UnixMilli(int64(queryInfo.QueryEndTimeMs)),
-		"statement_type":    queryInfo.StatementType.String(),
+		"query_id":         queryInfo.QueryId,
+		"user_name":        queryInfo.UserName,
+		"status":           queryInfo.Status.String(),
+		"query_start_time": time.UnixMilli(int64(queryInfo.QueryStartTimeMs)),
+		"query_end_time":   time.UnixMilli(int64(queryInfo.QueryEndTimeMs)),
+		"statement_type":   queryInfo.StatementType.String(),
 
 		// Databricks-specific fields
 		"endpoint_id":           queryInfo.EndpointId,

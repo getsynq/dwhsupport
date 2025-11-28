@@ -122,9 +122,14 @@ func (s *SnowflakeScrapper) FetchQueryLogs(
 	}
 
 	account := s.conf.Account
-	return querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](rows, obfuscator, s.DialectType(), func(row *SnowflakeQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
-		return convertSnowflakeRowToQueryLog(row, obfuscator, sqlDialect, account)
-	}), nil
+	return querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](
+		rows,
+		obfuscator,
+		s.DialectType(),
+		func(row *SnowflakeQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+			return convertSnowflakeRowToQueryLog(row, obfuscator, sqlDialect, account)
+		},
+	), nil
 }
 
 // findTableColumns queries the table to find available columns
@@ -327,15 +332,15 @@ func convertSnowflakeRowToQueryLog(
 	// Include ALL available fields, even those mapped to higher-level QueryLog fields
 	metadata := map[string]any{
 		// Fields also mapped to higher-level QueryLog fields
-		"query_id":                                    row.QueryID,
-		"query_type":                                  row.QueryType,
-		"user_name":                                   row.UserName,
-		"database_name":                               row.DatabaseName,
-		"schema_name":                                 row.SchemaName,
-		"warehouse_name":                              row.WarehouseName,
-		"role_name":                                   row.RoleName,
-		"start_time":                                  row.StartTime,
-		"end_time":                                    row.EndTime,
+		"query_id":       row.QueryID,
+		"query_type":     row.QueryType,
+		"user_name":      row.UserName,
+		"database_name":  row.DatabaseName,
+		"schema_name":    row.SchemaName,
+		"warehouse_name": row.WarehouseName,
+		"role_name":      row.RoleName,
+		"start_time":     row.StartTime,
+		"end_time":       row.EndTime,
 
 		// Snowflake-specific fields
 		"database_id":                                 row.DatabaseID,
