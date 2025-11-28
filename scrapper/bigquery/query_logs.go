@@ -219,10 +219,21 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 	}
 
 	// Build metadata with all BigQuery-specific fields
+	// Include ALL available fields, even those mapped to higher-level QueryLog fields
 	metadata := map[string]any{
+		// Fields also mapped to higher-level QueryLog fields
+		"job_id":         row.JobId.StringVal,
+		"user_email":     row.UserEmail.StringVal,
+		"project_id":     row.ProjectId.StringVal,
+		"creation_time":  row.CreationTime, // BigQuery job creation time (when queued)
+		"start_time":     row.StartTime,
+		"end_time":       row.EndTime,
+		"statement_type": row.StatementType.StringVal,
+
+		// BigQuery-specific fields
+		"state":                 row.State.StringVal, // Raw BigQuery state (e.g., "DONE")
 		"project_number":        row.ProjectNumber.Int64,
 		"job_type":              row.JobType.StringVal,
-		"statement_type":        row.StatementType.StringVal,
 		"priority":              row.Priority.StringVal,
 		"reservation_id":        row.ReservationId.StringVal,
 		"total_bytes_processed": row.TotalBytesProcessed.Int64,
