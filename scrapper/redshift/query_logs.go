@@ -87,7 +87,28 @@ func convertRedshiftRowToQueryLog(row *RedshiftQueryLogSchema, obfuscator queryl
 	}
 
 	// Build metadata with all Redshift-specific fields
+	// Include ALL available fields, even those mapped to higher-level QueryLog fields
 	metadata := make(map[string]any)
+
+	// Fields also mapped to higher-level QueryLog fields
+	metadata["query_id"] = row.QueryId
+	if row.DatabaseName != nil {
+		metadata["database_name"] = *row.DatabaseName
+	}
+	if row.QueryType != nil {
+		metadata["query_type"] = *row.QueryType
+	}
+	if row.Status != nil {
+		metadata["status"] = *row.Status
+	}
+	if row.StartTime != nil {
+		metadata["start_time"] = *row.StartTime
+	}
+	if row.EndTime != nil {
+		metadata["end_time"] = *row.EndTime
+	}
+
+	// Redshift-specific fields
 	if row.UserId != nil {
 		metadata["user_id"] = *row.UserId
 	}

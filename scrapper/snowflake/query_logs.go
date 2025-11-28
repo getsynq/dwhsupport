@@ -324,7 +324,20 @@ func convertSnowflakeRowToQueryLog(
 	}
 
 	// Build metadata with all Snowflake-specific fields
+	// Include ALL available fields, even those mapped to higher-level QueryLog fields
 	metadata := map[string]any{
+		// Fields also mapped to higher-level QueryLog fields
+		"query_id":                                    row.QueryID,
+		"query_type":                                  row.QueryType,
+		"user_name":                                   row.UserName,
+		"database_name":                               row.DatabaseName,
+		"schema_name":                                 row.SchemaName,
+		"warehouse_name":                              row.WarehouseName,
+		"role_name":                                   row.RoleName,
+		"start_time":                                  row.StartTime,
+		"end_time":                                    row.EndTime,
+
+		// Snowflake-specific fields
 		"database_id":                                 row.DatabaseID,
 		"schema_id":                                   row.SchemaID,
 		"session_id":                                  row.SessionID,

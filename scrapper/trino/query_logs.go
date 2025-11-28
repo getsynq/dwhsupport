@@ -88,10 +88,28 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 	}
 
 	// Build metadata with all Trino-specific fields
+	// Include ALL available fields, even those mapped to higher-level QueryLog fields
 	metadata := make(map[string]any)
+
+	// Fields also mapped to higher-level QueryLog fields
+	metadata["query_id"] = row.QueryId
+	if row.User != nil {
+		metadata["user"] = *row.User
+	}
 	if row.State != nil {
 		metadata["state"] = *row.State
 	}
+	if row.Created != nil {
+		metadata["created"] = *row.Created
+	}
+	if row.Started != nil {
+		metadata["started"] = *row.Started
+	}
+	if row.End != nil {
+		metadata["end"] = *row.End
+	}
+
+	// Trino-specific fields
 	if row.Source != nil {
 		metadata["source"] = *row.Source
 	}
@@ -115,14 +133,8 @@ func convertTrinoRowToQueryLog(row *TrinoQueryLogSchema, obfuscator querylogs.Qu
 	if row.PlanningTimeMs != nil {
 		metadata["planning_time_ms"] = *row.PlanningTimeMs
 	}
-	if row.Started != nil {
-		metadata["started"] = *row.Started
-	}
 	if row.LastHeartbeat != nil {
 		metadata["last_heartbeat"] = *row.LastHeartbeat
-	}
-	if row.End != nil {
-		metadata["end"] = *row.End
 	}
 	if row.ErrorType != nil {
 		metadata["error_type"] = *row.ErrorType
