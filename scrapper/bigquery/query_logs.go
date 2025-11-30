@@ -12,6 +12,7 @@ import (
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"google.golang.org/api/iterator"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type BqQueryTable struct {
@@ -220,47 +221,47 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 
 	// Build metadata with all BigQuery-specific fields
 	// Include ALL available fields, even those mapped to higher-level QueryLog fields
-	metadata := map[string]any{
+	metadata := map[string]*structpb.Value{
 		// Fields also mapped to higher-level QueryLog fields
-		"job_id":         row.JobId.StringVal,
-		"user_email":     row.UserEmail.StringVal,
-		"project_id":     row.ProjectId.StringVal,
-		"creation_time":  row.CreationTime, // BigQuery job creation time (when queued)
-		"start_time":     row.StartTime,
-		"end_time":       row.EndTime,
-		"statement_type": row.StatementType.StringVal,
+		"job_id":         querylogs.StringValue(row.JobId.StringVal),
+		"user_email":     querylogs.StringValue(row.UserEmail.StringVal),
+		"project_id":     querylogs.StringValue(row.ProjectId.StringVal),
+		"creation_time":  querylogs.TimeValue(row.CreationTime), // BigQuery job creation time (when queued)
+		"start_time":     querylogs.TimeValue(row.StartTime),
+		"end_time":       querylogs.TimeValue(row.EndTime),
+		"statement_type": querylogs.StringValue(row.StatementType.StringVal),
 
 		// BigQuery-specific fields
-		"state":                 row.State.StringVal, // Raw BigQuery state (e.g., "DONE")
-		"project_number":        row.ProjectNumber.Int64,
-		"job_type":              row.JobType.StringVal,
-		"priority":              row.Priority.StringVal,
-		"reservation_id":        row.ReservationId.StringVal,
-		"total_bytes_processed": row.TotalBytesProcessed.Int64,
-		"total_slot_ms":         row.TotalSlotMs.Int64,
-		"cache_hit":             row.CacheHit.Bool,
-		"total_bytes_billed":    row.TotalBytesBilled.Int64,
-		"transaction_id":        row.TransactionId.StringVal,
-		"parent_job_id":         row.ParentJobId.StringVal,
-		"transferred_bytes":     row.TransferredBytes.Int64,
+		"state":                 querylogs.StringValue(row.State.StringVal), // Raw BigQuery state (e.g., "DONE")
+		"project_number":        querylogs.IntValue(row.ProjectNumber.Int64),
+		"job_type":              querylogs.StringValue(row.JobType.StringVal),
+		"priority":              querylogs.StringValue(row.Priority.StringVal),
+		"reservation_id":        querylogs.StringValue(row.ReservationId.StringVal),
+		"total_bytes_processed": querylogs.IntValue(row.TotalBytesProcessed.Int64),
+		"total_slot_ms":         querylogs.IntValue(row.TotalSlotMs.Int64),
+		"cache_hit":             querylogs.BoolValue(row.CacheHit.Bool),
+		"total_bytes_billed":    querylogs.IntValue(row.TotalBytesBilled.Int64),
+		"transaction_id":        querylogs.StringValue(row.TransactionId.StringVal),
+		"parent_job_id":         querylogs.StringValue(row.ParentJobId.StringVal),
+		"transferred_bytes":     querylogs.IntValue(row.TransferredBytes.Int64),
 	}
 
 	// Add error details if present
 	if row.ErrorResult != nil {
-		metadata["error_reason"] = row.ErrorResult.Reason.StringVal
-		metadata["error_message"] = row.ErrorResult.Message.StringVal
+		metadata["error_reason"] = querylogs.StringValue(row.ErrorResult.Reason.StringVal)
+		metadata["error_message"] = querylogs.StringValue(row.ErrorResult.Message.StringVal)
 	}
 
 	// Add labels
 	if len(row.Labels) > 0 {
-		labels := make(map[string]string)
+		labels := make(map[string]*structpb.Value)
 		for _, l := range row.Labels {
 			if l != nil && l.Key.Valid && l.Value.Valid {
-				labels[l.Key.StringVal] = l.Value.StringVal
+				labels[l.Key.StringVal] = querylogs.StringValue(l.Value.StringVal)
 			}
 		}
 		if len(labels) > 0 {
-			metadata["labels"] = labels
+			metadata["labels"] = querylogs.StructValue(labels)
 		}
 	}
 
@@ -270,10 +271,10 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		lastJob := row.JobStages[len(row.JobStages)-1]
 		if lastJob != nil && strings.Contains(lastJob.Name.StringVal, "Output") {
 			if lastJob.RecordsRead.Valid {
-				metadata["records_read"] = lastJob.RecordsRead.Int64
+				metadata["records_read"] = querylogs.IntValue(lastJob.RecordsRead.Int64)
 			}
 			if lastJob.RecordsWritten.Valid {
-				metadata["records_written"] = lastJob.RecordsWritten.Int64
+				metadata["records_written"] = querylogs.IntValue(lastJob.RecordsWritten.Int64)
 			}
 		}
 	}
@@ -310,7 +311,7 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		DwhContext:               dwhContext,
 		QueryType:                row.StatementType.StringVal,
 		Status:                   status,
-		Metadata:                 querylogs.SanitizeMetadata(metadata),
+		Metadata:                 querylogs.NewMetadataStruct(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: nativeLineage != nil && len(nativeLineage.OutputTables) > 0, // BigQuery provides complete lineage
 		NativeLineage:            nativeLineage,

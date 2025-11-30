@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // ObfuscationMode represents the level of SQL obfuscation applied to query logs.
@@ -66,17 +67,9 @@ type QueryLog struct {
 	Status string
 
 	// Metadata contains platform-specific fields that don't fit into the standard structure.
-	// IMPORTANT: Values in this map MUST be JSON-compatible basic types only:
-	//   - nil
-	//   - bool
-	//   - numeric types (int, int64, float64, etc.)
-	//   - string (time.Time formatted as RFC3339Nano, net.IP as string, time.Duration as string)
-	//   - []interface{} (slices)
-	//   - map[string]interface{} (nested maps)
-	//
-	// Use SanitizeMetadata() to convert a map with Go-native types to a sanitized map.
-	// This ensures compatibility with proto.Struct, JSON marshaling, and other serialization formats.
-	Metadata map[string]interface{}
+	// This is a protobuf Struct for direct serialization compatibility.
+	// Use NewMetadataStruct() to create from a map with Go-native types.
+	Metadata *structpb.Struct
 
 	// SqlObfuscationMode indicates how the SQL was obfuscated (if at all)
 	SqlObfuscationMode ObfuscationMode

@@ -10,6 +10,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 //go:embed query_logs.sql
@@ -222,59 +223,57 @@ func convertClickhouseRowToQueryLog(
 
 	// Build metadata with all ClickHouse-specific fields
 	// Include ALL available fields, even those mapped to higher-level QueryLog fields
-	metadata := map[string]any{
+	metadata := map[string]*structpb.Value{
 		// Fields also mapped to higher-level QueryLog fields
-		"initial_query_id":              row.InitialQueryId,
-		"initial_user":                  row.InitialUser,
-		"current_database":              row.CurrentDatabase,
-		"query_kind":                    row.QueryKind,
-		"query_start_time_microseconds": row.QueryStartTimeMicroseconds,
-		"event_time_microseconds":       row.EventTimeMicroseconds,
-		"normalized_query_hash":         row.NormalizedQueryHash,
+		"initial_query_id":              querylogs.StringValue(row.InitialQueryId),
+		"initial_user":                  querylogs.StringValue(row.InitialUser),
+		"current_database":              querylogs.StringValue(row.CurrentDatabase),
+		"query_kind":                    querylogs.StringValue(row.QueryKind),
+		"query_start_time_microseconds": querylogs.TimeValue(row.QueryStartTimeMicroseconds),
+		"event_time_microseconds":       querylogs.TimeValue(row.EventTimeMicroseconds),
+		"normalized_query_hash":         querylogs.UintValue(row.NormalizedQueryHash),
 
 		// ClickHouse-specific fields
-		"query_type":                            row.QueryType,
-		"query_duration_ms":                     row.QueryDurationMs,
-		"peak_threads_usage":                    row.PeakThreadsUsage,
-		"read_rows":                             row.ReadRows,
-		"read_bytes":                            row.ReadBytes,
-		"written_rows":                          row.WrittenRows,
-		"written_bytes":                         row.WrittenBytes,
-		"result_rows":                           row.ResultRows,
-		"result_bytes":                          row.ResultBytes,
-		"memory_usage":                          row.MemoryUsage,
-		"databases":                             row.Databases,
-		"tables":                                row.Tables,
-		"columns":                               row.Columns,
-		"partitions":                            row.Partitions,
-		"projections":                           row.Projections,
-		"views":                                 row.Views,
-		"used_functions":                        row.UsedFunctions,
-		"used_aggregate_functions":              row.UsedAggregateFunctions,
-		"exception_code":                        row.ExceptionCode,
-		"exception":                             row.Exception,
-		"stack_trace":                           row.StackTrace,
-		"hostname":                              row.Hostname,
-		"initial_query_start_time_microseconds": row.InitialQueryStartTimeMicroseconds,
-		"os_user":                               row.OsUser,
-		"client_hostname":                       row.ClientHostname,
-		"client_name":                           row.ClientName,
-		"client_revision":                       row.ClientRevision,
-		"client_version_major":                  row.ClientRevisionMajor,
-		"client_version_minor":                  row.ClientRevisionMinor,
-		"client_version_patch":                  row.ClientRevisionPatch,
-		"distributed_depth":                     row.DistributedDepth,
-		"http_method":                           row.HttpMethod,
-		"http_user_agent":                       row.HttpUserAgent,
-		"http_referer":                          row.HttpReferer,
-		"forwarded_for":                         row.ForwardedFor,
-		"script_query_number":                   row.ScriptQueryNumber,
-		"script_line_number":                    row.ScriptLineNumber,
+		"query_type":                            querylogs.StringValue(row.QueryType),
+		"query_duration_ms":                     querylogs.UintValue(row.QueryDurationMs),
+		"peak_threads_usage":                    querylogs.UintValue(row.PeakThreadsUsage),
+		"read_rows":                             querylogs.UintValue(row.ReadRows),
+		"read_bytes":                            querylogs.UintValue(row.ReadBytes),
+		"written_rows":                          querylogs.UintValue(row.WrittenRows),
+		"written_bytes":                         querylogs.UintValue(row.WrittenBytes),
+		"result_rows":                           querylogs.UintValue(row.ResultRows),
+		"result_bytes":                          querylogs.UintValue(row.ResultBytes),
+		"memory_usage":                          querylogs.UintValue(row.MemoryUsage),
+		"databases":                             querylogs.StringListValue(row.Databases),
+		"tables":                                querylogs.StringListValue(row.Tables),
+		"columns":                               querylogs.StringListValue(row.Columns),
+		"partitions":                            querylogs.StringListValue(row.Partitions),
+		"projections":                           querylogs.StringListValue(row.Projections),
+		"views":                                 querylogs.StringListValue(row.Views),
+		"used_functions":                        querylogs.StringListValue(row.UsedFunctions),
+		"used_aggregate_functions":              querylogs.StringListValue(row.UsedAggregateFunctions),
+		"exception_code":                        querylogs.Int32Value(row.ExceptionCode),
+		"exception":                             querylogs.StringValue(row.Exception),
+		"stack_trace":                           querylogs.StringValue(row.StackTrace),
+		"hostname":                              querylogs.StringValue(row.Hostname),
+		"initial_query_start_time_microseconds": querylogs.TimeValue(row.InitialQueryStartTimeMicroseconds),
+		"os_user":                               querylogs.StringValue(row.OsUser),
+		"client_hostname":                       querylogs.StringValue(row.ClientHostname),
+		"client_name":                           querylogs.StringValue(row.ClientName),
+		"client_revision":                       querylogs.Uint32Value(row.ClientRevision),
+		"client_version_major":                  querylogs.Uint32Value(row.ClientRevisionMajor),
+		"client_version_minor":                  querylogs.Uint32Value(row.ClientRevisionMinor),
+		"client_version_patch":                  querylogs.Uint32Value(row.ClientRevisionPatch),
+		"distributed_depth":                     querylogs.UintValue(row.DistributedDepth),
+		"http_method":                           querylogs.Uint8Value(row.HttpMethod),
+		"http_user_agent":                       querylogs.StringValue(row.HttpUserAgent),
+		"http_referer":                          querylogs.StringValue(row.HttpReferer),
+		"forwarded_for":                         querylogs.StringValue(row.ForwardedFor),
+		"script_query_number":                   querylogs.Uint32Value(row.ScriptQueryNumber),
+		"script_line_number":                    querylogs.Uint32Value(row.ScriptLineNumber),
+		"initial_port":                          querylogs.UInt16Value(row.InitialPort),
+		"initial_address":                       querylogs.IPPtrValue(row.InitialAddress),
 	}
-
-	// Always add initial_port and initial_address (sanitization will handle net.IP -> string)
-	metadata["initial_port"] = row.InitialPort
-	metadata["initial_address"] = row.InitialAddress
 
 	// Sanitize and apply obfuscation (may be no-op if already normalized by ClickHouse)
 	queryText := strings.TrimSpace(strings.ToValidUTF8(row.Query, ""))
@@ -303,7 +302,7 @@ func convertClickhouseRowToQueryLog(
 		},
 		QueryType:                row.QueryKind,
 		Status:                   status,
-		Metadata:                 querylogs.SanitizeMetadata(metadata),
+		Metadata:                 querylogs.NewMetadataStruct(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // ClickHouse only provides input tables, not complete lineage
 		NativeLineage:            nativeLineage,

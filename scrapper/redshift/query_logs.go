@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/querylogs"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 //go:embed query_logs.sql
@@ -109,95 +110,40 @@ func convertRedshiftRowToQueryLog(
 
 	// Build metadata with all Redshift-specific fields
 	// Include ALL available fields, even those mapped to higher-level QueryLog fields
-	metadata := make(map[string]any)
+	// nil values are filtered out by NewMetadataStruct
+	metadata := map[string]*structpb.Value{
+		// Fields also mapped to higher-level QueryLog fields
+		"query_id":      querylogs.IntValue(row.QueryId),
+		"database_name": querylogs.TrimmedStringPtrValue(row.DatabaseName),
+		"query_type":    querylogs.TrimmedStringPtrValue(row.QueryType),
+		"status":        querylogs.TrimmedStringPtrValue(row.Status),
+		"start_time":    querylogs.TimePtrValue(row.StartTime),
+		"end_time":      querylogs.TimePtrValue(row.EndTime),
 
-	// Fields also mapped to higher-level QueryLog fields
-	metadata["query_id"] = row.QueryId
-	if trimmed := trimStringPtr(row.DatabaseName); trimmed != nil {
-		metadata["database_name"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.QueryType); trimmed != nil {
-		metadata["query_type"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.Status); trimmed != nil {
-		metadata["status"] = *trimmed
-	}
-	if row.StartTime != nil {
-		metadata["start_time"] = *row.StartTime
-	}
-	if row.EndTime != nil {
-		metadata["end_time"] = *row.EndTime
-	}
-
-	// Redshift-specific fields
-	if row.UserId != nil {
-		metadata["user_id"] = *row.UserId
-	}
-	if trimmed := trimStringPtr(row.QueryLabel); trimmed != nil {
-		metadata["query_label"] = *trimmed
-	}
-	if row.TransactionId != nil {
-		metadata["transaction_id"] = *row.TransactionId
-	}
-	if row.SessionId != nil {
-		metadata["session_id"] = *row.SessionId
-	}
-	if row.ResultCacheHit != nil {
-		metadata["result_cache_hit"] = *row.ResultCacheHit
-	}
-	if row.ElapsedTime != nil {
-		metadata["elapsed_time"] = *row.ElapsedTime
-	}
-	if row.QueueTime != nil {
-		metadata["queue_time"] = *row.QueueTime
-	}
-	if row.ExecutionTime != nil {
-		metadata["execution_time"] = *row.ExecutionTime
-	}
-	if trimmed := trimStringPtr(row.ErrorMessage); trimmed != nil {
-		metadata["error_message"] = *trimmed
-	}
-	if row.ReturnedRows != nil {
-		metadata["returned_rows"] = *row.ReturnedRows
-	}
-	if row.ReturnedBytes != nil {
-		metadata["returned_bytes"] = *row.ReturnedBytes
-	}
-	if trimmed := trimStringPtr(row.RedshiftVersion); trimmed != nil {
-		metadata["redshift_version"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.UsageLimit); trimmed != nil {
-		metadata["usage_limit"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.ComputeType); trimmed != nil {
-		metadata["compute_type"] = *trimmed
-	}
-	if row.CompileTime != nil {
-		metadata["compile_time"] = *row.CompileTime
-	}
-	if row.PlanningTime != nil {
-		metadata["planning_time"] = *row.PlanningTime
-	}
-	if row.LockWaitTime != nil {
-		metadata["lock_wait_time"] = *row.LockWaitTime
-	}
-	if row.ServiceClassId != nil {
-		metadata["service_class_id"] = *row.ServiceClassId
-	}
-	if trimmed := trimStringPtr(row.ServiceClassName); trimmed != nil {
-		metadata["service_class_name"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.QueryPriority); trimmed != nil {
-		metadata["query_priority"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.ShortQueryAccelerated); trimmed != nil {
-		metadata["short_query_accelerated"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.GenericQueryHash); trimmed != nil {
-		metadata["generic_query_hash"] = *trimmed
-	}
-	if trimmed := trimStringPtr(row.UserQueryHash); trimmed != nil {
-		metadata["user_query_hash"] = *trimmed
+		// Redshift-specific fields
+		"user_id":                 querylogs.IntPtrValue(row.UserId),
+		"query_label":             querylogs.TrimmedStringPtrValue(row.QueryLabel),
+		"transaction_id":          querylogs.IntPtrValue(row.TransactionId),
+		"session_id":              querylogs.IntPtrValue(row.SessionId),
+		"result_cache_hit":        querylogs.BoolPtrValue(row.ResultCacheHit),
+		"elapsed_time":            querylogs.IntPtrValue(row.ElapsedTime),
+		"queue_time":              querylogs.IntPtrValue(row.QueueTime),
+		"execution_time":          querylogs.IntPtrValue(row.ExecutionTime),
+		"error_message":           querylogs.TrimmedStringPtrValue(row.ErrorMessage),
+		"returned_rows":           querylogs.IntPtrValue(row.ReturnedRows),
+		"returned_bytes":          querylogs.IntPtrValue(row.ReturnedBytes),
+		"redshift_version":        querylogs.TrimmedStringPtrValue(row.RedshiftVersion),
+		"usage_limit":             querylogs.TrimmedStringPtrValue(row.UsageLimit),
+		"compute_type":            querylogs.TrimmedStringPtrValue(row.ComputeType),
+		"compile_time":            querylogs.IntPtrValue(row.CompileTime),
+		"planning_time":           querylogs.IntPtrValue(row.PlanningTime),
+		"lock_wait_time":          querylogs.IntPtrValue(row.LockWaitTime),
+		"service_class_id":        querylogs.IntPtrValue(row.ServiceClassId),
+		"service_class_name":      querylogs.TrimmedStringPtrValue(row.ServiceClassName),
+		"query_priority":          querylogs.TrimmedStringPtrValue(row.QueryPriority),
+		"short_query_accelerated": querylogs.TrimmedStringPtrValue(row.ShortQueryAccelerated),
+		"generic_query_hash":      querylogs.TrimmedStringPtrValue(row.GenericQueryHash),
+		"user_query_hash":         querylogs.TrimmedStringPtrValue(row.UserQueryHash),
 	}
 
 	// Get query text, sanitize and apply obfuscation
@@ -243,7 +189,7 @@ func convertRedshiftRowToQueryLog(
 		DwhContext:               dwhContext,
 		QueryType:                queryType,
 		Status:                   status,
-		Metadata:                 querylogs.SanitizeMetadata(metadata),
+		Metadata:                 querylogs.NewMetadataStruct(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Redshift doesn't provide lineage in SYS_QUERY_HISTORY
 		NativeLineage:            nil,
