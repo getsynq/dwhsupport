@@ -9,6 +9,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/trinodb/trino-go-client/trino"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 //go:embed query_logs.sql
@@ -99,29 +100,29 @@ func convertTrinoRowToQueryLog(
 
 	// Build metadata with all Trino-specific fields
 	// Include ALL available fields, even those mapped to higher-level QueryLog fields
-	metadata := make(map[string]any)
+	metadata := make(map[string]*structpb.Value)
 
 	// Fields also mapped to higher-level QueryLog fields
-	metadata["query_id"] = row.QueryId
+	metadata["query_id"] = querylogs.StringValue(row.QueryId)
 	if row.User != nil {
-		metadata["user"] = *row.User
+		metadata["user"] = querylogs.StringValue(*row.User)
 	}
 	if row.State != nil {
-		metadata["state"] = *row.State
+		metadata["state"] = querylogs.StringValue(*row.State)
 	}
 	if row.Created != nil {
-		metadata["created"] = *row.Created
+		metadata["created"] = querylogs.TimeValue(*row.Created)
 	}
 	if row.Started != nil {
-		metadata["started"] = *row.Started
+		metadata["started"] = querylogs.TimeValue(*row.Started)
 	}
 	if row.End != nil {
-		metadata["end"] = *row.End
+		metadata["end"] = querylogs.TimeValue(*row.End)
 	}
 
 	// Trino-specific fields
 	if row.Source != nil {
-		metadata["source"] = *row.Source
+		metadata["source"] = querylogs.StringValue(*row.Source)
 	}
 	if len(row.ResourceGroupId.SliceString) > 0 {
 		var resourceGroupIds []string
@@ -131,26 +132,26 @@ func convertTrinoRowToQueryLog(
 			}
 		}
 		if len(resourceGroupIds) > 0 {
-			metadata["resource_group_id"] = resourceGroupIds
+			metadata["resource_group_id"] = querylogs.StringListValue(resourceGroupIds)
 		}
 	}
 	if row.QueuedTimeMs != nil {
-		metadata["queued_time_ms"] = *row.QueuedTimeMs
+		metadata["queued_time_ms"] = querylogs.IntValue(*row.QueuedTimeMs)
 	}
 	if row.AnalysisTimeMs != nil {
-		metadata["analysis_time_ms"] = *row.AnalysisTimeMs
+		metadata["analysis_time_ms"] = querylogs.IntValue(*row.AnalysisTimeMs)
 	}
 	if row.PlanningTimeMs != nil {
-		metadata["planning_time_ms"] = *row.PlanningTimeMs
+		metadata["planning_time_ms"] = querylogs.IntValue(*row.PlanningTimeMs)
 	}
 	if row.LastHeartbeat != nil {
-		metadata["last_heartbeat"] = *row.LastHeartbeat
+		metadata["last_heartbeat"] = querylogs.TimeValue(*row.LastHeartbeat)
 	}
 	if row.ErrorType != nil {
-		metadata["error_type"] = *row.ErrorType
+		metadata["error_type"] = querylogs.StringValue(*row.ErrorType)
 	}
 	if row.ErrorCode != nil {
-		metadata["error_code"] = *row.ErrorCode
+		metadata["error_code"] = querylogs.StringValue(*row.ErrorCode)
 	}
 
 	// Get query text, sanitize and apply obfuscation
@@ -180,7 +181,7 @@ func convertTrinoRowToQueryLog(
 		DwhContext:               dwhContext,
 		QueryType:                "", // Trino doesn't provide query type in this table
 		Status:                   status,
-		Metadata:                 querylogs.SanitizeMetadata(metadata),
+		Metadata:                 querylogs.NewMetadataStruct(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Trino doesn't provide lineage in system.runtime.queries
 		NativeLineage:            nil,

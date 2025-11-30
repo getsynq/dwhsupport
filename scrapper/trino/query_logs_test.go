@@ -255,40 +255,41 @@ func TestConvertTrinoRowToQueryLog(t *testing.T) {
 
 			// Verify metadata contains expected fields
 			require.NotNil(t, log.Metadata)
+			fields := log.Metadata.GetFields()
 			if tt.row.State != nil {
-				require.Contains(t, log.Metadata, "state")
+				require.Contains(t, fields, "state")
 			}
 			if tt.row.Source != nil {
-				require.Contains(t, log.Metadata, "source")
+				require.Contains(t, fields, "source")
 			}
 			if len(tt.row.ResourceGroupId.SliceString) > 0 {
-				require.Contains(t, log.Metadata, "resource_group_id")
+				require.Contains(t, fields, "resource_group_id")
 			}
 			if tt.row.QueuedTimeMs != nil {
-				require.Contains(t, log.Metadata, "queued_time_ms")
+				require.Contains(t, fields, "queued_time_ms")
 			}
 			if tt.row.AnalysisTimeMs != nil {
-				require.Contains(t, log.Metadata, "analysis_time_ms")
+				require.Contains(t, fields, "analysis_time_ms")
 			}
 			if tt.row.PlanningTimeMs != nil {
-				require.Contains(t, log.Metadata, "planning_time_ms")
+				require.Contains(t, fields, "planning_time_ms")
 			}
 			if tt.row.ErrorType != nil {
-				require.Contains(t, log.Metadata, "error_type")
-				require.Equal(t, *tt.row.ErrorType, log.Metadata["error_type"])
+				require.Contains(t, fields, "error_type")
+				require.Equal(t, *tt.row.ErrorType, fields["error_type"].GetStringValue())
 			}
 			if tt.row.ErrorCode != nil {
-				require.Contains(t, log.Metadata, "error_code")
-				require.Equal(t, *tt.row.ErrorCode, log.Metadata["error_code"])
+				require.Contains(t, fields, "error_code")
+				require.Equal(t, *tt.row.ErrorCode, fields["error_code"].GetStringValue())
 			}
 			if tt.row.Started != nil {
-				require.Contains(t, log.Metadata, "started")
+				require.Contains(t, fields, "started")
 			}
 			if tt.row.LastHeartbeat != nil {
-				require.Contains(t, log.Metadata, "last_heartbeat")
+				require.Contains(t, fields, "last_heartbeat")
 			}
 			if tt.row.End != nil {
-				require.Contains(t, log.Metadata, "end")
+				require.Contains(t, fields, "end")
 			}
 		})
 	}

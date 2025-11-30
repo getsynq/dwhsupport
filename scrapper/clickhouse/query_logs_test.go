@@ -240,21 +240,22 @@ func TestConvertClickhouseRowToQueryLog(t *testing.T) {
 
 			// Verify metadata contains expected fields
 			require.NotNil(t, log.Metadata)
-			require.Contains(t, log.Metadata, "query_type")
-			require.Contains(t, log.Metadata, "read_rows")
-			require.Contains(t, log.Metadata, "read_bytes")
-			require.Contains(t, log.Metadata, "memory_usage")
+			fields := log.Metadata.GetFields()
+			require.Contains(t, fields, "query_type")
+			require.Contains(t, fields, "read_rows")
+			require.Contains(t, fields, "read_bytes")
+			require.Contains(t, fields, "memory_usage")
 
 			// Verify exception metadata when present
 			if tt.row.Exception != "" {
-				require.Contains(t, log.Metadata, "exception_code")
-				require.Contains(t, log.Metadata, "stack_trace")
+				require.Contains(t, fields, "exception_code")
+				require.Contains(t, fields, "stack_trace")
 			}
 
 			// Verify IP address when present
 			if tt.row.InitialAddress != nil {
-				require.Contains(t, log.Metadata, "initial_address")
-				require.Contains(t, log.Metadata, "initial_port")
+				require.Contains(t, fields, "initial_address")
+				require.Contains(t, fields, "initial_port")
 			}
 		})
 	}

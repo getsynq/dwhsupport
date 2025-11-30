@@ -274,52 +274,54 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 
 			// Verify metadata contains expected fields
 			require.NotNil(t, log.Metadata)
+			fields := log.Metadata.GetFields()
 			if tt.row.UserId != nil {
-				require.Contains(t, log.Metadata, "user_id")
+				require.Contains(t, fields, "user_id")
 			}
 			if tt.row.ElapsedTime != nil {
-				require.Contains(t, log.Metadata, "elapsed_time")
+				require.Contains(t, fields, "elapsed_time")
 			}
 			if tt.row.ExecutionTime != nil {
-				require.Contains(t, log.Metadata, "execution_time")
+				require.Contains(t, fields, "execution_time")
 			}
 			if tt.row.QueueTime != nil {
-				require.Contains(t, log.Metadata, "queue_time")
+				require.Contains(t, fields, "queue_time")
 			}
 			if tt.row.ResultCacheHit != nil {
-				require.Contains(t, log.Metadata, "result_cache_hit")
+				require.Contains(t, fields, "result_cache_hit")
 			}
 			if tt.row.ShortQueryAccelerated != nil {
-				require.Contains(t, log.Metadata, "short_query_accelerated")
+				require.Contains(t, fields, "short_query_accelerated")
 			}
-			if tt.row.ErrorMessage != nil {
-				require.Contains(t, log.Metadata, "error_message")
-				require.Equal(t, *tt.row.ErrorMessage, log.Metadata["error_message"])
+			// Error message is only included if non-empty (empty strings are filtered out by TrimmedStringPtrValue)
+			if tt.row.ErrorMessage != nil && strings.TrimSpace(*tt.row.ErrorMessage) != "" {
+				require.Contains(t, fields, "error_message")
+				require.Equal(t, strings.TrimSpace(*tt.row.ErrorMessage), fields["error_message"].GetStringValue())
 			}
 			if tt.row.GenericQueryHash != nil {
-				require.Contains(t, log.Metadata, "generic_query_hash")
+				require.Contains(t, fields, "generic_query_hash")
 			}
 			if tt.row.TransactionId != nil {
-				require.Contains(t, log.Metadata, "transaction_id")
+				require.Contains(t, fields, "transaction_id")
 			}
 			if tt.row.SessionId != nil {
-				require.Contains(t, log.Metadata, "session_id")
+				require.Contains(t, fields, "session_id")
 			}
 
 			// Additional assertions for whitespace trimming test
 			if tt.name == "query_with_trailing_whitespace_in_char_fields" {
 				// Verify that metadata string fields are trimmed
-				require.Equal(t, "analytics", log.Metadata["database_name"])
-				require.Equal(t, "COPY", log.Metadata["query_type"])
-				require.Equal(t, "SUCCESS", log.Metadata["status"])
-				require.Equal(t, "1.0.162991", log.Metadata["redshift_version"])
-				require.Equal(t, "primary", log.Metadata["compute_type"])
-				require.Equal(t, "priority_0", log.Metadata["service_class_name"])
-				require.Equal(t, "Highest", log.Metadata["query_priority"])
-				require.Equal(t, "false", log.Metadata["short_query_accelerated"])
-				require.Equal(t, "8t9wfhBxtpU=", log.Metadata["generic_query_hash"])
-				require.Equal(t, "8t9wfhBxtpU=", log.Metadata["user_query_hash"])
-				require.Equal(t, "default", log.Metadata["query_label"])
+				require.Equal(t, "analytics", fields["database_name"].GetStringValue())
+				require.Equal(t, "COPY", fields["query_type"].GetStringValue())
+				require.Equal(t, "SUCCESS", fields["status"].GetStringValue())
+				require.Equal(t, "1.0.162991", fields["redshift_version"].GetStringValue())
+				require.Equal(t, "primary", fields["compute_type"].GetStringValue())
+				require.Equal(t, "priority_0", fields["service_class_name"].GetStringValue())
+				require.Equal(t, "Highest", fields["query_priority"].GetStringValue())
+				require.Equal(t, "false", fields["short_query_accelerated"].GetStringValue())
+				require.Equal(t, "8t9wfhBxtpU=", fields["generic_query_hash"].GetStringValue())
+				require.Equal(t, "8t9wfhBxtpU=", fields["user_query_hash"].GetStringValue())
+				require.Equal(t, "default", fields["query_label"].GetStringValue())
 
 				// Verify QueryID is trimmed
 				require.Equal(t, "8t9wfhBxtpU=", log.QueryID)

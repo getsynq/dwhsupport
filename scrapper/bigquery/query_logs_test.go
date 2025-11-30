@@ -179,14 +179,15 @@ func TestConvertBigQueryRowToQueryLog(t *testing.T) {
 
 			// Verify metadata contains expected fields
 			require.NotNil(t, log.Metadata)
-			require.Contains(t, log.Metadata, "job_type")
-			require.Contains(t, log.Metadata, "statement_type")
-			require.Contains(t, log.Metadata, "total_bytes_processed")
+			fields := log.Metadata.GetFields()
+			require.Contains(t, fields, "job_type")
+			require.Contains(t, fields, "statement_type")
+			require.Contains(t, fields, "total_bytes_processed")
 
 			// Verify error metadata when present
 			if tt.row.ErrorResult != nil {
-				require.Contains(t, log.Metadata, "error_reason")
-				require.Contains(t, log.Metadata, "error_message")
+				require.Contains(t, fields, "error_reason")
+				require.Contains(t, fields, "error_message")
 			}
 		})
 	}

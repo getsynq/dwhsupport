@@ -1,199 +1,187 @@
 package querylogs
 
 import (
-	"encoding/json"
 	"net"
-	"reflect"
+	"strings"
 	"time"
+
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
-// Metadata is a type alias for metadata maps that are guaranteed to contain only
-// JSON-compatible types suitable for serialization to proto.Struct, JSON, etc.
-//
-// Valid value types in this map:
-//   - nil
-//   - bool
-//   - numeric types (int, int64, float64, etc. - preserved without conversion)
-//   - string (including time.Time formatted as RFC3339Nano, net.IP as string)
-//   - []interface{} (slices)
-//   - map[string]interface{} (nested maps)
-//
-// This type should be used for QueryLog.Metadata to ensure compatibility with
-// protobuf Struct, JSON marshaling, and other serialization formats.
-type Metadata map[string]interface{}
+// Helper functions to convert Go types to structpb.Value for efficient metadata construction.
+// These avoid reflection and validation overhead by creating Values directly.
 
-// SanitizeMetadataValue converts any Go value to a proto.Struct/JSON-compatible type.
-//
-// Special handling:
-//   - time.Time -> string (RFC3339Nano format, zero time becomes nil)
-//   - time.Duration -> string
-//   - net.IP -> string (IP address as string, nil becomes nil)
-//   - Pointers are dereferenced
-//   - Structs are converted to map[string]interface{} via JSON
-//   - Numeric types are preserved without precision loss
-func SanitizeMetadataValue(v interface{}) interface{} {
-	return sanitizeValue(v)
+// StringValue creates a structpb.Value from a string.
+func StringValue(v string) *structpb.Value {
+	return structpb.NewStringValue(v)
 }
 
-// SanitizeMetadata takes an existing map and returns a new Metadata map with all values sanitized.
-// This is useful when you have a map built incrementally and want to sanitize it at the end.
-func SanitizeMetadata(m map[string]interface{}) Metadata {
-	if m == nil {
-		return nil
-	}
-
-	result := make(Metadata, len(m))
-	for k, v := range m {
-		result[k] = sanitizeValue(v)
-	}
-	return result
-}
-
-// sanitizeValue recursively sanitizes a value for proto.Struct/JSON compatibility.
-// It preserves numeric types and only converts special types that need handling.
-func sanitizeValue(v interface{}) interface{} {
+// StringPtrValue creates a structpb.Value from a string pointer. Returns nil if pointer is nil.
+func StringPtrValue(v *string) *structpb.Value {
 	if v == nil {
 		return nil
 	}
-
-	// Handle special types first
-	switch val := v.(type) {
-	case time.Time:
-		if val.IsZero() {
-			return nil
-		}
-		return val.Format(time.RFC3339Nano)
-	case *time.Time:
-		if val == nil || val.IsZero() {
-			return nil
-		}
-		return val.Format(time.RFC3339Nano)
-	case time.Duration:
-		return val.String()
-	case net.IP:
-		if val == nil {
-			return nil
-		}
-		return val.String()
-	case *net.IP:
-		if val == nil || *val == nil {
-			return nil
-		}
-		return val.String()
-
-	// Primitives - pass through as-is (preserves int64, float64, etc.)
-	case bool, string,
-		int, int8, int16, int32, int64,
-		uint, uint8, uint16, uint32, uint64,
-		float32, float64:
-		return val
-
-	// Maps - recursively sanitize
-	case map[string]interface{}:
-		if val == nil {
-			return nil
-		}
-		result := make(map[string]interface{}, len(val))
-		for k, item := range val {
-			result[k] = sanitizeValue(item)
-		}
-		return result
-
-	// Slices - recursively sanitize
-	case []interface{}:
-		if val == nil {
-			return nil
-		}
-		result := make([]interface{}, len(val))
-		for i, item := range val {
-			result[i] = sanitizeValue(item)
-		}
-		return result
-	}
-
-	// Handle typed slices and other complex types via reflection
-	rv := reflect.ValueOf(v)
-
-	// Handle pointers - dereference
-	if rv.Kind() == reflect.Ptr {
-		if rv.IsNil() {
-			return nil
-		}
-		return sanitizeValue(rv.Elem().Interface())
-	}
-
-	// Handle typed slices ([]string, []int, etc.)
-	if rv.Kind() == reflect.Slice {
-		if rv.IsNil() {
-			return nil
-		}
-		result := make([]interface{}, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
-			result[i] = sanitizeValue(rv.Index(i).Interface())
-		}
-		return result
-	}
-
-	// Handle typed maps
-	if rv.Kind() == reflect.Map {
-		if rv.IsNil() {
-			return nil
-		}
-		result := make(map[string]interface{}, rv.Len())
-		iter := rv.MapRange()
-		for iter.Next() {
-			key := iter.Key()
-			// Only string keys are supported
-			if key.Kind() == reflect.String {
-				result[key.String()] = sanitizeValue(iter.Value().Interface())
-			}
-		}
-		return result
-	}
-
-	// For structs and other complex types, use JSON round-trip
-	// This handles custom types, embedded structs, etc.
-	if rv.Kind() == reflect.Struct {
-		data, err := json.Marshal(v)
-		if err != nil {
-			return nil
-		}
-		var result interface{}
-		if err := json.Unmarshal(data, &result); err != nil {
-			return nil
-		}
-		return result
-	}
-
-	// For anything else (channels, funcs, etc.), return nil
-	return nil
+	return structpb.NewStringValue(*v)
 }
 
-// NewMetadata creates a new Metadata map with sanitized values from the provided key-value pairs.
-// Keys must be strings, values can be any Go type and will be sanitized.
-//
-// Example:
-//
-//	metadata := NewMetadata(
-//	    "user_id", 123,
-//	    "timestamp", time.Now(),
-//	    "ip_address", net.ParseIP("192.168.1.1"),
-//	)
-//
-// Panics if an odd number of arguments is provided or if a key is not a string.
-func NewMetadata(pairs ...interface{}) Metadata {
-	if len(pairs)%2 != 0 {
-		panic("NewMetadata requires an even number of arguments (key-value pairs)")
+// TrimmedStringPtrValue creates a structpb.Value from a string pointer, trimming whitespace.
+// Returns nil if pointer is nil or if the trimmed string is empty.
+func TrimmedStringPtrValue(v *string) *structpb.Value {
+	if v == nil {
+		return nil
 	}
+	trimmed := strings.TrimSpace(*v)
+	if trimmed == "" {
+		return nil
+	}
+	return structpb.NewStringValue(trimmed)
+}
 
-	m := make(map[string]interface{}, len(pairs)/2)
-	for i := 0; i < len(pairs); i += 2 {
-		key, ok := pairs[i].(string)
-		if !ok {
-			panic("NewMetadata keys must be strings")
+// IntValue creates a structpb.Value from an int64.
+func IntValue(v int64) *structpb.Value {
+	return structpb.NewNumberValue(float64(v))
+}
+
+// IntPtrValue creates a structpb.Value from an int64 pointer. Returns nil if pointer is nil.
+func IntPtrValue(v *int64) *structpb.Value {
+	if v == nil {
+		return nil
+	}
+	return structpb.NewNumberValue(float64(*v))
+}
+
+// Int32PtrValue creates a structpb.Value from an int32 pointer. Returns nil if pointer is nil.
+func Int32PtrValue(v *int32) *structpb.Value {
+	if v == nil {
+		return nil
+	}
+	return structpb.NewNumberValue(float64(*v))
+}
+
+// UintValue creates a structpb.Value from a uint64.
+func UintValue(v uint64) *structpb.Value {
+	return structpb.NewNumberValue(float64(v))
+}
+
+// Uint32Value creates a structpb.Value from a uint32.
+func Uint32Value(v uint32) *structpb.Value {
+	return structpb.NewNumberValue(float64(v))
+}
+
+// Uint8Value creates a structpb.Value from a uint8.
+func Uint8Value(v uint8) *structpb.Value {
+	return structpb.NewNumberValue(float64(v))
+}
+
+// Int32Value creates a structpb.Value from an int32.
+func Int32Value(v int32) *structpb.Value {
+	return structpb.NewNumberValue(float64(v))
+}
+
+// FloatValue creates a structpb.Value from a float64.
+func FloatValue(v float64) *structpb.Value {
+	return structpb.NewNumberValue(v)
+}
+
+// FloatPtrValue creates a structpb.Value from a float64 pointer. Returns nil if pointer is nil.
+func FloatPtrValue(v *float64) *structpb.Value {
+	if v == nil {
+		return nil
+	}
+	return structpb.NewNumberValue(*v)
+}
+
+// BoolValue creates a structpb.Value from a bool.
+func BoolValue(v bool) *structpb.Value {
+	return structpb.NewBoolValue(v)
+}
+
+// BoolPtrValue creates a structpb.Value from a bool pointer. Returns nil if pointer is nil.
+func BoolPtrValue(v *bool) *structpb.Value {
+	if v == nil {
+		return nil
+	}
+	return structpb.NewBoolValue(*v)
+}
+
+// TimeValue creates a structpb.Value from a time.Time as RFC3339Nano string.
+// Returns nil for zero time.
+func TimeValue(v time.Time) *structpb.Value {
+	if v.IsZero() {
+		return nil
+	}
+	return structpb.NewStringValue(v.Format(time.RFC3339Nano))
+}
+
+// TimePtrValue creates a structpb.Value from a time.Time pointer. Returns nil if pointer is nil or zero.
+func TimePtrValue(v *time.Time) *structpb.Value {
+	if v == nil || v.IsZero() {
+		return nil
+	}
+	return structpb.NewStringValue(v.Format(time.RFC3339Nano))
+}
+
+// DurationValue creates a structpb.Value from a time.Duration as string.
+func DurationValue(v time.Duration) *structpb.Value {
+	return structpb.NewStringValue(v.String())
+}
+
+// IPValue creates a structpb.Value from a net.IP as string. Returns nil if IP is nil.
+func IPValue(v net.IP) *structpb.Value {
+	if v == nil {
+		return nil
+	}
+	return structpb.NewStringValue(v.String())
+}
+
+// IPPtrValue creates a structpb.Value from a net.IP pointer. Returns nil if pointer is nil.
+func IPPtrValue(v *net.IP) *structpb.Value {
+	if v == nil || *v == nil {
+		return nil
+	}
+	return structpb.NewStringValue(v.String())
+}
+
+// UInt16Value creates a structpb.Value from a uint16.
+func UInt16Value(v uint16) *structpb.Value {
+	return structpb.NewNumberValue(float64(v))
+}
+
+// StructValue creates a structpb.Value from a map of Values.
+func StructValue(fields map[string]*structpb.Value) *structpb.Value {
+	if len(fields) == 0 {
+		return nil
+	}
+	return structpb.NewStructValue(&structpb.Struct{Fields: fields})
+}
+
+// StringListValue creates a structpb.Value from a string slice.
+func StringListValue(v []string) *structpb.Value {
+	if len(v) == 0 {
+		return nil
+	}
+	values := make([]*structpb.Value, len(v))
+	for i, s := range v {
+		values[i] = structpb.NewStringValue(s)
+	}
+	return structpb.NewListValue(&structpb.ListValue{Values: values})
+}
+
+// NewMetadataStruct creates a structpb.Struct from a map of Values, filtering out nil values.
+// Returns nil if the resulting map is empty.
+func NewMetadataStruct(fields map[string]*structpb.Value) *structpb.Struct {
+	if len(fields) == 0 {
+		return nil
+	}
+	// Filter out nil values
+	filtered := make(map[string]*structpb.Value, len(fields))
+	for k, v := range fields {
+		if v != nil {
+			filtered[k] = v
 		}
-		m[key] = pairs[i+1]
 	}
-
-	return SanitizeMetadata(m)
+	if len(filtered) == 0 {
+		return nil
+	}
+	return &structpb.Struct{Fields: filtered}
 }

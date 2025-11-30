@@ -257,33 +257,34 @@ func TestConvertDatabricksQueryInfoToQueryLog(t *testing.T) {
 
 			// Verify metadata contains expected fields
 			require.NotNil(t, log.Metadata)
-			require.Contains(t, log.Metadata, "endpoint_id")
-			require.Contains(t, log.Metadata, "warehouse_id")
-			require.Contains(t, log.Metadata, "executed_as_user_name")
-			require.Contains(t, log.Metadata, "statement_type")
-			require.Contains(t, log.Metadata, "is_final")
+			fields := log.Metadata.GetFields()
+			require.Contains(t, fields, "endpoint_id")
+			require.Contains(t, fields, "warehouse_id")
+			require.Contains(t, fields, "executed_as_user_name")
+			require.Contains(t, fields, "statement_type")
+			require.Contains(t, fields, "is_final")
 
 			// Verify error message when present
 			if tt.queryInfo.ErrorMessage != "" {
-				require.Contains(t, log.Metadata, "error_message")
-				require.Equal(t, tt.queryInfo.ErrorMessage, log.Metadata["error_message"])
+				require.Contains(t, fields, "error_message")
+				require.Equal(t, tt.queryInfo.ErrorMessage, fields["error_message"].GetStringValue())
 			}
 
 			// Verify metrics when present
 			if tt.queryInfo.Metrics != nil {
-				require.Contains(t, log.Metadata, "metrics")
-				metrics := log.Metadata["metrics"].(map[string]any)
+				require.Contains(t, fields, "metrics")
+				metricsFields := fields["metrics"].GetStructValue().GetFields()
 				if tt.queryInfo.Metrics.ExecutionTimeMs != 0 {
-					require.Contains(t, metrics, "execution_time_ms")
+					require.Contains(t, metricsFields, "execution_time_ms")
 				}
 				if tt.queryInfo.Metrics.ReadBytes != 0 {
-					require.Contains(t, metrics, "read_bytes")
+					require.Contains(t, metricsFields, "read_bytes")
 				}
 			}
 
 			// Verify duration when present
 			if tt.queryInfo.Duration != 0 {
-				require.Contains(t, log.Metadata, "duration_ms")
+				require.Contains(t, fields, "duration_ms")
 			}
 		})
 	}
