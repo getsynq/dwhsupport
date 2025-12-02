@@ -50,10 +50,10 @@ func NewTrinoScrapper(ctx context.Context, conf *TrinoScrapperConf) (*TrinoScrap
 		return nil, err
 	}
 
-	allAvailableCatalogs := lazy.New[[]*TrinoCatalog](func() ([]*TrinoCatalog, error) {
+	allAvailableCatalogs := lazy.New(func() ([]*TrinoCatalog, error) {
 		db := executor.GetDb()
-		allCatalogs, err := stdsql.QueryMany[TrinoCatalog](ctx, db, "SELECT * FROM system.metadata.catalogs",
-			dwhexec.WithPostProcessors[TrinoCatalog](func(row *TrinoCatalog) (*TrinoCatalog, error) {
+		allCatalogs, err := stdsql.QueryMany(ctx, db, "SELECT catalog_name, connector_id, connector_name FROM system.metadata.catalogs",
+			dwhexec.WithPostProcessors(func(row *TrinoCatalog) (*TrinoCatalog, error) {
 				row.IsAccepted = lo.Contains(conf.Catalogs, row.CatalogName)
 				return row, nil
 			}),
@@ -156,7 +156,7 @@ func (e *TrinoScrapper) Executor() *dwhexectrino.TrinoExecutor {
 	return e.executor
 }
 
-func (e *TrinoScrapper) fqn(row scrapper.HasTableFqn, dollarTable ...string) interface{} {
+func (e *TrinoScrapper) fqn(row scrapper.HasTableFqn, dollarTable ...string) any {
 	fqn := row.TableFqn()
 	table := fqn.ObjectName
 	if len(dollarTable) > 0 {
