@@ -127,8 +127,10 @@ func cleanAccountName(account string) string {
 	return strings.TrimSuffix(account, ".snowflakecomputing.com")
 }
 
-func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeExecutor, error) {
-
+// buildSnowflakeConfig creates a gosnowflake.Config from SnowflakeConf.
+// This is separated from NewSnowflakeExecutor to allow unit testing of the configuration logic.
+// Note: This function does not handle PrivateKeyFile loading (requires file I/O) - that's done in NewSnowflakeExecutor.
+func buildSnowflakeConfig(conf *SnowflakeConf) *gosnowflake.Config {
 	database := ""
 	if len(conf.Databases) > 0 {
 		database = conf.Databases[0]
@@ -160,26 +162,34 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 		c.DisableConsoleLogin = gosnowflake.ConfigBoolFalse
 	default:
 		// Default: password or private key authentication
-		// Load private key from either inline bytes or file
-		var privateKeyPEM []byte
+		// Handle inline private key (PrivateKeyFile is handled in NewSnowflakeExecutor)
 		if len(conf.PrivateKey) > 0 {
-			privateKeyPEM = conf.PrivateKey
-		} else if len(conf.PrivateKeyFile) > 0 {
-			keyData, err := os.ReadFile(conf.PrivateKeyFile)
-			if err != nil {
-				return nil, exec.NewAuthError(errors.Wrap(err, "failed to read private key file"))
+			privKey, err := parsePrivateKey(conf.PrivateKey, conf.PrivateKeyPassphrase)
+			if err == nil {
+				c.PrivateKey = privKey
+				c.Authenticator = gosnowflake.AuthTypeJwt
 			}
-			privateKeyPEM = keyData
 		}
+	}
 
-		if len(privateKeyPEM) > 0 {
-			privKey, err := parsePrivateKey(privateKeyPEM, conf.PrivateKeyPassphrase)
-			if err != nil {
-				return nil, exec.NewAuthError(err)
-			}
-			c.PrivateKey = privKey
-			c.Authenticator = gosnowflake.AuthTypeJwt
+	return c
+}
+
+func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeExecutor, error) {
+	c := buildSnowflakeConfig(conf)
+
+	// Handle private key file loading (not in buildSnowflakeConfig to keep it side-effect free for testing)
+	if strings.ToLower(conf.AuthType) != "externalbrowser" && c.PrivateKey == nil && len(conf.PrivateKeyFile) > 0 {
+		keyData, err := os.ReadFile(conf.PrivateKeyFile)
+		if err != nil {
+			return nil, exec.NewAuthError(errors.Wrap(err, "failed to read private key file"))
 		}
+		privKey, err := parsePrivateKey(keyData, conf.PrivateKeyPassphrase)
+		if err != nil {
+			return nil, exec.NewAuthError(err)
+		}
+		c.PrivateKey = privKey
+		c.Authenticator = gosnowflake.AuthTypeJwt
 	}
 
 	connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *c)
