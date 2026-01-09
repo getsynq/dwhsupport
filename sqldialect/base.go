@@ -494,6 +494,18 @@ func (t *TableFqnExpr) ToSql(dialect Dialect) (string, error) {
 	return dialect.ResolveFqn(t)
 }
 
+func (t *TableFqnExpr) ProjectId() string {
+	return t.projectId
+}
+
+func (t *TableFqnExpr) DatasetId() string {
+	return t.datasetId
+}
+
+func (t *TableFqnExpr) TableId() string {
+	return t.tableId
+}
+
 func (t *TableFqnExpr) IsTableExpr() {}
 
 var _ TableExpr = (*CteAliasExpr)(nil)
