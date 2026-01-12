@@ -5,7 +5,6 @@ import (
 
 	. "github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/gkampitakis/go-snaps/snaps"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestMetaQueryBuilderSnapshot(t *testing.T) {
@@ -80,7 +79,6 @@ func TestMetaQueryBuilderSnapshot(t *testing.T) {
 		{"redshift", NewRedshiftDialect()},
 		{"snowflake", NewSnowflakeDialect()},
 		{"clickhouse", NewClickHouseDialect()},
-		{"databricks", NewDatabricksDialect()},
 		{"duckdb", NewDuckDBDialect()},
 		{"mysql", NewMySQLDialect()},
 	}

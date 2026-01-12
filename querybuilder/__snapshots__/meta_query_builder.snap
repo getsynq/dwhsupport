@@ -99,10 +99,6 @@ WHERE has_own_data = 1
 SETTINGS join_use_nulls=1
 ---
 
-[TestMetaQueryBuilderSnapshot/StandardTable/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
----
-
 [TestMetaQueryBuilderSnapshot/StandardTable/duckdb - 1]
 SELECT
     t.table_name as "table",
@@ -231,10 +227,6 @@ WHERE has_own_data = 1
   AND database = MySchema
   AND name = MyTable
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithUppercase/duckdb - 1]
@@ -367,10 +359,6 @@ WHERE has_own_data = 1
 SETTINGS join_use_nulls=1
 ---
 
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
----
-
 [TestMetaQueryBuilderSnapshot/TableWithUnderscores/duckdb - 1]
 SELECT
     t.table_name as "table",
@@ -499,10 +487,6 @@ WHERE has_own_data = 1
   AND database = my-schema
   AND name = my-table
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithHyphens/duckdb - 1]
@@ -635,10 +619,6 @@ WHERE has_own_data = 1
 SETTINGS join_use_nulls=1
 ---
 
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
----
-
 [TestMetaQueryBuilderSnapshot/TableWithSpecialChars/duckdb - 1]
 SELECT
     t.table_name as "table",
@@ -767,10 +747,6 @@ WHERE has_own_data = 1
   AND database = my_SCHEMA
   AND name = Table_Name_1
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithMixedCase/duckdb - 1]
@@ -903,10 +879,6 @@ WHERE has_own_data = 1
 SETTINGS join_use_nulls=1
 ---
 
-[TestMetaQueryBuilderSnapshot/ShortNames/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
----
-
 [TestMetaQueryBuilderSnapshot/ShortNames/duckdb - 1]
 SELECT
     t.table_name as "table",
@@ -1035,10 +1007,6 @@ WHERE has_own_data = 1
   AND database = very_long_schema_name_with_many_characters_1234567890
   AND name = very_long_table_name_with_many_characters_1234567890
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
 ---
 
 [TestMetaQueryBuilderSnapshot/LongNames/duckdb - 1]
@@ -1171,10 +1139,6 @@ WHERE has_own_data = 1
 SETTINGS join_use_nulls=1
 ---
 
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
----
-
 [TestMetaQueryBuilderSnapshot/NumericSuffixes/duckdb - 1]
 SELECT
     t.table_name as "table",
@@ -1303,10 +1267,6 @@ WHERE has_own_data = 1
   AND database = test_schema
   AND name = staging_table
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/databricks - 1]
-databricks uses SDK API calls for table metrics, not SQL queries
 ---
 
 [TestMetaQueryBuilderSnapshot/PrefixedNames/duckdb - 1]

@@ -31,8 +31,6 @@ func (m *MetaQueryBuilder) ToSql(dialect Dialect) (string, error) {
 		return snowflake(m.table)
 	case *ClickHouseDialect:
 		return clickhouse(m.table)
-	case *DatabricksDialect:
-		return databricks(m.table)
 	case *DuckDBDialect:
 		return duckdb(m.table)
 	case *MySQLDialect:
@@ -89,12 +87,6 @@ WHERE NOT temporary
   AND table_name = %s`
 
 	return fmt.Sprintf(query, tableFqn.ProjectId(), tableFqn.DatasetId(), tableFqn.TableId()), nil
-}
-
-func databricks(table TableExpr) (string, error) {
-	// Databricks uses SDK API calls, not SQL queries
-	// This is not applicable for SQL-based MetaQueryBuilder
-	return "", fmt.Errorf("databricks uses SDK API calls for table metrics, not SQL queries")
 }
 
 func clickhouse(table TableExpr) (string, error) {
