@@ -50,16 +50,13 @@ func mysql(table TableExpr) (string, error) {
 	}
 
 	query := `SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
+    TABLE_ROWS as "num_rows",
+    UPDATE_TIME as "last_loaded_at"
 FROM information_schema.tables
 WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
   AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = %s
-  AND TABLE_NAME = %s`
+  AND TABLE_SCHEMA = '%s'
+  AND TABLE_NAME = '%s'`
 
 	return fmt.Sprintf(query, tableFqn.DatasetId(), tableFqn.TableId()), nil
 }
@@ -73,18 +70,15 @@ func duckdb(table TableExpr) (string, error) {
 	}
 
 	query := `SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
+    estimated_size as "num_rows"
 FROM duckdb_tables() t
 WHERE NOT temporary
   AND NOT internal
   AND schema_name NOT IN ('information_schema')
   AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = %s
-  AND schema_name = %s
-  AND table_name = %s`
+  AND database_name = '%s'
+  AND schema_name = '%s'
+  AND table_name = '%s'`
 
 	return fmt.Sprintf(query, tableFqn.ProjectId(), tableFqn.DatasetId(), tableFqn.TableId()), nil
 }
@@ -106,18 +100,16 @@ func clickhouse(table TableExpr) (string, error) {
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = %s
-  AND name = %s
+  AND database = '%s'
+  AND name = '%s'
 SETTINGS join_use_nulls=1`
 
 	return fmt.Sprintf(query, tableFqn.DatasetId(), tableFqn.TableId()), nil
@@ -132,17 +124,14 @@ func snowflake(table TableExpr) (string, error) {
 	}
 
 	query := `SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
+    row_count as "num_rows",
     bytes as "size_bytes",
-    last_altered as "updated_at"
+    last_altered as "last_loaded_at"
 FROM %s.information_schema.tables
 WHERE row_count IS NOT NULL
   AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = %s
-  AND table_name = %s`
+  AND table_schema = '%s'
+  AND table_name = '%s'`
 
 	return fmt.Sprintf(query, tableFqn.ProjectId(), tableFqn.DatasetId(), tableFqn.TableId()), nil
 }
@@ -156,19 +145,16 @@ func redshift(table TableExpr) (string, error) {
 	}
 
 	query := `SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
+    estimated_visible_rows as "num_rows",
+    null::timestamp as "last_loaded_at"
 FROM pg_catalog.svv_table_info
 WHERE estimated_visible_rows IS NOT NULL
   AND schema <> 'catalog_history'::name
   AND schema <> 'pg_toast'::name
   AND schema <> 'pg_internal'::name
-  AND "database" = %s
-  AND "schema" = %s
-  AND "table" = %s`
+  AND "database" = '%s'
+  AND "schema" = '%s'
+  AND "table" = '%s'`
 
 	return fmt.Sprintf(query, tableFqn.ProjectId(), tableFqn.DatasetId(), tableFqn.TableId()), nil
 }
@@ -182,14 +168,11 @@ func bigquery(table TableExpr) (string, error) {
 	}
 
 	query := `SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
+    row_count AS num_rows,
+    size_bytes AS size_bytes,
+    TIMESTAMP_MILLIS(last_modified_time) AS last_loaded_at
 FROM ` + "`%s`.`%s`.__TABLES__" + `
-WHERE table_id = %s`
+WHERE table_id = '%s'`
 
 	return fmt.Sprintf(query, tableFqn.ProjectId(), tableFqn.DatasetId(), tableFqn.TableId()), nil
 }
@@ -216,9 +199,6 @@ func postgres(table TableExpr) (string, error) {
 	}
 
 	query := `SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
     COALESCE(
         (SELECT n_live_tup::bigint
          FROM pg_stat_user_tables
@@ -228,8 +208,7 @@ func postgres(table TableExpr) (string, error) {
             ELSE (tbl.reltuples *
                   (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
         END
-    ) as "row_count",
-    null::timestamp as "updated_at"
+    ) as "num_rows"
 FROM pg_catalog.pg_namespace sch
 JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
 WHERE NOT pg_is_other_temp_schema(sch.oid)
@@ -237,8 +216,8 @@ WHERE NOT pg_is_other_temp_schema(sch.oid)
   AND tbl.relkind IN ('r', 'f', 'p', 'm')
   AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
   AND tbl.reltuples >= 0
-  AND sch.nspname = %s
-  AND tbl.relname = %s`
+  AND sch.nspname = '%s'
+  AND tbl.relname = '%s'`
 
 	return fmt.Sprintf(query, tableFqn.DatasetId(), tableFqn.TableId()), nil
 }
