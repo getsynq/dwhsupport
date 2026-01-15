@@ -220,6 +220,48 @@ func (stats *MetricTableStats) ToDefault(timeSegment time.Time, segment string) 
 	stats.TimeSegment = timeSegment
 }
 
+// TABLE STATS ALTERNATIVE
+type MetricTableStatsAlt struct {
+	Segment      string    `ch:"segment"        bigquery:"segment"        db:"segment"        json:"segment"`
+	TimeSegment  time.Time `ch:"time_segment"   bigquery:"time_segment"   db:"time_segment"   json:"time_segment"`
+	LastLoadedAt time.Time `ch:"last_loaded_at" bigquery:"last_loaded_at" db:"last_loaded_at" json:"last_loaded_at"`
+	NumRows      int64     `ch:"num_rows"       bigquery:"num_rows"       db:"num_rows"       json:"num_rows"`
+	SizeBytes    int64     `ch:"size_bytes"     bigquery:"size_bytes"     db:"size_bytes"     json:"size_bytes"`
+}
+
+func NewMetricTableStatsAlt(lastLoadedAt time.Time, numRows int64, sizeBytes int64) *MetricTableStatsAlt {
+	return &MetricTableStatsAlt{
+		LastLoadedAt: lastLoadedAt,
+		NumRows:      numRows,
+		SizeBytes:    sizeBytes,
+	}
+}
+
+func NewMetricTableStatsWithSegmentAlt(lastLoadedAt time.Time, numRows int64, timeSegment time.Time, segment string) *MetricTableStatsAlt {
+	stats := NewMetricTableStatsAlt(lastLoadedAt, numRows, 0)
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+
+	return stats
+}
+
+func (stats *MetricTableStatsAlt) GetIdentity() MetricIdentity {
+	return MetricIdentity{
+		stats.TimeSegment,
+		stats.Segment,
+	}
+}
+
+func (stats *MetricTableStatsAlt) WithPartition(timeSegment time.Time, segment string) {
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+}
+
+func (stats *MetricTableStatsAlt) ToDefault(timeSegment time.Time, segment string) {
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+}
+
 //
 // FIELD DISTRIBUTION
 //
