@@ -19,22 +19,22 @@ func NewMetaQueryBuilder(table TableExpr) *MetaQueryBuilder {
 
 func (m *MetaQueryBuilder) ToSql(dialect Dialect) (string, error) {
 	switch dialect.(type) {
-	case *PostgresDialect:
-		return postgres(m.table)
-	case *TrinoDialect:
-		return trino(m.table)
-	case *BigQueryDialect:
-		return bigquery(m.table)
-	case *RedshiftDialect:
-		return redshift(m.table)
-	case *SnowflakeDialect:
-		return snowflake(m.table)
 	case *ClickHouseDialect:
 		return clickhouse(m.table)
-	case *DuckDBDialect:
-		return duckdb(m.table)
-	case *MySQLDialect:
-		return mysql(m.table)
+	// case *PostgresDialect:
+	// 	return postgres(m.table)
+	// case *TrinoDialect:
+	// 	return trino(m.table)
+	// case *BigQueryDialect:
+	// 	return bigquery(m.table)
+	// case *RedshiftDialect:
+	// 	return redshift(m.table)
+	// case *SnowflakeDialect:
+	// 	return snowflake(m.table)
+	// case *DuckDBDialect:
+	// 	return duckdb(m.table)
+	// case *MySQLDialect:
+	// 	return mysql(m.table)
 
 	default:
 		return "", fmt.Errorf("dialect not supported: %v", dialect)
