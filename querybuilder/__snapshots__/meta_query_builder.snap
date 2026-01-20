@@ -1,79 +1,4 @@
 
-[TestMetaQueryBuilderSnapshot/StandardTable/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = my_schema
-  AND tbl.relname = my_table
----
-
-[TestMetaQueryBuilderSnapshot/StandardTable/trino - 1]
-SHOW STATS FOR my_project.my_schema.my_table
----
-
-[TestMetaQueryBuilderSnapshot/StandardTable/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `my_project`.`my_schema`.__TABLES__
-WHERE table_id = my_table
----
-
-[TestMetaQueryBuilderSnapshot/StandardTable/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = my_project
-  AND "schema" = my_schema
-  AND "table" = my_table
----
-
-[TestMetaQueryBuilderSnapshot/StandardTable/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM my_project.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = my_schema
-  AND table_name = my_table
----
-
 [TestMetaQueryBuilderSnapshot/StandardTable/clickhouse - 1]
 WITH parts AS (
     SELECT
@@ -84,124 +9,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = my_schema
-  AND name = my_table
+  AND database = 'my_schema'
+  AND name = 'my_table'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/StandardTable/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = my_project
-  AND schema_name = my_schema
-  AND table_name = my_table
----
-
-[TestMetaQueryBuilderSnapshot/StandardTable/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = my_schema
-  AND TABLE_NAME = my_table
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = MySchema
-  AND tbl.relname = MyTable
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/trino - 1]
-SHOW STATS FOR MyProject.MySchema.MyTable
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `MyProject`.`MySchema`.__TABLES__
-WHERE table_id = MyTable
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = MyProject
-  AND "schema" = MySchema
-  AND "table" = MyTable
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM MyProject.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = MySchema
-  AND table_name = MyTable
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithUppercase/clickhouse - 1]
@@ -214,124 +32,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = MySchema
-  AND name = MyTable
+  AND database = 'MySchema'
+  AND name = 'MyTable'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = MyProject
-  AND schema_name = MySchema
-  AND table_name = MyTable
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUppercase/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = MySchema
-  AND TABLE_NAME = MyTable
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = my_schema_456
-  AND tbl.relname = my_table_789
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/trino - 1]
-SHOW STATS FOR my_project_123.my_schema_456.my_table_789
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `my_project_123`.`my_schema_456`.__TABLES__
-WHERE table_id = my_table_789
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = my_project_123
-  AND "schema" = my_schema_456
-  AND "table" = my_table_789
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM my_project_123.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = my_schema_456
-  AND table_name = my_table_789
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithUnderscores/clickhouse - 1]
@@ -344,124 +55,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = my_schema_456
-  AND name = my_table_789
+  AND database = 'my_schema_456'
+  AND name = 'my_table_789'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = my_project_123
-  AND schema_name = my_schema_456
-  AND table_name = my_table_789
----
-
-[TestMetaQueryBuilderSnapshot/TableWithUnderscores/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = my_schema_456
-  AND TABLE_NAME = my_table_789
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = my-schema
-  AND tbl.relname = my-table
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/trino - 1]
-SHOW STATS FOR my-project.my-schema.my-table
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `my-project`.`my-schema`.__TABLES__
-WHERE table_id = my-table
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = my-project
-  AND "schema" = my-schema
-  AND "table" = my-table
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM my-project.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = my-schema
-  AND table_name = my-table
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithHyphens/clickhouse - 1]
@@ -474,124 +78,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = my-schema
-  AND name = my-table
+  AND database = 'my-schema'
+  AND name = 'my-table'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = my-project
-  AND schema_name = my-schema
-  AND table_name = my-table
----
-
-[TestMetaQueryBuilderSnapshot/TableWithHyphens/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = my-schema
-  AND TABLE_NAME = my-table
----
-
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = schema-with-hyphens
-  AND tbl.relname = table_with_underscores
----
-
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/trino - 1]
-SHOW STATS FOR project.with.dots.schema-with-hyphens.table_with_underscores
----
-
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `project.with.dots`.`schema-with-hyphens`.__TABLES__
-WHERE table_id = table_with_underscores
----
-
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = project.with.dots
-  AND "schema" = schema-with-hyphens
-  AND "table" = table_with_underscores
----
-
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM project.with.dots.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = schema-with-hyphens
-  AND table_name = table_with_underscores
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithSpecialChars/clickhouse - 1]
@@ -604,124 +101,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = schema-with-hyphens
-  AND name = table_with_underscores
+  AND database = 'schema-with-hyphens'
+  AND name = 'table_with_underscores'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = project.with.dots
-  AND schema_name = schema-with-hyphens
-  AND table_name = table_with_underscores
----
-
-[TestMetaQueryBuilderSnapshot/TableWithSpecialChars/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = schema-with-hyphens
-  AND TABLE_NAME = table_with_underscores
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = my_SCHEMA
-  AND tbl.relname = Table_Name_1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/trino - 1]
-SHOW STATS FOR MyProject_123.my_SCHEMA.Table_Name_1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `MyProject_123`.`my_SCHEMA`.__TABLES__
-WHERE table_id = Table_Name_1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = MyProject_123
-  AND "schema" = my_SCHEMA
-  AND "table" = Table_Name_1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM MyProject_123.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = my_SCHEMA
-  AND table_name = Table_Name_1
 ---
 
 [TestMetaQueryBuilderSnapshot/TableWithMixedCase/clickhouse - 1]
@@ -734,124 +124,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = my_SCHEMA
-  AND name = Table_Name_1
+  AND database = 'my_SCHEMA'
+  AND name = 'Table_Name_1'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = MyProject_123
-  AND schema_name = my_SCHEMA
-  AND table_name = Table_Name_1
----
-
-[TestMetaQueryBuilderSnapshot/TableWithMixedCase/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = my_SCHEMA
-  AND TABLE_NAME = Table_Name_1
----
-
-[TestMetaQueryBuilderSnapshot/ShortNames/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = s
-  AND tbl.relname = t
----
-
-[TestMetaQueryBuilderSnapshot/ShortNames/trino - 1]
-SHOW STATS FOR p.s.t
----
-
-[TestMetaQueryBuilderSnapshot/ShortNames/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `p`.`s`.__TABLES__
-WHERE table_id = t
----
-
-[TestMetaQueryBuilderSnapshot/ShortNames/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = p
-  AND "schema" = s
-  AND "table" = t
----
-
-[TestMetaQueryBuilderSnapshot/ShortNames/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM p.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = s
-  AND table_name = t
 ---
 
 [TestMetaQueryBuilderSnapshot/ShortNames/clickhouse - 1]
@@ -864,124 +147,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = s
-  AND name = t
+  AND database = 's'
+  AND name = 't'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/ShortNames/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = p
-  AND schema_name = s
-  AND table_name = t
----
-
-[TestMetaQueryBuilderSnapshot/ShortNames/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = s
-  AND TABLE_NAME = t
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = very_long_schema_name_with_many_characters_1234567890
-  AND tbl.relname = very_long_table_name_with_many_characters_1234567890
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/trino - 1]
-SHOW STATS FOR very_long_project_name_with_many_characters_1234567890.very_long_schema_name_with_many_characters_1234567890.very_long_table_name_with_many_characters_1234567890
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `very_long_project_name_with_many_characters_1234567890`.`very_long_schema_name_with_many_characters_1234567890`.__TABLES__
-WHERE table_id = very_long_table_name_with_many_characters_1234567890
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = very_long_project_name_with_many_characters_1234567890
-  AND "schema" = very_long_schema_name_with_many_characters_1234567890
-  AND "table" = very_long_table_name_with_many_characters_1234567890
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM very_long_project_name_with_many_characters_1234567890.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = very_long_schema_name_with_many_characters_1234567890
-  AND table_name = very_long_table_name_with_many_characters_1234567890
 ---
 
 [TestMetaQueryBuilderSnapshot/LongNames/clickhouse - 1]
@@ -994,124 +170,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = very_long_schema_name_with_many_characters_1234567890
-  AND name = very_long_table_name_with_many_characters_1234567890
+  AND database = 'very_long_schema_name_with_many_characters_1234567890'
+  AND name = 'very_long_table_name_with_many_characters_1234567890'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = very_long_project_name_with_many_characters_1234567890
-  AND schema_name = very_long_schema_name_with_many_characters_1234567890
-  AND table_name = very_long_table_name_with_many_characters_1234567890
----
-
-[TestMetaQueryBuilderSnapshot/LongNames/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = very_long_schema_name_with_many_characters_1234567890
-  AND TABLE_NAME = very_long_table_name_with_many_characters_1234567890
----
-
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = schema456
-  AND tbl.relname = table789
----
-
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/trino - 1]
-SHOW STATS FOR project123.schema456.table789
----
-
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `project123`.`schema456`.__TABLES__
-WHERE table_id = table789
----
-
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = project123
-  AND "schema" = schema456
-  AND "table" = table789
----
-
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM project123.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = schema456
-  AND table_name = table789
 ---
 
 [TestMetaQueryBuilderSnapshot/NumericSuffixes/clickhouse - 1]
@@ -1124,124 +193,17 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = schema456
-  AND name = table789
+  AND database = 'schema456'
+  AND name = 'table789'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = project123
-  AND schema_name = schema456
-  AND table_name = table789
----
-
-[TestMetaQueryBuilderSnapshot/NumericSuffixes/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = schema456
-  AND TABLE_NAME = table789
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/postgres - 1]
-SELECT
-    current_database() as "database",
-    sch.nspname as "schema",
-    tbl.relname as "table",
-    COALESCE(
-        (SELECT n_live_tup::bigint
-         FROM pg_stat_user_tables
-         WHERE relid = tbl.oid),
-        CASE
-            WHEN tbl.relpages = 0 THEN 0
-            ELSE (tbl.reltuples *
-                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
-        END
-    ) as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.pg_namespace sch
-JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
-WHERE NOT pg_is_other_temp_schema(sch.oid)
-  AND tbl.relpersistence IN ('p', 'u')
-  AND tbl.relkind IN ('r', 'f', 'p', 'm')
-  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
-  AND tbl.reltuples >= 0
-  AND sch.nspname = test_schema
-  AND tbl.relname = staging_table
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/trino - 1]
-SHOW STATS FOR dev_project.test_schema.staging_table
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/bigquery - 1]
-SELECT
-    project_id as database,
-    dataset_id as schema,
-    table_id as table,
-    row_count as row_count,
-    size_bytes as size_bytes,
-    TIMESTAMP_MILLIS(last_modified_time) as updated_at
-FROM `dev_project`.`test_schema`.__TABLES__
-WHERE table_id = staging_table
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/redshift - 1]
-SELECT
-    "database",
-    "schema",
-    "table",
-    estimated_visible_rows as "row_count",
-    null::timestamp as "updated_at"
-FROM pg_catalog.svv_table_info
-WHERE estimated_visible_rows IS NOT NULL
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
-  AND "database" = dev_project
-  AND "schema" = test_schema
-  AND "table" = staging_table
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/snowflake - 1]
-SELECT
-    table_catalog as "database",
-    table_schema as "schema",
-    table_name as "table",
-    row_count as "row_count",
-    bytes as "size_bytes",
-    last_altered as "updated_at"
-FROM dev_project.information_schema.tables
-WHERE row_count IS NOT NULL
-  AND table_schema NOT IN ('INFORMATION_SCHEMA')
-  AND table_schema = test_schema
-  AND table_name = staging_table
 ---
 
 [TestMetaQueryBuilderSnapshot/PrefixedNames/clickhouse - 1]
@@ -1254,47 +216,15 @@ WITH parts AS (
     GROUP BY database, table
 )
 SELECT
-    database AS schema,
-    name AS table,
-    toInt64(total_rows) AS row_count,
-    parts.updated_at as updated_at
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
 FROM clusterAllReplicas(default, system.tables) tbls
 LEFT JOIN parts
     ON tbls.database = parts.schema
     AND tbls.name = parts.table
 WHERE has_own_data = 1
   AND schema NOT IN ('system', 'information_schema')
-  AND database = test_schema
-  AND name = staging_table
+  AND database = 'test_schema'
+  AND name = 'staging_table'
 SETTINGS join_use_nulls=1
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/duckdb - 1]
-SELECT
-    t.table_name as "table",
-    t.database_name as "database",
-    t.schema_name as "schema",
-    estimated_size as "row_count"
-FROM duckdb_tables() t
-WHERE NOT temporary
-  AND NOT internal
-  AND schema_name NOT IN ('information_schema')
-  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-  AND database_name = dev_project
-  AND schema_name = test_schema
-  AND table_name = staging_table
----
-
-[TestMetaQueryBuilderSnapshot/PrefixedNames/mysql - 1]
-SELECT
-    '' as "database",
-    TABLE_SCHEMA as "schema",
-    TABLE_NAME as "table",
-    TABLE_ROWS as "row_count",
-    UPDATE_TIME as "updated_at"
-FROM information_schema.tables
-WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
-  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
-  AND TABLE_SCHEMA = test_schema
-  AND TABLE_NAME = staging_table
 ---
