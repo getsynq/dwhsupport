@@ -210,6 +210,11 @@ func (stats *MetricTableStats) GetIdentity() MetricIdentity {
 	}
 }
 
+func (stats *MetricTableStats) WithPartition(timeSegment time.Time, segment string) {
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+}
+
 func (stats *MetricTableStats) ToDefault(timeSegment time.Time, segment string) {
 	stats.Segment = segment
 	stats.TimeSegment = timeSegment

@@ -8,6 +8,10 @@ import (
 	"github.com/samber/lo"
 )
 
+type QueryBuilderI interface {
+	ToSql(dialect Dialect) (string, error)
+}
+
 //
 // Query Builder
 //

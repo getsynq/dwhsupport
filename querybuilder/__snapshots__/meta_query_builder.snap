@@ -1,0 +1,23 @@
+
+[TestMetaQueryBuilderSnapshot/StandardTable/clickhouse - 1]
+WITH parts AS (
+    SELECT
+        database AS schema,
+        table,
+        max(modification_time) AS updated_at
+    FROM clusterAllReplicas(default, system.parts) prts
+    GROUP BY database, table
+)
+SELECT
+    toInt64(max(total_rows)) AS num_rows,
+    max(parts.updated_at) as last_loaded_at
+FROM clusterAllReplicas(default, system.tables) tbls
+LEFT JOIN parts
+    ON tbls.database = parts.schema
+    AND tbls.name = parts.table
+WHERE has_own_data = 1
+  AND schema NOT IN ('system', 'information_schema')
+  AND database = 'my_schema'
+  AND name = 'my_table'
+SETTINGS join_use_nulls=1
+---
