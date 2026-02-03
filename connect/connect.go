@@ -116,6 +116,7 @@ func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowf
 			Warehouse:            t.GetWarehouse(),
 			Databases:            t.GetDatabases(),
 			Role:                 t.GetRole(),
+			AuthType:             t.GetAuthType(),
 		},
 		NoGetDll:       !t.GetUseGetDdl(),
 		AccountUsageDb: lo.EmptyableToPtr(t.GetAccountUsageDb()),
