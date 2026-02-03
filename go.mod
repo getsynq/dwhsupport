@@ -3,7 +3,7 @@ module github.com/getsynq/dwhsupport
 go 1.24.5
 
 require (
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.10-20251007171430-8a7e5bf80010.1
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260128121821-ebfb968d6d43.1
 	cloud.google.com/go v0.121.0
 	cloud.google.com/go/bigquery v1.66.2
 	github.com/ClickHouse/clickhouse-go/v2 v2.30.1
@@ -29,11 +29,11 @@ require (
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 	google.golang.org/api v0.230.0
 	google.golang.org/grpc v1.75.0
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.10-20250717185734-6c6e0d3c608e.1 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.11-20250717185734-6c6e0d3c608e.1 // indirect
 	cloud.google.com/go/auth v0.16.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.7.0 // indirect
