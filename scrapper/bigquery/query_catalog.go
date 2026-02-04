@@ -111,9 +111,6 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 			}
 
 			g.Go(func() error {
-				log = log.WithField("table", tableId)
-				log.Debugf("processing table %s", tableId)
-
 				tableMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
