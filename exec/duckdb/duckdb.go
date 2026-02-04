@@ -48,6 +48,21 @@ func NewDuckDBExecutor(ctx context.Context, conf *DuckDBConf) (*DuckDBExecutor, 
 	return &DuckDBExecutor{conf: conf, db: db}, nil
 }
 
+// NewLocalDuckDBExecutor creates a DuckDB executor with a local database.
+// Use dsn="" for an in-memory database, or a file path for a persistent database.
+func NewLocalDuckDBExecutor(ctx context.Context, dsn string) (*DuckDBExecutor, error) {
+	db, err := sqlx.Open("duckdb", dsn)
+	if err != nil {
+		return nil, err
+	}
+	err = db.PingContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DuckDBExecutor{conf: &DuckDBConf{}, db: db}, nil
+}
+
 func (e *DuckDBExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
 	return e.db.QueryxContext(ctx, sql, args...)
 }

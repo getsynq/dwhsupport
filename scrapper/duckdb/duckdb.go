@@ -32,6 +32,20 @@ func NewDuckDBScrapper(ctx context.Context, conf *DuckDBScapperConf) (*DuckDBScr
 	}, nil
 }
 
+// NewLocalDuckDBScrapper creates a scrapper for local DuckDB (for testing).
+// Use dsn="" for in-memory database, or a file path for persistent database.
+func NewLocalDuckDBScrapper(ctx context.Context, dsn string, instanceName string) (*DuckDBScrapper, error) {
+	executor, err := dwhexecduckdb.NewLocalDuckDBExecutor(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DuckDBScrapper{
+		conf:     &DuckDBScapperConf{MotherduckAccount: instanceName},
+		executor: executor,
+	}, nil
+}
+
 func (e *DuckDBScrapper) IsPermissionError(err error) bool {
 	duckdbError := &duckdb.Error{}
 	if errors.As(err, &duckdbError) {

@@ -2,6 +2,7 @@ package scrapper
 
 import (
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/samber/lo"
@@ -203,6 +204,26 @@ func (TimeValue) isValue() {}
 type IgnoredValue struct{}
 
 func (IgnoredValue) isValue() {}
+
+// BigIntValue represents arbitrary precision integers (e.g., DuckDB hugeint, uint128)
+type BigIntValue big.Int
+
+func (*BigIntValue) isValue() {}
+
+// String returns the string representation of the big integer
+func (v *BigIntValue) String() string {
+	return (*big.Int)(v).String()
+}
+
+// BigInt returns the underlying *big.Int
+func (v *BigIntValue) BigInt() *big.Int {
+	return (*big.Int)(v)
+}
+
+// NewBigIntValue creates a BigIntValue from a *big.Int
+func NewBigIntValue(v *big.Int) *BigIntValue {
+	return (*BigIntValue)(v)
+}
 
 type ColumnValue struct {
 	Name   string
