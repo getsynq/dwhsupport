@@ -112,12 +112,23 @@ type Pool[K comparable, V Closer] struct {
 type connecting[V any] struct {
 	res   V
 	err   error
-	wg    sync.WaitGroup
+	done  chan struct{} // closed when connection is ready
+	mu    sync.Mutex
 	usage int
 }
 
 func (c *connecting[V]) addWaiter() {
+	c.mu.Lock()
 	c.usage++
+	c.mu.Unlock()
+}
+
+func (c *connecting[V]) wait() {
+	<-c.done
+}
+
+func (c *connecting[V]) signal() {
+	close(c.done)
 }
 
 type connected[V any] struct {
@@ -193,7 +204,7 @@ func (p *Pool[K, V]) Acquire(ctx context.Context, key K) (*Lease[K, V], error) {
 		}
 		conn.addWaiter()
 		p.mu.Unlock()
-		conn.wg.Wait()
+		conn.wait()
 
 		if conn.err != nil {
 			return nil, conn.err
@@ -206,9 +217,8 @@ func (p *Pool[K, V]) Acquire(ctx context.Context, key K) (*Lease[K, V], error) {
 		p.hooks.OnConnecting(ctx, key)
 	}
 	conn := &connecting[V]{
-		wg: sync.WaitGroup{},
+		done: make(chan struct{}),
 	}
-	conn.wg.Add(1)
 	conn.addWaiter()
 	p.connecting[key] = conn
 
@@ -231,7 +241,7 @@ func (p *Pool[K, V]) Acquire(ctx context.Context, key K) (*Lease[K, V], error) {
 				p.hooks.OnConnectError(ctx, key, err)
 			}
 			conn.err = err
-			conn.wg.Done()
+			conn.signal()
 			return
 		}
 
@@ -239,7 +249,7 @@ func (p *Pool[K, V]) Acquire(ctx context.Context, key K) (*Lease[K, V], error) {
 		if p.closed {
 			value.Close()
 			conn.err = fmt.Errorf("pool is closing")
-			conn.wg.Done()
+			conn.signal()
 			return
 		}
 
@@ -249,16 +259,20 @@ func (p *Pool[K, V]) Acquire(ctx context.Context, key K) (*Lease[K, V], error) {
 
 		p.startCleanerOnce.Do(p.startCleaner)
 
+		conn.mu.Lock()
+		usage := conn.usage
+		conn.mu.Unlock()
+
 		p.connected[key] = &connected[V]{
 			value:    value,
-			usage:    conn.usage,
+			usage:    usage,
 			openedAt: time.Now(),
 		}
 		conn.res = value
-		conn.wg.Done()
+		conn.signal()
 	}()
 
-	conn.wg.Wait()
+	conn.wait()
 
 	if conn.err != nil {
 		return nil, conn.err
@@ -368,9 +382,3 @@ func (p *Pool[K, V]) runCleanup() {
 	}
 }
 
-func (p *Pool[K, V]) formatKey(key K) string {
-	if p.hooks.FormatKey != nil {
-		return p.hooks.FormatKey(key)
-	}
-	return fmt.Sprintf("%v", key)
-}
