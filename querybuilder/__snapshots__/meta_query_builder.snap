@@ -21,3 +21,26 @@ WHERE has_own_data = 1
   AND name = 'my_table'
 SETTINGS join_use_nulls=1
 ---
+
+[TestMetaQueryBuilderSnapshot/StandardTable/postgres - 1]
+SELECT
+    COALESCE(
+        (SELECT n_live_tup::bigint
+         FROM pg_stat_user_tables
+         WHERE relid = tbl.oid),
+        CASE
+            WHEN tbl.relpages = 0 THEN 0
+            ELSE (tbl.reltuples *
+                  (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
+        END
+    ) as "num_rows"
+FROM pg_catalog.pg_namespace sch
+JOIN pg_catalog.pg_class tbl ON tbl.relnamespace = sch.oid
+WHERE NOT pg_is_other_temp_schema(sch.oid)
+  AND tbl.relpersistence IN ('p', 'u')
+  AND tbl.relkind IN ('r', 'f', 'p', 'm')
+  AND sch.nspname NOT IN ('pg_catalog', 'information_schema')
+  AND tbl.reltuples >= 0
+  AND sch.nspname = 'my_schema'
+  AND tbl.relname = 'my_table'
+---

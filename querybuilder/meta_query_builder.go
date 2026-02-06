@@ -21,8 +21,8 @@ func (m *MetaQueryBuilder) ToSql(dialect Dialect) (string, error) {
 	switch dialect.(type) {
 	case *ClickHouseDialect:
 		return clickhouse(m.table)
-	// case *PostgresDialect:
-	// 	return postgres(m.table)
+	case *PostgresDialect:
+		return postgres(m.table)
 	// case *TrinoDialect:
 	// 	return trino(m.table)
 	// case *BigQueryDialect:
