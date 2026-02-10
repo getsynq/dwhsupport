@@ -26,7 +26,7 @@ func TestMetaQueryBuilderSnapshot(t *testing.T) {
 		dialect Dialect
 	}{
 		{"clickhouse", NewClickHouseDialect()},
-		// {"postgres", NewPostgresDialect()},
+		{"postgres", NewPostgresDialect()},
 		// {"trino", NewTrinoDialect()},
 		// {"bigquery", NewBigQueryDialect()},
 		// {"redshift", NewRedshiftDialect()},
