@@ -162,6 +162,15 @@ func (s *scrapperWrapper[K]) QueryCustomMetrics(ctx context.Context, sql string,
 	return s.lease.Value().QueryCustomMetrics(ctx, sql, args...)
 }
 
+func (s *scrapperWrapper[K]) QueryShape(ctx context.Context, sql string) ([]*scrapper.QueryShapeColumn, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lease == nil || s.lease.Released() {
+		return nil, nil
+	}
+	return s.lease.Value().QueryShape(ctx, sql)
+}
+
 func (s *scrapperWrapper[K]) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

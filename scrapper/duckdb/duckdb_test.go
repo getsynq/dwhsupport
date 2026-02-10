@@ -355,6 +355,62 @@ func (s *LocalDuckDBScrapperSuite) TestQueryCustomMetrics() {
 	}
 }
 
+func (s *LocalDuckDBScrapperSuite) TestQueryShape() {
+	sql := `SELECT id, name, amount, created_at, is_active, big_number FROM test_schema.test_table`
+	columns, err := s.duckdbScrapper.QueryShape(s.ctx, sql)
+	s.Require().NoError(err)
+	s.Require().Len(columns, 6)
+
+	s.Equal("id", columns[0].Name)
+	s.Equal(int32(1), columns[0].Position)
+	s.Equal("INTEGER", columns[0].NativeType)
+
+	s.Equal("name", columns[1].Name)
+	s.Equal(int32(2), columns[1].Position)
+	s.Equal("VARCHAR", columns[1].NativeType)
+
+	s.Equal("amount", columns[2].Name)
+	s.Equal(int32(3), columns[2].Position)
+	s.Contains(columns[2].NativeType, "DECIMAL")
+
+	s.Equal("created_at", columns[3].Name)
+	s.Equal(int32(4), columns[3].Position)
+	s.Equal("TIMESTAMP", columns[3].NativeType)
+
+	s.Equal("is_active", columns[4].Name)
+	s.Equal(int32(5), columns[4].Position)
+	s.Equal("BOOLEAN", columns[4].NativeType)
+
+	s.Equal("big_number", columns[5].Name)
+	s.Equal(int32(6), columns[5].Position)
+	s.Equal("HUGEINT", columns[5].NativeType)
+}
+
+func (s *LocalDuckDBScrapperSuite) TestQueryShape_StdSQL() {
+	ctx := context.TODO()
+
+	db, err := sqlx.Open("duckdb", "")
+	s.Require().NoError(err)
+	defer db.Close()
+
+	sql := `SELECT 1::INTEGER as id, 'hello'::VARCHAR as name, 3.14::DOUBLE as value`
+	columns, err := scrapperstdsql.QueryShape(ctx, db, sql)
+	s.Require().NoError(err)
+	s.Require().Len(columns, 3)
+
+	s.Equal("id", columns[0].Name)
+	s.Equal(int32(1), columns[0].Position)
+	s.Equal("INTEGER", columns[0].NativeType)
+
+	s.Equal("name", columns[1].Name)
+	s.Equal(int32(2), columns[1].Position)
+	s.Equal("VARCHAR", columns[1].NativeType)
+
+	s.Equal("value", columns[2].Name)
+	s.Equal(int32(3), columns[2].Position)
+	s.Equal("DOUBLE", columns[2].NativeType)
+}
+
 func (s *LocalDuckDBScrapperSuite) TestQueryCustomMetrics_WithHugeInt() {
 	sql := `SELECT
 		name as segment_name,

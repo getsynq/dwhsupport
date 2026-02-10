@@ -60,6 +60,10 @@ func (m *mockScrapper) QueryCustomMetrics(ctx context.Context, sql string, args 
 	return nil, nil
 }
 
+func (m *mockScrapper) QueryShape(ctx context.Context, sql string) ([]*scrapper.QueryShapeColumn, error) {
+	return nil, nil
+}
+
 func (m *mockScrapper) Close() error {
 	m.closed.Store(true)
 	return nil

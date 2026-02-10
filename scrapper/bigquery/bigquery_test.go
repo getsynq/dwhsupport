@@ -330,6 +330,52 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithTimestamp() {
 	}
 }
 
+func (s *LocalBigQueryScrapperSuite) TestQueryShape() {
+	sql := "SELECT id, name, amount, big_amount, created_at, is_active FROM `nifty-motif-341212." + s.testDataset + ".test_bigquery_scrapper`"
+	columns, err := s.bigqueryScrapper.QueryShape(s.ctx, sql)
+	s.Require().NoError(err)
+	s.Require().Len(columns, 6)
+
+	s.Equal("id", columns[0].Name)
+	s.Equal(int32(1), columns[0].Position)
+	s.Equal("INTEGER", columns[0].NativeType)
+
+	s.Equal("name", columns[1].Name)
+	s.Equal(int32(2), columns[1].Position)
+	s.Equal("STRING", columns[1].NativeType)
+
+	s.Equal("amount", columns[2].Name)
+	s.Equal(int32(3), columns[2].Position)
+	s.Equal("NUMERIC", columns[2].NativeType)
+
+	s.Equal("big_amount", columns[3].Name)
+	s.Equal(int32(4), columns[3].Position)
+	s.Equal("BIGNUMERIC", columns[3].NativeType)
+
+	s.Equal("created_at", columns[4].Name)
+	s.Equal(int32(5), columns[4].Position)
+	s.Equal("TIMESTAMP", columns[4].NativeType)
+
+	s.Equal("is_active", columns[5].Name)
+	s.Equal(int32(6), columns[5].Position)
+	s.Equal("BOOLEAN", columns[5].NativeType)
+}
+
+func (s *LocalBigQueryScrapperSuite) TestQueryShape_WithExpression() {
+	sql := "SELECT COUNT(*) as cnt, MAX(amount) as max_amount FROM `nifty-motif-341212." + s.testDataset + ".test_bigquery_scrapper`"
+	columns, err := s.bigqueryScrapper.QueryShape(s.ctx, sql)
+	s.Require().NoError(err)
+	s.Require().Len(columns, 2)
+
+	s.Equal("cnt", columns[0].Name)
+	s.Equal(int32(1), columns[0].Position)
+	s.Equal("INTEGER", columns[0].NativeType)
+
+	s.Equal("max_amount", columns[1].Name)
+	s.Equal(int32(2), columns[1].Position)
+	s.Equal("NUMERIC", columns[1].NativeType)
+}
+
 func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithBoolean() {
 	sql := `SELECT
 		name as segment_name,
