@@ -6,6 +6,10 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/duckdb/duckdb-go/v2"
+	"github.com/getsynq/dwhsupport/scrapper"
+	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
+	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -51,4 +55,29 @@ func (s *DuckDBScrapperSuite) TestNewDuckDBScrapper() {
 	s.Require().NoError(err)
 	s.NotEmpty(tableMetrics)
 
+}
+
+func (s *DuckDBScrapperSuite) TestQueryCustomMetrics_HugeIntWithinInt64Range() {
+	ctx := context.TODO()
+
+	// Use in-memory DuckDB for testing hugeint support
+	db, err := sqlx.Open("duckdb", "")
+	s.Require().NoError(err)
+	defer db.Close()
+
+	// Test hugeint that fits within int64 range - should be converted to IntValue
+	sql := `SELECT 12345::hugeint as small_huge_value`
+
+	result, err := scrapperstdsql.QueryCustomMetrics(ctx, db, sql)
+	s.Require().NoError(err, "QueryCustomMetrics should handle hugeint that fits in int64")
+	s.Require().Len(result, 1)
+
+	row := result[0]
+	s.Require().Len(row.ColumnValues, 1)
+
+	// Hugeint within int64 range should be converted to IntValue
+	s.Equal("small_huge_value", row.ColumnValues[0].Name)
+	s.False(row.ColumnValues[0].IsNull)
+	s.IsType(scrapper.IntValue(0), row.ColumnValues[0].Value)
+	s.Equal(scrapper.IntValue(12345), row.ColumnValues[0].Value)
 }
