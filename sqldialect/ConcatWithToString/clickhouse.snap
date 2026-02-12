@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithToString - 1]
+concat_ws('|', toString(id), toString(amount))
+---

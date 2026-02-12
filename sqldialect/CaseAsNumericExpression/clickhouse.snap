@@ -1,0 +1,4 @@
+
+[TestCaseExprSuite/TestCaseAsNumericExpression - 1]
+SUM(CASE WHEN col > 10 THEN 1 ELSE 0 END)
+---

@@ -3,121 +3,103 @@ package sqldialect
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/gkampitakis/go-snaps/snaps"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestCaseExpr(t *testing.T) {
-	dialects := map[string]Dialect{
-		"postgres":   NewPostgresDialect(),
-		"mysql":      NewMySQLDialect(),
-		"snowflake":  NewSnowflakeDialect(),
-		"bigquery":   NewBigQueryDialect(),
-		"duckdb":     NewDuckDBDialect(),
-		"clickhouse": NewClickHouseDialect(),
-		"databricks": NewDatabricksDialect(),
-		"redshift":   NewRedshiftDialect(),
-		"trino":      NewTrinoDialect(),
-	}
+type CaseExprSuite struct {
+	suite.Suite
+}
 
-	t.Run("simple case with else", func(t *testing.T) {
-		// CASE WHEN col > 10 THEN 1 ELSE 0 END
+func TestCaseExprSuite(t *testing.T) {
+	suite.Run(t, new(CaseExprSuite))
+}
+
+func (s *CaseExprSuite) TestSimpleCaseWithElse() {
+	// CASE WHEN col > 10 THEN 1 ELSE 0 END
+	for _, dialect := range DialectsToTest() {
 		caseExpr := Case().
 			When(condSql("col > 10"), Int64(1)).
 			Else(Int64(0))
 
-		for name, dialect := range dialects {
-			t.Run(name, func(t *testing.T) {
-				sql, err := caseExpr.ToSql(dialect)
-				require.NoError(t, err)
-				assert.Contains(t, sql, "CASE")
-				assert.Contains(t, sql, "WHEN col > 10 THEN 1")
-				assert.Contains(t, sql, "ELSE 0")
-				assert.Contains(t, sql, "END")
-			})
-		}
-	})
+		sql, err := caseExpr.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
 
-	t.Run("multiple when clauses", func(t *testing.T) {
-		// CASE WHEN col < 10 THEN 'small' WHEN col < 100 THEN 'medium' ELSE 'large' END
+		snaps.WithConfig(snaps.Dir("SimpleCaseWithElse"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
+func (s *CaseExprSuite) TestMultipleWhenClauses() {
+	// CASE WHEN col < 10 THEN 'small' WHEN col < 100 THEN 'medium' ELSE 'large' END
+	for _, dialect := range DialectsToTest() {
 		caseExpr := Case().
 			When(condSql("col < 10"), String("small")).
 			When(condSql("col < 100"), String("medium")).
 			Else(String("large"))
 
-		for name, dialect := range dialects {
-			t.Run(name, func(t *testing.T) {
-				sql, err := caseExpr.ToSql(dialect)
-				require.NoError(t, err)
-				assert.Contains(t, sql, "CASE")
-				assert.Contains(t, sql, "WHEN col < 10 THEN")
-				assert.Contains(t, sql, "WHEN col < 100 THEN")
-				assert.Contains(t, sql, "ELSE")
-				assert.Contains(t, sql, "END")
-				// Verify order is preserved
-				smallIdx := assert.Contains(t, sql, "small")
-				mediumIdx := assert.Contains(t, sql, "medium")
-				if smallIdx && mediumIdx {
-					// This is a simplified check - in real code we'd verify string positions
-					assert.True(t, true)
-				}
-			})
-		}
-	})
+		sql, err := caseExpr.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
 
-	t.Run("case without else", func(t *testing.T) {
-		// CASE WHEN col > 10 THEN 1 END (no ELSE, returns NULL for non-matching rows)
+		snaps.WithConfig(snaps.Dir("MultipleWhenClauses"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
+func (s *CaseExprSuite) TestCaseWithoutElse() {
+	// CASE WHEN col > 10 THEN 1 END (no ELSE, returns NULL for non-matching rows)
+	for _, dialect := range DialectsToTest() {
 		caseExpr := Case().
 			When(condSql("col > 10"), Int64(1))
 
-		for name, dialect := range dialects {
-			t.Run(name, func(t *testing.T) {
-				sql, err := caseExpr.ToSql(dialect)
-				require.NoError(t, err)
-				assert.Contains(t, sql, "CASE")
-				assert.Contains(t, sql, "WHEN col > 10 THEN 1")
-				assert.NotContains(t, sql, "ELSE")
-				assert.Contains(t, sql, "END")
-			})
-		}
-	})
+		sql, err := caseExpr.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
 
-	t.Run("case with complex expressions", func(t *testing.T) {
-		// CASE WHEN id >= 1 AND id < 100 THEN 0 WHEN id >= 100 AND id < 200 THEN 1 END
+		snaps.WithConfig(snaps.Dir("CaseWithoutElse"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
+func (s *CaseExprSuite) TestCaseWithComplexExpressions() {
+	// CASE WHEN id >= 1 AND id < 100 THEN 0 WHEN id >= 100 AND id < 200 THEN 1 END
+	for _, dialect := range DialectsToTest() {
 		caseExpr := Case().
 			When(condSql("id >= 1 AND id < 100"), Int64(0)).
 			When(condSql("id >= 100 AND id < 200"), Int64(1))
 
-		for name, dialect := range dialects {
-			t.Run(name, func(t *testing.T) {
-				sql, err := caseExpr.ToSql(dialect)
-				require.NoError(t, err)
-				assert.Contains(t, sql, "id >= 1 AND id < 100")
-				assert.Contains(t, sql, "id >= 100 AND id < 200")
-			})
-		}
-	})
+		sql, err := caseExpr.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
 
-	t.Run("case as numeric expression", func(t *testing.T) {
-		// Verify CaseExpr implements NumericExpr
+		snaps.WithConfig(snaps.Dir("CaseWithComplexExpressions"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
+func (s *CaseExprSuite) TestCaseAsNumericExpression() {
+	// Verify CaseExpr implements NumericExpr and can be used in SUM
+	for _, dialect := range DialectsToTest() {
 		caseExpr := Case().
 			When(condSql("col > 10"), Int64(1)).
 			Else(Int64(0))
 
-		// This should compile because CaseExpr implements NumericExpr
-		var _ NumericExpr = caseExpr
-
-		// Should be usable in math operations or aggregations
+		// Should be usable in aggregations
 		sumExpr := Fn("SUM", caseExpr)
 
-		sql, err := sumExpr.ToSql(NewPostgresDialect())
-		require.NoError(t, err)
-		assert.Contains(t, sql, "SUM(CASE")
-	})
+		sql, err := sumExpr.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
+
+		snaps.WithConfig(snaps.Dir("CaseAsNumericExpression"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
 }
 
-func TestCaseExprInSelect(t *testing.T) {
-	t.Run("case in column list", func(t *testing.T) {
+func (s *CaseExprSuite) TestCaseInColumnList() {
+	for _, dialect := range DialectsToTest() {
 		caseExpr := Case().
 			When(condSql("amount > 100"), String("high")).
 			When(condSql("amount > 10"), String("medium")).
@@ -130,15 +112,17 @@ func TestCaseExprInSelect(t *testing.T) {
 				As(caseExpr, Sql("category")),
 			)
 
-		sql, err := sel.ToSql(NewPostgresDialect())
-		require.NoError(t, err)
-		assert.Contains(t, sql, "select")
-		assert.Contains(t, sql, "CASE")
-		assert.Contains(t, sql, "as category")
-		assert.Contains(t, sql, "from orders")
-	})
+		sql, err := sel.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
 
-	t.Run("case in group by", func(t *testing.T) {
+		snaps.WithConfig(snaps.Dir("CaseInColumnList"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
+func (s *CaseExprSuite) TestCaseInGroupBy() {
+	for _, dialect := range DialectsToTest() {
 		bucketExpr := Case().
 			When(condSql("id < 100"), Int64(0)).
 			Else(Int64(1))
@@ -151,10 +135,11 @@ func TestCaseExprInSelect(t *testing.T) {
 			).
 			GroupBy(Sql("bucket"))
 
-		sql, err := sel.ToSql(NewDuckDBDialect())
-		require.NoError(t, err)
-		assert.Contains(t, sql, "CASE")
-		assert.Contains(t, sql, "group by")
-		assert.Contains(t, sql, "bucket")
-	})
+		sql, err := sel.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
+
+		snaps.WithConfig(snaps.Dir("CaseInGroupBy"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
 }

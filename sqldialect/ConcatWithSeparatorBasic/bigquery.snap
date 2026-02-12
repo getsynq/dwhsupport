@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithSeparatorBasic - 1]
+CONCAT(col1, '|', col2, '|', col3)
+---
