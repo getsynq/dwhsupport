@@ -103,6 +103,13 @@ func (d *ClickHouseDialect) Coalesce(exprs ...Expr) Expr {
 	return Fn("coalesce", exprs...)
 }
 
+func (d *ClickHouseDialect) ConcatWithSeparator(separator string, exprs ...Expr) Expr {
+	args := make([]Expr, 0, len(exprs)+1)
+	args = append(args, String(separator))
+	args = append(args, exprs...)
+	return Fn("concat_ws", args...)
+}
+
 func (d *ClickHouseDialect) AggregationColumnReference(expression Expr, alias string) Expr {
 	return Identifier(alias)
 }

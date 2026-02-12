@@ -25,6 +25,7 @@ type Dialect interface {
 	StringLiteral(string) string
 	ToString(Expr) Expr
 	Coalesce(exprs ...Expr) Expr
+	ConcatWithSeparator(separator string, exprs ...Expr) Expr
 	ToFloat64(Expr) Expr
 	SubString(expr Expr, start int64, length int64) Expr
 

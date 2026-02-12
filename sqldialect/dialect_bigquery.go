@@ -103,6 +103,24 @@ func (d *BigQueryDialect) Coalesce(exprs ...Expr) Expr {
 	return Fn("COALESCE", exprs...)
 }
 
+func (d *BigQueryDialect) ConcatWithSeparator(separator string, exprs ...Expr) Expr {
+	// BigQuery doesn't have CONCAT_WS, so we build CONCAT(expr1, '|', expr2, '|', expr3)
+	if len(exprs) == 0 {
+		return String("")
+	}
+	if len(exprs) == 1 {
+		return exprs[0]
+	}
+	parts := make([]Expr, 0, len(exprs)*2-1)
+	for i, expr := range exprs {
+		parts = append(parts, expr)
+		if i < len(exprs)-1 {
+			parts = append(parts, String(separator))
+		}
+	}
+	return Fn("CONCAT", parts...)
+}
+
 func (d *BigQueryDialect) AggregationColumnReference(expression Expr, alias string) Expr {
 	return expression
 }

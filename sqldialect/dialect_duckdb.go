@@ -103,6 +103,13 @@ func (d *DuckDBDialect) Coalesce(exprs ...Expr) Expr {
 	return Fn("COALESCE", exprs...)
 }
 
+func (d *DuckDBDialect) ConcatWithSeparator(separator string, exprs ...Expr) Expr {
+	args := make([]Expr, 0, len(exprs)+1)
+	args = append(args, String(separator))
+	args = append(args, exprs...)
+	return Fn("concat_ws", args...)
+}
+
 func (d *DuckDBDialect) AggregationColumnReference(expression Expr, alias string) Expr {
 	return Identifier(alias)
 }
