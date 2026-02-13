@@ -15,14 +15,14 @@ import (
 )
 
 type MSSQLConf struct {
-	User        string
-	Password    string
-	Host        string
-	Port        int
-	Database    string
-	SSHTunnel   *sshtunnel.SshTunnel
-	TrustCert   bool
-	Encrypt     string // "disable", "false", "true" (default)
+	User      string
+	Password  string
+	Host      string
+	Port      int
+	Database  string
+	SSHTunnel *sshtunnel.SshTunnel
+	TrustCert bool
+	Encrypt   string // "disable", "false", "true" (default)
 }
 
 var _ stdsql.StdSqlExecutor = &MSSQLExecutor{}

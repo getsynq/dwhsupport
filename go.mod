@@ -11,6 +11,7 @@ require (
 	github.com/databricks/databricks-sdk-go v0.55.0
 	github.com/databricks/databricks-sql-go v1.6.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/duckdb/duckdb-go/v2 v2.5.2
 	github.com/gkampitakis/go-snaps v0.5.11
 	github.com/go-sql-driver/mysql v1.8.1
@@ -67,7 +68,6 @@ require (
 	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/coreos/go-oidc/v3 v3.5.0 // indirect
 	github.com/danieljoos/wincred v1.2.2 // indirect
-	github.com/denisenkom/go-mssqldb v0.12.3 // indirect
 	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/duckdb/duckdb-go-bindings v0.1.23 // indirect
 	github.com/duckdb/duckdb-go-bindings/darwin-amd64 v0.1.23 // indirect
