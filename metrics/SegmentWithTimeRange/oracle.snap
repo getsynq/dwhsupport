@@ -1,0 +1,22 @@
+
+[TestMetricsSuite/TestSegmentWithTimeRangeWithFilter - 1]
+select
+  COALESCE(TO_CHAR("workspace"), '') as "segment", 
+  'run_type' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT(run_type) as "num_not_null", 
+  COUNT(distinct run_type) as "num_unique", 
+  SUM(CASE WHEN run_type = 0 THEN 1 ELSE 0 END) as "num_empty", 
+  CAST(avg(run_type) AS BINARY_DOUBLE) as "mean", 
+  CAST(min(run_type) AS BINARY_DOUBLE) as "min", 
+  CAST(max(run_type) AS BINARY_DOUBLE) as "max", 
+  CAST(MEDIAN(run_type) AS BINARY_DOUBLE) as "median", 
+  CAST(STDDEV(run_type) AS BINARY_DOUBLE) as "stddev"
+from "default"."runs" 
+where
+  "ingested_at" >= TO_TIMESTAMP('2025-01-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS') and 
+  "ingested_at" < TO_TIMESTAMP('2025-02-01 00:00:00', 'YYYY-MM-DD HH24:MI:SS') and 
+  (workspace = 'synq-demo' OR 1=1)
+group by COALESCE(TO_CHAR("workspace"), '')
+order by COALESCE(TO_CHAR("workspace"), '') 
+---
