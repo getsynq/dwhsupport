@@ -82,6 +82,9 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 
 3. Implement `SqlDialect` in `sqldialect/` if needed
 
+4. Register the new dialect in `sqldialect/dialects.go` `DialectsToTest()` and regenerate snapshots:
+   - `UPDATE_SNAPS=true go test ./sqldialect/... ./metrics/... -count=1`
+
 ## Supported Warehouses
 
 - BigQuery
@@ -93,10 +96,14 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 - DuckDB
 - MySQL
 - Trino
+- Oracle
+- MSSQL
 
 ## Testing
 
 - Tests use `github.com/gkampitakis/go-snaps` for snapshot testing
+- To create/update snapshots: `UPDATE_SNAPS=true go test ./path/to/package -count=1`
+- `CI=true` and `UPDATE_SNAPS=true` are mutually exclusive — don't use both
 - Mock generation uses `go.uber.org/mock`
 - Test files follow `*_test.go` naming convention
 - Integration tests exist for most warehouse implementations
