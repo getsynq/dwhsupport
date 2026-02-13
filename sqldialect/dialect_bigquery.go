@@ -128,3 +128,7 @@ func (d *BigQueryDialect) AggregationColumnReference(expression Expr, alias stri
 func (d *BigQueryDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTR", expr, Int64(start), Int64(length))
 }
+
+func (d *BigQueryDialect) FormatLimit(rowsSql string) string {
+	return fmt.Sprintf("limit %s", rowsSql)
+}

@@ -117,3 +117,7 @@ func (d *SnowflakeDialect) AggregationColumnReference(expression Expr, alias str
 func (d *SnowflakeDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
+
+func (d *SnowflakeDialect) FormatLimit(rowsSql string) string {
+	return fmt.Sprintf("limit %s", rowsSql)
+}

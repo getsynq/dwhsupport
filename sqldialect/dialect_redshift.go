@@ -117,3 +117,7 @@ func (d *RedshiftDialect) AggregationColumnReference(expression Expr, alias stri
 func (d *RedshiftDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
+
+func (d *RedshiftDialect) FormatLimit(rowsSql string) string {
+	return fmt.Sprintf("limit %s", rowsSql)
+}
