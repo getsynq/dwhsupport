@@ -117,3 +117,7 @@ func (d *DuckDBDialect) AggregationColumnReference(expression Expr, alias string
 func (d *DuckDBDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
+
+func (d *DuckDBDialect) FormatLimit(rowsSql string) string {
+	return fmt.Sprintf("limit %s", rowsSql)
+}

@@ -33,6 +33,7 @@ type Dialect interface {
 	ResolveTimeColumn(col *TimeColExpr) (string, error)
 	AggregationColumnReference(expression Expr, alias string) Expr
 	ResolveTableFunction(t *TableFnExpr) (string, error)
+	FormatLimit(rowsSql string) string
 }
 
 // utils

@@ -67,11 +67,7 @@ func (e *LimitExpr) ToSql(dialect Dialect) (string, error) {
 		return "", err
 	}
 
-	if _, ok := dialect.(*OracleDialect); ok {
-		return fmt.Sprintf("FETCH FIRST %s ROWS ONLY", rowsSql), nil
-	}
-
-	return fmt.Sprintf("limit %s", rowsSql), nil
+	return dialect.FormatLimit(rowsSql), nil
 }
 
 type NotImplementedExpr struct {

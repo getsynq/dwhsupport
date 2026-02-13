@@ -11,6 +11,7 @@ require (
 	github.com/databricks/databricks-sdk-go v0.55.0
 	github.com/databricks/databricks-sql-go v1.6.1
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+	github.com/denisenkom/go-mssqldb v0.12.3
 	github.com/duckdb/duckdb-go/v2 v2.5.2
 	github.com/gkampitakis/go-snaps v0.5.11
 	github.com/go-sql-driver/mysql v1.8.1
@@ -93,6 +94,8 @@ require (
 	github.com/goccy/go-yaml v1.17.1 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
+	github.com/golang-sql/civil v0.0.0-20190719163853-cb61b32ac6fe // indirect
+	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/flatbuffers v25.2.10+incompatible // indirect
 	github.com/google/go-querystring v1.1.0 // indirect

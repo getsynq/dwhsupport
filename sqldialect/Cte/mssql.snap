@@ -1,0 +1,9 @@
+
+[TestBaseSuite/TestCte/mssql - 1]
+with cte AS (select *
+from [default].[users] 
+order by created_at desc OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY)
+select *
+from cte 
+ 
+---

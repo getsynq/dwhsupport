@@ -119,6 +119,10 @@ func (d *OracleDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTR", expr, Int64(start), Int64(length))
 }
 
+func (d *OracleDialect) FormatLimit(rowsSql string) string {
+	return fmt.Sprintf("FETCH FIRST %s ROWS ONLY", rowsSql)
+}
+
 func OracleQuoteIdentifier(identifier string) string {
 	return fmt.Sprintf("\"%s\"", identifier)
 }
