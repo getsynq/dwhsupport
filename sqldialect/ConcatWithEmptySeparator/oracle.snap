@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithEmptySeparator - 1]
+col1 || '' || col2
+---

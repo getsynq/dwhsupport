@@ -1,0 +1,18 @@
+
+[TestSegmentsSuite/TestSegmentQueries/oracle - 1]
+select
+  SUBSTR(TO_CHAR(workspace), 1, 100) as "segment", 
+  SUBSTR(TO_CHAR(run_status), 1, 100) as "segment2", 
+  SUBSTR(TO_CHAR(run_type), 1, 100) as "segment3", 
+  COUNT(*) as "num_rows"
+from "default"."runs" 
+where
+  "createdAt" >= TO_TIMESTAMP('1985-07-16 00:00:00', 'YYYY-MM-DD HH24:MI:SS') and 
+  "createdAt" < TO_TIMESTAMP('2025-03-16 00:00:00', 'YYYY-MM-DD HH24:MI:SS') and 
+  (1=1)
+group by
+  SUBSTR(TO_CHAR(workspace), 1, 100), 
+  SUBSTR(TO_CHAR(run_status), 1, 100), 
+  SUBSTR(TO_CHAR(run_type), 1, 100)
+order by COUNT(*) desc FETCH FIRST 10 ROWS ONLY
+---

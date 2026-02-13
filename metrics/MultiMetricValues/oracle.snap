@@ -1,0 +1,24 @@
+
+[TestMetricsSuite/TestMultiMetricValues - 1]
+select
+  COALESCE("workspace", '') as "segment", 
+  COALESCE("run_type", '') as "segment_2", 
+  COUNT(workspace) as "workspace$num_not_null", 
+  COUNT(distinct workspace) as "workspace$num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace$num_empty", 
+  COUNT(run_type) as "run_type$num_not_null", 
+  COUNT(distinct run_type) as "run_type$num_unique", 
+  SUM(CASE WHEN run_type = 0 THEN 1 ELSE 0 END) as "run_type$num_empty", 
+  CAST(avg(run_type) AS BINARY_DOUBLE) as "run_type$mean", 
+  CAST(min(run_type) AS BINARY_DOUBLE) as "run_type$min", 
+  CAST(max(run_type) AS BINARY_DOUBLE) as "run_type$max", 
+  CAST(MEDIAN(run_type) AS BINARY_DOUBLE) as "run_type$median", 
+  CAST(STDDEV(run_type) AS BINARY_DOUBLE) as "run_type$stddev"
+from "default"."runs" 
+group by
+  COALESCE("workspace", ''), 
+  COALESCE("run_type", '')
+order by
+  COALESCE("workspace", ''), 
+  COALESCE("run_type", '') 
+---

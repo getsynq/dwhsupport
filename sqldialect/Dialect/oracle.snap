@@ -1,0 +1,8 @@
+
+[TestBaseSuite/TestDialect/oracle - 1]
+select
+  *, 
+  (CURRENT_TIMESTAMP + INTERVAL '1' DAY) as "tomorrow"
+from "default"."users" 
+order by created_at desc FETCH FIRST 10 ROWS ONLY
+---

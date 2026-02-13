@@ -1,0 +1,330 @@
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_multi_condition_multi_segmentation/no_partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') as "segment", 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') as "segment_2", 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment_3", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') in ('1', '2', '3', '4') and 
+  (run_status > 0) and (run_type > 0)
+group by
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_multi_condition_multi_segmentation/partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') as "segment", 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') as "segment_2", 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment_3", 
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') in ('1', '2', '3', '4') and 
+  (run_status > 0) and (run_type > 0)
+group by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_multi_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (run_status > 0) and (run_type > 0)
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_multi_condition_no_segmentation/partitioning - 1]
+select
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (run_status > 0) and (run_type > 0)
+group by (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR)
+order by (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_multi_condition_single_segmentation_all/no_partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (run_status > 0) and (run_type > 0)
+group by COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_multi_condition_single_segmentation_all/partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment", 
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (run_status > 0) and (run_type > 0)
+group by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_no_conditions_multi_segmentation/no_partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') as "segment", 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') as "segment_2", 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment_3", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') in ('1', '2', '3', '4')
+group by
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_no_conditions_multi_segmentation/partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') as "segment", 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') as "segment_2", 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment_3", 
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') in ('1', '2', '3', '4')
+group by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_no_conditions_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_no_conditions_no_segmentation/partitioning - 1]
+select
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+group by (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR)
+order by (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_no_conditions_single_segmentation_all/no_partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+group by COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_no_conditions_single_segmentation_all/partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment", 
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+group by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_single_condition_multi_segmentation/no_partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') as "segment", 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') as "segment_2", 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment_3", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') in ('1', '2', '3', '4') and 
+  (1=1)
+group by
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_single_condition_multi_segmentation/partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') as "segment", 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') as "segment_2", 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment_3", 
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), '') not in ('synq-demo') and 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), '') in ('1', '2', '3', '4') and 
+  (1=1)
+group by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(workspace), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_status), 1, 100), ''), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_single_condition_no_segmentation/no_partitioning - 1]
+select
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (1=1)
+ 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_single_condition_no_segmentation/partitioning - 1]
+select
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (1=1)
+group by (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR)
+order by (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_single_condition_single_segmentation_all/no_partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (1=1)
+group by COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---
+
+[TestMetricsSuite/TestApplyMonitorDefArgs/oracle_single_condition_single_segmentation_all/partitioning - 1]
+select
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') as "segment", 
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR) as "time_segment", 
+  'ingested_at' as "field", 
+  COUNT(*) as "num_rows", 
+  COUNT("ingested_at") as "num_not_null", 
+  min("ingested_at") as "min", 
+  max("ingested_at") as "max"
+from "default"."runs" 
+where (1=1)
+group by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '')
+order by
+  (TRUNC("ingested_at", 'HH24') + INTERVAL '1' HOUR), 
+  COALESCE(SUBSTR(TO_CHAR(run_type), 1, 100), '') 
+---

@@ -1,0 +1,19 @@
+SELECT
+    USERNAME                    AS "database",
+    USERNAME                    AS "database_owner"
+FROM
+    ALL_USERS
+WHERE
+    USERNAME NOT IN (
+        'SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+        'GGSYS', 'GSMADMIN_INTERNAL', 'XDB', 'WMSYS', 'OJVMSYS',
+        'CTXSYS', 'ORDSYS', 'ORDDATA', 'MDSYS', 'LBACSYS',
+        'DVSYS', 'AUDSYS', 'OLAPSYS', 'REMOTE_SCHEDULER_AGENT',
+        'ANONYMOUS', 'XS$NULL', 'GGSHAREDCAP', 'MDDATA',
+        'DVF', 'SPATIAL_CSW_ADMIN_USR', 'SPATIAL_WFS_ADMIN_USR',
+        'SYSBACKUP', 'SYSDG', 'SYSKM', 'SYSRAC', 'SYS$UMF',
+        'DIP', 'ORACLE_OCM', 'FLOWS_FILES'
+    )
+    AND ORACLE_MAINTAINED = 'N'
+ORDER BY
+    USERNAME
