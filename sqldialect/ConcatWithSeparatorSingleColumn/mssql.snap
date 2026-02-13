@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithSeparatorSingleColumn - 1]
+CONCAT_WS('|', col1)
+---

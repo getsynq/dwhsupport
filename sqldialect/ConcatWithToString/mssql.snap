@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithToString - 1]
+CONCAT_WS('|', CAST(id AS NVARCHAR(MAX)), CAST(amount AS NVARCHAR(MAX)))
+---

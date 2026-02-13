@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithSeparatorEmpty - 1]
+CONCAT_WS('|')
+---

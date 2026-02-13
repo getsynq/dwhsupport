@@ -1,0 +1,11 @@
+
+[TestSubquerySuite/TestSubqueryWithWhere - 1]
+select
+  id, 
+  amount
+from (
+SELECT id, amount FROM transactions
+) AS txn 
+where amount > 100
+ 
+---
