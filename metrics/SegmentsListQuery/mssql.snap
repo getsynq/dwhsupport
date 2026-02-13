@@ -1,0 +1,18 @@
+
+[TestSegmentsSuite/TestSegmentQueries/mssql - 1]
+select
+  SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100) as [segment], 
+  SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100) as [segment2], 
+  SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100) as [segment3], 
+  COUNT(*) as [num_rows]
+from [default].[runs] 
+where
+  [createdAt] >= CAST('1985-07-16 00:00:00' AS DATETIME2) and 
+  [createdAt] < CAST('2025-03-16 00:00:00' AS DATETIME2) and 
+  (1=1)
+group by
+  SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), 
+  SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), 
+  SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100)
+order by COUNT(*) desc OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+---
