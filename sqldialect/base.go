@@ -71,6 +71,10 @@ func (e *LimitExpr) ToSql(dialect Dialect) (string, error) {
 		return fmt.Sprintf("FETCH FIRST %s ROWS ONLY", rowsSql), nil
 	}
 
+	if _, ok := dialect.(*MSSQLDialect); ok {
+		return fmt.Sprintf("OFFSET 0 ROWS FETCH NEXT %s ROWS ONLY", rowsSql), nil
+	}
+
 	return fmt.Sprintf("limit %s", rowsSql), nil
 }
 

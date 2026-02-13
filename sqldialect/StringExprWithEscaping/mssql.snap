@@ -1,0 +1,9 @@
+
+[TestBaseSuite/TestStringExprWithEscaping/mssql - 1]
+select
+  *, 
+  'it''s a test' as [test_col]
+from [default].[users] 
+where name = 'O''Brien'
+ 
+---

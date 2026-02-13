@@ -17,5 +17,6 @@ func DialectsToTest() []*TestedDialect {
 		{"duckdb", NewDuckDBDialect()},
 		{"trino", NewTrinoDialect()},
 		{"oracle", NewOracleDialect()},
+		{"mssql", NewMSSQLDialect()},
 	}
 }
