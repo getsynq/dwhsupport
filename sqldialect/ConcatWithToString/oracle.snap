@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithToString - 1]
+TO_CHAR(id) || '|' || TO_CHAR(amount)
+---

@@ -1,0 +1,9 @@
+
+[TestBaseSuite/TestCte/oracle - 1]
+with cte AS (select *
+from "default"."users" 
+order by created_at desc FETCH FIRST 10 ROWS ONLY)
+select *
+from cte 
+ 
+---

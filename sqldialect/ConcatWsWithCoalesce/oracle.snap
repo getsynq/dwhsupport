@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWsWithCoalesce - 1]
+COALESCE(col1, '<NULL>') || '|' || COALESCE(col2, '<NULL>')
+---
