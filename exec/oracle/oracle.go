@@ -3,13 +3,12 @@ package oracle
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/sshtunnel"
 	"github.com/jmoiron/sqlx"
-	_ "github.com/sijms/go-ora/v2"
+	go_ora "github.com/sijms/go-ora/v2"
 )
 
 type OracleConf struct {
@@ -38,8 +37,7 @@ func NewOracleExecutor(ctx context.Context, conf *OracleConf) (*OracleExecutor, 
 		conf.Port = 1521
 	}
 
-	connStr := fmt.Sprintf("oracle://%s:%s@%s:%d/%s",
-		conf.User, conf.Password, conf.Host, conf.Port, conf.ServiceName)
+	connStr := go_ora.BuildUrl(conf.Host, conf.Port, conf.ServiceName, conf.User, conf.Password, nil)
 
 	var err error
 	var db *sqlx.DB
