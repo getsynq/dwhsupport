@@ -1030,3 +1030,53 @@ func (e *AndGroupsExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (e *AndGroupsExpr) IsCondExpr() {}
+
+//
+// SubqueryTableExpr - represents (SELECT ...) AS alias
+//
+
+type SubqueryTableExpr struct {
+	rawSql string
+	alias  string
+}
+
+var _ Expr = (*SubqueryTableExpr)(nil)
+var _ TableExpr = (*SubqueryTableExpr)(nil)
+
+// SubqueryTable creates a subquery table expression
+func SubqueryTable(rawSql string, alias string) *SubqueryTableExpr {
+	return &SubqueryTableExpr{rawSql: rawSql, alias: alias}
+}
+
+func (e *SubqueryTableExpr) ToSql(dialect Dialect) (string, error) {
+	return fmt.Sprintf("(\n%s\n) AS %s", e.rawSql, e.alias), nil
+}
+
+func (e *SubqueryTableExpr) IsTableExpr() {}
+
+//
+// Helper functions
+//
+
+// Sum creates a SUM aggregation expression
+func Sum(expr Expr) Expr {
+	return Fn("SUM", expr)
+}
+
+// ConcatWs creates a CONCAT_WS expression (dialect-aware)
+func ConcatWs(separator string, exprs ...Expr) Expr {
+	// We can't delegate to dialect here because this is a standalone function
+	// Return a wrapper that will call the dialect method when ToSql is called
+	return &concatWsExpr{separator: separator, exprs: exprs}
+}
+
+type concatWsExpr struct {
+	separator string
+	exprs     []Expr
+}
+
+func (e *concatWsExpr) ToSql(dialect Dialect) (string, error) {
+	return dialect.ConcatWithSeparator(e.separator, e.exprs...).ToSql(dialect)
+}
+
+func (e *concatWsExpr) IsTextExpr() {}

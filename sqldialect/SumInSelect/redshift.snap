@@ -1,0 +1,6 @@
+
+[TestSubquerySuite/TestSumInSelect - 1]
+select SUM(amount) as total_amount
+from orders 
+ 
+---

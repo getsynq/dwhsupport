@@ -1,0 +1,11 @@
+
+[TestSubquerySuite/TestSubqueryWithGroupBy - 1]
+select
+  CASE WHEN id < 100 THEN 0 ELSE 1 END as bucket, 
+  COUNT(*) as cnt
+from (
+SELECT id, name, value FROM data
+) AS _recon_base 
+group by bucket
+order by bucket 
+---

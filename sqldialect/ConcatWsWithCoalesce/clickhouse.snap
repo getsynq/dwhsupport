@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWsWithCoalesce - 1]
+concat_ws('|', coalesce(col1, '<NULL>'), coalesce(col2, '<NULL>'))
+---

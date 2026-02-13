@@ -1,0 +1,13 @@
+
+[TestSubquerySuite/TestReconciliationPattern - 1]
+select
+  CASE WHEN id >= 1 AND id < 50 THEN 0 WHEN id >= 50 AND id < 100 THEN 1 ELSE 2 END as bucket, 
+  COUNT(*) as cnt, 
+  SUM(MD5(concat_ws('|', coalesce(toString(id), '<NULL>'), coalesce(toString(name), '<NULL>'), coalesce(toString(value), '<NULL>')))) as checksum
+from (
+SELECT id, name, value FROM test_data
+) AS _recon_base 
+where id >= 1 AND id < 100
+group by bucket
+order by bucket 
+---

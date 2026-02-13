@@ -1,0 +1,6 @@
+
+[TestConcatSuite/TestConcatWsInSelect - 1]
+select CONCAT(col1, '|', col2) as concatenated
+from test_table 
+ 
+---

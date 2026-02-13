@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithToString - 1]
+CONCAT(SAFE_CAST(id AS STRING), '|', SAFE_CAST(amount AS STRING))
+---

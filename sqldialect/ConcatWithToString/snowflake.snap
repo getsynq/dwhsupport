@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithToString - 1]
+concat_ws('|', to_varchar(id), to_varchar(amount))
+---
