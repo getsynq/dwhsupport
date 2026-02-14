@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/google/uuid"
@@ -95,33 +96,49 @@ func (e *ClickhouseExecutor) QueryRows(ctx context.Context, q string, args ...in
 	return rows, nil
 }
 
-// EnrichClickhouseContext wraps the context with ClickHouse-specific callbacks
-// (WithProgress, WithProfileInfo) when a querystats callback is registered.
+// EnrichClickhouseContext wraps the context with ClickHouse-specific options:
+// - log_comment setting with JSON query context (when query context is present)
+// - WithProgress/WithProfileInfo callbacks (when a querystats callback is registered)
 // Creates or reuses a DriverStats accumulator so the Collector in stdsql helpers
 // can merge the driver-specific stats at Finish() time.
 func EnrichClickhouseContext(ctx context.Context) context.Context {
+	var chOpts []clickhouse.QueryOption
+
+	// Set log_comment for native query tagging in system.query_log
+	if qc := querycontext.GetQueryContext(ctx); qc != nil {
+		if tag := qc.FormatAsJSON(); tag != "" {
+			chOpts = append(chOpts, clickhouse.WithSettings(clickhouse.Settings{
+				"log_comment": tag,
+			}))
+		}
+	}
+
 	ds, ctx := querystats.GetOrCreateDriverStats(ctx)
-	if ds == nil {
+	if ds != nil {
+		queryID := uuid.New().String()
+		ds.Set(querystats.QueryStats{QueryID: queryID})
+		chOpts = append(chOpts,
+			clickhouse.WithQueryID(queryID),
+			clickhouse.WithProgress(func(p *clickhouse.Progress) {
+				ds.Set(querystats.QueryStats{
+					RowsRead:  querystats.Int64Ptr(int64(p.Rows)),
+					BytesRead: querystats.Int64Ptr(int64(p.Bytes)),
+				})
+			}),
+			clickhouse.WithProfileInfo(func(p *clickhouse.ProfileInfo) {
+				ds.Set(querystats.QueryStats{
+					RowsRead:  querystats.Int64Ptr(int64(p.Rows)),
+					BytesRead: querystats.Int64Ptr(int64(p.Bytes)),
+					Blocks:    querystats.Int64Ptr(int64(p.Blocks)),
+				})
+			}),
+		)
+	}
+
+	if len(chOpts) == 0 {
 		return ctx
 	}
-	queryID := uuid.New().String()
-	ds.Set(querystats.QueryStats{QueryID: queryID})
-	return clickhouse.Context(ctx,
-		clickhouse.WithQueryID(queryID),
-		clickhouse.WithProgress(func(p *clickhouse.Progress) {
-			ds.Set(querystats.QueryStats{
-				RowsRead:  querystats.Int64Ptr(int64(p.Rows)),
-				BytesRead: querystats.Int64Ptr(int64(p.Bytes)),
-			})
-		}),
-		clickhouse.WithProfileInfo(func(p *clickhouse.ProfileInfo) {
-			ds.Set(querystats.QueryStats{
-				RowsRead:  querystats.Int64Ptr(int64(p.Rows)),
-				BytesRead: querystats.Int64Ptr(int64(p.Bytes)),
-				Blocks:    querystats.Int64Ptr(int64(p.Blocks)),
-			})
-		}),
-	)
+	return clickhouse.Context(ctx, chOpts...)
 }
 
 func (e *ClickhouseExecutor) Exec(ctx context.Context, q string) error {
