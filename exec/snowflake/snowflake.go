@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"github.com/snowflakedb/gosnowflake"
@@ -206,6 +208,63 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 
 func (e *SnowflakeExecutor) QueryRows(ctx context.Context, q string, args ...any) (*sqlx.Rows, error) {
 	return e.db.QueryxContext(ctx, q, args...)
+}
+
+// EnrichSnowflakeContext wraps the context with a query ID channel so the Snowflake driver
+// reports the query ID. Creates or reuses a DriverStats accumulator and registers an
+// onFinish hook to collect the query ID (and optionally detailed stats) when the
+// Collector finishes.
+func EnrichSnowflakeContext(ctx context.Context, db *sql.DB) context.Context {
+	ds, ctx := querystats.GetOrCreateDriverStats(ctx)
+	if ds == nil {
+		return ctx
+	}
+	queryIDChan := make(chan string, 1)
+	ctx = gosnowflake.WithQueryIDChan(ctx, queryIDChan)
+	ds.AddOnFinish(func() {
+		select {
+		case queryID := <-queryIDChan:
+			if queryID == "" {
+				return
+			}
+			ds.Set(querystats.QueryStats{QueryID: queryID})
+			if querystats.IsQueryStatsFetch(ctx) {
+				fetchSnowflakeQueryStats(ctx, db, ds, queryID)
+			}
+		default:
+		}
+	})
+	return ctx
+}
+
+// fetchSnowflakeQueryStats fetches detailed query statistics from Snowflake's monitoring API.
+// This makes an extra HTTP call per query — only called when WithQueryStatsFetch is set.
+func fetchSnowflakeQueryStats(ctx context.Context, db *sql.DB, ds *querystats.DriverStats, queryID string) {
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		logging.GetLogger(ctx).Printf("querystats: failed to get Snowflake connection for stats: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	err = conn.Raw(func(driverConn any) error {
+		sfConn, ok := driverConn.(gosnowflake.SnowflakeConnection)
+		if !ok {
+			return nil
+		}
+		status, err := sfConn.GetQueryStatus(ctx, queryID)
+		if err != nil {
+			return err
+		}
+		ds.Set(querystats.QueryStats{
+			BytesRead:    querystats.Int64Ptr(status.ScanBytes),
+			RowsProduced: querystats.Int64Ptr(status.ProducedRows),
+		})
+		return nil
+	})
+	if err != nil {
+		logging.GetLogger(ctx).Printf("querystats: failed to fetch Snowflake query status for %s: %v", queryID, err)
+	}
 }
 
 func (e *SnowflakeExecutor) Exec(ctx context.Context, sql string) error {

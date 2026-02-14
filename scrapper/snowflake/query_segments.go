@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/getsynq/dwhsupport/exec"
-	execstdsql "github.com/getsynq/dwhsupport/exec/stdsql"
+	execsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
 func (e *SnowflakeScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {
-	execer := execstdsql.NewQuerier[scrapper.SegmentRow](e.executor.GetDb())
+	execer := execsnowflake.NewQuerier[scrapper.SegmentRow](e.executor)
 	queryManyOpts := []exec.QueryManyOpt[scrapper.SegmentRow]{
 		exec.WithArgs[scrapper.SegmentRow](args...),
 	}

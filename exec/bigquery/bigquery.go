@@ -7,6 +7,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	_ "github.com/lib/pq"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -82,6 +83,9 @@ func (e *BigQueryExecutor) QueryRowsIterator(
 	args ...interface{},
 ) (*bigquery.RowIterator, error) {
 	query := e.client.Query(sql)
+	for _, arg := range args {
+		query.Parameters = append(query.Parameters, bigquery.QueryParameter{Value: arg})
+	}
 
 	job, err := query.Run(ctx)
 	if err != nil {
@@ -93,7 +97,34 @@ func (e *BigQueryExecutor) QueryRowsIterator(
 		return nil, err
 	}
 
+	CollectBigQueryStats(ctx, job)
 	return it, nil
+}
+
+// CollectBigQueryStats populates the DriverStats with BigQuery job statistics
+// if a stats callback is registered in the context.
+func CollectBigQueryStats(ctx context.Context, job *bigquery.Job) {
+	ds := querystats.GetDriverStats(ctx)
+	if ds == nil {
+		return
+	}
+	status := job.LastStatus()
+	if status == nil || status.Statistics == nil {
+		return
+	}
+
+	stats := querystats.QueryStats{
+		QueryID:   job.ID(),
+		BytesRead: querystats.Int64Ptr(status.Statistics.TotalBytesProcessed),
+	}
+
+	if qs, ok := status.Statistics.Details.(*bigquery.QueryStatistics); ok {
+		stats.BytesBilled = querystats.Int64Ptr(qs.TotalBytesBilled)
+		stats.SlotMillis = querystats.Int64Ptr(qs.SlotMillis)
+		stats.CacheHit = querystats.BoolPtr(qs.CacheHit)
+	}
+
+	ds.Set(stats)
 }
 
 func (e *BigQueryExecutor) GetBigQueryClient() *bigquery.Client {

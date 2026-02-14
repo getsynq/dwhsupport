@@ -2,10 +2,13 @@ package clickhouse
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querystats"
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -32,14 +35,20 @@ func (s *ClickhouseSuite) TestSomething() {
 	ctx := context.TODO()
 	execer, err := NewClickhouseExecutor(ctx, &ClickhouseConf{
 		Hostname:        "localhost",
-		Port:            9440,
+		Port:            9000,
 		Username:        "default",
-		Password:        "",
+		Password:        "default",
 		DefaultDatabase: "default",
+		NoSsl:           true,
 	})
 	s.NoError(err)
 	s.NotNil(execer)
 	defer execer.Close()
+
+	ctx = querystats.WithCallback(ctx, func(stats querystats.QueryStats) {
+		jsonBytes, _ := json.Marshal(stats)
+		logging.GetLogger(ctx).Printf("Query stats: %s", string(jsonBytes))
+	})
 
 	q := NewQuerier[res](execer)
 	res, err := q.QueryMany(
@@ -49,5 +58,4 @@ func (s *ClickhouseSuite) TestSomething() {
 	)
 	s.Require().NoError(err)
 	s.Require().NotEmpty(res)
-
 }
