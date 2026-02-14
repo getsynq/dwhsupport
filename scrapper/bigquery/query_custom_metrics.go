@@ -8,11 +8,17 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"cloud.google.com/go/civil"
+	execbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"google.golang.org/api/iterator"
 )
 
 func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	// Create a query using the BigQuery executor
 	query := e.executor.GetBigQueryClient().Query(sql)
 
@@ -27,6 +33,9 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 	if err != nil {
 		return nil, err
 	}
+
+	// Collect BigQuery job statistics
+	execbigquery.CollectBigQueryStats(ctx, job)
 
 	// Get the schema to extract column names
 	schema := it.Schema
@@ -45,8 +54,10 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 			break
 		}
 		if err != nil {
+			collector.SetRowsProduced(rowCount)
 			return nil, err
 		}
+		rowCount++
 
 		customRow := &scrapper.CustomMetricsRow{
 			ColumnValues: make([]*scrapper.ColumnValue, 0, len(columns)),
@@ -116,5 +127,6 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 		result = append(result, customRow)
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return result, nil
 }

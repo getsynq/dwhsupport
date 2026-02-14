@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/jmoiron/sqlx"
 
@@ -84,12 +85,39 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 }
 
 func (e *ClickhouseExecutor) QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error) {
+	ctx = EnrichClickhouseContext(ctx)
 	rows, err := e.db.QueryxContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}
 
 	return rows, nil
+}
+
+// EnrichClickhouseContext wraps the context with ClickHouse-specific callbacks
+// (WithProgress, WithProfileInfo) when a querystats callback is registered.
+// Creates or reuses a DriverStats accumulator so the Collector in stdsql helpers
+// can merge the driver-specific stats at Finish() time.
+func EnrichClickhouseContext(ctx context.Context) context.Context {
+	ds, ctx := querystats.GetOrCreateDriverStats(ctx)
+	if ds == nil {
+		return ctx
+	}
+	return clickhouse.Context(ctx,
+		clickhouse.WithProgress(func(p *clickhouse.Progress) {
+			ds.Set(querystats.QueryStats{
+				RowsRead:  querystats.Int64Ptr(int64(p.Rows)),
+				BytesRead: querystats.Int64Ptr(int64(p.Bytes)),
+			})
+		}),
+		clickhouse.WithProfileInfo(func(p *clickhouse.ProfileInfo) {
+			ds.Set(querystats.QueryStats{
+				RowsRead:  querystats.Int64Ptr(int64(p.Rows)),
+				BytesRead: querystats.Int64Ptr(int64(p.Bytes)),
+				Blocks:    querystats.Int64Ptr(int64(p.Blocks)),
+			})
+		}),
+	)
 }
 
 func (e *ClickhouseExecutor) Exec(ctx context.Context, q string) error {

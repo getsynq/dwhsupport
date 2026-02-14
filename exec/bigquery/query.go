@@ -5,6 +5,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/pkg/errors"
 	"google.golang.org/api/iterator"
 )
@@ -22,6 +23,10 @@ func (q *Querier[T]) Close() error {
 }
 
 func (q *Querier[T]) QueryMaps(ctx context.Context, sql string) ([]exec.QueryMapResult, error) {
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	it, err := q.conn.QueryRowsIterator(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -37,9 +42,11 @@ func (q *Querier[T]) QueryMaps(ctx context.Context, sql string) ([]exec.QueryMap
 			break
 		}
 		if err != nil {
+			collector.SetRowsProduced(rowCount)
 			return nil, err
 		}
 
+		rowCount++
 		for k, v := range row {
 			result[k] = v
 		}
@@ -47,6 +54,7 @@ func (q *Querier[T]) QueryMaps(ctx context.Context, sql string) ([]exec.QueryMap
 		results = append(results, result)
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return results, nil
 }
 
@@ -64,27 +72,31 @@ func (q *Querier[T]) QueryMany(
 		opt(qq)
 	}
 
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	rows, err := q.conn.QueryRowsIterator(ctx, qq.Sql, qq.Args...)
 	if err != nil {
 		return nil, err
 	}
-	counter := 0
 	results := make([]*T, 0)
 	for {
-		counter++
-
 		var result T
 		err = rows.Next(&result)
 		if err == iterator.Done {
 			break
 		}
 		if err != nil {
+			collector.SetRowsProduced(rowCount)
 			return nil, err
 		}
 
+		rowCount++
 		results = append(results, &result)
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return results, nil
 }
 
@@ -99,6 +111,10 @@ func (q *Querier[T]) QueryAndProcessMany(
 		opt(qq)
 	}
 
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	rows, err := q.conn.QueryRowsIterator(ctx, qq.Sql, qq.Args...)
 	if err != nil {
 		return err
@@ -111,13 +127,16 @@ func (q *Querier[T]) QueryAndProcessMany(
 			break
 		}
 		if err != nil {
+			collector.SetRowsProduced(rowCount)
 			return err
 		}
 
+		rowCount++
 		results = append(results, &result)
 		if len(results) >= qq.ProcessBatchSize {
 			err = handler(ctx, results)
 			if err != nil {
+				collector.SetRowsProduced(rowCount)
 				return err
 			}
 			results = nil
@@ -126,9 +145,11 @@ func (q *Querier[T]) QueryAndProcessMany(
 	if len(results) > 0 {
 		err = handler(ctx, results)
 		if err != nil {
+			collector.SetRowsProduced(rowCount)
 			return err
 		}
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return nil
 }

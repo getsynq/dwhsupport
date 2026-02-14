@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -20,6 +21,10 @@ func QueryAndProcessMany[T any](
 		opt(queryMany)
 	}
 
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	rows, err := conn.QueryxContext(ctx, queryMany.Sql, queryMany.Args...)
 	if err != nil {
 		return err
@@ -29,14 +34,17 @@ func QueryAndProcessMany[T any](
 	results := make([]*T, 0)
 	for rows.Next() {
 		counter++
+		rowCount++
 		err = rows.Err()
 		if err != nil {
+			collector.SetRowsProduced(rowCount)
 			return err
 		}
 
 		var result T
 		processed := &result
 		if err := rows.StructScan(&result); err != nil {
+			collector.SetRowsProduced(rowCount)
 			return err
 		}
 
@@ -44,6 +52,7 @@ func QueryAndProcessMany[T any](
 			if processed != nil {
 				processed, err = processor(processed)
 				if err != nil {
+					collector.SetRowsProduced(rowCount)
 					return err
 				}
 			}
@@ -58,6 +67,7 @@ func QueryAndProcessMany[T any](
 			err = handler(ctx, results)
 
 			if err != nil {
+				collector.SetRowsProduced(rowCount)
 				return err
 			}
 			// clear the slice
@@ -67,6 +77,7 @@ func QueryAndProcessMany[T any](
 
 	err = rows.Err()
 	if err != nil {
+		collector.SetRowsProduced(rowCount)
 		return err
 	}
 
@@ -74,10 +85,12 @@ func QueryAndProcessMany[T any](
 	if len(results) > 0 {
 		err = handler(ctx, results)
 		if err != nil {
+			collector.SetRowsProduced(rowCount)
 			return err
 		}
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return nil
 }
 
@@ -86,6 +99,11 @@ func QueryMany[T any](ctx context.Context, conn *sqlx.DB, sql string, opts ...ex
 	for _, opt := range opts {
 		opt(queryMany)
 	}
+
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	rows, err := conn.QueryxContext(ctx, queryMany.Sql, queryMany.Args...)
 	if err != nil {
 		return nil, err
@@ -93,10 +111,12 @@ func QueryMany[T any](ctx context.Context, conn *sqlx.DB, sql string, opts ...ex
 
 	results := make([]*T, 0)
 	for rows.Next() {
+		rowCount++
 		result := *new(T)
 		processed := &result
 
 		if err := rows.StructScan(&result); err != nil {
+			collector.SetRowsProduced(rowCount)
 			return nil, err
 		}
 
@@ -104,6 +124,7 @@ func QueryMany[T any](ctx context.Context, conn *sqlx.DB, sql string, opts ...ex
 			if processed != nil {
 				processed, err = processor(processed)
 				if err != nil {
+					collector.SetRowsProduced(rowCount)
 					return nil, err
 				}
 			}
@@ -115,13 +136,19 @@ func QueryMany[T any](ctx context.Context, conn *sqlx.DB, sql string, opts ...ex
 	}
 
 	if err := rows.Err(); err != nil {
+		collector.SetRowsProduced(rowCount)
 		return nil, err
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return results, nil
 }
 
 func QueryMaps(ctx context.Context, conn *sqlx.DB, sql string) ([]exec.QueryMapResult, error) {
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	rows, err := conn.QueryxContext(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -129,9 +156,11 @@ func QueryMaps(ctx context.Context, conn *sqlx.DB, sql string) ([]exec.QueryMapR
 
 	results := make([]exec.QueryMapResult, 0)
 	for rows.Next() {
+		rowCount++
 		result := make(exec.QueryMapResult)
 
 		if err := rows.MapScan(result); err != nil {
+			collector.SetRowsProduced(rowCount)
 			return nil, err
 		}
 
@@ -139,9 +168,11 @@ func QueryMaps(ctx context.Context, conn *sqlx.DB, sql string) ([]exec.QueryMapR
 	}
 
 	if err := rows.Err(); err != nil {
+		collector.SetRowsProduced(rowCount)
 		return nil, err
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return results, nil
 }
 

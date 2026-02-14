@@ -8,11 +8,16 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/jmoiron/sqlx"
 )
 
 func QueryCustomMetrics(ctx context.Context, db *sqlx.DB, sqlQuery string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	var rowCount int64
+
 	sqlRows, err := db.QueryContext(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, err
@@ -32,7 +37,9 @@ func QueryCustomMetrics(ctx context.Context, db *sqlx.DB, sqlQuery string, args 
 	result := make([]*scrapper.CustomMetricsRow, 0)
 
 	for sqlRows.Next() {
+		rowCount++
 		if err := sqlRows.Err(); err != nil {
+			collector.SetRowsProduced(rowCount)
 			return nil, err
 		}
 
@@ -43,6 +50,7 @@ func QueryCustomMetrics(ctx context.Context, db *sqlx.DB, sqlQuery string, args 
 		}
 
 		if err := sqlRows.Scan(scanners...); err != nil {
+			collector.SetRowsProduced(rowCount)
 			return nil, err
 		}
 
@@ -86,9 +94,11 @@ func QueryCustomMetrics(ctx context.Context, db *sqlx.DB, sqlQuery string, args 
 	}
 
 	if err := sqlRows.Err(); err != nil {
+		collector.SetRowsProduced(rowCount)
 		return nil, err
 	}
 
+	collector.SetRowsProduced(rowCount)
 	return result, nil
 }
 
