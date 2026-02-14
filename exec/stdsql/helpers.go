@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/jmoiron/sqlx"
 )
@@ -20,6 +21,7 @@ func QueryAndProcessMany[T any](
 	for _, opt := range opts {
 		opt(queryMany)
 	}
+	queryMany.Sql = querycontext.AppendSQLComment(ctx, queryMany.Sql)
 
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
@@ -99,6 +101,7 @@ func QueryMany[T any](ctx context.Context, conn *sqlx.DB, sql string, opts ...ex
 	for _, opt := range opts {
 		opt(queryMany)
 	}
+	queryMany.Sql = querycontext.AppendSQLComment(ctx, queryMany.Sql)
 
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
@@ -145,6 +148,8 @@ func QueryMany[T any](ctx context.Context, conn *sqlx.DB, sql string, opts ...ex
 }
 
 func QueryMaps(ctx context.Context, conn *sqlx.DB, sql string) ([]exec.QueryMapResult, error) {
+	sql = querycontext.AppendSQLComment(ctx, sql)
+
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
 	var rowCount int64
@@ -177,6 +182,7 @@ func QueryMaps(ctx context.Context, conn *sqlx.DB, sql string) ([]exec.QueryMapR
 }
 
 func Exec(ctx context.Context, db *sqlx.DB, sql string) error {
+	sql = querycontext.AppendSQLComment(ctx, sql)
 	_, err := db.ExecContext(ctx, sql)
 	return err
 }

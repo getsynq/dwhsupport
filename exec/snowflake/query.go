@@ -5,7 +5,9 @@ import (
 
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/querier"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	"github.com/snowflakedb/gosnowflake"
 )
 
 func NewQuerier[T any](conn *SnowflakeExecutor) querier.Querier[T] {
@@ -23,7 +25,13 @@ type snowflakeQuerier[T any] struct {
 }
 
 func (q *snowflakeQuerier[T]) enrichCtx(ctx context.Context) context.Context {
-	return EnrichSnowflakeContext(ctx, q.exec.db.DB)
+	ctx = EnrichSnowflakeContext(ctx, q.exec.db.DB)
+	if qc := querycontext.GetQueryContext(ctx); qc != nil {
+		if tag := qc.FormatAsJSON(); tag != "" {
+			ctx = gosnowflake.WithQueryTag(ctx, tag)
+		}
+	}
+	return ctx
 }
 
 func (q *snowflakeQuerier[T]) QueryMany(ctx context.Context, sql string, opts ...exec.QueryManyOpt[T]) ([]*T, error) {

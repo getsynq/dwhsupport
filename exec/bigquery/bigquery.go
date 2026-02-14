@@ -7,6 +7,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	_ "github.com/lib/pq"
 	"google.golang.org/api/iterator"
@@ -63,7 +64,11 @@ func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExec
 }
 
 func (e *BigQueryExecutor) Exec(ctx context.Context, sql string) error {
+	sql = querycontext.AppendSQLComment(ctx, sql)
 	query := e.client.Query(sql)
+	if qc := querycontext.GetQueryContext(ctx); qc != nil {
+		query.Labels = qc.AsBigQueryLabels()
+	}
 	job, err := query.Run(ctx)
 	if err != nil {
 		return err
@@ -82,7 +87,11 @@ func (e *BigQueryExecutor) QueryRowsIterator(
 	sql string,
 	args ...interface{},
 ) (*bigquery.RowIterator, error) {
+	sql = querycontext.AppendSQLComment(ctx, sql)
 	query := e.client.Query(sql)
+	if qc := querycontext.GetQueryContext(ctx); qc != nil {
+		query.Labels = qc.AsBigQueryLabels()
+	}
 	for _, arg := range args {
 		query.Parameters = append(query.Parameters, bigquery.QueryParameter{Value: arg})
 	}
