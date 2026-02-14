@@ -10,6 +10,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -103,7 +104,10 @@ func EnrichClickhouseContext(ctx context.Context) context.Context {
 	if ds == nil {
 		return ctx
 	}
+	queryID := uuid.New().String()
+	ds.Set(querystats.QueryStats{QueryID: queryID})
 	return clickhouse.Context(ctx,
+		clickhouse.WithQueryID(queryID),
 		clickhouse.WithProgress(func(p *clickhouse.Progress) {
 			ds.Set(querystats.QueryStats{
 				RowsRead:  querystats.Int64Ptr(int64(p.Rows)),

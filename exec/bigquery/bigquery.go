@@ -114,6 +114,7 @@ func CollectBigQueryStats(ctx context.Context, job *bigquery.Job) {
 	}
 
 	stats := querystats.QueryStats{
+		QueryID:   job.ID(),
 		BytesRead: querystats.Int64Ptr(status.Statistics.TotalBytesProcessed),
 	}
 

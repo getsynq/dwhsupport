@@ -9,6 +9,9 @@ import (
 // QueryStats holds execution statistics collected from the database driver.
 // Fields are pointers — nil means the metric is not available for the driver.
 type QueryStats struct {
+	// QueryID is the database-assigned query identifier for auditing.
+	// Available for BigQuery (job ID), Snowflake, ClickHouse (client-generated).
+	QueryID string `json:"query_id,omitempty"`
 	// RowsRead is the number of rows read/scanned by the query engine.
 	RowsRead *int64 `json:"rows_read,omitempty"`
 	// BytesRead is the number of bytes read/scanned by the query engine.
@@ -34,8 +37,11 @@ type QueryStats struct {
 	Duration time.Duration `json:"duration"`
 }
 
-// Merge copies non-nil fields from other into s, overwriting existing values.
+// Merge copies non-nil/non-zero fields from other into s, overwriting existing values.
 func (s *QueryStats) Merge(other QueryStats) {
+	if other.QueryID != "" {
+		s.QueryID = other.QueryID
+	}
 	if other.RowsRead != nil {
 		s.RowsRead = other.RowsRead
 	}
@@ -74,6 +80,7 @@ type Callback func(QueryStats)
 
 type callbackKey struct{}
 type driverStatsKey struct{}
+type queryStatsFetchKey struct{}
 
 // WithCallback attaches a stats callback to the context.
 // When a query is executed with this context, the callback will be invoked
@@ -88,12 +95,26 @@ func GetCallback(ctx context.Context) (Callback, bool) {
 	return cb, ok
 }
 
+// WithQueryStatsFetch marks the context so that drivers which require extra API calls
+// to fetch detailed stats (e.g. Snowflake's GetQueryStatus) will do so.
+// Without this flag, those drivers only collect cheap metrics like the query ID.
+func WithQueryStatsFetch(ctx context.Context) context.Context {
+	return context.WithValue(ctx, queryStatsFetchKey{}, true)
+}
+
+// IsQueryStatsFetch reports whether the context has the query-stats-fetch flag set.
+func IsQueryStatsFetch(ctx context.Context) bool {
+	v, _ := ctx.Value(queryStatsFetchKey{}).(bool)
+	return v
+}
+
 // DriverStats is a thread-safe accumulator for driver-specific stats.
 // Database executors populate this via ClickHouse callbacks, BigQuery job stats, etc.
 // The Collector merges these into the final QueryStats on Finish().
 type DriverStats struct {
-	mu    sync.Mutex
-	stats QueryStats
+	mu       sync.Mutex
+	stats    QueryStats
+	onFinish []func()
 }
 
 // Set replaces the accumulated driver stats with a merge.
@@ -108,6 +129,26 @@ func (d *DriverStats) Get() QueryStats {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.stats
+}
+
+// AddOnFinish registers a function to be called when the Collector finishes,
+// right before merging DriverStats into the final QueryStats. This is useful for
+// drivers that need to collect stats after the query completes (e.g. Snowflake
+// query ID from a channel).
+func (d *DriverStats) AddOnFinish(fn func()) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.onFinish = append(d.onFinish, fn)
+}
+
+// runOnFinish executes all registered onFinish hooks.
+func (d *DriverStats) runOnFinish() {
+	d.mu.Lock()
+	hooks := d.onFinish
+	d.mu.Unlock()
+	for _, fn := range hooks {
+		fn()
+	}
 }
 
 // WithDriverStats attaches a DriverStats accumulator to the context.
@@ -173,6 +214,7 @@ func (c *Collector) Finish() {
 	}
 	c.Stats.Duration = time.Since(c.start)
 	if c.driverStats != nil {
+		c.driverStats.runOnFinish()
 		c.Stats.Merge(c.driverStats.Get())
 	}
 	c.cb(c.Stats)
@@ -185,6 +227,15 @@ func (c *Collector) SetRowsProduced(n int64) {
 		return
 	}
 	c.Stats.RowsProduced = Int64Ptr(n)
+}
+
+// SetQueryID sets the database-assigned query identifier.
+// Safe to call on nil Collector.
+func (c *Collector) SetQueryID(id string) {
+	if c == nil {
+		return
+	}
+	c.Stats.QueryID = id
 }
 
 // Int64Ptr returns a pointer to the given int64 value.

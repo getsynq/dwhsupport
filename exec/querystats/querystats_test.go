@@ -158,6 +158,94 @@ func TestQueryStats_JSON(t *testing.T) {
 	}
 }
 
+func TestQueryID_MergedFromDriverStats(t *testing.T) {
+	var received QueryStats
+	ctx := WithCallback(context.Background(), func(stats QueryStats) {
+		received = stats
+	})
+
+	collector, ctx := Start(ctx)
+	ds := GetDriverStats(ctx)
+	ds.Set(QueryStats{QueryID: "job-abc-123"})
+	collector.SetRowsProduced(1)
+	collector.Finish()
+
+	if received.QueryID != "job-abc-123" {
+		t.Fatalf("expected QueryID=job-abc-123, got %q", received.QueryID)
+	}
+}
+
+func TestSetQueryID(t *testing.T) {
+	var received QueryStats
+	ctx := WithCallback(context.Background(), func(stats QueryStats) {
+		received = stats
+	})
+
+	collector, _ := Start(ctx)
+	collector.SetQueryID("direct-id")
+	collector.Finish()
+
+	if received.QueryID != "direct-id" {
+		t.Fatalf("expected QueryID=direct-id, got %q", received.QueryID)
+	}
+
+	// Safe on nil
+	var nilCollector *Collector
+	nilCollector.SetQueryID("noop")
+}
+
+func TestQueryStatsFetch(t *testing.T) {
+	ctx := context.Background()
+	if IsQueryStatsFetch(ctx) {
+		t.Fatal("expected query stats fetch to be false by default")
+	}
+	ctx = WithQueryStatsFetch(ctx)
+	if !IsQueryStatsFetch(ctx) {
+		t.Fatal("expected query stats fetch to be true after WithQueryStatsFetch")
+	}
+}
+
+func TestMerge_QueryID(t *testing.T) {
+	s := QueryStats{QueryID: "old"}
+	s.Merge(QueryStats{QueryID: "new"})
+	if s.QueryID != "new" {
+		t.Fatalf("expected QueryID=new, got %q", s.QueryID)
+	}
+
+	// Empty QueryID should not overwrite
+	s.Merge(QueryStats{})
+	if s.QueryID != "new" {
+		t.Fatalf("expected QueryID=new after empty merge, got %q", s.QueryID)
+	}
+}
+
+func TestQueryStats_JSON_WithQueryID(t *testing.T) {
+	stats := QueryStats{
+		QueryID:  "bq-job-123",
+		Duration: time.Second,
+	}
+	data, err := json.Marshal(stats)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	var decoded QueryStats
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if decoded.QueryID != "bq-job-123" {
+		t.Fatalf("expected QueryID=bq-job-123, got %q", decoded.QueryID)
+	}
+
+	// Empty QueryID should be omitted
+	sparse := QueryStats{Duration: time.Second}
+	data, _ = json.Marshal(sparse)
+	var m map[string]interface{}
+	json.Unmarshal(data, &m)
+	if _, ok := m["query_id"]; ok {
+		t.Fatal("expected query_id to be omitted from JSON when empty")
+	}
+}
+
 func TestHelpers(t *testing.T) {
 	v := Int64Ptr(42)
 	if *v != 42 {
