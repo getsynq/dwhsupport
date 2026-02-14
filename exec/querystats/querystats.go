@@ -10,28 +10,28 @@ import (
 // Fields are pointers — nil means the metric is not available for the driver.
 type QueryStats struct {
 	// RowsRead is the number of rows read/scanned by the query engine.
-	RowsRead *int64
+	RowsRead *int64 `json:"rows_read,omitempty"`
 	// BytesRead is the number of bytes read/scanned by the query engine.
-	BytesRead *int64
+	BytesRead *int64 `json:"bytes_read,omitempty"`
 	// RowsProduced is the number of result rows returned to the caller.
-	RowsProduced *int64
+	RowsProduced *int64 `json:"rows_produced,omitempty"`
 	// CacheHit indicates whether the query result was served from cache.
-	CacheHit *bool
+	CacheHit *bool `json:"cache_hit,omitempty"`
 	// BytesBilled is the number of bytes billed (BigQuery).
-	BytesBilled *int64
+	BytesBilled *int64 `json:"bytes_billed,omitempty"`
 	// SlotMillis is the slot time consumed (BigQuery).
-	SlotMillis *int64
+	SlotMillis *int64 `json:"slot_millis,omitempty"`
 	// Blocks is the number of data blocks read (ClickHouse).
-	Blocks *int64
+	Blocks *int64 `json:"blocks,omitempty"`
 	// CompletedSplits is the number of completed splits (Trino).
-	CompletedSplits *int64
+	CompletedSplits *int64 `json:"completed_splits,omitempty"`
 	// CPUTimeMillis is the CPU time consumed (Trino).
-	CPUTimeMillis *int64
+	CPUTimeMillis *int64 `json:"cpu_time_millis,omitempty"`
 	// WallTimeMillis is the wall time reported by the engine (Trino).
-	WallTimeMillis *int64
+	WallTimeMillis *int64 `json:"wall_time_millis,omitempty"`
 	// Duration is the wall-clock time of the query as measured by the client.
 	// This field is always set.
-	Duration time.Duration
+	Duration time.Duration `json:"duration"`
 }
 
 // Merge copies non-nil fields from other into s, overwriting existing values.

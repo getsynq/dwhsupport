@@ -2,6 +2,7 @@ package querystats
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -106,6 +107,54 @@ func TestDriverStats_ThreadSafety(t *testing.T) {
 	// Both should be set (order doesn't matter for non-overlapping fields)
 	if got.RowsRead == nil || got.BytesRead == nil {
 		t.Fatalf("expected both fields set, got RowsRead=%v BytesRead=%v", got.RowsRead, got.BytesRead)
+	}
+}
+
+func TestQueryStats_JSON(t *testing.T) {
+	stats := QueryStats{
+		RowsRead:     Int64Ptr(1000),
+		BytesRead:    Int64Ptr(2048),
+		RowsProduced: Int64Ptr(50),
+		CacheHit:     BoolPtr(true),
+		Duration:     500 * time.Millisecond,
+	}
+
+	data, err := json.Marshal(stats)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+
+	var decoded QueryStats
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+
+	if *decoded.RowsRead != 1000 {
+		t.Fatalf("expected RowsRead=1000, got %d", *decoded.RowsRead)
+	}
+	if *decoded.BytesRead != 2048 {
+		t.Fatalf("expected BytesRead=2048, got %d", *decoded.BytesRead)
+	}
+	if *decoded.RowsProduced != 50 {
+		t.Fatalf("expected RowsProduced=50, got %d", *decoded.RowsProduced)
+	}
+	if !*decoded.CacheHit {
+		t.Fatal("expected CacheHit=true")
+	}
+	if decoded.Duration != 500*time.Millisecond {
+		t.Fatalf("expected Duration=500ms, got %v", decoded.Duration)
+	}
+
+	// Nil fields should be omitted
+	sparse := QueryStats{Duration: time.Second}
+	data, _ = json.Marshal(sparse)
+	var m map[string]interface{}
+	json.Unmarshal(data, &m)
+	if _, ok := m["rows_read"]; ok {
+		t.Fatal("expected rows_read to be omitted from JSON")
+	}
+	if _, ok := m["duration"]; !ok {
+		t.Fatal("expected duration to be present in JSON")
 	}
 }
 
