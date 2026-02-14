@@ -83,6 +83,9 @@ func (e *BigQueryExecutor) QueryRowsIterator(
 	args ...interface{},
 ) (*bigquery.RowIterator, error) {
 	query := e.client.Query(sql)
+	for _, arg := range args {
+		query.Parameters = append(query.Parameters, bigquery.QueryParameter{Value: arg})
+	}
 
 	job, err := query.Run(ctx)
 	if err != nil {

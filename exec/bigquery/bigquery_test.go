@@ -1,7 +1,8 @@
-package clickhouse
+package bigquery
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -11,50 +12,52 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type ClickhouseSuite struct {
+type BigquerySuite struct {
 	suite.Suite
 }
 
-func TestClickhouseSuite(t *testing.T) {
+func TestBigquerySuite(t *testing.T) {
 	if len(os.Getenv("CI")) > 0 {
 		t.SkipNow()
 	}
 
-	suite.Run(t, new(ClickhouseSuite))
+	suite.Run(t, new(BigquerySuite))
 }
 
-type res struct {
-	TableCatalog string `db:"table_catalog"`
-	TableSchema  string `db:"table_schema"`
-	TableName    string `db:"table_name"`
-	TableType    string `db:"table_type"`
+type paramRes struct {
+	Val int64 `bigquery:"val"`
 }
 
-func (s *ClickhouseSuite) TestSomething() {
+func (s *BigquerySuite) TestPositionalParams() {
 	ctx := context.TODO()
-	execer, err := NewClickhouseExecutor(ctx, &ClickhouseConf{
-		Hostname:        "localhost",
-		Port:            9000,
-		Username:        "default",
-		Password:        "default",
-		DefaultDatabase: "default",
-		NoSsl:           true,
+	execer, err := NewBigqueryExecutor(ctx, &BigQueryConf{
+		ProjectId:       "nifty-motif-341212",
+		CredentialsFile: "../../sa.json",
 	})
-	s.NoError(err)
-	s.NotNil(execer)
+	s.Require().NoError(err)
+	s.Require().NotNil(execer)
 	defer execer.Close()
 
+	var receivedStats *querystats.QueryStats
 	ctx = querystats.WithCallback(ctx, func(stats querystats.QueryStats) {
-		logging.GetLogger(ctx).Printf("Query stats: rows=%d bytes=%d duration=%s",
-			*stats.RowsProduced, *stats.BytesRead, stats.Duration)
+		receivedStats = &stats
+		jsonBytes, _ := json.Marshal(stats)
+		logging.GetLogger(ctx).Printf("Query stats: %s", string(jsonBytes))
 	})
 
-	q := NewQuerier[res](execer)
-	res, err := q.QueryMany(
+	q := NewQuerier[paramRes](execer)
+	results, err := q.QueryMany(
 		ctx,
-		"SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables WHERE table_catalog = ?",
-		exec.WithArgs[res]("system"),
+		"SELECT ? AS val",
+		exec.WithArgs[paramRes](42),
 	)
+
 	s.Require().NoError(err)
-	s.Require().NotEmpty(res)
+	s.Require().Len(results, 1)
+	s.Equal(int64(42), results[0].Val)
+
+	s.Require().NotNil(receivedStats, "query stats callback should have been called")
+	s.NotNil(receivedStats.BytesRead)
+	s.NotNil(receivedStats.RowsProduced)
+	s.Equal(int64(1), *receivedStats.RowsProduced)
 }

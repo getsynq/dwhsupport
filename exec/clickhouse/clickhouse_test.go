@@ -2,6 +2,7 @@ package clickhouse
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -45,8 +46,8 @@ func (s *ClickhouseSuite) TestSomething() {
 	defer execer.Close()
 
 	ctx = querystats.WithCallback(ctx, func(stats querystats.QueryStats) {
-		logging.GetLogger(ctx).Printf("Query stats: rows=%d bytes=%d duration=%s",
-			*stats.RowsProduced, *stats.BytesRead, stats.Duration)
+		jsonBytes, _ := json.Marshal(stats)
+		logging.GetLogger(ctx).Printf("Query stats: %s", string(jsonBytes))
 	})
 
 	q := NewQuerier[res](execer)
