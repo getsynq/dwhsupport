@@ -274,4 +274,5 @@ const (
 	ConstraintTypePartitionBy     = "PARTITION BY"
 	ConstraintTypeClusterBy       = "CLUSTER BY"
 	ConstraintTypeDistributionKey = "DISTRIBUTION KEY"
+	ConstraintTypeProjection      = "PROJECTION"
 )
