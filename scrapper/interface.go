@@ -35,7 +35,7 @@ type Scrapper interface {
 	QuerySegments(ctx context.Context, sql string, args ...any) ([]*SegmentRow, error)
 	QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*CustomMetricsRow, error)
 	QueryShape(ctx context.Context, sql string) ([]*QueryShapeColumn, error)
-	QueryTableConstraints(ctx context.Context, schema string, table string) ([]*TableConstraintRow, error)
+	QueryTableConstraints(ctx context.Context, database string, schema string, table string) ([]*TableConstraintRow, error)
 	// This will close underlying execer, such scrapper can't be used anymore
 	Close() error
 }

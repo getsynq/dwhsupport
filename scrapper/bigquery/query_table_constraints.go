@@ -8,7 +8,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (e *BigQueryScrapper) QueryTableConstraints(ctx context.Context, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
+func (e *BigQueryScrapper) QueryTableConstraints(ctx context.Context, database string, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
 	tableMeta, err := e.executor.GetBigQueryClient().Dataset(schema).Table(table).Metadata(ctx)
 	if err != nil {
 		if errIsNotFound(err) {

@@ -21,18 +21,23 @@ type showPrimaryKeyRow struct {
 	SchemaEvolution string `db:"schema_evolution_record"`
 }
 
-func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
+func (e *SnowflakeScrapper) QueryTableConstraints(
+	ctx context.Context,
+	database string,
+	schema string,
+	table string,
+) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
 	// Query primary keys
-	pkRows, err := e.queryPrimaryKeys(ctx, schema, table)
+	pkRows, err := e.queryPrimaryKeys(ctx, database, schema, table)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query primary keys")
 	}
 	results = append(results, pkRows...)
 
 	// Query clustering keys
-	ckRows, err := e.queryClusteringKeys(ctx, schema, table)
+	ckRows, err := e.queryClusteringKeys(ctx, database, schema, table)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to query clustering keys")
 	}
@@ -41,10 +46,15 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context, schema st
 	return results, nil
 }
 
-func (e *SnowflakeScrapper) queryPrimaryKeys(ctx context.Context, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
+func (e *SnowflakeScrapper) queryPrimaryKeys(
+	ctx context.Context,
+	database string,
+	schema string,
+	table string,
+) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
-	rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf("SHOW PRIMARY KEYS IN %s.%s.%s", e.conf.Databases[0], schema, table))
+	rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf("SHOW PRIMARY KEYS IN %s.%s.%s", database, schema, table))
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +84,17 @@ type clusteringKeyRow struct {
 	ClusterBy string `db:"cluster_by"`
 }
 
-func (e *SnowflakeScrapper) queryClusteringKeys(ctx context.Context, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
+func (e *SnowflakeScrapper) queryClusteringKeys(
+	ctx context.Context,
+	database string,
+	schema string,
+	table string,
+) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
 	query := fmt.Sprintf(
 		`SELECT cluster_by AS "cluster_by" FROM %s.information_schema.tables WHERE table_schema = '%s' AND table_name = '%s' AND cluster_by IS NOT NULL AND cluster_by != ''`,
-		e.conf.Databases[0],
+		database,
 		strings.ToUpper(schema),
 		strings.ToUpper(table),
 	)
@@ -110,7 +125,7 @@ func (e *SnowflakeScrapper) queryClusteringKeys(ctx context.Context, schema stri
 			}
 			results = append(results, &scrapper.TableConstraintRow{
 				Instance:       e.conf.Account,
-				Database:       e.conf.Databases[0],
+				Database:       database,
 				Schema:         schema,
 				Table:          table,
 				ConstraintName: "clustering_key",

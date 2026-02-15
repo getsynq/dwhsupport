@@ -13,7 +13,7 @@ import (
 //go:embed query_table_constraints.sql
 var queryTableConstraintsSql string
 
-func (e *RedshiftScrapper) QueryTableConstraints(ctx context.Context, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
+func (e *RedshiftScrapper) QueryTableConstraints(ctx context.Context, database string, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
 	// Query primary keys and unique constraints

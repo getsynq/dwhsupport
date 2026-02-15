@@ -171,13 +171,13 @@ func (s *scrapperWrapper[K]) QueryShape(ctx context.Context, sql string) ([]*scr
 	return s.lease.Value().QueryShape(ctx, sql)
 }
 
-func (s *scrapperWrapper[K]) QueryTableConstraints(ctx context.Context, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
+func (s *scrapperWrapper[K]) QueryTableConstraints(ctx context.Context, database string, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.lease == nil || s.lease.Released() {
 		return nil, nil
 	}
-	return s.lease.Value().QueryTableConstraints(ctx, schema, table)
+	return s.lease.Value().QueryTableConstraints(ctx, database, schema, table)
 }
 
 func (s *scrapperWrapper[K]) Close() error {
