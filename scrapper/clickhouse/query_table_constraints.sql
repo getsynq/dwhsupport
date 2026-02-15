@@ -12,7 +12,5 @@ SELECT
     END AS constraint_type,
     toInt32(c.position) AS column_position
 FROM system.columns c
-WHERE c.database = ?
-    AND c.table = ?
-    AND (c.is_in_primary_key = 1 OR c.is_in_sorting_key = 1)
-ORDER BY constraint_name, c.position
+WHERE c.is_in_primary_key = 1 OR c.is_in_sorting_key = 1
+ORDER BY c.database, c.table, constraint_name, c.position

@@ -13,7 +13,5 @@ JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ord(attnum, position)
 JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ord.attnum
-WHERE n.nspname = $1
-    AND c.relname = $2
-    AND con.contype IN ('p', 'u')
-ORDER BY con.conname, ord.position
+WHERE con.contype IN ('p', 'u')
+ORDER BY n.nspname, c.relname, con.conname, ord.position

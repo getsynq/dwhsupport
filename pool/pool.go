@@ -381,4 +381,3 @@ func (p *Pool[K, V]) runCleanup() {
 		}
 	}
 }
-

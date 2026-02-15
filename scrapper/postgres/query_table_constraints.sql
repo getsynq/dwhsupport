@@ -10,7 +10,5 @@ JOIN information_schema.constraint_column_usage c
     ON tc.constraint_name = c.constraint_name
     AND tc.constraint_schema = c.constraint_schema
     AND tc.constraint_catalog = c.constraint_catalog
-WHERE tc.table_schema = $1
-    AND tc.table_name = $2
-    AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
-ORDER BY tc.constraint_name, c.ordinal_position
+WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+ORDER BY c.table_schema, c.table_name, tc.constraint_name, c.ordinal_position

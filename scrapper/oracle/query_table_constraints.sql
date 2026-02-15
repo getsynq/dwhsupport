@@ -12,7 +12,5 @@ FROM all_constraints c
 JOIN all_cons_columns cc
     ON c.constraint_name = cc.constraint_name
     AND c.owner = cc.owner
-WHERE cc.owner = :1
-    AND cc.table_name = :2
-    AND c.constraint_type IN ('P', 'U')
-ORDER BY cc.constraint_name, cc.position
+WHERE c.constraint_type IN ('P', 'U')
+ORDER BY cc.owner, cc.table_name, cc.constraint_name, cc.position

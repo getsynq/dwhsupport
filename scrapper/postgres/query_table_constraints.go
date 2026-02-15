@@ -12,9 +12,8 @@ import (
 //go:embed query_table_constraints.sql
 var queryTableConstraintsSql string
 
-func (e *PostgresScrapper) QueryTableConstraints(ctx context.Context, database string, schema string, table string) ([]*scrapper.TableConstraintRow, error) {
+func (e *PostgresScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	return stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), queryTableConstraintsSql,
-		dwhexec.WithArgs[scrapper.TableConstraintRow](schema, table),
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
