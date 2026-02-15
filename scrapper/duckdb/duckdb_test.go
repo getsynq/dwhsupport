@@ -411,6 +411,29 @@ func (s *LocalDuckDBScrapperSuite) TestQueryShape_StdSQL() {
 	s.Equal("DOUBLE", columns[2].NativeType)
 }
 
+func (s *LocalDuckDBScrapperSuite) TestQueryTableConstraints() {
+	constraints, err := s.duckdbScrapper.QueryTableConstraints(s.ctx)
+	s.Require().NoError(err)
+	s.NotEmpty(constraints, "Should return table constraints")
+
+	// Find primary key constraints from our test fixtures
+	var foundTestTablePK, foundAnotherTablePK bool
+	for _, c := range constraints {
+		s.Equal("test_instance", c.Instance)
+		if c.Schema == "test_schema" && c.Table == "test_table" && c.ConstraintType == scrapper.ConstraintTypePrimaryKey {
+			foundTestTablePK = true
+			s.Equal("id", c.ColumnName)
+		}
+		if c.Schema == "test_schema" && c.Table == "another_table" && c.ConstraintType == scrapper.ConstraintTypePrimaryKey {
+			foundAnotherTablePK = true
+			s.Equal("key", c.ColumnName)
+		}
+	}
+
+	s.True(foundTestTablePK, "Should find PRIMARY KEY constraint for test_table.id")
+	s.True(foundAnotherTablePK, "Should find PRIMARY KEY constraint for another_table.key")
+}
+
 func (s *LocalDuckDBScrapperSuite) TestQueryCustomMetrics_WithHugeInt() {
 	sql := `SELECT
 		name as segment_name,

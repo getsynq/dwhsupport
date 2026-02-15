@@ -240,3 +240,39 @@ type CustomMetricsRow struct {
 	Segments     []*SegmentValue
 	ColumnValues []*ColumnValue
 }
+
+// TableConstraintRow represents a constraint or key on a table column.
+// This covers traditional indexes, primary keys, unique constraints,
+// as well as warehouse-specific concepts like BigQuery partitioning/clustering,
+// ClickHouse sorting keys, and Snowflake clustering keys.
+type TableConstraintRow struct {
+	Instance       string `db:"instance"        json:"instance"        ch:"instance"        bigquery:"instance"`
+	Database       string `db:"database"        json:"database"        ch:"_database"       bigquery:"database"`
+	Schema         string `db:"schema"          json:"schema"          ch:"schema"          bigquery:"schema"`
+	Table          string `db:"table"           json:"table"           ch:"table"           bigquery:"table"`
+	ConstraintName string `db:"constraint_name" json:"constraint_name" ch:"constraint_name" bigquery:"constraint_name"`
+	ColumnName     string `db:"column_name"     json:"column_name"     ch:"column_name"     bigquery:"column_name"`
+	ConstraintType string `db:"constraint_type" json:"constraint_type" ch:"constraint_type" bigquery:"constraint_type"`
+	ColumnPosition int32  `db:"column_position" json:"column_position" ch:"column_position" bigquery:"column_position"`
+}
+
+func (r TableConstraintRow) TableFqn() DwhFqn {
+	return DwhFqn{
+		InstanceName: r.Instance,
+		DatabaseName: r.Database,
+		SchemaName:   r.Schema,
+		ObjectName:   r.Table,
+	}
+}
+
+// Constraint type constants
+const (
+	ConstraintTypePrimaryKey      = "PRIMARY KEY"
+	ConstraintTypeUniqueIndex     = "UNIQUE INDEX"
+	ConstraintTypeIndex           = "INDEX"
+	ConstraintTypeSortingKey      = "SORTING KEY"
+	ConstraintTypePartitionBy     = "PARTITION BY"
+	ConstraintTypeClusterBy       = "CLUSTER BY"
+	ConstraintTypeDistributionKey = "DISTRIBUTION KEY"
+	ConstraintTypeProjection      = "PROJECTION"
+)

@@ -94,12 +94,32 @@ func (s *LocalClickHouseScrapperSuite) setupTestFixtures() {
 		SELECT id, name, amount FROM test_clickhouse_scrapper WHERE is_active = 1
 	`)
 	s.Require().NoError(err)
+
+	// Create a table with compound ORDER BY, data skipping indexes, and partition key
+	// to test richer constraint extraction
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS test_clickhouse_constraints (
+			workspace String,
+			id String,
+			created_at DateTime,
+			category String,
+			assets Array(String),
+			target Array(String),
+			INDEX bloom_idx assets TYPE bloom_filter GRANULARITY 4,
+			INDEX minmax_idx created_at TYPE minmax GRANULARITY 3,
+			INDEX composite_idx arrayUnion(assets, target) TYPE bloom_filter(0.01) GRANULARITY 2
+		) ENGINE = MergeTree()
+		PARTITION BY toYYYYMM(created_at)
+		ORDER BY (workspace, created_at, id)
+	`)
+	s.Require().NoError(err)
 }
 
 func (s *LocalClickHouseScrapperSuite) cleanupTestFixtures() {
 	db := s.clickhouseScrapper.executor.GetDb()
 	db.Exec(`DROP VIEW IF EXISTS test_clickhouse_scrapper_view`)
 	db.Exec(`DROP TABLE IF EXISTS test_clickhouse_scrapper`)
+	db.Exec(`DROP TABLE IF EXISTS test_clickhouse_constraints`)
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryDatabases() {
@@ -312,6 +332,95 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithDecimal() {
 		// Decimal should be converted to DoubleValue via the Float64 interface
 		s.IsType(scrapper.DoubleValue(0), col.Value, "Decimal should be converted to DoubleValue")
 	}
+}
+
+func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
+	constraints, err := s.clickhouseScrapper.QueryTableConstraints(s.ctx)
+	s.Require().NoError(err)
+	s.NotEmpty(constraints, "Should return table constraints")
+
+	// Determine which schema the test tables were created in.
+	// The ClickHouse Go driver connects to the default database unless explicitly set,
+	// so tables created without a database prefix end up in "default".
+	var testSchema string
+	for _, c := range constraints {
+		if c.Table == "test_clickhouse_scrapper" {
+			testSchema = c.Schema
+			break
+		}
+	}
+	s.NotEmpty(testSchema, "Should find test_clickhouse_scrapper in constraints")
+
+	// Verify simple table (MergeTree ORDER BY id makes id both primary key and sorting key)
+	var foundSimplePK, foundSimpleSK bool
+	for _, c := range constraints {
+		if c.Schema == testSchema && c.Table == "test_clickhouse_scrapper" {
+			s.Equal("kernel_runs", c.Database, "Database should be set by post-processor")
+			if c.ConstraintType == scrapper.ConstraintTypePrimaryKey && c.ColumnName == "id" {
+				foundSimplePK = true
+			}
+			if c.ConstraintType == scrapper.ConstraintTypeSortingKey && c.ColumnName == "id" {
+				foundSimpleSK = true
+			}
+		}
+	}
+	s.True(foundSimplePK, "Should find PRIMARY KEY for test_clickhouse_scrapper.id")
+	s.True(foundSimpleSK, "Should find SORTING KEY for test_clickhouse_scrapper.id")
+
+	// Verify compound ORDER BY table: ORDER BY (workspace, created_at, id)
+	// The compound key means efficient queries require prefix: workspace, workspace+created_at, workspace+created_at+id
+	constraintsTable := "test_clickhouse_constraints"
+	var primaryKeyCols, sortingKeyCols []string
+	var indexNames []string
+	var indexExprs []string
+	var foundPartition bool
+	var partitionExpr string
+
+	for _, c := range constraints {
+		if c.Schema == testSchema && c.Table == constraintsTable {
+			s.Equal("kernel_runs", c.Database, "Database should be set by post-processor")
+			switch c.ConstraintType {
+			case scrapper.ConstraintTypePrimaryKey:
+				primaryKeyCols = append(primaryKeyCols, c.ColumnName)
+			case scrapper.ConstraintTypeSortingKey:
+				sortingKeyCols = append(sortingKeyCols, c.ColumnName)
+			case scrapper.ConstraintTypeIndex:
+				indexNames = append(indexNames, c.ConstraintName)
+				indexExprs = append(indexExprs, c.ColumnName)
+			case scrapper.ConstraintTypePartitionBy:
+				foundPartition = true
+				partitionExpr = c.ColumnName
+			}
+		}
+	}
+
+	// Compound primary key / sorting key should have all 3 columns in order
+	s.Equal([]string{"workspace", "created_at", "id"}, primaryKeyCols,
+		"PRIMARY KEY should contain all ORDER BY columns in prefix order")
+	s.Equal([]string{"workspace", "created_at", "id"}, sortingKeyCols,
+		"SORTING KEY should contain all ORDER BY columns in prefix order")
+
+	// Data skipping indexes
+	s.Contains(indexNames, "bloom_idx", "Should find bloom_filter index")
+	s.Contains(indexNames, "minmax_idx", "Should find minmax index")
+	s.Contains(indexNames, "composite_idx", "Should find composite bloom_filter index")
+
+	// Verify expressions for data skipping indexes
+	for i, name := range indexNames {
+		switch name {
+		case "bloom_idx":
+			s.Equal("assets", indexExprs[i], "bloom_idx should index 'assets' column")
+		case "minmax_idx":
+			s.Equal("created_at", indexExprs[i], "minmax_idx should index 'created_at' column")
+		case "composite_idx":
+			s.Equal("arrayUnion(assets, target)", indexExprs[i],
+				"composite_idx should index the arrayUnion expression")
+		}
+	}
+
+	// Partition key
+	s.True(foundPartition, "Should find PARTITION BY constraint")
+	s.Equal("toYYYYMM(created_at)", partitionExpr, "Partition expression should be toYYYYMM(created_at)")
 }
 
 // TestQueryCustomMetrics_DirectDB tests QueryCustomMetrics directly with the DB connection

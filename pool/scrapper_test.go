@@ -64,6 +64,10 @@ func (m *mockScrapper) QueryShape(ctx context.Context, sql string) ([]*scrapper.
 	return nil, nil
 }
 
+func (m *mockScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
+	return nil, nil
+}
+
 func (m *mockScrapper) Close() error {
 	m.closed.Store(true)
 	return nil
