@@ -314,6 +314,29 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithDecimal() {
 	}
 }
 
+func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
+	constraints, err := s.clickhouseScrapper.QueryTableConstraints(s.ctx)
+	s.Require().NoError(err)
+	s.NotEmpty(constraints, "Should return table constraints")
+
+	// Find constraints for our test table (MergeTree ORDER BY id makes id both primary key and sorting key)
+	var foundPrimaryKey, foundSortingKey bool
+	for _, c := range constraints {
+		if c.Schema == "kernel_runs" && c.Table == "test_clickhouse_scrapper" {
+			s.Equal("kernel_runs", c.Database)
+			if c.ConstraintType == scrapper.ConstraintTypePrimaryKey && c.ColumnName == "id" {
+				foundPrimaryKey = true
+			}
+			if c.ConstraintType == scrapper.ConstraintTypeSortingKey && c.ColumnName == "id" {
+				foundSortingKey = true
+			}
+		}
+	}
+
+	s.True(foundPrimaryKey, "Should find PRIMARY KEY constraint for test_clickhouse_scrapper.id")
+	s.True(foundSortingKey, "Should find SORTING KEY constraint for test_clickhouse_scrapper.id")
+}
+
 // TestQueryCustomMetrics_DirectDB tests QueryCustomMetrics directly with the DB connection
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {
 	db := s.clickhouseScrapper.executor.GetDb()

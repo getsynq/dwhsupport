@@ -108,14 +108,29 @@ func (s *LocalBigQueryScrapperSuite) setupTestFixtures() {
 	`
 	err = s.bigqueryScrapper.executor.Exec(s.ctx, createViewSQL)
 	s.Require().NoError(err)
+
+	// Create a partitioned and clustered table for constraint testing
+	createPartitionedSQL := `
+		CREATE TABLE IF NOT EXISTS ` + "`nifty-motif-341212." + s.testDataset + `.test_partitioned_table` + "`" + ` (
+			id INT64,
+			name STRING,
+			created_at TIMESTAMP,
+			category STRING
+		)
+		PARTITION BY DATE(created_at)
+		CLUSTER BY category, name
+	`
+	err = s.bigqueryScrapper.executor.Exec(s.ctx, createPartitionedSQL)
+	s.Require().NoError(err)
 }
 
 func (s *LocalBigQueryScrapperSuite) cleanupTestFixtures() {
 	client := s.bigqueryScrapper.executor.GetBigQueryClient()
 
-	// Drop test view and table (ignore errors during cleanup)
+	// Drop test view and tables (ignore errors during cleanup)
 	_ = client.Dataset(s.testDataset).Table("test_bigquery_scrapper_view").Delete(s.ctx)
 	_ = client.Dataset(s.testDataset).Table("test_bigquery_scrapper").Delete(s.ctx)
+	_ = client.Dataset(s.testDataset).Table("test_partitioned_table").Delete(s.ctx)
 }
 
 func (s *LocalBigQueryScrapperSuite) TestQueryDatabases() {
@@ -374,6 +389,34 @@ func (s *LocalBigQueryScrapperSuite) TestQueryShape_WithExpression() {
 	s.Equal("max_amount", columns[1].Name)
 	s.Equal(int32(2), columns[1].Position)
 	s.Equal("NUMERIC", columns[1].NativeType)
+}
+
+func (s *LocalBigQueryScrapperSuite) TestQueryTableConstraints() {
+	constraints, err := s.bigqueryScrapper.QueryTableConstraints(s.ctx)
+	s.Require().NoError(err)
+	s.NotEmpty(constraints, "Should return table constraints")
+
+	// Find constraints for the partitioned and clustered test table
+	var foundPartition, foundClusterCategory, foundClusterName bool
+	for _, c := range constraints {
+		if c.Schema == s.testDataset && c.Table == "test_partitioned_table" {
+			s.Equal("nifty-motif-341212", c.Database)
+			switch {
+			case c.ConstraintType == scrapper.ConstraintTypePartitionBy && c.ColumnName == "created_at":
+				foundPartition = true
+			case c.ConstraintType == scrapper.ConstraintTypeClusterBy && c.ColumnName == "category":
+				foundClusterCategory = true
+				s.Equal(int32(1), c.ColumnPosition)
+			case c.ConstraintType == scrapper.ConstraintTypeClusterBy && c.ColumnName == "name":
+				foundClusterName = true
+				s.Equal(int32(2), c.ColumnPosition)
+			}
+		}
+	}
+
+	s.True(foundPartition, "Should find PARTITION BY constraint for test_partitioned_table.created_at")
+	s.True(foundClusterCategory, "Should find CLUSTER BY constraint for test_partitioned_table.category")
+	s.True(foundClusterName, "Should find CLUSTER BY constraint for test_partitioned_table.name")
 }
 
 func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithBoolean() {
