@@ -18,6 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Building
 - `go build ./...` - Build all packages
 
+### Code Generation
+- `go generate ./...` - Regenerate all generated code (mocks, etc.)
+- `./mockgen.sh` - Regenerate mocks only (called by `go generate`)
+- CI verifies generated code is up to date; run `go generate ./...` before pushing if interfaces change
+
 ## Architecture
 
 ### Core Abstraction Layers
@@ -54,6 +59,8 @@ The library is organized into three main layers:
 - `QueryDatabases(ctx)` - Get database metadata
 - `QuerySegments(ctx, sql, args)` - Query custom segments
 - `QueryCustomMetrics(ctx, sql, args)` - Query custom metrics
+- `QueryShape(ctx, sql)` - Get column schema for a SQL query
+- `QueryTableConstraints(ctx)` - Get table constraints (indexes, keys)
 - `Close()` - Close underlying executor
 
 ### Data Models
@@ -104,9 +111,15 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 - Tests use `github.com/gkampitakis/go-snaps` for snapshot testing
 - To create/update snapshots: `UPDATE_SNAPS=true go test ./path/to/package -count=1`
 - `CI=true` and `UPDATE_SNAPS=true` are mutually exclusive — don't use both
-- Mock generation uses `go.uber.org/mock`
+- Mock generation uses `go.uber.org/mock` via `go tool` — regenerate with `go generate ./...`
 - Test files follow `*_test.go` naming convention
 - Integration tests exist for most warehouse implementations
+
+## Releases
+
+- Tags with `-rcX` suffix (e.g. `v0.9.0-rc6`) are pre-releases — use `--prerelease` flag when creating with `gh release create`
+- RC release changelogs must include all changes since the last **stable** release, not just since the previous RC
+- Example: `v0.9.0-rc6` changelog lists changes since `v0.8.3` (last stable), not since `v0.9.0-rc5`
 
 ## Special Patterns
 
