@@ -6,7 +6,7 @@
 //	mockgen -typed -package=querier -destination=exec/querier/mocks.go github.com/getsynq/dwhsupport/exec/querier Querier
 //
 
-// Package scrapper is a generated GoMock package.
+// Package querier is a generated GoMock package.
 package querier
 
 import (

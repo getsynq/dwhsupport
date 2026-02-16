@@ -401,18 +401,18 @@ func (c *MockScrapperQuerySqlDefinitionsCall) DoAndReturn(f func(context.Context
 }
 
 // QueryTableConstraints mocks base method.
-func (m *MockScrapper) QueryTableConstraints(ctx context.Context, database, schema, table string) ([]*TableConstraintRow, error) {
+func (m *MockScrapper) QueryTableConstraints(ctx context.Context) ([]*TableConstraintRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryTableConstraints", ctx, database, schema, table)
+	ret := m.ctrl.Call(m, "QueryTableConstraints", ctx)
 	ret0, _ := ret[0].([]*TableConstraintRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryTableConstraints indicates an expected call of QueryTableConstraints.
-func (mr *MockScrapperMockRecorder) QueryTableConstraints(ctx, database, schema, table any) *MockScrapperQueryTableConstraintsCall {
+func (mr *MockScrapperMockRecorder) QueryTableConstraints(ctx any) *MockScrapperQueryTableConstraintsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTableConstraints", reflect.TypeOf((*MockScrapper)(nil).QueryTableConstraints), ctx, database, schema, table)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTableConstraints", reflect.TypeOf((*MockScrapper)(nil).QueryTableConstraints), ctx)
 	return &MockScrapperQueryTableConstraintsCall{Call: call}
 }
 
@@ -428,13 +428,13 @@ func (c *MockScrapperQueryTableConstraintsCall) Return(arg0 []*TableConstraintRo
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockScrapperQueryTableConstraintsCall) Do(f func(context.Context, string, string, string) ([]*TableConstraintRow, error)) *MockScrapperQueryTableConstraintsCall {
+func (c *MockScrapperQueryTableConstraintsCall) Do(f func(context.Context) ([]*TableConstraintRow, error)) *MockScrapperQueryTableConstraintsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockScrapperQueryTableConstraintsCall) DoAndReturn(f func(context.Context, string, string, string) ([]*TableConstraintRow, error)) *MockScrapperQueryTableConstraintsCall {
+func (c *MockScrapperQueryTableConstraintsCall) DoAndReturn(f func(context.Context) ([]*TableConstraintRow, error)) *MockScrapperQueryTableConstraintsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

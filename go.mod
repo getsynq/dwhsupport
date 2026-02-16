@@ -26,7 +26,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/trinodb/trino-go-client v0.323.0
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78
-	go.uber.org/mock v0.5.2
+	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.45.0
 	golang.org/x/sync v0.18.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
@@ -165,4 +165,7 @@ require (
 	gotest.tools/gotestsum v1.8.2 // indirect
 )
 
-tool golang.org/x/tools/cmd/deadcode
+tool (
+	go.uber.org/mock/mockgen
+	golang.org/x/tools/cmd/deadcode
+)
