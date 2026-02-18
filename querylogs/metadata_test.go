@@ -14,6 +14,11 @@ func TestStringValue(t *testing.T) {
 	v := StringValue("hello")
 	require.NotNil(t, v)
 	assert.Equal(t, "hello", v.GetStringValue())
+
+	// Invalid UTF-8 should be sanitized
+	v = StringValue("bad \xff byte")
+	require.NotNil(t, v)
+	assert.Equal(t, "bad \uFFFD byte", v.GetStringValue())
 }
 
 func TestStringPtrValue(t *testing.T) {
@@ -25,6 +30,12 @@ func TestStringPtrValue(t *testing.T) {
 
 	// Nil pointer
 	assert.Nil(t, StringPtrValue(nil))
+
+	// Invalid UTF-8 should be sanitized
+	bad := "prefix \xa0\xc2\xa0 suffix"
+	v = StringPtrValue(&bad)
+	require.NotNil(t, v)
+	assert.Equal(t, "prefix \uFFFD\u00a0 suffix", v.GetStringValue())
 }
 
 func TestTrimmedStringPtrValue(t *testing.T) {
@@ -139,6 +150,13 @@ func TestStringListValue(t *testing.T) {
 	// Empty slice
 	assert.Nil(t, StringListValue([]string{}))
 	assert.Nil(t, StringListValue(nil))
+
+	// Invalid UTF-8 in list elements should be sanitized
+	v = StringListValue([]string{"ok", "bad \xff byte"})
+	require.NotNil(t, v)
+	list = v.GetListValue()
+	assert.Equal(t, "ok", list.GetValues()[0].GetStringValue())
+	assert.Equal(t, "bad \uFFFD byte", list.GetValues()[1].GetStringValue())
 }
 
 func TestStructValue(t *testing.T) {

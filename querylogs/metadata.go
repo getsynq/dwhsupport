@@ -12,20 +12,23 @@ import (
 // These avoid reflection and validation overhead by creating Values directly.
 
 // StringValue creates a structpb.Value from a string.
+// Invalid UTF-8 sequences are replaced with U+FFFD to prevent protobuf marshaling failures.
 func StringValue(v string) *structpb.Value {
-	return structpb.NewStringValue(v)
+	return structpb.NewStringValue(strings.ToValidUTF8(v, "\uFFFD"))
 }
 
 // StringPtrValue creates a structpb.Value from a string pointer. Returns nil if pointer is nil.
+// Invalid UTF-8 sequences are replaced with U+FFFD to prevent protobuf marshaling failures.
 func StringPtrValue(v *string) *structpb.Value {
 	if v == nil {
 		return nil
 	}
-	return structpb.NewStringValue(*v)
+	return structpb.NewStringValue(strings.ToValidUTF8(*v, "\uFFFD"))
 }
 
 // TrimmedStringPtrValue creates a structpb.Value from a string pointer, trimming whitespace.
 // Returns nil if pointer is nil or if the trimmed string is empty.
+// Invalid UTF-8 sequences are replaced with U+FFFD to prevent protobuf marshaling failures.
 func TrimmedStringPtrValue(v *string) *structpb.Value {
 	if v == nil {
 		return nil
@@ -34,7 +37,7 @@ func TrimmedStringPtrValue(v *string) *structpb.Value {
 	if trimmed == "" {
 		return nil
 	}
-	return structpb.NewStringValue(trimmed)
+	return structpb.NewStringValue(strings.ToValidUTF8(trimmed, "\uFFFD"))
 }
 
 // IntValue creates a structpb.Value from an int64.
@@ -156,13 +159,14 @@ func StructValue(fields map[string]*structpb.Value) *structpb.Value {
 }
 
 // StringListValue creates a structpb.Value from a string slice.
+// Invalid UTF-8 sequences are replaced with U+FFFD to prevent protobuf marshaling failures.
 func StringListValue(v []string) *structpb.Value {
 	if len(v) == 0 {
 		return nil
 	}
 	values := make([]*structpb.Value, len(v))
 	for i, s := range v {
-		values[i] = structpb.NewStringValue(s)
+		values[i] = structpb.NewStringValue(strings.ToValidUTF8(s, "\uFFFD"))
 	}
 	return structpb.NewListValue(&structpb.ListValue{Values: values})
 }
