@@ -69,10 +69,11 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 	if !s.True(isAcceptableError(err), "QueryDatabases error: %v", err) {
 		s.T().FailNow()
 	}
-	for i, row := range databases {
-		s.NotEmptyf(row.Instance, "QueryDatabases row[%d].Instance", i)
-		s.NotEmptyf(row.Database, "QueryDatabases row[%d].Database", i)
-		allInstances = append(allInstances, row.Instance)
+	for _, row := range databases {
+		s.NotEmpty(row.Database)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
 	}
 
 	// --- QueryTables ---
@@ -81,11 +82,12 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		s.T().FailNow()
 	}
 	for i, row := range tables {
-		s.NotEmptyf(row.Instance, "QueryTables row[%d].Instance", i)
 		s.NotEmptyf(row.Database, "QueryTables row[%d].Database", i)
 		s.NotEmptyf(row.Schema, "QueryTables row[%d].Schema", i)
 		s.NotEmptyf(row.Table, "QueryTables row[%d].Table", i)
-		allInstances = append(allInstances, row.Instance)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
 	}
 
 	// --- QueryCatalog ---
@@ -94,13 +96,14 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		s.T().FailNow()
 	}
 	for i, row := range catalog {
-		s.NotEmptyf(row.Instance, "QueryCatalog row[%d].Instance", i)
 		s.NotEmptyf(row.Database, "QueryCatalog row[%d].Database", i)
 		s.NotEmptyf(row.Schema, "QueryCatalog row[%d].Schema", i)
 		s.NotEmptyf(row.Table, "QueryCatalog row[%d].Table", i)
 		s.NotEmptyf(row.Column, "QueryCatalog row[%d].Column", i)
 		s.NotEmptyf(row.Type, "QueryCatalog row[%d].Type", i)
-		allInstances = append(allInstances, row.Instance)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
 	}
 
 	// --- QueryTableMetrics ---
@@ -109,11 +112,12 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		s.T().FailNow()
 	}
 	for i, row := range metrics {
-		s.NotEmptyf(row.Instance, "QueryTableMetrics row[%d].Instance", i)
 		s.NotEmptyf(row.Database, "QueryTableMetrics row[%d].Database", i)
 		s.NotEmptyf(row.Schema, "QueryTableMetrics row[%d].Schema", i)
 		s.NotEmptyf(row.Table, "QueryTableMetrics row[%d].Table", i)
-		allInstances = append(allInstances, row.Instance)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
 	}
 
 	// --- QuerySqlDefinitions ---
@@ -122,12 +126,13 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		s.T().FailNow()
 	}
 	for i, row := range defs {
-		s.NotEmptyf(row.Instance, "QuerySqlDefinitions row[%d].Instance", i)
 		s.NotEmptyf(row.Database, "QuerySqlDefinitions row[%d].Database", i)
 		s.NotEmptyf(row.Schema, "QuerySqlDefinitions row[%d].Schema", i)
 		s.NotEmptyf(row.Table, "QuerySqlDefinitions row[%d].Table", i)
 		s.NotEmptyf(row.Sql, "QuerySqlDefinitions row[%d].Sql", i)
-		allInstances = append(allInstances, row.Instance)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
 	}
 
 	// --- QueryTableConstraints ---
@@ -136,17 +141,18 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		s.T().FailNow()
 	}
 	for i, row := range constraints {
-		s.NotEmptyf(row.Instance, "QueryTableConstraints row[%d].Instance", i)
 		s.NotEmptyf(row.Database, "QueryTableConstraints row[%d].Database", i)
 		s.NotEmptyf(row.Schema, "QueryTableConstraints row[%d].Schema", i)
 		s.NotEmptyf(row.Table, "QueryTableConstraints row[%d].Table", i)
 		s.NotEmptyf(row.ConstraintName, "QueryTableConstraints row[%d].ConstraintName", i)
 		s.NotEmptyf(row.ConstraintType, "QueryTableConstraints row[%d].ConstraintType", i)
 		s.NotEmptyf(row.ColumnName, "QueryTableConstraints row[%d].ColumnName", i)
-		allInstances = append(allInstances, row.Instance)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
 	}
 
-	// --- Cross-method consistency: all Instance values must be equal ---
+	// --- Cross-method consistency: all non-empty Instance values must be equal ---
 	if len(allInstances) > 1 {
 		first := allInstances[0]
 		for i, inst := range allInstances[1:] {

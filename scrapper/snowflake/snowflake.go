@@ -232,7 +232,9 @@ func isClusterByUnsupportedError(err error) bool {
 	if errors.As(err, &snowflakeErr) {
 		return snowflakeErr.Number == 904 && strings.Contains(strings.ToUpper(snowflakeErr.Message), "CLUSTER_BY")
 	}
-	return false
+	// Fallback: check the error string directly (handles cases where errors.As doesn't unwrap the driver error)
+	errStr := strings.ToUpper(err.Error())
+	return strings.Contains(errStr, "INVALID IDENTIFIER") && strings.Contains(errStr, "CLUSTER_BY")
 }
 
 // isSharedDatabaseUnavailableError checks if the error is a Snowflake shared database unavailable error
