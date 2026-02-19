@@ -440,3 +440,25 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithBoolean() {
 	s.IsType(scrapper.IntValue(0), result[1].ColumnValues[0].Value)
 	s.Equal(scrapper.IntValue(0), result[1].ColumnValues[0].Value)
 }
+
+func (s *LocalBigQueryScrapperSuite) TestFetchTableChangeHistory() {
+	// Use a wide time range since INFORMATION_SCHEMA.JOBS may have a short delay
+	to := time.Now().UTC()
+	from := to.Add(-24 * time.Hour)
+
+	fqn := scrapper.DwhFqn{
+		DatabaseName: s.bigqueryScrapper.conf.ProjectId,
+		SchemaName:   s.testDataset,
+		ObjectName:   "test_bigquery_scrapper",
+	}
+
+	events, err := s.bigqueryScrapper.FetchTableChangeHistory(s.ctx, fqn, from, to, 100)
+	s.Require().NoError(err)
+	// Events may or may not be present depending on INFORMATION_SCHEMA lag,
+	// but the call must succeed. If events are present, validate their structure.
+	for _, event := range events {
+		s.NotZero(event.Timestamp)
+		s.NotEmpty(event.Version, "BigQuery events should have a job_id as version")
+		s.NotEmpty(event.Operation)
+	}
+}

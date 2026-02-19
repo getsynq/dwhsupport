@@ -1,0 +1,60 @@
+
+[TestTableChangeHistorySuite/TestBuildTableChangeHistorySQL/default_region_us - 1]
+SELECT
+    end_time AS timestamp,
+    job_id AS version,
+    statement_type AS operation,
+    dml_statistics.inserted_row_count AS inserted_row_count,
+    dml_statistics.updated_row_count AS updated_row_count,
+    dml_statistics.deleted_row_count AS deleted_row_count
+FROM `my-project`.`region-us`.INFORMATION_SCHEMA.JOBS
+WHERE destination_table.project_id = 'my_project'
+  AND destination_table.dataset_id = 'my_dataset'
+  AND destination_table.table_id = 'my_table'
+  AND statement_type IN ('INSERT', 'UPDATE', 'DELETE', 'MERGE', 'TRUNCATE_TABLE')
+  AND state = 'DONE'
+  AND error_result IS NULL
+  AND creation_time BETWEEN '2025-01-01T00:00:00' AND '2025-01-31T23:59:59'
+ORDER BY end_time DESC
+LIMIT 100
+---
+
+[TestTableChangeHistorySuite/TestBuildTableChangeHistorySQL/explicit_eu_region - 1]
+SELECT
+    end_time AS timestamp,
+    job_id AS version,
+    statement_type AS operation,
+    dml_statistics.inserted_row_count AS inserted_row_count,
+    dml_statistics.updated_row_count AS updated_row_count,
+    dml_statistics.deleted_row_count AS deleted_row_count
+FROM `my-project`.`region-EU`.INFORMATION_SCHEMA.JOBS
+WHERE destination_table.project_id = 'my_project'
+  AND destination_table.dataset_id = 'my_dataset'
+  AND destination_table.table_id = 'my_table'
+  AND statement_type IN ('INSERT', 'UPDATE', 'DELETE', 'MERGE', 'TRUNCATE_TABLE')
+  AND state = 'DONE'
+  AND error_result IS NULL
+  AND creation_time BETWEEN '2025-01-01T00:00:00' AND '2025-01-31T23:59:59'
+ORDER BY end_time DESC
+LIMIT 50
+---
+
+[TestTableChangeHistorySuite/TestBuildTableChangeHistorySQL/table_name_with_single_quote - 1]
+SELECT
+    end_time AS timestamp,
+    job_id AS version,
+    statement_type AS operation,
+    dml_statistics.inserted_row_count AS inserted_row_count,
+    dml_statistics.updated_row_count AS updated_row_count,
+    dml_statistics.deleted_row_count AS deleted_row_count
+FROM `my-project`.`region-us`.INFORMATION_SCHEMA.JOBS
+WHERE destination_table.project_id = 'project''name'
+  AND destination_table.dataset_id = 'data''set'
+  AND destination_table.table_id = 'my''table'
+  AND statement_type IN ('INSERT', 'UPDATE', 'DELETE', 'MERGE', 'TRUNCATE_TABLE')
+  AND state = 'DONE'
+  AND error_result IS NULL
+  AND creation_time BETWEEN '2025-01-01T00:00:00' AND '2025-01-31T23:59:59'
+ORDER BY end_time DESC
+LIMIT 10
+---

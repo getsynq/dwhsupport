@@ -1,0 +1,81 @@
+
+[TestTableChangeHistorySuite/TestBuildAccessHistorySQL/default_account_usage_db - 1]
+SELECT
+    h.query_start_time AS "TIMESTAMP"
+FROM SNOWFLAKE.ACCOUNT_USAGE.ACCESS_HISTORY h,
+    LATERAL FLATTEN(INPUT => h.objects_modified) obj
+WHERE obj.value:objectDomain::string = 'Table'
+  AND UPPER(obj.value:objectName::string) = UPPER('MY_DB.PUBLIC.ORDERS')
+  AND h.query_start_time >= '2025-01-01T00:00:00'
+  AND h.query_start_time <= '2025-01-31T23:59:59'
+ORDER BY h.query_start_time DESC
+LIMIT 100
+---
+
+[TestTableChangeHistorySuite/TestBuildAccessHistorySQL/custom_account_usage_db - 1]
+SELECT
+    h.query_start_time AS "TIMESTAMP"
+FROM CUSTOM_SNOWFLAKE.ACCOUNT_USAGE.ACCESS_HISTORY h,
+    LATERAL FLATTEN(INPUT => h.objects_modified) obj
+WHERE obj.value:objectDomain::string = 'Table'
+  AND UPPER(obj.value:objectName::string) = UPPER('MY_DB.PUBLIC.ORDERS')
+  AND h.query_start_time >= '2025-01-01T00:00:00'
+  AND h.query_start_time <= '2025-01-31T23:59:59'
+ORDER BY h.query_start_time DESC
+LIMIT 50
+---
+
+[TestTableChangeHistorySuite/TestBuildAccessHistorySQL/object_name_with_single_quote - 1]
+SELECT
+    h.query_start_time AS "TIMESTAMP"
+FROM SNOWFLAKE.ACCOUNT_USAGE.ACCESS_HISTORY h,
+    LATERAL FLATTEN(INPUT => h.objects_modified) obj
+WHERE obj.value:objectDomain::string = 'Table'
+  AND UPPER(obj.value:objectName::string) = UPPER('DB''TEST.SCH''EMA.TABLE''NAME')
+  AND h.query_start_time >= '2025-01-01T00:00:00'
+  AND h.query_start_time <= '2025-01-31T23:59:59'
+ORDER BY h.query_start_time DESC
+LIMIT 10
+---
+
+[TestTableChangeHistorySuite/TestBuildDMLHistorySQL/default_account_usage_db - 1]
+SELECT
+    end_time AS "TIMESTAMP"
+FROM SNOWFLAKE.ACCOUNT_USAGE.TABLE_DML_HISTORY
+WHERE UPPER(database_name) = UPPER('MY_DB')
+  AND UPPER(schema_name) = UPPER('PUBLIC')
+  AND UPPER(table_name) = UPPER('ORDERS')
+  AND (rows_added > 0 OR rows_removed > 0 OR rows_updated > 0)
+  AND start_time >= '2025-01-01T00:00:00'
+  AND end_time <= '2025-01-31T23:59:59'
+ORDER BY end_time DESC
+LIMIT 100
+---
+
+[TestTableChangeHistorySuite/TestBuildDMLHistorySQL/custom_account_usage_db - 1]
+SELECT
+    end_time AS "TIMESTAMP"
+FROM CUSTOM_SNOWFLAKE.ACCOUNT_USAGE.TABLE_DML_HISTORY
+WHERE UPPER(database_name) = UPPER('MY_DB')
+  AND UPPER(schema_name) = UPPER('PUBLIC')
+  AND UPPER(table_name) = UPPER('ORDERS')
+  AND (rows_added > 0 OR rows_removed > 0 OR rows_updated > 0)
+  AND start_time >= '2025-01-01T00:00:00'
+  AND end_time <= '2025-01-31T23:59:59'
+ORDER BY end_time DESC
+LIMIT 50
+---
+
+[TestTableChangeHistorySuite/TestBuildDMLHistorySQL/table_name_with_single_quote - 1]
+SELECT
+    end_time AS "TIMESTAMP"
+FROM SNOWFLAKE.ACCOUNT_USAGE.TABLE_DML_HISTORY
+WHERE UPPER(database_name) = UPPER('DB''WITH''QUOTES')
+  AND UPPER(schema_name) = UPPER('SCH''EMA')
+  AND UPPER(table_name) = UPPER('TABLE''NAME')
+  AND (rows_added > 0 OR rows_removed > 0 OR rows_updated > 0)
+  AND start_time >= '2025-01-01T00:00:00'
+  AND end_time <= '2025-01-31T23:59:59'
+ORDER BY end_time DESC
+LIMIT 10
+---

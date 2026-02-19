@@ -6,7 +6,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
 type databricksHistoryRow struct {
@@ -25,31 +27,15 @@ func (e *DatabricksScrapper) FetchTableChangeHistory(
 	from, to time.Time,
 	limit int,
 ) ([]*scrapper.TableChangeEvent, error) {
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+
 	executor, err := e.lazyExecutor.Get()
 	if err != nil {
 		return nil, err
 	}
 
-	tableFqn := fmt.Sprintf("`%s`.`%s`.`%s`", fqn.DatabaseName, fqn.SchemaName, fqn.ObjectName)
-
-	sql := fmt.Sprintf(`SELECT
-    version,
-    timestamp,
-    operation,
-    operationMetrics['numOutputRows'] as num_output_rows,
-    operationMetrics['numTargetRowsInserted'] as num_rows_inserted,
-    operationMetrics['numTargetRowsUpdated'] as num_rows_updated,
-    operationMetrics['numTargetRowsDeleted'] as num_rows_deleted
-FROM (DESCRIBE HISTORY %s)
-WHERE operation IN ('WRITE', 'MERGE', 'UPDATE', 'DELETE', 'STREAMING UPDATE', 'COPY INTO')
-  AND timestamp BETWEEN '%s' AND '%s'
-ORDER BY version DESC
-LIMIT %d`,
-		tableFqn,
-		from.UTC().Format("2006-01-02T15:04:05"),
-		to.UTC().Format("2006-01-02T15:04:05"),
-		limit,
-	)
+	sql := e.buildTableChangeHistorySQL(fqn, from, to, limit)
 
 	rows, err := executor.GetDb().QueryxContext(ctx, sql)
 	if err != nil {
@@ -100,7 +86,31 @@ LIMIT %d`,
 		return nil, err
 	}
 
+	collector.SetRowsProduced(int64(len(events)))
 	return events, nil
+}
+
+func (e *DatabricksScrapper) buildTableChangeHistorySQL(fqn scrapper.DwhFqn, from, to time.Time, limit int) string {
+	dialect := sqldialect.NewDatabricksDialect()
+	tableFqn := fmt.Sprintf("%s.%s.%s", dialect.Identifier(fqn.DatabaseName), dialect.Identifier(fqn.SchemaName), dialect.Identifier(fqn.ObjectName))
+	return fmt.Sprintf(`SELECT
+    version,
+    timestamp,
+    operation,
+    operationMetrics['numOutputRows'] as num_output_rows,
+    operationMetrics['numTargetRowsInserted'] as num_rows_inserted,
+    operationMetrics['numTargetRowsUpdated'] as num_rows_updated,
+    operationMetrics['numTargetRowsDeleted'] as num_rows_deleted
+FROM (DESCRIBE HISTORY %s)
+WHERE operation IN ('WRITE', 'MERGE', 'UPDATE', 'DELETE', 'STREAMING UPDATE', 'COPY INTO')
+  AND timestamp BETWEEN '%s' AND '%s'
+ORDER BY version DESC
+LIMIT %d`,
+		tableFqn,
+		from.UTC().Format("2006-01-02T15:04:05"),
+		to.UTC().Format("2006-01-02T15:04:05"),
+		limit,
+	)
 }
 
 func normalizeDatabricksOperation(op string) string {

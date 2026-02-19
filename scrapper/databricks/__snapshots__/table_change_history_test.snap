@@ -1,0 +1,48 @@
+
+[TestTableChangeHistorySuite/TestBuildTableChangeHistorySQL/simple_table - 1]
+SELECT
+    version,
+    timestamp,
+    operation,
+    operationMetrics['numOutputRows'] as num_output_rows,
+    operationMetrics['numTargetRowsInserted'] as num_rows_inserted,
+    operationMetrics['numTargetRowsUpdated'] as num_rows_updated,
+    operationMetrics['numTargetRowsDeleted'] as num_rows_deleted
+FROM (DESCRIBE HISTORY `my_catalog`.`public`.`orders`)
+WHERE operation IN ('WRITE', 'MERGE', 'UPDATE', 'DELETE', 'STREAMING UPDATE', 'COPY INTO')
+  AND timestamp BETWEEN '2025-01-01T00:00:00' AND '2025-01-31T23:59:59'
+ORDER BY version DESC
+LIMIT 100
+---
+
+[TestTableChangeHistorySuite/TestBuildTableChangeHistorySQL/table_with_special_chars - 1]
+SELECT
+    version,
+    timestamp,
+    operation,
+    operationMetrics['numOutputRows'] as num_output_rows,
+    operationMetrics['numTargetRowsInserted'] as num_rows_inserted,
+    operationMetrics['numTargetRowsUpdated'] as num_rows_updated,
+    operationMetrics['numTargetRowsDeleted'] as num_rows_deleted
+FROM (DESCRIBE HISTORY `catalog-with-dashes`.`schema_name`.`table name`)
+WHERE operation IN ('WRITE', 'MERGE', 'UPDATE', 'DELETE', 'STREAMING UPDATE', 'COPY INTO')
+  AND timestamp BETWEEN '2025-01-01T00:00:00' AND '2025-01-31T23:59:59'
+ORDER BY version DESC
+LIMIT 50
+---
+
+[TestTableChangeHistorySuite/TestBuildTableChangeHistorySQL/table_with_backtick - 1]
+SELECT
+    version,
+    timestamp,
+    operation,
+    operationMetrics['numOutputRows'] as num_output_rows,
+    operationMetrics['numTargetRowsInserted'] as num_rows_inserted,
+    operationMetrics['numTargetRowsUpdated'] as num_rows_updated,
+    operationMetrics['numTargetRowsDeleted'] as num_rows_deleted
+FROM (DESCRIBE HISTORY `catalog`inject`.`schema`.`table`)
+WHERE operation IN ('WRITE', 'MERGE', 'UPDATE', 'DELETE', 'STREAMING UPDATE', 'COPY INTO')
+  AND timestamp BETWEEN '2025-01-01T00:00:00' AND '2025-01-31T23:59:59'
+ORDER BY version DESC
+LIMIT 10
+---
