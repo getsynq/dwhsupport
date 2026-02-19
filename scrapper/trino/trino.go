@@ -177,6 +177,16 @@ func (e *TrinoScrapper) fqn(row scrapper.HasTableFqn, dollarTable ...string) any
 // Note: Trino responds with HTTP 200 OK but includes an error message when it cannot
 // connect to the external database backing a catalog (e.g., PostgreSQL, MySQL).
 // The "EXTERNAL" prefix indicates the error is with the external data source, not Trino itself.
+// isTableNotFoundError checks if the error indicates a table does not exist.
+// Some Trino catalogs (e.g. tpch, tpcds) do not expose information_schema.table_constraints.
+func isTableNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "does not exist") && strings.Contains(errMsg, "table")
+}
+
 func isCatalogUnavailableError(err error) bool {
 	if err == nil {
 		return false
