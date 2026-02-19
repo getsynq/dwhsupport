@@ -33,15 +33,19 @@ func (s *TableChangeHistoryIntegrationSuite) SetupSuite() {
 		s.T().Skip("SNOWFLAKE_DATABASE env var not set")
 	}
 
+	sfConf := dwhexecsnowflake.SnowflakeConf{
+		User:      os.Getenv("SNOWFLAKE_USER"),
+		Password:  os.Getenv("SNOWFLAKE_PASSWORD"),
+		Account:   os.Getenv("SNOWFLAKE_ACCOUNT"),
+		Warehouse: os.Getenv("SNOWFLAKE_WAREHOUSE"),
+		Databases: []string{database},
+		Role:      os.Getenv("SNOWFLAKE_ROLE"),
+	}
+	if pk := os.Getenv("SNOWFLAKE_PRIVATE_KEY"); pk != "" {
+		sfConf.PrivateKey = []byte(pk)
+	}
 	conf := &SnowflakeScrapperConf{
-		SnowflakeConf: dwhexecsnowflake.SnowflakeConf{
-			User:      os.Getenv("SNOWFLAKE_USER"),
-			Password:  os.Getenv("SNOWFLAKE_PASSWORD"),
-			Account:   os.Getenv("SNOWFLAKE_ACCOUNT"),
-			Warehouse: os.Getenv("SNOWFLAKE_WAREHOUSE"),
-			Databases: []string{database},
-			Role:      os.Getenv("SNOWFLAKE_ROLE"),
-		},
+		SnowflakeConf: sfConf,
 	}
 
 	var err error

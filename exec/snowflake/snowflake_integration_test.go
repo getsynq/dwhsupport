@@ -33,14 +33,18 @@ type sfRes struct {
 
 func (s *SnowflakeSuite) newExecutor() *SnowflakeExecutor {
 	ctx := context.TODO()
-	execer, err := NewSnowflakeExecutor(ctx, &SnowflakeConf{
+	conf := &SnowflakeConf{
 		User:      os.Getenv("SNOWFLAKE_USER"),
 		Password:  os.Getenv("SNOWFLAKE_PASSWORD"),
 		Account:   os.Getenv("SNOWFLAKE_ACCOUNT"),
 		Warehouse: os.Getenv("SNOWFLAKE_WAREHOUSE"),
 		Databases: []string{os.Getenv("SNOWFLAKE_DATABASE")},
 		Role:      os.Getenv("SNOWFLAKE_ROLE"),
-	})
+	}
+	if pk := os.Getenv("SNOWFLAKE_PRIVATE_KEY"); pk != "" {
+		conf.PrivateKey = []byte(pk)
+	}
+	execer, err := NewSnowflakeExecutor(ctx, conf)
 	s.Require().NoError(err)
 	s.Require().NotNil(execer)
 	return execer
