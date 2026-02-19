@@ -3,6 +3,7 @@ package trino
 import (
 	"context"
 	"os"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -26,15 +27,31 @@ type res struct {
 	TableType    string `db:"table_type"`
 }
 
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func envOrDefaultInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
+
 func (s *TrinoSuite) TestBasicQuery() {
 	// please run locally to make test pass:
 	// docker run --name trino -d -p 8080:8080 trinodb/trino
 	ctx := context.TODO()
 	execer, err := NewTrinoExecutor(ctx, &TrinoConf{
-		Host:      "localhost",
-		Port:      8080,
-		User:      "trino",
-		Password:  "trino",
+		Host:      envOrDefault("TRINO_HOST", "localhost"),
+		Port:      envOrDefaultInt("TRINO_PORT", 8080),
+		User:      envOrDefault("TRINO_USER", "trino"),
+		Password:  envOrDefault("TRINO_PASSWORD", "trino"),
 		Plaintext: true,
 	})
 	s.NoError(err)

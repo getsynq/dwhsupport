@@ -11,6 +11,13 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 // LocalBigQueryScrapperSuite tests scrapper methods against a local BigQuery instance
 type LocalBigQueryScrapperSuite struct {
 	suite.Suite
@@ -33,7 +40,7 @@ func (s *LocalBigQueryScrapperSuite) SetupSuite() {
 	s.testDataset = "test_scrapper"
 
 	// Try to load credentials from the JSON file
-	credentialsFile := "../../nifty-motif-341212-88499dbfc22e.json"
+	credentialsFile := envOrDefault("BIGQUERY_CREDENTIALS_FILE", "../../nifty-motif-341212-88499dbfc22e.json")
 	credentialsJson, err := os.ReadFile(credentialsFile)
 	if err != nil {
 		s.T().Skipf("Skipping: could not read BigQuery credentials file: %v", err)
@@ -45,8 +52,8 @@ func (s *LocalBigQueryScrapperSuite) SetupSuite() {
 	blocklist := "analytics,analytics*,dbt*,elementary*,fivetran*,gitlab*,google_sheets,in_ecom*,kuba,lukas*,marketing,mini_dbt,petr,petr*,runtime,snapshots,sqlmesh,sqlmesh*,synq*,test"
 	conf := &BigQueryScrapperConf{
 		BigQueryConf: dwhexecbigquery.BigQueryConf{
-			ProjectId:       "nifty-motif-341212",
-			Region:          "EU",
+			ProjectId:       os.Getenv("BIGQUERY_PROJECT_ID"),
+			Region:          envOrDefault("BIGQUERY_REGION", "EU"),
 			CredentialsJson: string(credentialsJson),
 		},
 		Blocklist: blocklist,
@@ -79,7 +86,7 @@ func (s *LocalBigQueryScrapperSuite) setupTestFixtures() {
 	// Create a test table with various column types
 	// BigQuery doesn't have Int128/Int256, but has NUMERIC (38 digits) and BIGNUMERIC (76 digits)
 	createTableSQL := `
-		CREATE TABLE IF NOT EXISTS ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + ` (
+		CREATE TABLE IF NOT EXISTS ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + ` (
 			id INT64,
 			name STRING,
 			amount NUMERIC,
@@ -93,7 +100,7 @@ func (s *LocalBigQueryScrapperSuite) setupTestFixtures() {
 
 	// Insert test data
 	insertDataSQL := `
-		INSERT INTO ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + ` (id, name, amount, big_amount, created_at, is_active)
+		INSERT INTO ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + ` (id, name, amount, big_amount, created_at, is_active)
 		VALUES
 			(1, 'Alice', 100.50, 12345678901234567890.123456789012345678, TIMESTAMP('2024-01-01 10:00:00'), true),
 			(2, 'Bob', 200.75, 99999999999999999999999999999999999999.999999999999999999, TIMESTAMP('2024-01-02 11:00:00'), false)
@@ -103,15 +110,15 @@ func (s *LocalBigQueryScrapperSuite) setupTestFixtures() {
 
 	// Create a test view
 	createViewSQL := `
-		CREATE VIEW IF NOT EXISTS ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper_view` + "`" + ` AS
-		SELECT id, name, amount FROM ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + ` WHERE is_active = true
+		CREATE VIEW IF NOT EXISTS ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper_view` + "`" + ` AS
+		SELECT id, name, amount FROM ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + ` WHERE is_active = true
 	`
 	err = s.bigqueryScrapper.executor.Exec(s.ctx, createViewSQL)
 	s.Require().NoError(err)
 
 	// Create a partitioned and clustered table for constraint testing
 	createPartitionedSQL := `
-		CREATE TABLE IF NOT EXISTS ` + "`nifty-motif-341212." + s.testDataset + `.test_partitioned_table` + "`" + ` (
+		CREATE TABLE IF NOT EXISTS ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_partitioned_table` + "`" + ` (
 			id INT64,
 			name STRING,
 			created_at TIMESTAMP,
@@ -232,7 +239,7 @@ func (s *LocalBigQueryScrapperSuite) TestQuerySqlDefinitions() {
 }
 
 func (s *LocalBigQueryScrapperSuite) TestQuerySegments() {
-	sql := `SELECT DISTINCT name as segment FROM ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`"
+	sql := `SELECT DISTINCT name as segment FROM ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`"
 	segments, err := s.bigqueryScrapper.QuerySegments(s.ctx, sql)
 	s.Require().NoError(err)
 	s.Require().Len(segments, 2, "Should return 2 segments (Alice and Bob)")
@@ -250,7 +257,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics() {
 		name as segment_name,
 		SUM(CAST(amount AS FLOAT64)) as total_amount,
 		COUNT(*) as record_count
-	FROM ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
+	FROM ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
 	GROUP BY name`
 
 	result, err := s.bigqueryScrapper.QueryCustomMetrics(s.ctx, sql)
@@ -282,7 +289,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithNumeric() {
 	sql := `SELECT
 		name as segment_name,
 		amount as numeric_value
-	FROM ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
+	FROM ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
 	ORDER BY id`
 
 	result, err := s.bigqueryScrapper.QueryCustomMetrics(s.ctx, sql)
@@ -305,7 +312,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithBigNumeric() {
 	sql := `SELECT
 		name as segment_name,
 		big_amount as bignumeric_value
-	FROM ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
+	FROM ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
 	ORDER BY id`
 
 	result, err := s.bigqueryScrapper.QueryCustomMetrics(s.ctx, sql)
@@ -327,7 +334,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithTimestamp() {
 	sql := `SELECT
 		name as segment_name,
 		created_at as timestamp_value
-	FROM ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
+	FROM ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
 	ORDER BY id`
 
 	result, err := s.bigqueryScrapper.QueryCustomMetrics(s.ctx, sql)
@@ -346,7 +353,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithTimestamp() {
 }
 
 func (s *LocalBigQueryScrapperSuite) TestQueryShape() {
-	sql := "SELECT id, name, amount, big_amount, created_at, is_active FROM `nifty-motif-341212." + s.testDataset + ".test_bigquery_scrapper`"
+	sql := "SELECT id, name, amount, big_amount, created_at, is_active FROM `" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + ".test_bigquery_scrapper`"
 	columns, err := s.bigqueryScrapper.QueryShape(s.ctx, sql)
 	s.Require().NoError(err)
 	s.Require().Len(columns, 6)
@@ -377,7 +384,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryShape() {
 }
 
 func (s *LocalBigQueryScrapperSuite) TestQueryShape_WithExpression() {
-	sql := "SELECT COUNT(*) as cnt, MAX(amount) as max_amount FROM `nifty-motif-341212." + s.testDataset + ".test_bigquery_scrapper`"
+	sql := "SELECT COUNT(*) as cnt, MAX(amount) as max_amount FROM `" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + ".test_bigquery_scrapper`"
 	columns, err := s.bigqueryScrapper.QueryShape(s.ctx, sql)
 	s.Require().NoError(err)
 	s.Require().Len(columns, 2)
@@ -400,7 +407,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryTableConstraints() {
 	var foundPartition, foundClusterCategory, foundClusterName bool
 	for _, c := range constraints {
 		if c.Schema == s.testDataset && c.Table == "test_partitioned_table" {
-			s.Equal("nifty-motif-341212", c.Database)
+			s.Equal(s.bigqueryScrapper.conf.ProjectId, c.Database)
 			switch {
 			case c.ConstraintType == scrapper.ConstraintTypePartitionBy && c.ColumnName == "created_at":
 				foundPartition = true
@@ -423,7 +430,7 @@ func (s *LocalBigQueryScrapperSuite) TestQueryCustomMetrics_WithBoolean() {
 	sql := `SELECT
 		name as segment_name,
 		is_active as bool_value
-	FROM ` + "`nifty-motif-341212." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
+	FROM ` + "`" + s.bigqueryScrapper.conf.ProjectId + "." + s.testDataset + `.test_bigquery_scrapper` + "`" + `
 	ORDER BY id`
 
 	result, err := s.bigqueryScrapper.QueryCustomMetrics(s.ctx, sql)

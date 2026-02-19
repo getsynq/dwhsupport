@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ type LocalClickHouseScrapperSuite struct {
 	suite.Suite
 	clickhouseScrapper *ClickhouseScrapper
 	ctx                context.Context
+	databaseName       string
 }
 
 func TestLocalClickHouseScrapperSuite(t *testing.T) {
@@ -30,18 +32,19 @@ func (s *LocalClickHouseScrapperSuite) SetupSuite() {
 	}
 
 	s.ctx = context.TODO()
+	s.databaseName = envOrDefault("CLICKHOUSE_DATABASE", "kernel_runs")
 
 	// Create a local ClickHouse scrapper
 	conf := ClickhouseScrapperConf{
 		ClickhouseConf: dwhexecclickhouse.ClickhouseConf{
-			Hostname:        "127.0.0.1",
-			Port:            9000,
-			Username:        "",
-			Password:        "getsynq10",
-			DefaultDatabase: "kernel_runs",
+			Hostname:        envOrDefault("CLICKHOUSE_HOST", "127.0.0.1"),
+			Port:            envOrDefaultInt("CLICKHOUSE_PORT", 9000),
+			Username:        os.Getenv("CLICKHOUSE_USER"),
+			Password:        envOrDefault("CLICKHOUSE_PASSWORD", "getsynq10"),
+			DefaultDatabase: s.databaseName,
 			NoSsl:           true,
 		},
-		DatabaseName: "kernel_runs",
+		DatabaseName: s.databaseName,
 	}
 
 	scrapper, err := NewClickhouseScrapper(s.ctx, conf)
@@ -137,7 +140,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTables() {
 	// Find our test table
 	var foundTable, foundView bool
 	for _, table := range tables {
-		if table.Database == "kernel_runs" {
+		if table.Database == s.databaseName {
 			switch table.Table {
 			case "test_clickhouse_scrapper":
 				foundTable = true
@@ -159,7 +162,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCatalog() {
 	// Find columns from our test table
 	var foundIdColumn, foundNameColumn, foundBigNumberColumn, foundHugeNumberColumn bool
 	for _, col := range catalog {
-		if col.Database == "kernel_runs" && col.Table == "test_clickhouse_scrapper" {
+		if col.Database == s.databaseName && col.Table == "test_clickhouse_scrapper" {
 			switch col.Column {
 			case "id":
 				foundIdColumn = true
@@ -191,7 +194,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableMetrics() {
 	// Find metrics for our test table
 	var found bool
 	for _, m := range metrics {
-		if m.Database == "kernel_runs" && m.Table == "test_clickhouse_scrapper" {
+		if m.Database == s.databaseName && m.Table == "test_clickhouse_scrapper" {
 			found = true
 			s.NotNil(m.RowCount)
 		}
@@ -208,7 +211,7 @@ func (s *LocalClickHouseScrapperSuite) TestQuerySqlDefinitions() {
 	// Find our view definition
 	var found bool
 	for _, def := range definitions {
-		if def.Database == "kernel_runs" && def.Table == "test_clickhouse_scrapper_view" {
+		if def.Database == s.databaseName && def.Table == "test_clickhouse_scrapper_view" {
 			found = true
 			s.True(def.IsView)
 			s.NotEmpty(def.Sql)
@@ -355,7 +358,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	var foundSimplePK, foundSimpleSK bool
 	for _, c := range constraints {
 		if c.Schema == testSchema && c.Table == "test_clickhouse_scrapper" {
-			s.Equal("kernel_runs", c.Database, "Database should be set by post-processor")
+			s.Equal(s.databaseName, c.Database, "Database should be set by post-processor")
 			if c.ConstraintType == scrapper.ConstraintTypePrimaryKey && c.ColumnName == "id" {
 				foundSimplePK = true
 			}
@@ -378,7 +381,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 
 	for _, c := range constraints {
 		if c.Schema == testSchema && c.Table == constraintsTable {
-			s.Equal("kernel_runs", c.Database, "Database should be set by post-processor")
+			s.Equal(s.databaseName, c.Database, "Database should be set by post-processor")
 			switch c.ConstraintType {
 			case scrapper.ConstraintTypePrimaryKey:
 				primaryKeyCols = append(primaryKeyCols, c.ColumnName)
@@ -421,6 +424,22 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	// Partition key
 	s.True(foundPartition, "Should find PARTITION BY constraint")
 	s.Equal("toYYYYMM(created_at)", partitionExpr, "Partition expression should be toYYYYMM(created_at)")
+}
+
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+func envOrDefaultInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
 }
 
 // TestQueryCustomMetrics_DirectDB tests QueryCustomMetrics directly with the DB connection
