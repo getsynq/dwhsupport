@@ -34,12 +34,13 @@ func (s *TableChangeHistoryIntegrationSuite) SetupSuite() {
 	}
 
 	sfConf := dwhexecsnowflake.SnowflakeConf{
-		User:      os.Getenv("SNOWFLAKE_USER"),
-		Password:  os.Getenv("SNOWFLAKE_PASSWORD"),
-		Account:   os.Getenv("SNOWFLAKE_ACCOUNT"),
-		Warehouse: os.Getenv("SNOWFLAKE_WAREHOUSE"),
-		Databases: []string{database},
-		Role:      os.Getenv("SNOWFLAKE_ROLE"),
+		User:           os.Getenv("SNOWFLAKE_USER"),
+		Password:       os.Getenv("SNOWFLAKE_PASSWORD"),
+		Account:        os.Getenv("SNOWFLAKE_ACCOUNT"),
+		Warehouse:      os.Getenv("SNOWFLAKE_WAREHOUSE"),
+		Databases:      []string{database},
+		Role:           os.Getenv("SNOWFLAKE_ROLE"),
+		PrivateKeyFile: os.Getenv("SNOWFLAKE_PRIVATE_KEY_FILE"),
 	}
 	if pk := os.Getenv("SNOWFLAKE_PRIVATE_KEY"); pk != "" {
 		sfConf.PrivateKey = []byte(pk)
