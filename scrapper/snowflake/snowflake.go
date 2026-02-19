@@ -28,6 +28,9 @@ type SnowflakeScrapperConf struct {
 	NoGetDll           bool
 	AccountUsageDb     *string
 	QueryLogsDatabases []string
+	// UseAccessHistoryForTableChanges enables ACCESS_HISTORY for FetchTableChangeHistory instead of
+	// TABLE_DML_HISTORY. ACCESS_HISTORY provides ~3h lag vs ~6h but requires Snowflake Enterprise edition.
+	UseAccessHistoryForTableChanges bool
 }
 
 // FIXME: I couldn't make it work with `foo IN (?)` binding, so I'm using this

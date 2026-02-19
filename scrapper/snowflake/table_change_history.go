@@ -9,29 +9,31 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
-type snowflakeTableDMLHistoryRow struct {
-	Timestamp   time.Time `db:"TIMESTAMP"`
-	RowsAdded   *int64    `db:"ROWS_ADDED"`
-	RowsRemoved *int64    `db:"ROWS_REMOVED"`
-	RowsUpdated *int64    `db:"ROWS_UPDATED"`
-}
-
 func (e *SnowflakeScrapper) FetchTableChangeHistory(
 	ctx context.Context,
 	fqn scrapper.DwhFqn,
 	from, to time.Time,
 	limit int,
 ) ([]*scrapper.TableChangeEvent, error) {
-	accountUsageDb := "SNOWFLAKE"
-	if e.conf.AccountUsageDb != nil && len(*e.conf.AccountUsageDb) > 0 {
-		accountUsageDb = *e.conf.AccountUsageDb
+	if e.conf.UseAccessHistoryForTableChanges {
+		return e.fetchTableChangeHistoryFromAccessHistory(ctx, fqn, from, to, limit)
 	}
+	return e.fetchTableChangeHistoryFromDMLHistory(ctx, fqn, from, to, limit)
+}
+
+// fetchTableChangeHistoryFromDMLHistory uses ACCOUNT_USAGE.TABLE_DML_HISTORY.
+// Available on all Snowflake editions. Latency: up to ~6h.
+// Only returns buckets where rows actually changed (rows_added/removed/updated > 0).
+func (e *SnowflakeScrapper) fetchTableChangeHistoryFromDMLHistory(
+	ctx context.Context,
+	fqn scrapper.DwhFqn,
+	from, to time.Time,
+	limit int,
+) ([]*scrapper.TableChangeEvent, error) {
+	accountUsageDb := e.accountUsageDb()
 
 	sql := fmt.Sprintf(`SELECT
-    end_time AS "TIMESTAMP",
-    rows_added AS "ROWS_ADDED",
-    rows_removed AS "ROWS_REMOVED",
-    rows_updated AS "ROWS_UPDATED"
+    end_time AS "TIMESTAMP"
 FROM %s.ACCOUNT_USAGE.TABLE_DML_HISTORY
 WHERE UPPER(database_name) = UPPER('%s')
   AND UPPER(schema_name) = UPPER('%s')
@@ -50,6 +52,48 @@ LIMIT %d`,
 		limit,
 	)
 
+	return e.queryTableChangeEvents(ctx, sql)
+}
+
+// fetchTableChangeHistoryFromAccessHistory uses ACCOUNT_USAGE.ACCESS_HISTORY.
+// Requires Snowflake Enterprise edition. Latency: up to ~3h.
+// Returns all DML events regardless of whether rows changed.
+func (e *SnowflakeScrapper) fetchTableChangeHistoryFromAccessHistory(
+	ctx context.Context,
+	fqn scrapper.DwhFqn,
+	from, to time.Time,
+	limit int,
+) ([]*scrapper.TableChangeEvent, error) {
+	accountUsageDb := e.accountUsageDb()
+
+	// objectName in ACCESS_HISTORY is stored as DATABASE.SCHEMA.TABLE
+	objectName := fqn.DatabaseName + "." + fqn.SchemaName + "." + fqn.ObjectName
+
+	sql := fmt.Sprintf(`SELECT
+    h.query_start_time AS "TIMESTAMP"
+FROM %s.ACCOUNT_USAGE.ACCESS_HISTORY h,
+    LATERAL FLATTEN(INPUT => h.objects_modified) obj
+WHERE obj.value:objectDomain::string = 'Table'
+  AND UPPER(obj.value:objectName::string) = UPPER('%s')
+  AND h.query_start_time >= '%s'
+  AND h.query_start_time <= '%s'
+ORDER BY h.query_start_time DESC
+LIMIT %d`,
+		accountUsageDb,
+		strings.ReplaceAll(objectName, "'", "''"),
+		from.UTC().Format("2006-01-02T15:04:05"),
+		to.UTC().Format("2006-01-02T15:04:05"),
+		limit,
+	)
+
+	return e.queryTableChangeEvents(ctx, sql)
+}
+
+type snowflakeTableChangeRow struct {
+	Timestamp time.Time `db:"TIMESTAMP"`
+}
+
+func (e *SnowflakeScrapper) queryTableChangeEvents(ctx context.Context, sql string) ([]*scrapper.TableChangeEvent, error) {
 	rows, err := e.executor.GetDb().QueryxContext(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -58,28 +102,13 @@ LIMIT %d`,
 
 	var events []*scrapper.TableChangeEvent
 	for rows.Next() {
-		row := &snowflakeTableDMLHistoryRow{}
+		row := &snowflakeTableChangeRow{}
 		if err := rows.StructScan(row); err != nil {
 			return nil, err
 		}
-
-		event := &scrapper.TableChangeEvent{
+		events = append(events, &scrapper.TableChangeEvent{
 			Timestamp: row.Timestamp,
-			Version:   "",
-			Operation: "OTHER",
-		}
-
-		if row.RowsAdded != nil {
-			event.RowsInserted = row.RowsAdded
-		}
-		if row.RowsUpdated != nil {
-			event.RowsUpdated = row.RowsUpdated
-		}
-		if row.RowsRemoved != nil {
-			event.RowsDeleted = row.RowsRemoved
-		}
-
-		events = append(events, event)
+		})
 	}
 
 	if err := rows.Err(); err != nil {
@@ -87,4 +116,11 @@ LIMIT %d`,
 	}
 
 	return events, nil
+}
+
+func (e *SnowflakeScrapper) accountUsageDb() string {
+	if e.conf.AccountUsageDb != nil && len(*e.conf.AccountUsageDb) > 0 {
+		return *e.conf.AccountUsageDb
+	}
+	return "SNOWFLAKE"
 }
