@@ -28,6 +28,9 @@ type SnowflakeScrapperConf struct {
 	NoGetDll           bool
 	AccountUsageDb     *string
 	QueryLogsDatabases []string
+	// UseAccessHistoryForTableChanges enables ACCESS_HISTORY for FetchTableChangeHistory instead of
+	// TABLE_DML_HISTORY. ACCESS_HISTORY provides ~3h lag vs ~6h but requires Snowflake Enterprise edition.
+	UseAccessHistoryForTableChanges bool
 }
 
 // FIXME: I couldn't make it work with `foo IN (?)` binding, so I'm using this
@@ -215,6 +218,23 @@ func ignoreShare(ownerAccount string) bool {
 		return true
 	}
 	return false
+}
+
+// isClusterByUnsupportedError checks if the error indicates the CLUSTER_BY column is unavailable.
+// This happens on Snowflake Standard edition where information_schema.tables does not expose
+// the CLUSTER_BY column (only available on Enterprise and above).
+func isClusterByUnsupportedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Snowflake returns SQL compilation error code 904 for invalid identifiers
+	var snowflakeErr *gosnowflake.SnowflakeError
+	if errors.As(err, &snowflakeErr) {
+		return snowflakeErr.Number == 904 && strings.Contains(strings.ToUpper(snowflakeErr.Message), "CLUSTER_BY")
+	}
+	// Fallback: check the error string directly (handles cases where errors.As doesn't unwrap the driver error)
+	errStr := strings.ToUpper(err.Error())
+	return strings.Contains(errStr, "INVALID IDENTIFIER") && strings.Contains(errStr, "CLUSTER_BY")
 }
 
 // isSharedDatabaseUnavailableError checks if the error is a Snowflake shared database unavailable error

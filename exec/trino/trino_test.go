@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -26,15 +27,16 @@ type res struct {
 	TableType    string `db:"table_type"`
 }
 
+
 func (s *TrinoSuite) TestBasicQuery() {
 	// please run locally to make test pass:
 	// docker run --name trino -d -p 8080:8080 trinodb/trino
 	ctx := context.TODO()
 	execer, err := NewTrinoExecutor(ctx, &TrinoConf{
-		Host:      "localhost",
-		Port:      8080,
-		User:      "trino",
-		Password:  "trino",
+		Host:      testenv.EnvOrDefault("TRINO_HOST", "localhost"),
+		Port:      testenv.EnvOrDefaultInt("TRINO_PORT", 8080),
+		User:      testenv.EnvOrDefault("TRINO_USER", "trino"),
+		Password:  testenv.EnvOrDefault("TRINO_PASSWORD", "trino"),
 		Plaintext: true,
 	})
 	s.NoError(err)

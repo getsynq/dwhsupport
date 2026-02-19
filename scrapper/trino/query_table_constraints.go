@@ -53,6 +53,11 @@ func (e *TrinoScrapper) queryTableConstraintsForCatalog(ctx context.Context, cat
 				Warn("Catalog is no longer available, skipping")
 			return nil, nil
 		}
+		if isTableNotFoundError(err) {
+			logging.GetLogger(ctx).WithField("catalog", catalogName).
+				Debug("information_schema.table_constraints not available for catalog, skipping")
+			return nil, nil
+		}
 		return nil, err
 	}
 	return res, nil

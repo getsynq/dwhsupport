@@ -81,6 +81,11 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 						Warn("Shared database is no longer available, skipping")
 					return nil
 				}
+				if isClusterByUnsupportedError(err) {
+					logging.GetLogger(groupCtx).WithField("database", database).
+						Debug("CLUSTER_BY column not available (Snowflake Standard edition), skipping clustering keys")
+					return nil
+				}
 				return errors.Wrapf(err, "failed to query clustering keys for database %s", database)
 			}
 			results = append(results, ckRows...)

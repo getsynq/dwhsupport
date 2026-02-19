@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/logging"
+	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -31,15 +32,16 @@ type res struct {
 	TableType    string `db:"table_type"`
 }
 
+
 func (s *ClickhouseSuite) TestSomething() {
 	ctx := context.TODO()
 	execer, err := NewClickhouseExecutor(ctx, &ClickhouseConf{
-		Hostname:        "localhost",
-		Port:            9000,
-		Username:        "default",
-		Password:        "default",
-		DefaultDatabase: "default",
-		NoSsl:           true,
+		Hostname:        testenv.EnvOrDefault("CLICKHOUSE_HOST", "localhost"),
+		Port:            testenv.EnvOrDefaultInt("CLICKHOUSE_PORT", 9000),
+		Username:        testenv.EnvOrDefault("CLICKHOUSE_USER", "default"),
+		Password:        testenv.EnvOrDefault("CLICKHOUSE_PASSWORD", "default"),
+		DefaultDatabase: testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "default"),
+		NoSsl:           testenv.EnvOrDefaultBool("CLICKHOUSE_NO_SSL", true),
 	})
 	s.NoError(err)
 	s.NotNil(execer)

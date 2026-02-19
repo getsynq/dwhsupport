@@ -56,7 +56,14 @@ func (e *TrinoScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrappe
 		}
 	}
 
-	return basic, nil
+	// Filter out rows with no SQL definition
+	var result []*scrapper.SqlDefinitionRow
+	for _, row := range basic {
+		if row.Sql != "" {
+			result = append(result, row)
+		}
+	}
+	return result, nil
 }
 
 func (e *TrinoScrapper) showCreate(

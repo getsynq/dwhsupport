@@ -9,6 +9,7 @@ import (
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
 	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
+	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -17,6 +18,8 @@ type LocalClickHouseScrapperSuite struct {
 	suite.Suite
 	clickhouseScrapper *ClickhouseScrapper
 	ctx                context.Context
+	databaseName       string
+	fixturesAvailable  bool // set to false when CREATE TABLE is not permitted
 }
 
 func TestLocalClickHouseScrapperSuite(t *testing.T) {
@@ -30,18 +33,19 @@ func (s *LocalClickHouseScrapperSuite) SetupSuite() {
 	}
 
 	s.ctx = context.TODO()
+	s.databaseName = testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "kernel_runs")
 
 	// Create a local ClickHouse scrapper
 	conf := ClickhouseScrapperConf{
 		ClickhouseConf: dwhexecclickhouse.ClickhouseConf{
-			Hostname:        "127.0.0.1",
-			Port:            9000,
-			Username:        "",
-			Password:        "getsynq10",
-			DefaultDatabase: "kernel_runs",
-			NoSsl:           true,
+			Hostname:        testenv.EnvOrDefault("CLICKHOUSE_HOST", "127.0.0.1"),
+			Port:            testenv.EnvOrDefaultInt("CLICKHOUSE_PORT", 9000),
+			Username:        os.Getenv("CLICKHOUSE_USER"),
+			Password:        testenv.EnvOrDefault("CLICKHOUSE_PASSWORD", "getsynq10"),
+			DefaultDatabase: s.databaseName,
+			NoSsl:           testenv.EnvOrDefaultBool("CLICKHOUSE_NO_SSL", true),
 		},
-		DatabaseName: "kernel_runs",
+		DatabaseName: s.databaseName,
 	}
 
 	scrapper, err := NewClickhouseScrapper(s.ctx, conf)
@@ -50,8 +54,8 @@ func (s *LocalClickHouseScrapperSuite) SetupSuite() {
 	}
 	s.clickhouseScrapper = scrapper
 
-	// Create test fixtures
-	s.setupTestFixtures()
+	// Create test fixtures (best-effort: skip fixture-dependent tests if CREATE TABLE is not permitted)
+	s.fixturesAvailable = s.setupTestFixtures()
 }
 
 func (s *LocalClickHouseScrapperSuite) TearDownSuite() {
@@ -61,7 +65,9 @@ func (s *LocalClickHouseScrapperSuite) TearDownSuite() {
 	}
 }
 
-func (s *LocalClickHouseScrapperSuite) setupTestFixtures() {
+// setupTestFixtures creates test tables and data. Returns false if CREATE TABLE is not permitted,
+// in which case fixture-dependent tests will be skipped.
+func (s *LocalClickHouseScrapperSuite) setupTestFixtures() bool {
 	db := s.clickhouseScrapper.executor.GetDb()
 
 	// Create a test table with various column types
@@ -77,7 +83,10 @@ func (s *LocalClickHouseScrapperSuite) setupTestFixtures() {
 		) ENGINE = MergeTree()
 		ORDER BY id
 	`)
-	s.Require().NoError(err)
+	if err != nil {
+		s.T().Logf("Skipping fixture creation (no CREATE TABLE permission): %v", err)
+		return false
+	}
 
 	// Insert test data
 	_, err = db.Exec(`
@@ -113,6 +122,7 @@ func (s *LocalClickHouseScrapperSuite) setupTestFixtures() {
 		ORDER BY (workspace, created_at, id)
 	`)
 	s.Require().NoError(err)
+	return true
 }
 
 func (s *LocalClickHouseScrapperSuite) cleanupTestFixtures() {
@@ -130,6 +140,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryDatabases() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryTables() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	tables, err := s.clickhouseScrapper.QueryTables(s.ctx)
 	s.Require().NoError(err)
 	s.NotEmpty(tables, "Should return tables")
@@ -137,7 +150,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTables() {
 	// Find our test table
 	var foundTable, foundView bool
 	for _, table := range tables {
-		if table.Database == "kernel_runs" {
+		if table.Database == s.databaseName {
 			switch table.Table {
 			case "test_clickhouse_scrapper":
 				foundTable = true
@@ -152,6 +165,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTables() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryCatalog() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	catalog, err := s.clickhouseScrapper.QueryCatalog(s.ctx)
 	s.Require().NoError(err)
 	s.NotEmpty(catalog, "Should return catalog entries")
@@ -159,7 +175,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCatalog() {
 	// Find columns from our test table
 	var foundIdColumn, foundNameColumn, foundBigNumberColumn, foundHugeNumberColumn bool
 	for _, col := range catalog {
-		if col.Database == "kernel_runs" && col.Table == "test_clickhouse_scrapper" {
+		if col.Database == s.databaseName && col.Table == "test_clickhouse_scrapper" {
 			switch col.Column {
 			case "id":
 				foundIdColumn = true
@@ -184,6 +200,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCatalog() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryTableMetrics() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	metrics, err := s.clickhouseScrapper.QueryTableMetrics(s.ctx, time.Time{})
 	s.Require().NoError(err)
 	s.NotEmpty(metrics, "Should return table metrics")
@@ -191,7 +210,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableMetrics() {
 	// Find metrics for our test table
 	var found bool
 	for _, m := range metrics {
-		if m.Database == "kernel_runs" && m.Table == "test_clickhouse_scrapper" {
+		if m.Database == s.databaseName && m.Table == "test_clickhouse_scrapper" {
 			found = true
 			s.NotNil(m.RowCount)
 		}
@@ -201,6 +220,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableMetrics() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQuerySqlDefinitions() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	definitions, err := s.clickhouseScrapper.QuerySqlDefinitions(s.ctx)
 	s.Require().NoError(err)
 	s.NotEmpty(definitions, "Should return SQL definitions")
@@ -208,7 +230,7 @@ func (s *LocalClickHouseScrapperSuite) TestQuerySqlDefinitions() {
 	// Find our view definition
 	var found bool
 	for _, def := range definitions {
-		if def.Database == "kernel_runs" && def.Table == "test_clickhouse_scrapper_view" {
+		if def.Database == s.databaseName && def.Table == "test_clickhouse_scrapper_view" {
 			found = true
 			s.True(def.IsView)
 			s.NotEmpty(def.Sql)
@@ -220,6 +242,9 @@ func (s *LocalClickHouseScrapperSuite) TestQuerySqlDefinitions() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQuerySegments() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	sql := `SELECT DISTINCT name as segment FROM test_clickhouse_scrapper`
 	segments, err := s.clickhouseScrapper.QuerySegments(s.ctx, sql)
 	s.Require().NoError(err)
@@ -234,6 +259,9 @@ func (s *LocalClickHouseScrapperSuite) TestQuerySegments() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	sql := `SELECT
 		name as segment_name,
 		toFloat64(SUM(amount)) as total_amount,
@@ -266,6 +294,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithBigInt() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	sql := `SELECT
 		name as segment_name,
 		big_number as big_value
@@ -289,6 +320,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithBigInt() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithInt256() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	sql := `SELECT
 		name as segment_name,
 		huge_number as huge_value
@@ -312,6 +346,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithInt256() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithDecimal() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	// Test that Decimal types are handled properly
 	sql := `SELECT
 		name as segment_name,
@@ -335,6 +372,9 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_WithDecimal() {
 }
 
 func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	constraints, err := s.clickhouseScrapper.QueryTableConstraints(s.ctx)
 	s.Require().NoError(err)
 	s.NotEmpty(constraints, "Should return table constraints")
@@ -355,7 +395,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	var foundSimplePK, foundSimpleSK bool
 	for _, c := range constraints {
 		if c.Schema == testSchema && c.Table == "test_clickhouse_scrapper" {
-			s.Equal("kernel_runs", c.Database, "Database should be set by post-processor")
+			s.Equal(s.databaseName, c.Database, "Database should be set by post-processor")
 			if c.ConstraintType == scrapper.ConstraintTypePrimaryKey && c.ColumnName == "id" {
 				foundSimplePK = true
 			}
@@ -378,7 +418,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 
 	for _, c := range constraints {
 		if c.Schema == testSchema && c.Table == constraintsTable {
-			s.Equal("kernel_runs", c.Database, "Database should be set by post-processor")
+			s.Equal(s.databaseName, c.Database, "Database should be set by post-processor")
 			switch c.ConstraintType {
 			case scrapper.ConstraintTypePrimaryKey:
 				primaryKeyCols = append(primaryKeyCols, c.ColumnName)
@@ -423,8 +463,12 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	s.Equal("toYYYYMM(created_at)", partitionExpr, "Partition expression should be toYYYYMM(created_at)")
 }
 
+
 // TestQueryCustomMetrics_DirectDB tests QueryCustomMetrics directly with the DB connection
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
 	db := s.clickhouseScrapper.executor.GetDb()
 
 	sql := `SELECT

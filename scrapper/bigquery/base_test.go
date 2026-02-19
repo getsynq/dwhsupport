@@ -1,4 +1,4 @@
-package trino
+package bigquery
 
 import (
 	"os"

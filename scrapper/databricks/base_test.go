@@ -1,4 +1,4 @@
-package trino
+package databricks
 
 import (
 	"os"
