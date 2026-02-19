@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
@@ -35,7 +36,7 @@ func (e *DatabricksScrapper) FetchTableChangeHistory(
 		return nil, err
 	}
 
-	sql := e.buildTableChangeHistorySQL(fqn, from, to, limit)
+	sql := querycontext.AppendSQLComment(ctx, e.buildTableChangeHistorySQL(fqn, from, to, limit))
 
 	rows, err := executor.GetDb().QueryxContext(ctx, sql)
 	if err != nil {

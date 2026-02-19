@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
 )
@@ -39,9 +40,10 @@ func (e *RedshiftScrapper) FetchTableChangeHistory(
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
 
+	sql := querycontext.AppendSQLComment(ctx, tableChangeHistorySQL)
 	rows, err := e.executor.GetDb().QueryxContext(
 		ctx,
-		tableChangeHistorySQL,
+		sql,
 		from.UTC(),
 		to.UTC(),
 		fqn.SchemaName,

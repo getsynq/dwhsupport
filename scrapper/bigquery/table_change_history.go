@@ -6,7 +6,6 @@ import (
 	"time"
 
 	bq "cloud.google.com/go/bigquery"
-	execbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
@@ -33,16 +32,10 @@ func (e *BigQueryScrapper) FetchTableChangeHistory(
 
 	sql := e.buildTableChangeHistorySQL(fqn, from, to, limit)
 
-	query := e.executor.GetBigQueryClient().Query(sql)
-	job, err := query.Run(ctx)
+	iter, err := e.executor.QueryRowsIterator(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
-	iter, err := job.Read(ctx)
-	if err != nil {
-		return nil, err
-	}
-	execbigquery.CollectBigQueryStats(ctx, job)
 
 	var events []*scrapper.TableChangeEvent
 	for {
