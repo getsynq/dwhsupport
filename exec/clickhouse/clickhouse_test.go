@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"strconv"
 	"testing"
 
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/logging"
+	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -32,31 +32,16 @@ type res struct {
 	TableType    string `db:"table_type"`
 }
 
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
-func envOrDefaultInt(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	return def
-}
 
 func (s *ClickhouseSuite) TestSomething() {
 	ctx := context.TODO()
 	execer, err := NewClickhouseExecutor(ctx, &ClickhouseConf{
-		Hostname:        envOrDefault("CLICKHOUSE_HOST", "localhost"),
-		Port:            envOrDefaultInt("CLICKHOUSE_PORT", 9000),
-		Username:        envOrDefault("CLICKHOUSE_USER", "default"),
-		Password:        envOrDefault("CLICKHOUSE_PASSWORD", "default"),
-		DefaultDatabase: envOrDefault("CLICKHOUSE_DATABASE", "default"),
-		NoSsl:           true,
+		Hostname:        testenv.EnvOrDefault("CLICKHOUSE_HOST", "localhost"),
+		Port:            testenv.EnvOrDefaultInt("CLICKHOUSE_PORT", 9000),
+		Username:        testenv.EnvOrDefault("CLICKHOUSE_USER", "default"),
+		Password:        testenv.EnvOrDefault("CLICKHOUSE_PASSWORD", "default"),
+		DefaultDatabase: testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "default"),
+		NoSsl:           testenv.EnvOrDefaultBool("CLICKHOUSE_NO_SSL", true),
 	})
 	s.NoError(err)
 	s.NotNil(execer)

@@ -3,13 +3,13 @@ package clickhouse
 import (
 	"context"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
 	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
+	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -32,17 +32,17 @@ func (s *LocalClickHouseScrapperSuite) SetupSuite() {
 	}
 
 	s.ctx = context.TODO()
-	s.databaseName = envOrDefault("CLICKHOUSE_DATABASE", "kernel_runs")
+	s.databaseName = testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "kernel_runs")
 
 	// Create a local ClickHouse scrapper
 	conf := ClickhouseScrapperConf{
 		ClickhouseConf: dwhexecclickhouse.ClickhouseConf{
-			Hostname:        envOrDefault("CLICKHOUSE_HOST", "127.0.0.1"),
-			Port:            envOrDefaultInt("CLICKHOUSE_PORT", 9000),
+			Hostname:        testenv.EnvOrDefault("CLICKHOUSE_HOST", "127.0.0.1"),
+			Port:            testenv.EnvOrDefaultInt("CLICKHOUSE_PORT", 9000),
 			Username:        os.Getenv("CLICKHOUSE_USER"),
-			Password:        envOrDefault("CLICKHOUSE_PASSWORD", "getsynq10"),
+			Password:        testenv.EnvOrDefault("CLICKHOUSE_PASSWORD", "getsynq10"),
 			DefaultDatabase: s.databaseName,
-			NoSsl:           true,
+			NoSsl:           testenv.EnvOrDefaultBool("CLICKHOUSE_NO_SSL", true),
 		},
 		DatabaseName: s.databaseName,
 	}
@@ -426,21 +426,6 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	s.Equal("toYYYYMM(created_at)", partitionExpr, "Partition expression should be toYYYYMM(created_at)")
 }
 
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
-
-func envOrDefaultInt(key string, def int) int {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			return n
-		}
-	}
-	return def
-}
 
 // TestQueryCustomMetrics_DirectDB tests QueryCustomMetrics directly with the DB connection
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {

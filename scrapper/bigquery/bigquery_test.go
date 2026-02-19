@@ -8,15 +8,9 @@ import (
 
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
-
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
-}
 
 // LocalBigQueryScrapperSuite tests scrapper methods against a local BigQuery instance
 type LocalBigQueryScrapperSuite struct {
@@ -40,7 +34,7 @@ func (s *LocalBigQueryScrapperSuite) SetupSuite() {
 	s.testDataset = "test_scrapper"
 
 	// Try to load credentials from the JSON file
-	credentialsFile := envOrDefault("BIGQUERY_CREDENTIALS_FILE", "../../nifty-motif-341212-88499dbfc22e.json")
+	credentialsFile := testenv.EnvOrDefault("BIGQUERY_CREDENTIALS_FILE", "../../nifty-motif-341212-88499dbfc22e.json")
 	credentialsJson, err := os.ReadFile(credentialsFile)
 	if err != nil {
 		s.T().Skipf("Skipping: could not read BigQuery credentials file: %v", err)
@@ -53,7 +47,7 @@ func (s *LocalBigQueryScrapperSuite) SetupSuite() {
 	conf := &BigQueryScrapperConf{
 		BigQueryConf: dwhexecbigquery.BigQueryConf{
 			ProjectId:       os.Getenv("BIGQUERY_PROJECT_ID"),
-			Region:          envOrDefault("BIGQUERY_REGION", "EU"),
+			Region:          testenv.EnvOrDefault("BIGQUERY_REGION", "EU"),
 			CredentialsJson: string(credentialsJson),
 		},
 		Blocklist: blocklist,
