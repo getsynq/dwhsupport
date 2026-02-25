@@ -44,3 +44,16 @@ WHERE NOT pg_is_other_temp_schema(sch.oid)
   AND sch.nspname = 'my_schema'
   AND tbl.relname = 'my_table'
 ---
+
+[TestMetaQueryBuilderSnapshot/StandardTable/duckdb - 1]
+SELECT
+    estimated_size as "num_rows"
+FROM duckdb_tables() t
+WHERE NOT temporary
+  AND NOT internal
+  AND schema_name NOT IN ('information_schema')
+  AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
+  AND database_name = 'my_project'
+  AND schema_name = 'my_schema'
+  AND table_name = 'my_table'
+---
