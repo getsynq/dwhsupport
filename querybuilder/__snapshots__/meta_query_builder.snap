@@ -44,3 +44,15 @@ WHERE NOT pg_is_other_temp_schema(sch.oid)
   AND sch.nspname = 'my_schema'
   AND tbl.relname = 'my_table'
 ---
+
+[TestMetaQueryBuilderSnapshot/StandardTable/snowflake - 1]
+SELECT
+    row_count as "num_rows",
+    bytes as "size_bytes",
+    last_altered as "last_loaded_at"
+FROM my_project.information_schema.tables
+WHERE row_count IS NOT NULL
+  AND table_schema NOT IN ('INFORMATION_SCHEMA')
+  AND table_schema = 'my_schema'
+  AND table_name = 'my_table'
+---

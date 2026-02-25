@@ -29,8 +29,8 @@ func (m *MetaQueryBuilder) ToSql(dialect Dialect) (string, error) {
 	// 	return bigquery(m.table)
 	// case *RedshiftDialect:
 	// 	return redshift(m.table)
-	// case *SnowflakeDialect:
-	// 	return snowflake(m.table)
+	case *SnowflakeDialect:
+		return snowflake(m.table)
 	// case *DuckDBDialect:
 	// 	return duckdb(m.table)
 	// case *MySQLDialect:

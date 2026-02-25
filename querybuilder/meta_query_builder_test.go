@@ -30,7 +30,7 @@ func TestMetaQueryBuilderSnapshot(t *testing.T) {
 		// {"trino", NewTrinoDialect()},
 		// {"bigquery", NewBigQueryDialect()},
 		// {"redshift", NewRedshiftDialect()},
-		// {"snowflake", NewSnowflakeDialect()},
+		{"snowflake", NewSnowflakeDialect()},
 		// {"duckdb", NewDuckDBDialect()},
 		// {"mysql", NewMySQLDialect()},
 	}
