@@ -44,3 +44,14 @@ WHERE NOT pg_is_other_temp_schema(sch.oid)
   AND sch.nspname = 'my_schema'
   AND tbl.relname = 'my_table'
 ---
+
+[TestMetaQueryBuilderSnapshot/StandardTable/mysql - 1]
+SELECT
+    TABLE_ROWS as "num_rows",
+    UPDATE_TIME as "last_loaded_at"
+FROM information_schema.tables
+WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
+  AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
+  AND TABLE_SCHEMA = 'my_schema'
+  AND TABLE_NAME = 'my_table'
+---

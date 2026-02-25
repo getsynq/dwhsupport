@@ -32,7 +32,7 @@ func TestMetaQueryBuilderSnapshot(t *testing.T) {
 		// {"redshift", NewRedshiftDialect()},
 		// {"snowflake", NewSnowflakeDialect()},
 		// {"duckdb", NewDuckDBDialect()},
-		// {"mysql", NewMySQLDialect()},
+		{"mysql", NewMySQLDialect()},
 	}
 
 	for _, tc := range testCases {

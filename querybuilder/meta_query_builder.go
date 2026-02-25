@@ -33,8 +33,8 @@ func (m *MetaQueryBuilder) ToSql(dialect Dialect) (string, error) {
 	// 	return snowflake(m.table)
 	// case *DuckDBDialect:
 	// 	return duckdb(m.table)
-	// case *MySQLDialect:
-	// 	return mysql(m.table)
+	case *MySQLDialect:
+		return mysql(m.table)
 
 	default:
 		return "", fmt.Errorf("dialect not supported: %v", dialect)
