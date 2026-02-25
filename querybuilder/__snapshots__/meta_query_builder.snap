@@ -44,3 +44,17 @@ WHERE NOT pg_is_other_temp_schema(sch.oid)
   AND sch.nspname = 'my_schema'
   AND tbl.relname = 'my_table'
 ---
+
+[TestMetaQueryBuilderSnapshot/StandardTable/redshift - 1]
+SELECT
+    estimated_visible_rows as "num_rows",
+    null::timestamp as "last_loaded_at"
+FROM pg_catalog.svv_table_info
+WHERE estimated_visible_rows IS NOT NULL
+  AND schema <> 'catalog_history'::name
+  AND schema <> 'pg_toast'::name
+  AND schema <> 'pg_internal'::name
+  AND "database" = 'my_project'
+  AND "schema" = 'my_schema'
+  AND "table" = 'my_table'
+---
