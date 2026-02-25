@@ -23,8 +23,8 @@ func (m *MetaQueryBuilder) ToSql(dialect Dialect) (string, error) {
 		return clickhouse(m.table)
 	case *PostgresDialect:
 		return postgres(m.table)
-	// case *TrinoDialect:
-	// 	return trino(m.table)
+	case *TrinoDialect:
+		return trino(m.table)
 	// case *BigQueryDialect:
 	// 	return bigquery(m.table)
 	// case *RedshiftDialect:
