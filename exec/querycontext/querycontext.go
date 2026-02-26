@@ -39,11 +39,18 @@ func (qc QueryContext) FormatAsJSON() string {
 
 // FormatAsSQLComment returns the query context as a SQL block comment
 // suitable for appending to a query string: /* {"key":"value"} */
+//
+// The JSON payload is sanitized to prevent SQL injection: any occurrence of
+// the comment-close sequence "*/" is neutralised by replacing "/" with its
+// JSON Unicode escape "\u002f". The result is still valid, parseable JSON
+// but cannot prematurely close the SQL block comment.
 func (qc QueryContext) FormatAsSQLComment() string {
 	j := qc.FormatAsJSON()
 	if j == "" {
 		return ""
 	}
+	// Prevent comment-close injection: escape "/" as \u002f inside "*/" sequences.
+	j = strings.ReplaceAll(j, "*/", "*\\u002f")
 	return " /* " + j + " */"
 }
 
