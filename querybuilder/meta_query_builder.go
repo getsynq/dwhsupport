@@ -2,6 +2,7 @@ package querybuilder
 
 import (
 	"fmt"
+	"strings"
 
 	. "github.com/getsynq/dwhsupport/sqldialect"
 )
@@ -185,9 +186,18 @@ func trino(table TableExpr) (string, error) {
 		return "", fmt.Errorf("expected TableFqnExpr for trino")
 	}
 
-	// SHOW STATS returns statistics for a specific table
-	query := fmt.Sprintf("SHOW STATS FOR %s.%s.%s", tableFqn.ProjectId(), tableFqn.DatasetId(), tableFqn.TableId())
+	// SHOW STATS returns statistics for a specific table.
+	query := fmt.Sprintf("SHOW STATS FOR %s.%s.%s",
+		trinoQuoteIdentifier(tableFqn.ProjectId()),
+		trinoQuoteIdentifier(tableFqn.DatasetId()),
+		trinoQuoteIdentifier(tableFqn.TableId()),
+	)
 	return query, nil
+}
+
+// trinoQuoteIdentifier wraps s in double quotes, escaping any embedded double quotes.
+func trinoQuoteIdentifier(s string) string {
+	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
 func postgres(table TableExpr) (string, error) {

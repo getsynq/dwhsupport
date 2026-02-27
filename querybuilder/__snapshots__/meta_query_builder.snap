@@ -46,5 +46,5 @@ WHERE NOT pg_is_other_temp_schema(sch.oid)
 ---
 
 [TestMetaQueryBuilderSnapshot/StandardTable/trino - 1]
-SHOW STATS FOR my_project.my_schema.my_table
+SHOW STATS FOR "my_project"."my_schema"."my_table"
 ---
