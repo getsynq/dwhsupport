@@ -16,5 +16,6 @@ select ''                         as "database",
        '' AS "description"
 from tables
 where table_schema not in ('information_schema', 'performance_schema', 'mysql', 'sys')
+  /* SYNQ_SCOPE_FILTER */
 order by
     "database", "schema", "table"

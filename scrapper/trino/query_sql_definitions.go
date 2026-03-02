@@ -10,6 +10,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -130,6 +131,7 @@ func (e *TrinoScrapper) getBasicSqlDefinitions(ctx context.Context) ([]*scrapper
 				"coalesce(v.view_definition, '')", -1)
 		}
 
+		catalogQuery = scope.AppendScopeConditions(ctx, catalogQuery, "", "table_schema", "table_name")
 		res, err := stdsql.QueryMany(ctx, db, catalogQuery,
 			dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
 				row.Instance = e.conf.Host

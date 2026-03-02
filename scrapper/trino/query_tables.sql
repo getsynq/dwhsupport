@@ -10,3 +10,4 @@ FROM {{catalog}}.information_schema.tables t
 {{table_comments_join}}
 {{materialized_views_join}}
 WHERE t.table_schema NOT IN ('information_schema')
+  /* SYNQ_SCOPE_FILTER */

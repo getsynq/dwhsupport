@@ -23,6 +23,7 @@ WHERE r.schema_name NOT IN ('information_schema')
   AND r.database_name NOT IN ('sample_data'
     , 'temp'
     , 'system', 'md_information_schema')
+  /* SYNQ_SCOPE_FILTER */
 ORDER BY
     r.database_name,
     r.schema_name,

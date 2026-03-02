@@ -11,4 +11,5 @@ JOIN information_schema.constraint_column_usage c
     AND tc.constraint_schema = c.constraint_schema
     AND tc.constraint_catalog = c.constraint_catalog
 WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+  /* SYNQ_SCOPE_FILTER */
 ORDER BY c.table_schema, c.table_name, tc.constraint_name, c.ordinal_position

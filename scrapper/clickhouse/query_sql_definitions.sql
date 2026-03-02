@@ -4,4 +4,5 @@ SELECT tbls.database                                               as schema,
        tbls.create_table_query                                     as sql
 FROM clusterAllReplicas(default, system.tables) tbls
 WHERE length(sql) > 0 and schema NOT IN ('system', 'information_schema')
+  /* SYNQ_SCOPE_FILTER */
 LIMIT 1 by schema, table

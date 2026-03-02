@@ -4,4 +4,5 @@ SELECT tbls.database as schema,
        tbls.comment  as description
 FROM clusterAllReplicas(default, system.tables) tbls
 WHERE schema NOT IN ('system', 'information_schema')
+  /* SYNQ_SCOPE_FILTER */
 LIMIT 1 by schema, table

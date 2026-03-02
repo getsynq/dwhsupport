@@ -18,5 +18,6 @@ where
   and tbl.relkind in ('r', 'v', 'f', 'p', 'm') -- o[r]dinary table, [v]iew, [f]oreign table, [p]artitioned table, [m]aterialized view. Other values are [i]ndex, [S]equence, [c]omposite type, [t]OAST table
   AND
     sch.nspname not in ('pg_catalog', 'information_schema')
+  /* SYNQ_SCOPE_FILTER */
 order by
     database, schema, "table"

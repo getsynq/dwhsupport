@@ -1,3 +1,5 @@
+SELECT schema, table, constraint_name, column_name, constraint_type, column_position
+FROM (
 -- Primary keys parsed from system.tables.primary_key with correct key column ordering
 SELECT
     t.database AS schema,
@@ -62,5 +64,7 @@ WHERE t.partition_key != ''
 
 -- TODO: Add projections when system.projections table becomes available in ClickHouse.
 -- Currently projections can only be extracted by parsing create_table_query DDL which is fragile.
-
+)
+WHERE 1=1
+  /* SYNQ_SCOPE_FILTER */
 ORDER BY schema, table, constraint_type, constraint_name, column_position

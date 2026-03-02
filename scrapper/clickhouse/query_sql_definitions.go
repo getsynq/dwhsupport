@@ -8,6 +8,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -15,8 +16,8 @@ import (
 var querySqlDefinitionsSql string
 
 func (e *ClickhouseScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-
-	sqlDefs, err := dwhexecclickhouse.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, querySqlDefinitionsSql,
+	sql := scope.AppendScopeConditions(ctx, querySqlDefinitionsSql, "", "tbls.database", "tbls.name")
+	sqlDefs, err := dwhexecclickhouse.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.SqlDefinitionRow](func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
 			row.Database = e.conf.Hostname
 			if len(e.conf.DatabaseName) > 0 {

@@ -10,4 +10,6 @@ SELECT
     END AS `constraint_type`,
     s.SEQ_IN_INDEX AS `column_position`
 FROM information_schema.STATISTICS s
+WHERE 1=1
+  /* SYNQ_SCOPE_FILTER */
 ORDER BY s.TABLE_SCHEMA, s.TABLE_NAME, s.INDEX_NAME, s.SEQ_IN_INDEX

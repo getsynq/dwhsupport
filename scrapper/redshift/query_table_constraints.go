@@ -7,6 +7,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_table_constraints.sql
@@ -31,7 +32,8 @@ func (e *RedshiftScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapp
 	var results []*scrapper.TableConstraintRow
 
 	// Query primary keys and unique constraints
-	pkRows, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), queryTableConstraintsSql,
+	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "n.nspname", "c.relname")
+	pkRows, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host

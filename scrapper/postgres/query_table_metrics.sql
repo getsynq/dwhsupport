@@ -24,3 +24,4 @@ WHERE not pg_is_other_temp_schema(sch.oid) -- Exclude temporary schemas from oth
   and tbl.relkind in ('r', 'f', 'p', 'm')  -- Include regular tables, foreign tables, partitioned tables, and materialized views
   AND sch.nspname NOT IN ('pg_catalog', 'information_schema')  -- Exclude system schemas
   AND tbl.reltuples >= 0  -- Exclude tables with negative tuple counts (which indicate invalid statistics)
+  /* SYNQ_SCOPE_FILTER */

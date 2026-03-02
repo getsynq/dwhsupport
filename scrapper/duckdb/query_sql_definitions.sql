@@ -23,7 +23,8 @@ select r.database_name as "database",
 FROM relations r
 WHERE r.schema_name NOT IN ('information_schema')
   AND r.database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
-and length(r.sql) > 0
+  AND length(r.sql) > 0
+  /* SYNQ_SCOPE_FILTER */
 ORDER BY r.database_name,
          r.schema_name,
          r.table_name

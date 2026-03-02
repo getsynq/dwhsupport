@@ -7,3 +7,4 @@ WHERE not temporary
   and not internal
   AND schema_name NOT IN ('information_schema')
   AND database_name NOT IN ('sample_data', 'temp', 'system', 'md_information_schema')
+  /* SYNQ_SCOPE_FILTER */

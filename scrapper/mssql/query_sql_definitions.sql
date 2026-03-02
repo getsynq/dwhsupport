@@ -14,5 +14,6 @@ FROM
 WHERE
     v.is_ms_shipped = 0
     AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
+    /* SYNQ_SCOPE_FILTER */
 ORDER BY
     s.name, v.name

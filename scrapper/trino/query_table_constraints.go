@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_table_constraints.sql
@@ -37,6 +38,7 @@ func (e *TrinoScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.
 
 func (e *TrinoScrapper) queryTableConstraintsForCatalog(ctx context.Context, catalogName string) ([]*scrapper.TableConstraintRow, error) {
 	query := strings.ReplaceAll(queryTableConstraintsSql, "{{catalog}}", catalogName)
+	query = scope.AppendScopeConditions(ctx, query, "", "tc.constraint_schema", "tc.table_name")
 
 	res, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), query,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {

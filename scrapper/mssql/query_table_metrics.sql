@@ -32,5 +32,6 @@ WHERE
     t.is_ms_shipped = 0
     AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
     AND t.type = 'U'
+    /* SYNQ_SCOPE_FILTER */
 ORDER BY
     s.name, t.name

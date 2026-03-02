@@ -23,3 +23,5 @@ SELECT cols.schema,
        table_comments.table_comment
 FROM cols
          LEFT JOIN table_comments USING (schema, table)
+WHERE 1=1
+  /* SYNQ_SCOPE_FILTER */

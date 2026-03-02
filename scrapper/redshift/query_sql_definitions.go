@@ -7,13 +7,15 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_sql_definitions.sql
 var querySqlDefinitionsSql string
 
 func (e *RedshiftScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	return stdsql.QueryMany[scrapper.SqlDefinitionRow](ctx, e.executor.GetDb(), querySqlDefinitionsSql,
+	sql := scope.AppendScopeConditions(ctx, querySqlDefinitionsSql, "", "table_schema", "table_name")
+	return stdsql.QueryMany[scrapper.SqlDefinitionRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithArgs[scrapper.SqlDefinitionRow](e.conf.Database),
 		dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
 			if row.Schema == "pg_automv" {

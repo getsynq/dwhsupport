@@ -15,4 +15,5 @@ JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
 JOIN sys.tables t ON i.object_id = t.object_id
 JOIN sys.schemas s ON t.schema_id = s.schema_id
 WHERE ic.is_included_column = 0
+    /* SYNQ_SCOPE_FILTER */
 ORDER BY s.name, t.name, i.name, ic.key_ordinal
