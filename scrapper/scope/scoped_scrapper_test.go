@@ -21,10 +21,10 @@ type mockScrapper struct {
 	constraintRows []*scrapper.TableConstraintRow
 }
 
-func (m *mockScrapper) DialectType() string                         { return "mock" }
+func (m *mockScrapper) DialectType() string            { return "mock" }
 func (m *mockScrapper) SqlDialect() sqldialect.Dialect { return nil }
-func (m *mockScrapper) IsPermissionError(error) bool                { return false }
-func (m *mockScrapper) Close() error                                { return nil }
+func (m *mockScrapper) IsPermissionError(error) bool   { return false }
+func (m *mockScrapper) Close() error                   { return nil }
 
 func (m *mockScrapper) ValidateConfiguration(context.Context) ([]string, error) {
 	return nil, nil

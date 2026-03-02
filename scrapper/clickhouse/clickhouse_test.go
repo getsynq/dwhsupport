@@ -463,7 +463,6 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	s.Equal("toYYYYMM(created_at)", partitionExpr, "Partition expression should be toYYYYMM(created_at)")
 }
 
-
 // TestQueryCustomMetrics_DirectDB tests QueryCustomMetrics directly with the DB connection
 func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {
 	if !s.fixturesAvailable {
