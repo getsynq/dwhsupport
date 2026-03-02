@@ -10,6 +10,7 @@ import (
 	"github.com/DataDog/go-sqllexer"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqlparser"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -53,10 +54,15 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		existingDbs[database.Name] = true
 	}
 
+	scopeFilter := scope.GetScope(origCtx)
+
 	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
+			continue
+		}
+		if !scopeFilter.IsDatabaseAccepted(database) {
 			continue
 		}
 

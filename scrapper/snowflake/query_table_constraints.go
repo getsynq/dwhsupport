@@ -8,6 +8,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -44,11 +45,16 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 		existingDbs[database.Name] = true
 	}
 
+	scopeFilter := scope.GetScope(ctx)
+
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(4)
 
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
+			continue
+		}
+		if !scopeFilter.IsDatabaseAccepted(database) {
 			continue
 		}
 
