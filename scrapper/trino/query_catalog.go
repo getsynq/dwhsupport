@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_catalog.sql
@@ -43,6 +44,7 @@ func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogCo
 			query = strings.Replace(query, "{{table_comments_join}}", "", -1)
 			query = strings.Replace(query, "{{table_comment_expression}}", "''", -1)
 		}
+		query = scope.AppendScopeConditions(ctx, query, "", "t.table_schema", "t.table_name")
 		rows, err := stdsql.QueryMany(ctx, db, query,
 			dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 				row.Instance = e.conf.Host

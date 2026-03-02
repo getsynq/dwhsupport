@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_tables.sql
@@ -76,6 +77,7 @@ func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]
 		catalogQuery = strings.Replace(catalogQuery, "{{is_view_expression}}", "t.table_type = 'VIEW'", -1)
 	}
 
+	catalogQuery = scope.AppendScopeConditions(ctx, catalogQuery, "", "t.table_schema", "t.table_name")
 	res, err := stdsql.QueryMany(ctx, db, catalogQuery,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {
 			row.Instance = e.conf.Host

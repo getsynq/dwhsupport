@@ -7,13 +7,15 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_catalog.sql
 var queryCatalogSql string
 
 func (e *OracleScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-	return dwhexecoracle.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, queryCatalogSql,
+	sql := scope.AppendScopeConditions(ctx, queryCatalogSql, "", "c.OWNER", "c.TABLE_NAME")
+	return dwhexecoracle.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Database = e.conf.ServiceName
 			row.Instance = e.conf.Host
