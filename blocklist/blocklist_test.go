@@ -15,7 +15,7 @@ func TestNewBlocklist(t *testing.T) {
 		{
 			patterns: []string{"test_*"},
 			accepted: []string{"something.bar", "tests_bar.baz.bar", "tests_bar"},
-			rejected: []string{"test_bar.baz", "test_bar.baz.bar.baz"},
+			rejected: []string{"test_bar.baz", "test_bar.baz.bar.baz", "test_"},
 		},
 		{
 			patterns: []string{"*.pr_*"},
@@ -25,6 +25,12 @@ func TestNewBlocklist(t *testing.T) {
 		{
 			patterns: []string{"..."},
 			accepted: []string{"foo"},
+		},
+		{
+			// Zero-char glob match: * should match empty string too.
+			patterns: []string{"prefix_*"},
+			accepted: []string{"other"},
+			rejected: []string{"prefix_", "prefix_foo"},
 		},
 	}
 
