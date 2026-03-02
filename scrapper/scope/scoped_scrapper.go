@@ -35,7 +35,10 @@ func (s *ScopedScrapper) effectiveFilter(ctx context.Context) *ScopeFilter {
 	return GetScope(s.effectiveCtx(ctx))
 }
 
-// Scrapper interface — pass-through methods
+// Scrapper interface — pass-through methods (not filtered by scope).
+// These either don't return warehouse objects (DialectType, SqlDialect, IsPermissionError, Close,
+// ValidateConfiguration) or execute user-provided SQL that cannot be scope-filtered
+// (QuerySegments, QueryCustomMetrics, QueryShape).
 
 func (s *ScopedScrapper) DialectType() string              { return s.inner.DialectType() }
 func (s *ScopedScrapper) SqlDialect() sqldialect.Dialect   { return s.inner.SqlDialect() }
@@ -58,7 +61,10 @@ func (s *ScopedScrapper) QueryShape(ctx context.Context, sql string) ([]*scrappe
 	return s.inner.QueryShape(ctx, sql)
 }
 
-// Scrapper interface — filtered methods
+// Scrapper interface — filtered methods.
+// These inject the base scope into the context (enabling SQL push-down in the inner scrapper)
+// and post-filter returned rows to guarantee scope compliance even when the inner scrapper
+// does not support SQL push-down.
 
 func (s *ScopedScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	ctx = s.effectiveCtx(ctx)
