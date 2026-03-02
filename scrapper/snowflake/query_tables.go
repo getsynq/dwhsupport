@@ -16,7 +16,7 @@ import (
 )
 
 var tablesQuery = `
-	select 
+	select
 		t.table_catalog as "database",
         t.table_schema as "schema",
         t.table_name as "table",
@@ -24,10 +24,11 @@ var tablesQuery = `
         NVL2(t.comment, t.comment, '') as "description",
         (table_type='VIEW' OR table_type='MATERIALIZED VIEW') as "is_view",
         table_type='BASE TABLE' as "is_table"
-	from  
+	from
 		%s.information_schema.tables as t
-	where 
+	where
 		UPPER(t.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
+		/* SYNQ_SCOPE_FILTER */
 	`
 
 func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.TableRow, error) {
@@ -68,7 +69,8 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.Ta
 
 				var tmpResults []*scrapper.TableRow
 
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(tablesQuery, database))
+				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(tablesQuery, database), "", "t.table_schema", "t.table_name")
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
@@ -144,7 +146,8 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.Ta
 		return nil, err
 	}
 
-	return finalResults, nil
+	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
+	return scope.FilterRows(finalResults, scopeFilter), nil
 }
 
 // ShowStreamsRow represents the structure of a row returned by SHOW STREAMS command

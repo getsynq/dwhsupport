@@ -16,7 +16,7 @@ import (
 )
 
 var catalogQuery = `
-	select 
+	select
 	    CURRENT_ORGANIZATION_NAME() || '-' || CURRENT_ACCOUNT() as "instance",
 		c.table_catalog as "database",
         c.table_schema as "schema",
@@ -25,14 +25,15 @@ var catalogQuery = `
         c.column_name as "column",
         c.data_type as "type",
         c.ordinal_position as "position"
-	from 
+	from
 		%[1]s.information_schema.columns as c
-	join 
-		%[1]s.information_schema.tables as t on 
+	join
+		%[1]s.information_schema.tables as t on
 		    c.table_catalog = t.table_catalog
 			and c.table_name = t.table_name
 			and c.table_schema = t.table_schema
 	where UPPER(c.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
+		/* SYNQ_SCOPE_FILTER */
 	`
 
 func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.CatalogColumnRow, error) {
@@ -69,7 +70,8 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 		}
 		g.Go(
 			func() error {
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(catalogQuery, database))
+				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(catalogQuery, database), "", "c.table_schema", "c.table_name")
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
@@ -192,5 +194,6 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 		return nil, err
 	}
 
-	return finalResults, nil
+	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
+	return scope.FilterRows(finalResults, scopeFilter), nil
 }

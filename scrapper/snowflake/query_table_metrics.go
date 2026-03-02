@@ -14,17 +14,18 @@ import (
 )
 
 var tableMetricsSql = `
-	select 
+	select
 		table_catalog as "database",
 		table_schema as "schema",
 		table_name as "table",
 		row_count as "row_count",
 		bytes as "size_bytes",
 		last_altered as "updated_at"
-	from 
+	from
 		%s.information_schema.tables
-	where 
+	where
 		row_count is not null and table_schema not in ('INFORMATION_SCHEMA')
+		/* SYNQ_SCOPE_FILTER */
 	`
 
 func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
@@ -65,7 +66,8 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 
 				var tmpResults []*scrapper.TableMetricsRow
 
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(tableMetricsSql, database))
+				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(tableMetricsSql, database), "", "table_schema", "table_name")
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).

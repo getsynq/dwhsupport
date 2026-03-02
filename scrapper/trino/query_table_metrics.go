@@ -17,6 +17,8 @@ import (
 
 type MetricsStrategy func(ctx context.Context, db *sqlx.DB, tableRow *scrapper.TableRow, tableMetricsRow *scrapper.TableMetricsRow) error
 
+// QueryTableMetrics fetches metrics for each table returned by queryTables, which
+// already applies scope filtering via SQL push-down. No additional scope check needed.
 func (e *TrinoScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 
 	db := e.executor.GetDb()
