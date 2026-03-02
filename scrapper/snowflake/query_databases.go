@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/samber/lo"
 )
 
@@ -25,5 +26,5 @@ func (e *SnowflakeScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.Dat
 			DatabaseOwner: lo.EmptyableToPtr(db.Origin),
 		})
 	}
-	return res, nil
+	return scope.FilterDatabaseRows(res, scope.GetScope(ctx)), nil
 }

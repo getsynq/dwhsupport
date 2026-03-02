@@ -25,6 +25,7 @@ JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE (a.attsortkeyord > 0 OR a.attisdistkey = true)
 	AND a.attnum > 0
+	/* SYNQ_SCOPE_FILTER */
 ORDER BY n.nspname, c.relname, a.attsortkeyord
 `
 
@@ -64,7 +65,8 @@ type sortDistRow struct {
 }
 
 func (e *RedshiftScrapper) querySortDistKeys(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
-	rows, err := stdsql.QueryMany[sortDistRow](ctx, e.executor.GetDb(), querySortDistKeysSql)
+	sql := scope.AppendScopeConditions(ctx, querySortDistKeysSql, "", "n.nspname", "c.relname")
+	rows, err := stdsql.QueryMany[sortDistRow](ctx, e.executor.GetDb(), sql)
 	if err != nil {
 		return nil, err
 	}
