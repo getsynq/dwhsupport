@@ -10,6 +10,7 @@ import (
 	"github.com/DataDog/go-sqllexer"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqlparser"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -26,6 +27,7 @@ NVL2(view_definition,view_definition,'') as "sql"
 
 FROM %[1]s.information_schema.views
 where UPPER(table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
+/* SYNQ_SCOPE_FILTER */
 UNION ALL
 SELECT table_catalog as "database",
 table_schema as "schema",
@@ -37,6 +39,7 @@ FROM %[1]s.information_schema.tables
 where UPPER(table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
 AND table_type !='VIEW'
 AND table_type !='MATERIALIZED VIEW'
+/* SYNQ_SCOPE_FILTER */
 `
 
 func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
@@ -53,10 +56,15 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		existingDbs[database.Name] = true
 	}
 
+	scopeFilter := scope.GetScope(origCtx)
+
 	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
+			continue
+		}
+		if !scopeFilter.IsDatabaseAccepted(database) {
 			continue
 		}
 
@@ -71,7 +79,8 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 
 				var tmpResults []*scrapper.SqlDefinitionRow
 
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, fmt.Sprintf(sqlDefinitionsQuery, database))
+				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(sqlDefinitionsQuery, database), "", "table_schema", "table_name")
+				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
@@ -124,6 +133,9 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	if err != nil {
 		return nil, err
 	}
+
+	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
+	finalResults = scope.FilterRows(finalResults, scopeFilter)
 
 	if e.conf.NoGetDll {
 		logging.GetLogger(origCtx).Info("skipping get ddl in sql definitions")

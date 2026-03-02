@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/getsynq/dwhsupport/blocklist"
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -35,9 +35,9 @@ type Executor interface {
 var _ scrapper.Scrapper = &BigQueryScrapper{}
 
 type BigQueryScrapper struct {
-	conf      *BigQueryScrapperConf
-	blocklist blocklist.Blocklist
-	executor  *dwhexecbigquery.BigQueryExecutor
+	conf     *BigQueryScrapperConf
+	scope    *scope.ScopeFilter
+	executor *dwhexecbigquery.BigQueryExecutor
 }
 
 func (e *BigQueryScrapper) IsPermissionError(err error) bool {
@@ -78,9 +78,9 @@ func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQ
 		return nil, err
 	}
 
-	blocklist := blocklist.NewBlocklistFromString(conf.Blocklist)
+	scopeFilter := ScopeFromConf(conf)
 
-	return &BigQueryScrapper{executor: executor, conf: conf, blocklist: blocklist}, nil
+	return &BigQueryScrapper{executor: executor, conf: conf, scope: scopeFilter}, nil
 }
 
 func (e *BigQueryScrapper) Executor() *dwhexecbigquery.BigQueryExecutor {

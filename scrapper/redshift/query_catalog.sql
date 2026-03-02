@@ -264,4 +264,5 @@ select database_name         as database,
 from svv_all_columns
 where database_name = $1
   and schema_name not in ('pg_catalog', 'information_schema', 'pg_automv')
+  /* SYNQ_SCOPE_FILTER */
 order by database, schema, "table", position

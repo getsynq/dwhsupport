@@ -6,3 +6,4 @@ select ''           as "database",
 FROM information_schema.tables
 WHERE TABLE_SCHEMA NOT IN ('sys', 'information_schema', 'mysql', 'performance_schema')
   AND (UPDATE_TIME IS NOT NULL OR TABLE_ROWS IS NOT NULL)
+  /* SYNQ_SCOPE_FILTER */

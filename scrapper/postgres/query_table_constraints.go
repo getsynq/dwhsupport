@@ -7,13 +7,15 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_table_constraints.sql
 var queryTableConstraintsSql string
 
 func (e *PostgresScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
-	return stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), queryTableConstraintsSql,
+	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "c.table_schema", "c.table_name")
+	return stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host

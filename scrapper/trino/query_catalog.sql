@@ -14,3 +14,4 @@ JOIN {{catalog}}.information_schema.columns c
   AND t.table_name = c.table_name
 {{table_comments_join}}
 WHERE t.table_schema NOT IN ('information_schema')
+  /* SYNQ_SCOPE_FILTER */

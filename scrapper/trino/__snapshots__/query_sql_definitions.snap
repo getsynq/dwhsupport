@@ -8,6 +8,7 @@ with tables as (
         table_type
     from test_catalog.information_schema.tables
     where table_schema not in ('information_schema')
+      /* SYNQ_SCOPE_FILTER */
 )
 select
     t.database,
@@ -32,6 +33,7 @@ with tables as (
         table_type
     from test_catalog.information_schema.tables
     where table_schema not in ('information_schema')
+      /* SYNQ_SCOPE_FILTER */
 )
 select
     t.database,
@@ -56,6 +58,7 @@ with tables as (
         table_type
     from test_catalog.information_schema.tables
     where table_schema not in ('information_schema')
+      /* SYNQ_SCOPE_FILTER */
 )
 select
     t.database,
@@ -80,6 +83,7 @@ with tables as (
         table_type
     from test_catalog.information_schema.tables
     where table_schema not in ('information_schema')
+      /* SYNQ_SCOPE_FILTER */
 )
 select
     t.database,

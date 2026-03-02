@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
+	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/snowflakedb/gosnowflake"

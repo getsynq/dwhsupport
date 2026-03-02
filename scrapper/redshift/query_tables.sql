@@ -92,5 +92,5 @@ select distinct tbl.database_name                  as database,
 from svv_all_tables tbl
 where tbl.schema_name not in ('pg_catalog', 'information_schema', 'pg_automv')
   and tbl.database_name = $1
-
+  /* SYNQ_SCOPE_FILTER */
 order by database, schema, "table"

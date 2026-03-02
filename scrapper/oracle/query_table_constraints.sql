@@ -13,4 +13,5 @@ JOIN all_cons_columns cc
     ON c.constraint_name = cc.constraint_name
     AND c.owner = cc.owner
 WHERE c.constraint_type IN ('P', 'U')
+    /* SYNQ_SCOPE_FILTER */
 ORDER BY cc.owner, cc.table_name, cc.constraint_name, cc.position

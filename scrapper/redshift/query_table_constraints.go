@@ -7,6 +7,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_table_constraints.sql
@@ -24,6 +25,7 @@ JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE (a.attsortkeyord > 0 OR a.attisdistkey = true)
 	AND a.attnum > 0
+	/* SYNQ_SCOPE_FILTER */
 ORDER BY n.nspname, c.relname, a.attsortkeyord
 `
 
@@ -31,7 +33,8 @@ func (e *RedshiftScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapp
 	var results []*scrapper.TableConstraintRow
 
 	// Query primary keys and unique constraints
-	pkRows, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), queryTableConstraintsSql,
+	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "n.nspname", "c.relname")
+	pkRows, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
@@ -62,7 +65,8 @@ type sortDistRow struct {
 }
 
 func (e *RedshiftScrapper) querySortDistKeys(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
-	rows, err := stdsql.QueryMany[sortDistRow](ctx, e.executor.GetDb(), querySortDistKeysSql)
+	sql := scope.AppendScopeConditions(ctx, querySortDistKeysSql, "", "n.nspname", "c.relname")
+	rows, err := stdsql.QueryMany[sortDistRow](ctx, e.executor.GetDb(), sql)
 	if err != nil {
 		return nil, err
 	}

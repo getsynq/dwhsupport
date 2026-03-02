@@ -15,4 +15,5 @@ from clusterAllReplicas(default, system.tables) tbls
                    ON tbls.database = parts.schema
                        AND tbls.name = parts.table
 where has_own_data = 1 AND schema NOT IN ('system', 'information_schema')
+  /* SYNQ_SCOPE_FILTER */
 settings join_use_nulls=1

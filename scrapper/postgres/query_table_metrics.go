@@ -8,6 +8,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	_ "github.com/lib/pq"
 )
 
@@ -15,7 +16,8 @@ import (
 var queryTableMetricsSql string
 
 func (e *PostgresScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	return dwhexecpostgres.NewQuerier[scrapper.TableMetricsRow](e.executor).QueryMany(ctx, queryTableMetricsSql,
+	sql := scope.AppendSchemaScopeConditions(ctx, queryTableMetricsSql, "", "sch.nspname")
+	return dwhexecpostgres.NewQuerier[scrapper.TableMetricsRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableMetricsRow) (*scrapper.TableMetricsRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host

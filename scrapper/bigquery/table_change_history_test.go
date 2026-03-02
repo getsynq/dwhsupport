@@ -24,10 +24,10 @@ func (s *TableChangeHistorySuite) TestBuildTableChangeHistorySQL() {
 	fqn := scrapper.DwhFqn{DatabaseName: "my_project", SchemaName: "my_dataset", ObjectName: "my_table"}
 
 	testCases := []struct {
-		name   string
-		conf   *BigQueryScrapperConf
-		fqn    scrapper.DwhFqn
-		limit  int
+		name  string
+		conf  *BigQueryScrapperConf
+		fqn   scrapper.DwhFqn
+		limit int
 	}{
 		{
 			name: "default_region_us",

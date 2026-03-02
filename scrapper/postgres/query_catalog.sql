@@ -20,4 +20,5 @@ where not pg_is_other_temp_schema(sch.oid)     -- not a temporary schema belongi
   and col.attnum > 0                           -- negative numbers are used for system columns such as oid
   and not col.attisdropped                     -- column as not been dropped
   AND sch.nspname not in ('pg_catalog', 'information_schema')
+  /* SYNQ_SCOPE_FILTER */
 order by database, schema, "table", position

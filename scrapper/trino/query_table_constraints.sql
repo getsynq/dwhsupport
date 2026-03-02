@@ -12,4 +12,5 @@ JOIN {{catalog}}.information_schema.key_column_usage ccu
     AND tc.constraint_schema = ccu.constraint_schema
     AND tc.constraint_name = ccu.constraint_name
 WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+  /* SYNQ_SCOPE_FILTER */
 ORDER BY tc.constraint_schema, tc.table_name, tc.constraint_name, ccu.ordinal_position

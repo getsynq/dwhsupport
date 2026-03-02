@@ -7,7 +7,8 @@ WITH rows_estimation AS (select "database",
                            AND schema <> 'catalog_history'::name
                            AND schema <> 'pg_toast'::name
                            AND schema <> 'pg_internal'::name
-                           AND database = $1),
+                           AND database = $1
+                           /* SYNQ_SCOPE_FILTER */),
      freshness_estimation AS (SELECT ti.database,
                                      ti.schema,
                                      ti.table,

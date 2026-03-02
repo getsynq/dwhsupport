@@ -10,6 +10,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -17,8 +18,8 @@ import (
 var querySqlDefinitionsSql string
 
 func (e *MySQLScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-
-	sqlDefs, err := dwhexecmysql.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, querySqlDefinitionsSql,
+	sql := scope.AppendScopeConditions(ctx, querySqlDefinitionsSql, "", "table_schema", "table_name")
+	sqlDefs, err := dwhexecmysql.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
 			row.Database = e.conf.Host
 			return row, nil

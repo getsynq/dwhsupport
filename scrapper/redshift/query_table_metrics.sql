@@ -9,3 +9,4 @@ where estimated_visible_rows is not null
   AND schema <> 'pg_toast'::name
   AND schema <> 'pg_internal'::name
   and "database" = $1
+  /* SYNQ_SCOPE_FILTER */

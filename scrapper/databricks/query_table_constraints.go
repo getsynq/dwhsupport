@@ -19,8 +19,8 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 		if e.isIgnoredCatalog(catalogInfo) {
 			continue
 		}
-		if e.blocklist.IsBlocked(catalogInfo.FullName) {
-			logging.GetLogger(ctx).Infof("catalog %s excluded by blocklist", catalogInfo.FullName)
+		if !e.scope.IsDatabaseAccepted(catalogInfo.Name) {
+			logging.GetLogger(ctx).Infof("catalog %s excluded by scope filter", catalogInfo.Name)
 			continue
 		}
 
@@ -32,8 +32,8 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 			if schemaInfo.Name == "information_schema" {
 				continue
 			}
-			if e.blocklist.IsBlocked(schemaInfo.FullName) {
-				logging.GetLogger(ctx).Infof("schema %s excluded by blocklist", schemaInfo.FullName)
+			if !e.scope.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
+				logging.GetLogger(ctx).Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
 				continue
 			}
 
@@ -42,8 +42,8 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 				return nil, err
 			}
 			for _, tableInfo := range tables {
-				if e.blocklist.IsBlocked(tableInfo.FullName) {
-					logging.GetLogger(ctx).Infof("table %s excluded by blocklist", tableInfo.FullName)
+				if !e.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
+					logging.GetLogger(ctx).Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
 					continue
 				}
 

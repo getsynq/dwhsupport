@@ -8,6 +8,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -44,11 +45,16 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 		existingDbs[database.Name] = true
 	}
 
+	scopeFilter := scope.GetScope(ctx)
+
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(4)
 
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
+			continue
+		}
+		if !scopeFilter.IsDatabaseAccepted(database) {
 			continue
 		}
 
@@ -101,7 +107,8 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 		return nil, err
 	}
 
-	return finalResults, nil
+	// Post-filter results for SHOW PRIMARY KEYS which doesn't support WHERE clauses.
+	return scope.FilterRows(finalResults, scopeFilter), nil
 }
 
 func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, database string) ([]*scrapper.TableConstraintRow, error) {
@@ -136,9 +143,13 @@ func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, data
 func (e *SnowflakeScrapper) queryClusteringKeysInDatabase(ctx context.Context, database string) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
-	query := fmt.Sprintf(
-		`SELECT table_schema AS "table_schema", table_name AS "table_name", cluster_by AS "cluster_by" FROM %s.information_schema.tables WHERE cluster_by IS NOT NULL AND cluster_by != ''`,
-		database,
+	query := scope.AppendScopeConditions(
+		ctx,
+		fmt.Sprintf(
+			`SELECT table_schema AS "table_schema", table_name AS "table_name", cluster_by AS "cluster_by" FROM %s.information_schema.tables WHERE cluster_by IS NOT NULL AND cluster_by != '' /* SYNQ_SCOPE_FILTER */`,
+			database,
+		),
+		"", "table_schema", "table_name",
 	)
 
 	rows, err := e.executor.GetDb().QueryxContext(ctx, query)

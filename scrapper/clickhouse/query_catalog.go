@@ -7,14 +7,15 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_catalog.sql
 var queryCatalogSql string
 
 func (e *ClickhouseScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-
-	return dwhexecclickhouse.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, queryCatalogSql,
+	sql := scope.AppendScopeConditions(ctx, queryCatalogSql, "", "cols.schema", "cols.table")
+	return dwhexecclickhouse.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.CatalogColumnRow](func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Database = e.conf.Hostname
 			if len(e.conf.DatabaseName) > 0 {

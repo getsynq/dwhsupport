@@ -34,4 +34,5 @@ select ''                         as "database",
 from tables
          join columns using (table_schema, table_name)
 where table_schema not in ('information_schema', 'performance_schema', 'mysql', 'sys')
+  /* SYNQ_SCOPE_FILTER */
 order by "database", "schema", "table", "position"

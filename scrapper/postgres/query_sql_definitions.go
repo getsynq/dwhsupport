@@ -7,6 +7,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	_ "github.com/lib/pq"
 )
 
@@ -14,7 +15,8 @@ import (
 var querySqlDefinitionsSql string
 
 func (e *PostgresScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	return dwhexecpostgres.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, querySqlDefinitionsSql,
+	sql := scope.AppendScopeConditions(ctx, querySqlDefinitionsSql, "", "table_schema", "table_name")
+	return dwhexecpostgres.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithArgs[scrapper.SqlDefinitionRow](e.conf.Database),
 		dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
 			row.Database = e.conf.Database

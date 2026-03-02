@@ -8,6 +8,7 @@ import (
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
 //go:embed query_table_metrics.sql
@@ -22,7 +23,7 @@ func (e *RedshiftScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 	if e.conf.FreshnessFromQueryLogs {
 		sqlToRun = queryTabkeMetricsEstimatedFreshnessSql
 	}
-
+	sqlToRun = scope.AppendScopeConditions(ctx, sqlToRun, "", `"schema"`, `"table"`)
 	return stdsql.QueryMany[scrapper.TableMetricsRow](ctx, e.executor.GetDb(), sqlToRun,
 		dwhexec.WithArgs[scrapper.TableMetricsRow](e.conf.Database),
 		dwhexec.WithPostProcessors(func(row *scrapper.TableMetricsRow) (*scrapper.TableMetricsRow, error) {

@@ -31,6 +31,7 @@ WHERE r.schema_name NOT IN ('information_schema')
     , 'temp'
     , 'system',
                              'md_information_schema')
+  /* SYNQ_SCOPE_FILTER */
 ORDER BY
     r.database_name,
     r.schema_name,

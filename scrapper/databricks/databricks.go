@@ -9,11 +9,11 @@ import (
 	"github.com/databricks/databricks-sdk-go"
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	"github.com/databricks/databricks-sdk-go/useragent"
-	"github.com/getsynq/dwhsupport/blocklist"
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
@@ -44,7 +44,7 @@ type DatabricksScrapper struct {
 	client       *databricks.WorkspaceClient
 	conf         *DatabricksScrapperConf
 	lazyExecutor lazy.Lazy[*dwhexecdatabricks.DatabricksExecutor]
-	blocklist    blocklist.Blocklist
+	scope        *scope.ScopeFilter
 }
 
 func (e *DatabricksScrapper) DialectType() string {
@@ -100,7 +100,7 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 		return nil, err
 	}
 
-	blocklist := blocklist.NewBlocklistFromString(conf.CatalogBlocklist)
+	scopeFilter := ScopeFromConf(conf)
 
 	executor := lazy.New(func() (*dwhexecdatabricks.DatabricksExecutor, error) {
 
@@ -111,7 +111,7 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 		return executor, nil
 	})
 
-	return &DatabricksScrapper{client: client, conf: conf, blocklist: blocklist, lazyExecutor: executor}, nil
+	return &DatabricksScrapper{client: client, conf: conf, scope: scopeFilter, lazyExecutor: executor}, nil
 }
 
 func (e *DatabricksScrapper) IsPermissionError(err error) bool {

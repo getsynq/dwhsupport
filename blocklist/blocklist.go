@@ -33,7 +33,7 @@ func NewBlocklist(patterns []string) Blocklist {
 			continue
 		}
 		escapedPattern := regexp.QuoteMeta(pattern)
-		regexPattern := "^" + strings.ReplaceAll(escapedPattern, "\\*", ".+") + "$"
+		regexPattern := "^" + strings.ReplaceAll(escapedPattern, "\\*", ".*") + "$"
 		regexPatterns = append(regexPatterns, regexp.MustCompile(regexPattern))
 	}
 

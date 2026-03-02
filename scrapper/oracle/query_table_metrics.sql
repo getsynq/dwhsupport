@@ -18,5 +18,6 @@ WHERE
     )
     AND t.NESTED = 'NO'
     AND t.SECONDARY = 'N'
+    /* SYNQ_SCOPE_FILTER */
 ORDER BY
     t.OWNER, t.TABLE_NAME
