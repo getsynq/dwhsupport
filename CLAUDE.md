@@ -110,6 +110,7 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 
 - Tests use `github.com/gkampitakis/go-snaps` for snapshot testing
 - To create/update snapshots: `UPDATE_SNAPS=true go test ./path/to/package -count=1`
+- Trino scrapper uses snapshot tests for SQL queries — changes to `scrapper/trino/*.sql` require snapshot updates
 - `CI=true` and `UPDATE_SNAPS=true` are mutually exclusive — don't use both
 - Mock generation uses `go.uber.org/mock` via `go tool` — regenerate with `go generate ./...`
 - Test files follow `*_test.go` naming convention
@@ -128,3 +129,5 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 - **Query Building**: `querybuilder/` provides utilities for dynamic query construction
 - **Blocklists**: `blocklist/` provides filtering for databases/schemas
 - **Metrics Extraction**: `metrics/` contains logic for extracting and processing metrics from different warehouses
+- **Scope Filtering**: `scrapper/scope/` provides include/exclude scope filtering. SQL files use `/* SYNQ_SCOPE_FILTER */` placeholder at the injection point; `AppendScopeConditions` replaces it with `AND <conditions>` or empty string. Never use heuristic WHERE-append.
+- **Scope Compliance Testing**: `scrapper/scrappertest/ScopeComplianceSuite` is an embeddable test suite for validating scope filtering — embed alongside `ComplianceSuite` in warehouse integration tests
