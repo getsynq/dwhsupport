@@ -26,8 +26,8 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 		if e.isIgnoredCatalog(catalogInfo) {
 			continue
 		}
-		if e.blocklist.IsBlocked(catalogInfo.FullName) {
-			log.Infof("catalog %s excluded by blocklist", catalogInfo.FullName)
+		if !e.scope.IsDatabaseAccepted(catalogInfo.Name) {
+			log.Infof("catalog %s excluded by scope filter", catalogInfo.Name)
 			continue
 		}
 
@@ -39,8 +39,8 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 			if schemaInfo.Name == "information_schema" {
 				continue
 			}
-			if e.blocklist.IsBlocked(schemaInfo.FullName) {
-				log.Infof("schema %s excluded by blocklist", schemaInfo.FullName)
+			if !e.scope.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
+				log.Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
 				continue
 			}
 
@@ -56,8 +56,8 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), catalogInfo.Name, schemaInfo.Name, tablesFound)
 
 			for _, tableInfo := range tables {
-				if e.blocklist.IsBlocked(tableInfo.FullName) {
-					log.Infof("table %s excluded by blocklist", tableInfo.FullName)
+				if !e.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
+					log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
 					continue
 				}
 				sqlDefs = append(sqlDefs, &scrapper.SqlDefinitionRow{

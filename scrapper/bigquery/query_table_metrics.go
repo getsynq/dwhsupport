@@ -55,8 +55,8 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 			continue
 		}
 
-		if e.blocklist.IsBlocked(dataset.DatasetID) {
-			log.Infof("dataset %s blacklisted by config", dataset.DatasetID)
+		if !e.scope.IsSchemaAccepted(e.conf.ProjectId, dataset.DatasetID) {
+			log.Infof("dataset %s excluded by scope filter", dataset.DatasetID)
 			continue
 		}
 

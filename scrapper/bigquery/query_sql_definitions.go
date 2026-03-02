@@ -74,8 +74,8 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 			continue
 		}
 
-		if e.blocklist.IsBlocked(dataset.DatasetID) {
-			log.Infof("dataset %s blacklisted by config", dataset.DatasetID)
+		if !e.scope.IsSchemaAccepted(e.conf.ProjectId, dataset.DatasetID) {
+			log.Infof("dataset %s excluded by scope filter", dataset.DatasetID)
 			continue
 		}
 
@@ -205,8 +205,8 @@ func (e *BigQueryScrapper) querySqlDefinitionsSql(ctx context.Context) ([]*scrap
 
 		dataset := res["schema"].(string)
 
-		if e.blocklist.IsBlocked(dataset) {
-			log.Debugf("dataset %s blacklisted by config", dataset)
+		if !e.scope.IsSchemaAccepted(e.conf.ProjectId, dataset) {
+			log.Debugf("dataset %s excluded by scope filter", dataset)
 			continue
 		}
 
