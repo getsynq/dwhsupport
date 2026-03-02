@@ -24,6 +24,48 @@ The library includes comprehensive models for:
 - `SqlDefinitionRow`: SQL definitions for views/tables
 - `DatabaseRow`: Database-level metadata
 
+### Scope Filtering
+
+The `scrapper/scope` package provides include/exclude filtering at database, schema, and table levels with glob pattern support:
+
+```go
+// Define a scope filter
+filter := &scope.ScopeFilter{
+    Include: []scope.ScopeRule{
+        {Database: "prod_*", Schema: "public"},
+    },
+    Exclude: []scope.ScopeRule{
+        {Database: "prod_staging"},
+    },
+}
+
+// Option 1: Wrap a scrapper with ScopedScrapper for automatic filtering
+scoped := scope.NewScopedScrapper(inner, filter)
+tables, err := scoped.QueryTables(ctx) // automatically filtered
+
+// Option 2: Inject scope via context for SQL push-down
+ctx = scope.WithScope(ctx, filter)
+tables, err := inner.QueryTables(ctx) // filter conditions pushed into SQL
+```
+
+`ScopedScrapper` applies filtering at two levels:
+- **SQL push-down** — scope conditions are injected directly into warehouse queries for efficiency
+- **Post-filtering** — results are filtered in-memory to guarantee compliance
+
+### Query Stats
+
+The `exec/querystats` package provides query execution statistics via context:
+
+```go
+ctx = querystats.WithCallback(ctx, func(stats querystats.QueryStats) {
+    log.Printf("Query %s: %d rows read, %d bytes, %v",
+        stats.QueryID, stats.RowsRead, stats.BytesRead, stats.Duration)
+})
+
+// All queries executed with this context will report stats via the callback
+tables, err := scrapper.QueryTables(ctx)
+```
+
 ### Query Processing
 
 The `QueryMany` type provides flexible options for:
@@ -36,7 +78,6 @@ The `QueryMany` type provides flexible options for:
 ## Usage
 
 ```go
-// Example of using the scrapper interface
 scrapper := NewYourDwhScrapper(config)
 defer scrapper.Close()
 
@@ -48,6 +89,13 @@ catalog, err := scrapper.QueryCatalog(ctx)
 
 // Query SQL definitions
 definitions, err := scrapper.QuerySqlDefinitions(ctx)
+
+// Scoped queries — only return results matching the filter
+filter := &scope.ScopeFilter{
+    Include: []scope.ScopeRule{{Schema: "analytics"}},
+}
+scoped := scope.NewScopedScrapper(scrapper, filter)
+tables, err := scoped.QueryTables(ctx)
 ```
 
 ## Contributing
