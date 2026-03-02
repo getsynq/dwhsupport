@@ -3,11 +3,13 @@ package clickhouse
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
@@ -491,4 +493,154 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {
 
 	// huge_value (Int256)
 	s.IsType((*scrapper.BigIntValue)(nil), row.ColumnValues[1].Value)
+}
+
+// --- Scope filtering tests ---
+
+func (s *LocalClickHouseScrapperSuite) TestScope_IncludeFilterLimitsQueryTables() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
+
+	// Get unscoped tables to discover what schema the fixtures landed in.
+	allTables, err := s.clickhouseScrapper.QueryTables(s.ctx)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(allTables)
+
+	targetSchema := ""
+	for _, t := range allTables {
+		if t.Table == "test_clickhouse_scrapper" {
+			targetSchema = t.Schema
+			break
+		}
+	}
+	s.Require().NotEmpty(targetSchema, "Should find test_clickhouse_scrapper in unscoped results")
+
+	// Apply include scope for the target schema only.
+	filter := &scope.ScopeFilter{
+		Include: []scope.ScopeRule{
+			{Schema: targetSchema},
+		},
+	}
+	scopedCtx := scope.WithScope(s.ctx, filter)
+
+	filteredTables, err := s.clickhouseScrapper.QueryTables(scopedCtx)
+	s.Require().NoError(err)
+	for _, t := range filteredTables {
+		s.Truef(strings.EqualFold(t.Schema, targetSchema),
+			"QueryTables should only return tables from schema %s, got %s.%s", targetSchema, t.Schema, t.Table)
+	}
+}
+
+func (s *LocalClickHouseScrapperSuite) TestScope_ExcludeFilterRemovesFixtures() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
+
+	// Discover the schema where fixtures live.
+	allTables, err := s.clickhouseScrapper.QueryTables(s.ctx)
+	s.Require().NoError(err)
+
+	targetSchema := ""
+	for _, t := range allTables {
+		if t.Table == "test_clickhouse_scrapper" {
+			targetSchema = t.Schema
+			break
+		}
+	}
+	s.Require().NotEmpty(targetSchema)
+
+	// Exclude that schema.
+	filter := &scope.ScopeFilter{
+		Exclude: []scope.ScopeRule{
+			{Schema: targetSchema},
+		},
+	}
+	scopedCtx := scope.WithScope(s.ctx, filter)
+
+	filteredTables, err := s.clickhouseScrapper.QueryTables(scopedCtx)
+	s.Require().NoError(err)
+	for _, t := range filteredTables {
+		s.Falsef(strings.EqualFold(t.Schema, targetSchema),
+			"QueryTables should not return tables from excluded schema %s, got %s", targetSchema, t.Table)
+	}
+}
+
+func (s *LocalClickHouseScrapperSuite) TestScope_NonMatchingIncludeReturnsEmpty() {
+	filter := &scope.ScopeFilter{
+		Include: []scope.ScopeRule{
+			{Schema: "__synq_nonexistent_schema__"},
+		},
+	}
+	scopedCtx := scope.WithScope(s.ctx, filter)
+
+	tables, err := s.clickhouseScrapper.QueryTables(scopedCtx)
+	s.Require().NoError(err)
+	s.Empty(tables, "Non-matching include scope should return empty")
+
+	catalog, err := s.clickhouseScrapper.QueryCatalog(scopedCtx)
+	s.Require().NoError(err)
+	s.Empty(catalog, "Non-matching include scope should return empty")
+
+	metrics, err := s.clickhouseScrapper.QueryTableMetrics(scopedCtx, time.Time{})
+	s.Require().NoError(err)
+	s.Empty(metrics, "Non-matching include scope should return empty")
+}
+
+func (s *LocalClickHouseScrapperSuite) TestScope_IncludeFilterAppliesToAllMethods() {
+	if !s.fixturesAvailable {
+		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
+	}
+
+	// Discover the schema where fixtures live.
+	allTables, err := s.clickhouseScrapper.QueryTables(s.ctx)
+	s.Require().NoError(err)
+
+	targetSchema := ""
+	for _, t := range allTables {
+		if t.Table == "test_clickhouse_scrapper" {
+			targetSchema = t.Schema
+			break
+		}
+	}
+	s.Require().NotEmpty(targetSchema)
+
+	filter := &scope.ScopeFilter{
+		Include: []scope.ScopeRule{
+			{Schema: targetSchema},
+		},
+	}
+	scopedCtx := scope.WithScope(s.ctx, filter)
+
+	// QueryCatalog
+	catalog, err := s.clickhouseScrapper.QueryCatalog(scopedCtx)
+	s.Require().NoError(err)
+	for i, row := range catalog {
+		s.Truef(strings.EqualFold(row.Schema, targetSchema),
+			"QueryCatalog row[%d]: expected schema %s, got %s", i, targetSchema, row.Schema)
+	}
+
+	// QueryTableMetrics
+	metrics, err := s.clickhouseScrapper.QueryTableMetrics(scopedCtx, time.Time{})
+	s.Require().NoError(err)
+	for i, row := range metrics {
+		s.Truef(strings.EqualFold(row.Schema, targetSchema),
+			"QueryTableMetrics row[%d]: expected schema %s, got %s", i, targetSchema, row.Schema)
+	}
+
+	// QuerySqlDefinitions
+	defs, err := s.clickhouseScrapper.QuerySqlDefinitions(scopedCtx)
+	s.Require().NoError(err)
+	for i, row := range defs {
+		s.Truef(strings.EqualFold(row.Schema, targetSchema),
+			"QuerySqlDefinitions row[%d]: expected schema %s, got %s", i, targetSchema, row.Schema)
+	}
+
+	// QueryTableConstraints
+	constraints, err := s.clickhouseScrapper.QueryTableConstraints(scopedCtx)
+	s.Require().NoError(err)
+	for i, row := range constraints {
+		s.Truef(strings.EqualFold(row.Schema, targetSchema),
+			"QueryTableConstraints row[%d]: expected schema %s, got %s", i, targetSchema, row.Schema)
+	}
 }
