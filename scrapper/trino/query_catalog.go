@@ -19,15 +19,12 @@ func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogCo
 	db := e.executor.GetDb()
 	var out []*scrapper.CatalogColumnRow
 
-	availableCatalogs, err := e.allAvailableCatalogs.Get()
+	acceptedCatalogs, err := e.acceptedCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, catalog := range availableCatalogs {
-		if !catalog.IsAccepted {
-			continue
-		}
+	for _, catalog := range acceptedCatalogs {
 		query := strings.Replace(queryCatalogSQL, "{{catalog}}", catalog.CatalogName, -1)
 
 		// Conditionally add table comments JOIN based on feature flag

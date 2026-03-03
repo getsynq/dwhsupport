@@ -26,16 +26,12 @@ func (e *TrinoScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFe
 	var outMu sync.Mutex
 	var tableMetricsRows []*scrapper.TableMetricsRow
 
-	availableCatalogs, err := e.allAvailableCatalogs.Get()
+	acceptedCatalogs, err := e.acceptedCatalogs(origCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, catalog := range availableCatalogs {
-		if !catalog.IsAccepted {
-			continue
-		}
-
+	for _, catalog := range acceptedCatalogs {
 		tables, err := e.queryTables(origCtx, catalog.CatalogName)
 		if err != nil {
 			return nil, err

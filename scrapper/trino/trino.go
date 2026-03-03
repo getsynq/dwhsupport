@@ -12,6 +12,7 @@ import (
 	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/samber/lo"
 )
@@ -146,6 +147,29 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 	}
 
 	return messages, nil
+}
+
+// acceptedCatalogs returns the subset of all available catalogs that are accepted
+// by conf.Catalogs and, if a scope filter is present in ctx, by that filter's
+// database rules. This is the single place for catalog-level filtering; all
+// scrapper query methods should call this instead of allAvailableCatalogs.Get().
+func (e *TrinoScrapper) acceptedCatalogs(ctx context.Context) ([]*TrinoCatalog, error) {
+	allCatalogs, err := e.allAvailableCatalogs.Get()
+	if err != nil {
+		return nil, err
+	}
+	scopeFilter := scope.GetScope(ctx)
+	result := make([]*TrinoCatalog, 0, len(allCatalogs))
+	for _, catalog := range allCatalogs {
+		if !catalog.IsAccepted {
+			continue
+		}
+		if scopeFilter != nil && !scopeFilter.IsDatabaseAccepted(catalog.CatalogName) {
+			continue
+		}
+		result = append(result, catalog)
+	}
+	return result, nil
 }
 
 func (e *TrinoScrapper) Close() error {

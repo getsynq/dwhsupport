@@ -101,15 +101,12 @@ func (e *TrinoScrapper) getBasicSqlDefinitions(ctx context.Context) ([]*scrapper
 	db := e.executor.GetDb()
 	var out []*scrapper.SqlDefinitionRow
 
-	availableCatalogs, err := e.allAvailableCatalogs.Get()
+	acceptedCatalogs, err := e.acceptedCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, catalog := range availableCatalogs {
-		if !catalog.IsAccepted {
-			continue
-		}
+	for _, catalog := range acceptedCatalogs {
 		catalogQuery := strings.Replace(query, "{{catalog}}", catalog.CatalogName, -1)
 
 		// Conditionally add materialized views JOIN based on feature flag
