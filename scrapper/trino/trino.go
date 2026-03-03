@@ -211,7 +211,11 @@ func isCatalogUnavailableError(err error) bool {
 	// - "catalog 'xyz' does not exist" - catalog doesn't exist
 	// - "line 1:15: catalog 'xyz' not registered" - catalog not registered
 	// - "EXTERNAL: Error listing tables for catalog xyz: The connection attempt failed" - external DB unreachable
+	// - "EXTERNAL: The connection attempt failed." - external DB unreachable (no catalog in message)
 	// - Other connection/listing errors from external data sources
+	if strings.Contains(errMsg, "external") && strings.Contains(errMsg, "connection attempt failed") {
+		return true
+	}
 	return strings.Contains(errMsg, "catalog") &&
 		(strings.Contains(errMsg, "not found") ||
 			strings.Contains(errMsg, "does not exist") ||
