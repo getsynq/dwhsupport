@@ -141,6 +141,11 @@ func (s *ErrorDetectionSuite) TestIsCatalogUnavailableError() {
 			expected: true,
 		},
 		{
+			name:     "external connection attempt failed without catalog",
+			errMsg:   "trino: query failed (200 OK): \"EXTERNAL: The connection attempt failed.\"",
+			expected: true,
+		},
+		{
 			name:     "catalog unreachable",
 			errMsg:   "catalog 'remote_catalog' unreachable",
 			expected: true,
