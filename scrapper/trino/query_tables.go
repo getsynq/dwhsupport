@@ -18,15 +18,12 @@ var queryTablesSQL string
 func (e *TrinoScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
 	var out []*scrapper.TableRow
 
-	availableCatalogs, err := e.allAvailableCatalogs.Get()
+	acceptedCatalogs, err := e.acceptedCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, catalog := range availableCatalogs {
-		if !catalog.IsAccepted {
-			continue
-		}
+	for _, catalog := range acceptedCatalogs {
 		res, err := e.queryTables(ctx, catalog.CatalogName)
 		if err != nil {
 			return nil, err

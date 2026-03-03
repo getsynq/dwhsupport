@@ -18,15 +18,12 @@ var queryTableConstraintsSql string
 func (e *TrinoScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	var out []*scrapper.TableConstraintRow
 
-	availableCatalogs, err := e.allAvailableCatalogs.Get()
+	acceptedCatalogs, err := e.acceptedCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	for _, catalog := range availableCatalogs {
-		if !catalog.IsAccepted {
-			continue
-		}
+	for _, catalog := range acceptedCatalogs {
 		res, err := e.queryTableConstraintsForCatalog(ctx, catalog.CatalogName)
 		if err != nil {
 			return nil, err
