@@ -8,7 +8,7 @@ require (
 	cloud.google.com/go/bigquery v1.69.0
 	github.com/ClickHouse/clickhouse-go/v2 v2.40.3
 	github.com/DataDog/go-sqllexer v0.1.8
-	github.com/databricks/databricks-sdk-go v0.63.0
+	github.com/databricks/databricks-sdk-go v0.118.0
 	github.com/databricks/databricks-sql-go v1.7.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/denisenkom/go-mssqldb v0.12.3

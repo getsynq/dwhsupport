@@ -137,8 +137,8 @@ github.com/coreos/go-systemd/v22 v22.5.0/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSV
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/danieljoos/wincred v1.2.3 h1:v7dZC2x32Ut3nEfRH+vhoZGvN72+dQ/snVXo/vMFLdQ=
 github.com/danieljoos/wincred v1.2.3/go.mod h1:6qqX0WNrS4RzPZ1tnroDzq9kY3fu1KwE7MRLQK4X0bs=
-github.com/databricks/databricks-sdk-go v0.63.0 h1:xUoWOnBdpY5ENnyYYiiH9r6t4dn3Ut9v81VgjMTnOF8=
-github.com/databricks/databricks-sdk-go v0.63.0/go.mod h1:xBtjeP9nq+6MgTewZW1EcbRkD7aDY9gZvcRPcwPhZjw=
+github.com/databricks/databricks-sdk-go v0.118.0 h1:KTEL2bQnKZIsFZAGT4m/Bg23Im6jYkNDzMJkWjKRc2s=
+github.com/databricks/databricks-sdk-go v0.118.0/go.mod h1:hWoHnHbNLjPKiTm5K/7bcIv3J3Pkgo5x9pPzh8K3RVE=
 github.com/databricks/databricks-sql-go v1.7.0 h1:CIVk/ilI0Phf8vmUbkj8YU9yERJ46n2s4IdEE03+QK8=
 github.com/databricks/databricks-sql-go v1.7.0/go.mod h1:JkzZWQZmpOcj8q6a7CtME8v02Tegeb9eLpkmAlyvFR8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
