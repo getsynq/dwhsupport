@@ -29,6 +29,7 @@ const (
 	METRIC_MIN_LENGTH          MetricId = "min_length"
 	METRIC_MAX_LENGTH          MetricId = "max_length"
 	METRIC_MEAN_LENGTH         MetricId = "mean_length"
+	METRIC_CATEGORY_JSD        MetricId = "category_jsd"
 )
 
 // Implement the sql.Scanner interface
@@ -91,6 +92,8 @@ func MetricIdDescription(id MetricId) string {
 		return "Max Length"
 	case METRIC_MEAN_LENGTH:
 		return "Mean Length"
+	case METRIC_CATEGORY_JSD:
+		return "Category JSD"
 	default:
 		return string(id)
 	}
