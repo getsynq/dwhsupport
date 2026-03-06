@@ -247,6 +247,11 @@ func (metric *MetricFieldDistribution) ToDefault(timeSegment time.Time, segment 
 	metric.Labels = []string{}
 }
 
+func (metric *MetricFieldDistribution) WithPartition(timeSegment time.Time, segment string) {
+	metric.Segment = segment
+	metric.TimeSegment = timeSegment
+}
+
 //
 // FIELD STATS
 //
