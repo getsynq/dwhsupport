@@ -37,6 +37,7 @@ var NumericPredictionMetricsGroup = []MetricId{
 	METRIC_PCT_NULL,
 	METRIC_PCT_UNIQUE,
 	METRIC_PCT_EMPTY,
+	METRIC_CATEGORY_JSD,
 }
 
 var TextPredictionMetricsGroup = []MetricId{

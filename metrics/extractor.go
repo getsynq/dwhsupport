@@ -53,7 +53,8 @@ func GetMetricValueFromNumber[T MetricType, V int64 | float64](
 		METRIC_STDDEV,
 		METRIC_PCT_NULL,
 		METRIC_PCT_UNIQUE,
-		METRIC_PCT_EMPTY:
+		METRIC_PCT_EMPTY,
+		METRIC_CATEGORY_JSD:
 		val := float64(value)
 		return ConvertToMetricType[T](val)
 	}
