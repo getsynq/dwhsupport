@@ -1,15 +1,19 @@
 SELECT
-    c.table_schema AS "schema",
-    c.table_name AS "table",
-    tc.constraint_name AS "constraint_name",
-    c.column_name AS "column_name",
-    tc.constraint_type AS "constraint_type",
-    c.ordinal_position::int AS "column_position"
-FROM information_schema.table_constraints tc
-JOIN information_schema.constraint_column_usage c
-    ON tc.constraint_name = c.constraint_name
-    AND tc.constraint_schema = c.constraint_schema
-    AND tc.constraint_catalog = c.constraint_catalog
-WHERE tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+    n.nspname AS "schema",
+    c.relname AS "table",
+    con.conname AS "constraint_name",
+    a.attname AS "column_name",
+    CASE con.contype
+        WHEN 'p' THEN 'PRIMARY KEY'
+        WHEN 'u' THEN 'UNIQUE'
+    END AS "constraint_type",
+    ord.ordinality::int AS "column_position"
+FROM pg_catalog.pg_constraint con
+JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ord(attnum, ordinality)
+JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ord.attnum
+WHERE con.contype IN ('p', 'u')
+  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
   /* SYNQ_SCOPE_FILTER */
-ORDER BY c.table_schema, c.table_name, tc.constraint_name, c.ordinal_position
+ORDER BY n.nspname, c.relname, con.conname, ord.ordinality
