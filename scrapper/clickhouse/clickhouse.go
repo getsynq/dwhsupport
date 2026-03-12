@@ -3,7 +3,10 @@ package clickhouse
 import (
 	"context"
 	_ "embed"
+	"strings"
 
+	chgo "github.com/ClickHouse/ch-go"
+	"github.com/ClickHouse/ch-go/proto"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
@@ -31,7 +34,14 @@ func NewClickhouseScrapper(ctx context.Context, conf ClickhouseScrapperConf) (*C
 }
 
 func (e *ClickhouseScrapper) IsPermissionError(err error) bool {
-	return false
+	if err == nil {
+		return false
+	}
+	// Code 497: NOT_ENOUGH_PRIVILEGES (not defined as constant in ch-go)
+	if chgo.IsErr(err, proto.Error(497)) {
+		return true
+	}
+	return strings.Contains(err.Error(), "Not enough privileges")
 }
 
 func (e *ClickhouseScrapper) DialectType() string {
