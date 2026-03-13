@@ -121,3 +121,5 @@ func (d *SnowflakeDialect) SubString(expr Expr, start int64, length int64) Expr 
 func (d *SnowflakeDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *SnowflakeDialect) SupportsCrossDatabaseQueries() bool { return true }

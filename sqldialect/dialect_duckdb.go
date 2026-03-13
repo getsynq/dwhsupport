@@ -121,3 +121,5 @@ func (d *DuckDBDialect) SubString(expr Expr, start int64, length int64) Expr {
 func (d *DuckDBDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *DuckDBDialect) SupportsCrossDatabaseQueries() bool { return false }

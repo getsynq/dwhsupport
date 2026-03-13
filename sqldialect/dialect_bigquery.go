@@ -132,3 +132,5 @@ func (d *BigQueryDialect) SubString(expr Expr, start int64, length int64) Expr {
 func (d *BigQueryDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *BigQueryDialect) SupportsCrossDatabaseQueries() bool { return true }

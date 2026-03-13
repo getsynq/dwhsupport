@@ -132,3 +132,5 @@ func (d *MySQLDialect) SubString(expr Expr, start int64, length int64) Expr {
 func (d *MySQLDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *MySQLDialect) SupportsCrossDatabaseQueries() bool { return false }

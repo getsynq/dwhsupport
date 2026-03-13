@@ -121,3 +121,5 @@ func (d *TrinoDialect) SubString(expr Expr, start int64, length int64) Expr {
 func (d *TrinoDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *TrinoDialect) SupportsCrossDatabaseQueries() bool { return true }

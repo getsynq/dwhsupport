@@ -34,6 +34,10 @@ type Dialect interface {
 	AggregationColumnReference(expression Expr, alias string) Expr
 	ResolveTableFunction(t *TableFnExpr) (string, error)
 	FormatLimit(rowsSql string) string
+
+	// SupportsCrossDatabaseQueries returns true if the dialect supports referencing
+	// the database/catalog as part of the SQL FQN (e.g. database.schema.table).
+	SupportsCrossDatabaseQueries() bool
 }
 
 // utils
