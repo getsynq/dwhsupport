@@ -118,6 +118,8 @@ func MSSQLQuoteIdentifier(identifier string) string {
 	return fmt.Sprintf("[%s]", identifier)
 }
 
+func (d *MSSQLDialect) SupportsCrossDatabaseQueries() bool { return false }
+
 func mssqlTimeUnit(duration time.Duration) TimeUnit {
 	switch {
 	case duration >= 24*time.Hour:

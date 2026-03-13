@@ -121,3 +121,5 @@ func (d *RedshiftDialect) SubString(expr Expr, start int64, length int64) Expr {
 func (d *RedshiftDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *RedshiftDialect) SupportsCrossDatabaseQueries() bool { return true }

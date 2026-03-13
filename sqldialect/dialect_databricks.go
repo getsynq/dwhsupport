@@ -121,3 +121,5 @@ func (d *DatabricksDialect) SubString(expr Expr, start int64, length int64) Expr
 func (d *DatabricksDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *DatabricksDialect) SupportsCrossDatabaseQueries() bool { return true }

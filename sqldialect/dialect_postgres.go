@@ -121,3 +121,5 @@ func (d *PostgresDialect) SubString(expr Expr, start int64, length int64) Expr {
 func (d *PostgresDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *PostgresDialect) SupportsCrossDatabaseQueries() bool { return false }

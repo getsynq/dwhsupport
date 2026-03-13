@@ -121,3 +121,5 @@ func (d *ClickHouseDialect) SubString(expr Expr, start int64, length int64) Expr
 func (d *ClickHouseDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }
+
+func (d *ClickHouseDialect) SupportsCrossDatabaseQueries() bool { return false }

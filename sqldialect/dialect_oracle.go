@@ -123,6 +123,8 @@ func (d *OracleDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("FETCH FIRST %s ROWS ONLY", rowsSql)
 }
 
+func (d *OracleDialect) SupportsCrossDatabaseQueries() bool { return false }
+
 func OracleQuoteIdentifier(identifier string) string {
 	return fmt.Sprintf("\"%s\"", identifier)
 }
