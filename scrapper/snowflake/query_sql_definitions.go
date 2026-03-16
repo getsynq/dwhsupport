@@ -439,18 +439,36 @@ func parseTagName(parser *sqlparser.BaseParser) (string, bool) {
 	return strings.Join(parts, "."), len(parts) > 0
 }
 
-// ParseCommentClause extracts the COMMENT='...' value from a Snowflake DDL statement.
+// ParseCommentClause extracts the table-level COMMENT='...' value from a Snowflake DDL statement.
+// It only considers COMMENT tokens that appear after the outermost closing parenthesis
+// of the column definitions, to avoid matching column-level comments.
 func ParseCommentClause(ddl string) *string {
 	lexer := sqllexer.New(ddl, sqllexer.WithDBMS(sqllexer.DBMSSnowflake))
 	tokens := sqlparser.ScanAllTokens(lexer)
 	parser := sqlparser.BaseParser{Tokens: tokens}
 
+	// Track parenthesis depth to skip column definitions
+	depth := 0
 	for {
 		ind, tok := parser.PeekToken()
 		if tok.Type == sqllexer.EOF {
 			return nil
 		}
 		parser.Index = ind
+
+		if tok.Type == sqllexer.PUNCTUATION && tok.Value == "(" {
+			depth++
+			continue
+		}
+		if tok.Type == sqllexer.PUNCTUATION && tok.Value == ")" {
+			depth--
+			continue
+		}
+
+		// Only match COMMENT outside of parentheses
+		if depth > 0 {
+			continue
+		}
 
 		if strings.ToUpper(tok.Value) != "COMMENT" {
 			continue

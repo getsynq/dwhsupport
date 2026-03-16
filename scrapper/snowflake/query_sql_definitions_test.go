@@ -281,6 +281,27 @@ func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseWithoutEquals() {
 	s.Equal("Test view without equals", *comment)
 }
 
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseIgnoresColumnComment() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216) COMMENT 'this is a column comment',
+    NAME VARCHAR(256)
+) COMMENT='this is the table comment'
+;`
+	comment := ParseCommentClause(ddl)
+	s.Require().NotNil(comment)
+	s.Equal("this is the table comment", *comment)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseOnlyColumnComment() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216) COMMENT 'this is a column comment',
+    NAME VARCHAR(256)
+)
+;`
+	comment := ParseCommentClause(ddl)
+	s.Nil(comment)
+}
+
 func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseNoComment() {
 	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
     ID VARCHAR(16777216)
