@@ -204,6 +204,8 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 									continue
 								}
 								sqlDefRow.Sql = ddl
+								sqlDefRow.Tags = ParseWithTagClause(ddl)
+								sqlDefRow.Description = ParseCommentClause(ddl)
 							}
 						}
 					}
@@ -320,4 +322,180 @@ var ddlReplacer = strings.NewReplacer(
 
 func fixDdl(s string) string {
 	return ddlReplacer.Replace(s)
+}
+
+// ParseWithTagClause extracts tags from a Snowflake DDL's WITH TAG (...) clause.
+// It skips UNKNOWN_TAG sentinel entries that indicate insufficient permissions.
+func ParseWithTagClause(ddl string) []*scrapper.Tag {
+	lexer := sqllexer.New(ddl, sqllexer.WithDBMS(sqllexer.DBMSSnowflake))
+	tokens := sqlparser.ScanAllTokens(lexer)
+	parser := sqlparser.BaseParser{Tokens: tokens}
+
+	// Scan for WITH TAG pattern
+	for {
+		ind, tok := parser.PeekToken()
+		if tok.Type == sqllexer.EOF {
+			return nil
+		}
+		parser.Index = ind
+
+		if strings.ToUpper(tok.Value) != "WITH" {
+			continue
+		}
+
+		nextInd, nextTok := parser.PeekToken()
+		if nextTok.Type == sqllexer.EOF {
+			return nil
+		}
+		if strings.ToUpper(nextTok.Value) != "TAG" {
+			// Not WITH TAG, continue scanning
+			parser.Index = nextInd
+			continue
+		}
+		parser.Index = nextInd
+
+		// Expect opening parenthesis
+		openInd, openTok := parser.PeekToken()
+		if openTok.Type != sqllexer.PUNCTUATION || openTok.Value != "(" {
+			continue
+		}
+		parser.Index = openInd
+
+		// Parse tag assignments until closing parenthesis
+		return parseTagAssignments(&parser)
+	}
+}
+
+// parseTagAssignments parses tag_name='value' pairs inside WITH TAG (...).
+// Parser must be positioned right after the opening '('.
+func parseTagAssignments(parser *sqlparser.BaseParser) []*scrapper.Tag {
+	var tags []*scrapper.Tag
+
+	for {
+		// Parse tag name (fully qualified identifier like DB.SCHEMA.TAG_NAME)
+		tagName, ok := parseTagName(parser)
+		if !ok {
+			break
+		}
+
+		// Expect '='
+		ind, tok := parser.PeekToken()
+		if tok.Type != sqllexer.OPERATOR || tok.Value != "=" {
+			break
+		}
+		parser.Index = ind
+
+		// Expect quoted value
+		ind, tok = parser.PeekToken()
+		if tok.Type != sqllexer.STRING {
+			break
+		}
+		parser.Index = ind
+		tagValue := strings.Trim(tok.Value, "'")
+
+		// Skip UNKNOWN_TAG sentinel values (insufficient permissions)
+		if !isUnknownTag(tagName, tagValue) {
+			tags = append(tags, &scrapper.Tag{
+				TagName:  tagName,
+				TagValue: tagValue,
+			})
+		}
+
+		// Expect ',' or ')'
+		ind, tok = parser.PeekToken()
+		if tok.Type == sqllexer.PUNCTUATION && tok.Value == "," {
+			parser.Index = ind
+			continue
+		}
+		// ')' or anything else means we're done
+		break
+	}
+
+	return tags
+}
+
+// parseTagName parses a potentially dot-qualified tag name like DB.SCHEMA.TAG_NAME.
+func parseTagName(parser *sqlparser.BaseParser) (string, bool) {
+	var parts []string
+
+	for {
+		ind, tok := parser.PeekToken()
+		if !sqlparser.IsIdentifierLikeToken(tok) {
+			return "", false
+		}
+		parser.Index = ind
+		parts = append(parts, tok.Value)
+
+		// Check for dot separator
+		ind, tok = parser.PeekToken()
+		if tok.Type == sqllexer.PUNCTUATION && tok.Value == "." {
+			parser.Index = ind
+			continue
+		}
+		// Not a dot — done with this tag name
+		break
+	}
+
+	return strings.Join(parts, "."), len(parts) > 0
+}
+
+// ParseCommentClause extracts the table-level COMMENT='...' value from a Snowflake DDL statement.
+// It only considers COMMENT tokens that appear after the outermost closing parenthesis
+// of the column definitions, to avoid matching column-level comments.
+func ParseCommentClause(ddl string) *string {
+	lexer := sqllexer.New(ddl, sqllexer.WithDBMS(sqllexer.DBMSSnowflake))
+	tokens := sqlparser.ScanAllTokens(lexer)
+	parser := sqlparser.BaseParser{Tokens: tokens}
+
+	// Track parenthesis depth to skip column definitions
+	depth := 0
+	for {
+		ind, tok := parser.PeekToken()
+		if tok.Type == sqllexer.EOF {
+			return nil
+		}
+		parser.Index = ind
+
+		if tok.Type == sqllexer.PUNCTUATION && tok.Value == "(" {
+			depth++
+			continue
+		}
+		if tok.Type == sqllexer.PUNCTUATION && tok.Value == ")" {
+			depth--
+			continue
+		}
+
+		// Only match COMMENT outside of parentheses
+		if depth > 0 {
+			continue
+		}
+
+		if strings.ToUpper(tok.Value) != "COMMENT" {
+			continue
+		}
+
+		// Accept both COMMENT='value' and COMMENT 'value'
+		nextInd, nextTok := parser.PeekToken()
+		if nextTok.Type == sqllexer.OPERATOR && nextTok.Value == "=" {
+			parser.Index = nextInd
+			nextInd, nextTok = parser.PeekToken()
+		}
+
+		if nextTok.Type != sqllexer.STRING {
+			continue
+		}
+		parser.Index = nextInd
+		comment := strings.Trim(nextTok.Value, "'")
+		if comment == "" {
+			return nil
+		}
+		return &comment
+	}
+}
+
+func isUnknownTag(tagName, tagValue string) bool {
+	upperName := strings.ToUpper(tagName)
+	upperValue := strings.ToUpper(tagValue)
+	return upperName == "UNKNOWN_TAG" || strings.HasSuffix(upperName, ".UNKNOWN_TAG") ||
+		upperValue == "UNKNOWN_VALUE" || upperValue == "#UNKNOWN_VALUE"
 }

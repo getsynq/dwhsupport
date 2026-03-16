@@ -3,6 +3,7 @@ package snowflake
 import (
 	"testing"
 
+	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
 	"github.com/stretchr/testify/suite"
@@ -176,6 +177,176 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlsPerObjectRecursiveView() {
 		s.NotEmpty(ddl)
 	}
 
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClause() {
+	ddl := `create or replace TRANSIENT TABLE ANALYTICS.ANALYTICS.DATE_SPINE (
+    DATE_DAY DATE
+) WITH TAG (GOVERNANCE.TAGS.TEAM='DATA_INSIGHT_PLATFORM')
+;`
+	tags := ParseWithTagClause(ddl)
+	s.Require().Len(tags, 1)
+	s.Equal("GOVERNANCE.TAGS.TEAM", tags[0].TagName)
+	s.Equal("DATA_INSIGHT_PLATFORM", tags[0].TagValue)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseMultipleTags() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    DS DATE,
+    ID VARCHAR(16777216),
+    NAME VARCHAR(256)
+) WITH TAG (
+    GOVERNANCE.TAGS.FRESHNESS_SLA='24',
+    GOVERNANCE.TAGS.META='{"owner":"team_a","channel":"alerts"}'
+)
+;`
+	tags := ParseWithTagClause(ddl)
+	s.Require().Len(tags, 2)
+	s.Equal("GOVERNANCE.TAGS.FRESHNESS_SLA", tags[0].TagName)
+	s.Equal("24", tags[0].TagValue)
+	s.Equal("GOVERNANCE.TAGS.META", tags[1].TagName)
+	s.Equal(`{"owner":"team_a","channel":"alerts"}`, tags[1].TagValue)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseUnknownTag() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216),
+    TITLE VARCHAR(16777216)
+) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE')
+;`
+	tags := ParseWithTagClause(ddl)
+	s.Require().Empty(tags)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseMixedKnownAndUnknown() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216)
+) WITH TAG (
+    GOVERNANCE.TAGS.TEAM='DATA_PLATFORM',
+    UNKNOWN_TAG='UNKNOWN_VALUE'
+)
+;`
+	tags := ParseWithTagClause(ddl)
+	s.Require().Len(tags, 1)
+	s.Equal("GOVERNANCE.TAGS.TEAM", tags[0].TagName)
+	s.Equal("DATA_PLATFORM", tags[0].TagValue)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseNoTags() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216)
+)
+;`
+	tags := ParseWithTagClause(ddl)
+	s.Require().Nil(tags)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseView() {
+	ddl := `create or replace view MY_DB.MY_SCHEMA.MY_VIEW(
+    ID
+) WITH TAG (GOVERNANCE.TAGS.SENSITIVITY='HIGH')
+ as (
+    select * from MY_TABLE
+);`
+	tags := ParseWithTagClause(ddl)
+	s.Require().Len(tags, 1)
+	s.Equal("GOVERNANCE.TAGS.SENSITIVITY", tags[0].TagName)
+	s.Equal("HIGH", tags[0].TagValue)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestIsUnknownTag() {
+	s.True(isUnknownTag("UNKNOWN_TAG", "UNKNOWN_VALUE"))
+	s.True(isUnknownTag("UNKNOWN_TAG", "#UNKNOWN_VALUE"))
+	s.True(isUnknownTag("DB.SCHEMA.UNKNOWN_TAG", "some_value"))
+	s.False(isUnknownTag("GOVERNANCE.TAGS.TEAM", "DATA_PLATFORM"))
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClause() {
+	ddl := `CREATE MATERIALIZED VIEW mymv
+    COMMENT='Test view description'
+    AS
+    SELECT col1, col2 FROM mytable;`
+	comment := ParseCommentClause(ddl)
+	s.Require().NotNil(comment)
+	s.Equal("Test view description", *comment)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseWithoutEquals() {
+	ddl := `CREATE MATERIALIZED VIEW mymv
+    COMMENT 'Test view without equals'
+    AS
+    SELECT col1, col2 FROM mytable;`
+	comment := ParseCommentClause(ddl)
+	s.Require().NotNil(comment)
+	s.Equal("Test view without equals", *comment)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseIgnoresColumnComment() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216) COMMENT 'this is a column comment',
+    NAME VARCHAR(256)
+) COMMENT='this is the table comment'
+;`
+	comment := ParseCommentClause(ddl)
+	s.Require().NotNil(comment)
+	s.Equal("this is the table comment", *comment)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseOnlyColumnComment() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216) COMMENT 'this is a column comment',
+    NAME VARCHAR(256)
+)
+;`
+	comment := ParseCommentClause(ddl)
+	s.Nil(comment)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseNoComment() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216)
+);`
+	comment := ParseCommentClause(ddl)
+	s.Nil(comment)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseEmptyComment() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216)
+) COMMENT=''
+;`
+	comment := ParseCommentClause(ddl)
+	s.Nil(comment)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseWithTags() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216)
+) COMMENT='My table description' WITH TAG (GOVERNANCE.TAGS.TEAM='DATA_PLATFORM')
+;`
+	comment := ParseCommentClause(ddl)
+	s.Require().NotNil(comment)
+	s.Equal("My table description", *comment)
+
+	tags := ParseWithTagClause(ddl)
+	s.Require().Len(tags, 1)
+	s.Equal("GOVERNANCE.TAGS.TEAM", tags[0].TagName)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClausePreservesInParseDdlsPerObject() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID VARCHAR(16777216)
+) WITH TAG (GOVERNANCE.TAGS.TEAM='DATA_PLATFORM')
+;`
+	perObject, err := ParseCreateStatementsPerObject(s.T().Context(), ddl)
+	s.Require().NoError(err)
+	s.Require().Len(perObject, 1)
+
+	for _, objDdl := range perObject {
+		tags := ParseWithTagClause(objDdl)
+		s.Require().Len(tags, 1)
+		s.Equal(&scrapper.Tag{TagName: "GOVERNANCE.TAGS.TEAM", TagValue: "DATA_PLATFORM"}, tags[0])
+	}
 }
 
 func (s *QuerySqlDefinitionsSuite) TestIsSharedDatabaseUnavailableError() {
