@@ -67,21 +67,21 @@ type CatalogColumnRow struct {
 }
 
 type SchemaColumnField struct {
-	Name string `protobuf:"bytes,1,opt,name=name,proto3"                                   json:"name,omitempty"`
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Human readable name of the column as present in dbt or data warehouse.
-	HumanName string `protobuf:"bytes,2,opt,name=human_name,json=humanName,proto3"              json:"human_name,omitempty"`
+	HumanName string `protobuf:"bytes,2,opt,name=human_name,json=humanName,proto3" json:"human_name,omitempty"`
 	// Native data type of the column as present in data warehouse.
-	NativeType string `protobuf:"bytes,4,opt,name=native_type,json=nativeType,proto3"            json:"native_type,omitempty"`
+	NativeType string `protobuf:"bytes,4,opt,name=native_type,json=nativeType,proto3" json:"native_type,omitempty"`
 	// Description of the column
-	Description *string `protobuf:"bytes,5,opt,name=description,proto3"                            json:"description,omitempty"`
+	Description *string `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
 	// Ordinal position of the column in the table, starting from 1
 	OrdinalPosition int32 `protobuf:"varint,6,opt,name=ordinal_position,json=ordinalPosition,proto3" json:"ordinal_position,omitempty"`
 	// Indicates that the column type could be used as a struct/json in a data warehouse
-	IsStruct bool `protobuf:"varint,7,opt,name=is_struct,json=isStruct,proto3"               json:"is_struct,omitempty"`
+	IsStruct bool `protobuf:"varint,7,opt,name=is_struct,json=isStruct,proto3" json:"is_struct,omitempty"`
 	// Indicates that the column is a repeated field in a data warehouse (e.g. array)
-	IsRepeated bool `protobuf:"varint,8,opt,name=is_repeated,json=isRepeated,proto3"           json:"is_repeated,omitempty"`
+	IsRepeated bool `protobuf:"varint,8,opt,name=is_repeated,json=isRepeated,proto3" json:"is_repeated,omitempty"`
 	// Fields inside of the struct/record like column
-	Fields []*SchemaColumnField `protobuf:"bytes,9,rep,name=fields,proto3"                                 json:"fields,omitempty"`
+	Fields []*SchemaColumnField `protobuf:"bytes,9,rep,name=fields,proto3" json:"fields,omitempty"`
 }
 
 func (r CatalogColumnRow) TableFqn() DwhFqn {
@@ -151,13 +151,15 @@ func GetTableRowOption[T any](tableRow *TableRow, optionName string) T {
 }
 
 type SqlDefinitionRow struct {
-	Instance           string `db:"instance"             json:"instance"             ch:"instance"             bigquery:"instance"`
-	Database           string `db:"database"             json:"database"             ch:"_database"            bigquery:"database"`
-	Schema             string `db:"schema"               json:"schema"               ch:"schema"               bigquery:"schema"`
-	Table              string `db:"table"                json:"table"                ch:"table"                bigquery:"table"`
-	IsView             bool   `db:"is_view"              json:"is_view"              ch:"is_view"              bigquery:"is_view"`
-	IsMaterializedView bool   `db:"is_materialized_view" json:"is_materialized_view" ch:"is_materialized_view" bigquery:"is_materialized_view"`
-	Sql                string `db:"sql"                  json:"sql"                  ch:"sql"                  bigquery:"sql"`
+	Instance           string  `db:"instance"             json:"instance"             ch:"instance"             bigquery:"instance"`
+	Database           string  `db:"database"             json:"database"             ch:"_database"            bigquery:"database"`
+	Schema             string  `db:"schema"               json:"schema"               ch:"schema"               bigquery:"schema"`
+	Table              string  `db:"table"                json:"table"                ch:"table"                bigquery:"table"`
+	IsView             bool    `db:"is_view"              json:"is_view"              ch:"is_view"              bigquery:"is_view"`
+	IsMaterializedView bool    `db:"is_materialized_view" json:"is_materialized_view" ch:"is_materialized_view" bigquery:"is_materialized_view"`
+	Sql                string  `db:"sql"                  json:"sql"                  ch:"sql"                  bigquery:"sql"`
+	Comment            *string `                          json:"comment,omitempty"`
+	Tags               []*Tag  `                          json:"tags,omitempty"`
 }
 
 type DatabaseRow struct {
