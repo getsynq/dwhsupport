@@ -205,7 +205,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 								}
 								sqlDefRow.Sql = ddl
 								sqlDefRow.Tags = ParseWithTagClause(ddl)
-								sqlDefRow.Comment = ParseCommentClause(ddl)
+								sqlDefRow.Description = ParseCommentClause(ddl)
 							}
 						}
 					}

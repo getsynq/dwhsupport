@@ -49,21 +49,24 @@ func (t Tag) String() string {
 }
 
 type CatalogColumnRow struct {
-	Instance       string  `db:"instance"         json:"instance"         ch:"instance"         bigquery:"instance"`
-	Database       string  `db:"database"         json:"database"         ch:"_database"        bigquery:"database"`
-	Schema         string  `db:"schema"           json:"schema"           ch:"schema"           bigquery:"schema"`
-	Table          string  `db:"table"            json:"table"            ch:"table"            bigquery:"table"`
-	IsView         bool    `db:"is_view"          json:"is_view"          ch:"is_view"          bigquery:"is_view"`
-	Column         string  `db:"column"           json:"column"           ch:"column"           bigquery:"column"`
-	Type           string  `db:"type"             json:"type"             ch:"type"             bigquery:"type"`
-	Position       int32   `db:"position"         json:"position"         ch:"position"         bigquery:"position"`
-	Comment        *string `db:"comment"          json:"comment"          ch:"comment"          bigquery:"comment"`
-	TableComment   *string `db:"table_comment"    json:"table_comment"    ch:"table_comment"    bigquery:"table_comment"`
-	ColumnTags     []*Tag  `                      json:"column_tags"`
-	TableTags      []*Tag  `                      json:"table_tags"`
-	IsStructColumn bool    `db:"is_struct_column" json:"is_struct_column" ch:"is_struct_column" bigquery:"is_struct_column"`
-	IsArrayColumn  bool    `db:"is_array_column"  json:"is_array_column"  ch:"is_array_column"  bigquery:"is_array_column"`
-	FieldSchemas   []*SchemaColumnField
+	Instance           string  `db:"instance"             json:"instance"             ch:"instance"             bigquery:"instance"`
+	Database           string  `db:"database"             json:"database"             ch:"_database"            bigquery:"database"`
+	Schema             string  `db:"schema"               json:"schema"               ch:"schema"               bigquery:"schema"`
+	Table              string  `db:"table"                json:"table"                ch:"table"                bigquery:"table"`
+	IsView             bool    `db:"is_view"              json:"is_view"              ch:"is_view"              bigquery:"is_view"`
+	IsTable            bool    `db:"is_table"             json:"is_table"             ch:"is_table"             bigquery:"is_table"`
+	IsMaterializedView bool    `db:"is_materialized_view" json:"is_materialized_view" ch:"is_materialized_view" bigquery:"is_materialized_view"`
+	TableType          string  `db:"table_type"           json:"table_type"           ch:"table_type"           bigquery:"table_type"`
+	Column             string  `db:"column"               json:"column"               ch:"column"               bigquery:"column"`
+	Type               string  `db:"type"                 json:"type"                 ch:"type"                 bigquery:"type"`
+	Position           int32   `db:"position"             json:"position"             ch:"position"             bigquery:"position"`
+	Comment            *string `db:"comment"              json:"comment"              ch:"comment"              bigquery:"comment"`
+	TableComment       *string `db:"table_comment"        json:"table_comment"        ch:"table_comment"        bigquery:"table_comment"`
+	ColumnTags         []*Tag  `                          json:"column_tags"`
+	TableTags          []*Tag  `                          json:"table_tags"`
+	IsStructColumn     bool    `db:"is_struct_column"     json:"is_struct_column"     ch:"is_struct_column"     bigquery:"is_struct_column"`
+	IsArrayColumn      bool    `db:"is_array_column"      json:"is_array_column"      ch:"is_array_column"      bigquery:"is_array_column"`
+	FieldSchemas       []*SchemaColumnField
 }
 
 type SchemaColumnField struct {
@@ -113,17 +116,18 @@ type Annotation struct {
 }
 
 type TableRow struct {
-	Instance    string                 `db:"instance"    json:"instance"    ch:"instance"    bigquery:"instance"`
-	Database    string                 `db:"database"    json:"database"    ch:"_database"   bigquery:"database"`
-	Schema      string                 `db:"schema"      json:"schema"      ch:"schema"      bigquery:"schema"`
-	Table       string                 `db:"table"       json:"table"       ch:"table"       bigquery:"table"`
-	TableType   string                 `db:"table_type"  json:"table_type"  ch:"table_type"  bigquery:"table_type"`
-	Description *string                `db:"description" json:"description" ch:"description" bigquery:"description"`
-	Tags        []*Tag                 `db:"tags"        json:"tags"`
-	IsView      bool                   `db:"is_view"     json:"is_view"     ch:"is_view"`
-	IsTable     bool                   `db:"is_table"    json:"is_table"    ch:"is_table"`
-	Options     map[string]interface{} `db:"options"     json:"options"`
-	Annotations []*Annotation          `db:"annotations" json:"annotations"`
+	Instance           string                 `db:"instance"             json:"instance"             ch:"instance"             bigquery:"instance"`
+	Database           string                 `db:"database"             json:"database"             ch:"_database"            bigquery:"database"`
+	Schema             string                 `db:"schema"               json:"schema"               ch:"schema"               bigquery:"schema"`
+	Table              string                 `db:"table"                json:"table"                ch:"table"                bigquery:"table"`
+	TableType          string                 `db:"table_type"           json:"table_type"           ch:"table_type"           bigquery:"table_type"`
+	Description        *string                `db:"description"          json:"description"          ch:"description"          bigquery:"description"`
+	Tags               []*Tag                 `db:"tags"                 json:"tags"`
+	IsView             bool                   `db:"is_view"              json:"is_view"              ch:"is_view"`
+	IsTable            bool                   `db:"is_table"             json:"is_table"             ch:"is_table"`
+	IsMaterializedView bool                   `db:"is_materialized_view" json:"is_materialized_view" ch:"is_materialized_view"`
+	Options            map[string]interface{} `db:"options"              json:"options"`
+	Annotations        []*Annotation          `db:"annotations"          json:"annotations"`
 }
 
 func (r TableRow) TableFqn() DwhFqn {
@@ -151,14 +155,16 @@ func GetTableRowOption[T any](tableRow *TableRow, optionName string) T {
 }
 
 type SqlDefinitionRow struct {
-	Instance           string  `db:"instance"             json:"instance"             ch:"instance"             bigquery:"instance"`
-	Database           string  `db:"database"             json:"database"             ch:"_database"            bigquery:"database"`
-	Schema             string  `db:"schema"               json:"schema"               ch:"schema"               bigquery:"schema"`
-	Table              string  `db:"table"                json:"table"                ch:"table"                bigquery:"table"`
-	IsView             bool    `db:"is_view"              json:"is_view"              ch:"is_view"              bigquery:"is_view"`
-	IsMaterializedView bool    `db:"is_materialized_view" json:"is_materialized_view" ch:"is_materialized_view" bigquery:"is_materialized_view"`
-	Sql                string  `db:"sql"                  json:"sql"                  ch:"sql"                  bigquery:"sql"`
-	Comment            *string `                          json:"comment,omitempty"`
+	Instance           string  `db:"instance"             json:"instance"              ch:"instance"             bigquery:"instance"`
+	Database           string  `db:"database"             json:"database"              ch:"_database"            bigquery:"database"`
+	Schema             string  `db:"schema"               json:"schema"                ch:"schema"               bigquery:"schema"`
+	Table              string  `db:"table"                json:"table"                 ch:"table"                bigquery:"table"`
+	IsView             bool    `db:"is_view"              json:"is_view"               ch:"is_view"              bigquery:"is_view"`
+	IsTable            bool    `db:"is_table"             json:"is_table"              ch:"is_table"             bigquery:"is_table"`
+	IsMaterializedView bool    `db:"is_materialized_view" json:"is_materialized_view"  ch:"is_materialized_view" bigquery:"is_materialized_view"`
+	TableType          string  `db:"table_type"           json:"table_type"            ch:"table_type"           bigquery:"table_type"`
+	Sql                string  `db:"sql"                  json:"sql"                   ch:"sql"                  bigquery:"sql"`
+	Description        *string `                          json:"description,omitempty"`
 	Tags               []*Tag  `                          json:"tags,omitempty"`
 }
 
