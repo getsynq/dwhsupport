@@ -456,20 +456,18 @@ func ParseCommentClause(ddl string) *string {
 			continue
 		}
 
-		// Expect '='
+		// Accept both COMMENT='value' and COMMENT 'value'
 		nextInd, nextTok := parser.PeekToken()
-		if nextTok.Type != sqllexer.OPERATOR || nextTok.Value != "=" {
+		if nextTok.Type == sqllexer.OPERATOR && nextTok.Value == "=" {
+			parser.Index = nextInd
+			nextInd, nextTok = parser.PeekToken()
+		}
+
+		if nextTok.Type != sqllexer.STRING {
 			continue
 		}
 		parser.Index = nextInd
-
-		// Expect quoted string value
-		valInd, valTok := parser.PeekToken()
-		if valTok.Type != sqllexer.STRING {
-			continue
-		}
-		parser.Index = valInd
-		comment := strings.Trim(valTok.Value, "'")
+		comment := strings.Trim(nextTok.Value, "'")
 		if comment == "" {
 			return nil
 		}

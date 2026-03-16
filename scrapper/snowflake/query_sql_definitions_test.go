@@ -271,6 +271,16 @@ func (s *QuerySqlDefinitionsSuite) TestParseCommentClause() {
 	s.Equal("Test view description", *comment)
 }
 
+func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseWithoutEquals() {
+	ddl := `CREATE MATERIALIZED VIEW mymv
+    COMMENT 'Test view without equals'
+    AS
+    SELECT col1, col2 FROM mytable;`
+	comment := ParseCommentClause(ddl)
+	s.Require().NotNil(comment)
+	s.Equal("Test view without equals", *comment)
+}
+
 func (s *QuerySqlDefinitionsSuite) TestParseCommentClauseNoComment() {
 	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
     ID VARCHAR(16777216)
