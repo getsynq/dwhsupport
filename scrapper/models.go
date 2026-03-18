@@ -128,6 +128,10 @@ type TableRow struct {
 	IsMaterializedView bool                   `db:"is_materialized_view" json:"is_materialized_view" ch:"is_materialized_view"`
 	Options            map[string]interface{} `db:"options"              json:"options"`
 	Annotations        []*Annotation          `db:"annotations"          json:"annotations"`
+
+	// Constraints is optionally populated by QueryTables when WithConstraints() is passed.
+	// When non-nil, callers may skip a separate QueryTableConstraints call.
+	Constraints []*TableConstraintRow `json:"constraints,omitempty"`
 }
 
 func (r TableRow) TableFqn() DwhFqn {

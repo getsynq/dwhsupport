@@ -44,6 +44,12 @@ func (e *BigQueryScrapper) IsPermissionError(err error) bool {
 	return errIsAccessDenied(err)
 }
 
+func (e *BigQueryScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		ConstraintsViaQueryTables: true,
+	}
+}
+
 func (e *BigQueryScrapper) DialectType() string {
 	return "bigquery"
 }

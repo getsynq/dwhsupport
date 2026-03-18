@@ -15,7 +15,7 @@ import (
 //go:embed query_tables.sql
 var queryTablesSQL string
 
-func (e *TrinoScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (e *TrinoScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	var out []*scrapper.TableRow
 
 	acceptedCatalogs, err := e.acceptedCatalogs(ctx)

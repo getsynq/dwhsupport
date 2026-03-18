@@ -31,7 +31,7 @@ var tablesQuery = `
 		/* SYNQ_SCOPE_FILTER */
 	`
 
-func (e *SnowflakeScrapper) QueryTables(origCtx context.Context) ([]*scrapper.TableRow, error) {
+func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	var finalResults []*scrapper.TableRow
 	var m sync.Mutex
 

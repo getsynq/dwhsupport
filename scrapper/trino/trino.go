@@ -80,6 +80,8 @@ func (e *TrinoScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
+func (e *TrinoScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *TrinoScrapper) DialectType() string {
 	return "trino"
 }

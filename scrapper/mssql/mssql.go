@@ -42,6 +42,8 @@ func (e *MSSQLScrapper) IsPermissionError(err error) bool {
 		strings.Contains(errStr, "permission denied")
 }
 
+func (e *MSSQLScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *MSSQLScrapper) DialectType() string {
 	return "mssql"
 }

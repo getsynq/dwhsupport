@@ -11,7 +11,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
-func (e *DatabricksScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (e *DatabricksScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	var res []*scrapper.TableRow
 
 	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})

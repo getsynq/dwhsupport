@@ -63,6 +63,15 @@ type scrapperWrapper[K comparable] struct {
 	mu    sync.Mutex
 }
 
+func (s *scrapperWrapper[K]) Capabilities() scrapper.Capabilities {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lease == nil || s.lease.Released() {
+		return scrapper.Capabilities{}
+	}
+	return s.lease.Value().Capabilities()
+}
+
 func (s *scrapperWrapper[K]) DialectType() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -126,13 +135,13 @@ func (s *scrapperWrapper[K]) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 	return s.lease.Value().QuerySqlDefinitions(ctx)
 }
 
-func (s *scrapperWrapper[K]) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (s *scrapperWrapper[K]) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.lease == nil || s.lease.Released() {
 		return nil, nil
 	}
-	return s.lease.Value().QueryTables(ctx)
+	return s.lease.Value().QueryTables(ctx, opts...)
 }
 
 func (s *scrapperWrapper[K]) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {

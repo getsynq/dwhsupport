@@ -42,6 +42,44 @@ func (m *MockScrapper) EXPECT() *MockScrapperMockRecorder {
 	return m.recorder
 }
 
+// Capabilities mocks base method.
+func (m *MockScrapper) Capabilities() Capabilities {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Capabilities")
+	ret0, _ := ret[0].(Capabilities)
+	return ret0
+}
+
+// Capabilities indicates an expected call of Capabilities.
+func (mr *MockScrapperMockRecorder) Capabilities() *MockScrapperCapabilitiesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Capabilities", reflect.TypeOf((*MockScrapper)(nil).Capabilities))
+	return &MockScrapperCapabilitiesCall{Call: call}
+}
+
+// MockScrapperCapabilitiesCall wrap *gomock.Call
+type MockScrapperCapabilitiesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockScrapperCapabilitiesCall) Return(arg0 Capabilities) *MockScrapperCapabilitiesCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockScrapperCapabilitiesCall) Do(f func() Capabilities) *MockScrapperCapabilitiesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockScrapperCapabilitiesCall) DoAndReturn(f func() Capabilities) *MockScrapperCapabilitiesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Close mocks base method.
 func (m *MockScrapper) Close() error {
 	m.ctrl.T.Helper()
@@ -479,18 +517,23 @@ func (c *MockScrapperQueryTableMetricsCall) DoAndReturn(f func(context.Context, 
 }
 
 // QueryTables mocks base method.
-func (m *MockScrapper) QueryTables(ctx context.Context) ([]*TableRow, error) {
+func (m *MockScrapper) QueryTables(ctx context.Context, opts ...QueryTablesOption) ([]*TableRow, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "QueryTables", ctx)
+	varargs := []any{ctx}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "QueryTables", varargs...)
 	ret0, _ := ret[0].([]*TableRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // QueryTables indicates an expected call of QueryTables.
-func (mr *MockScrapperMockRecorder) QueryTables(ctx any) *MockScrapperQueryTablesCall {
+func (mr *MockScrapperMockRecorder) QueryTables(ctx any, opts ...any) *MockScrapperQueryTablesCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTables", reflect.TypeOf((*MockScrapper)(nil).QueryTables), ctx)
+	varargs := append([]any{ctx}, opts...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryTables", reflect.TypeOf((*MockScrapper)(nil).QueryTables), varargs...)
 	return &MockScrapperQueryTablesCall{Call: call}
 }
 
@@ -506,13 +549,13 @@ func (c *MockScrapperQueryTablesCall) Return(arg0 []*TableRow, arg1 error) *Mock
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockScrapperQueryTablesCall) Do(f func(context.Context) ([]*TableRow, error)) *MockScrapperQueryTablesCall {
+func (c *MockScrapperQueryTablesCall) Do(f func(context.Context, ...QueryTablesOption) ([]*TableRow, error)) *MockScrapperQueryTablesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockScrapperQueryTablesCall) DoAndReturn(f func(context.Context) ([]*TableRow, error)) *MockScrapperQueryTablesCall {
+func (c *MockScrapperQueryTablesCall) DoAndReturn(f func(context.Context, ...QueryTablesOption) ([]*TableRow, error)) *MockScrapperQueryTablesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
