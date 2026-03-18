@@ -16,6 +16,10 @@ type mockScrapper struct {
 	closed      atomic.Bool
 }
 
+func (m *mockScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{}
+}
+
 func (m *mockScrapper) DialectType() string {
 	return m.dialectType
 }
@@ -44,7 +48,7 @@ func (m *mockScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.Sql
 	return nil, nil
 }
 
-func (m *mockScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (m *mockScrapper) QueryTables(ctx context.Context, _ ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	return nil, nil
 }
 

@@ -43,6 +43,8 @@ func (e *OracleScrapper) IsPermissionError(err error) bool {
 		strings.Contains(errStr, "ORA-00604")
 }
 
+func (e *OracleScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *OracleScrapper) DialectType() string {
 	return "oracle"
 }

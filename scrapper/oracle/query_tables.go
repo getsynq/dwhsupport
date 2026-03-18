@@ -13,7 +13,7 @@ import (
 //go:embed query_tables.sql
 var queryTablesSql string
 
-func (e *OracleScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (e *OracleScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	sql := scope.AppendScopeConditions(ctx, queryTablesSql, "", "o.OWNER", "o.OBJECT_NAME")
 	return dwhexecoracle.NewQuerier[scrapper.TableRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {

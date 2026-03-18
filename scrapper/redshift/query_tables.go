@@ -13,7 +13,7 @@ import (
 //go:embed query_tables.sql
 var tablesSql string
 
-func (e *RedshiftScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (e *RedshiftScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	sql := scope.AppendScopeConditions(ctx, tablesSql, "", "tbl.schema_name", "tbl.table_name")
 	return stdsql.QueryMany[scrapper.TableRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithArgs[scrapper.TableRow](e.conf.Database),

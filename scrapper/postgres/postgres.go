@@ -41,6 +41,8 @@ func (e *PostgresScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
+func (e *PostgresScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *PostgresScrapper) DialectType() string {
 	return "postgres"
 }

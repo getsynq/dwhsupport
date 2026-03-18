@@ -42,6 +42,8 @@ func (e *MySQLScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
+func (e *MySQLScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *MySQLScrapper) DialectType() string {
 	return "mysql"
 }

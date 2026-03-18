@@ -40,7 +40,8 @@ func (s *ScopedScrapper) effectiveFilter(ctx context.Context) *ScopeFilter {
 // ValidateConfiguration) or execute user-provided SQL that cannot be scope-filtered
 // (QuerySegments, QueryCustomMetrics, QueryShape).
 
-func (s *ScopedScrapper) DialectType() string              { return s.inner.DialectType() }
+func (s *ScopedScrapper) Capabilities() scrapper.Capabilities { return s.inner.Capabilities() }
+func (s *ScopedScrapper) DialectType() string                 { return s.inner.DialectType() }
 func (s *ScopedScrapper) SqlDialect() sqldialect.Dialect   { return s.inner.SqlDialect() }
 func (s *ScopedScrapper) IsPermissionError(err error) bool { return s.inner.IsPermissionError(err) }
 func (s *ScopedScrapper) Close() error                     { return s.inner.Close() }
@@ -93,9 +94,9 @@ func (s *ScopedScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.S
 	return FilterRows(rows, GetScope(ctx)), nil
 }
 
-func (s *ScopedScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (s *ScopedScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	ctx = s.effectiveCtx(ctx)
-	rows, err := s.inner.QueryTables(ctx)
+	rows, err := s.inner.QueryTables(ctx, opts...)
 	if err != nil {
 		return nil, err
 	}

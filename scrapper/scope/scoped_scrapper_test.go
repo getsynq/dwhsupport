@@ -21,10 +21,11 @@ type mockScrapper struct {
 	constraintRows []*scrapper.TableConstraintRow
 }
 
-func (m *mockScrapper) DialectType() string            { return "mock" }
-func (m *mockScrapper) SqlDialect() sqldialect.Dialect { return nil }
-func (m *mockScrapper) IsPermissionError(error) bool   { return false }
-func (m *mockScrapper) Close() error                   { return nil }
+func (m *mockScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (m *mockScrapper) DialectType() string                 { return "mock" }
+func (m *mockScrapper) SqlDialect() sqldialect.Dialect      { return nil }
+func (m *mockScrapper) IsPermissionError(error) bool        { return false }
+func (m *mockScrapper) Close() error                        { return nil }
 
 func (m *mockScrapper) ValidateConfiguration(context.Context) ([]string, error) {
 	return nil, nil
@@ -42,7 +43,7 @@ func (m *mockScrapper) QuerySqlDefinitions(context.Context) ([]*scrapper.SqlDefi
 	return m.sqlDefRows, nil
 }
 
-func (m *mockScrapper) QueryTables(context.Context) ([]*scrapper.TableRow, error) {
+func (m *mockScrapper) QueryTables(_ context.Context, _ ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	return m.tableRows, nil
 }
 

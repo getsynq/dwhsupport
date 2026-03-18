@@ -54,6 +54,8 @@ func (e *DuckDBScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
+func (e *DuckDBScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *DuckDBScrapper) DialectType() string {
 	return "duckdb"
 }

@@ -13,7 +13,9 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-func (e *BigQueryScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRow, error) {
+func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
+	cfg := scrapper.ApplyQueryTablesOptions(opts...)
+
 	log := logging.
 		GetLogger(ctx).
 		WithField("executor", "bigquery").
@@ -107,6 +109,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRo
 			default:
 			}
 
+			includeConstraints := cfg.IncludeConstraints
 			g.Go(func() error {
 				tableMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
 				if err != nil {
@@ -119,17 +122,22 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context) ([]*scrapper.TableRo
 				var tableTags []*scrapper.Tag = datasetTags
 				tableTags = append(tableTags, labelsToTags(tableMeta.Labels)...)
 
-				mutex.Lock()
-				defer mutex.Unlock()
-
-				rows = append(rows, &scrapper.TableRow{
+				row := &scrapper.TableRow{
 					Instance:    "",
 					Database:    e.conf.ProjectId,
 					Schema:      dataset.DatasetID,
 					Table:       tableAlias,
 					TableType:   string(tableMeta.Type),
 					Description: lo.EmptyableToPtr(tableMeta.Description),
-				})
+				}
+
+				if includeConstraints {
+					row.Constraints = extractConstraintsFromMeta(e.conf.ProjectId, dataset.DatasetID, tableAlias, tableMeta)
+				}
+
+				mutex.Lock()
+				defer mutex.Unlock()
+				rows = append(rows, row)
 
 				return nil
 			})

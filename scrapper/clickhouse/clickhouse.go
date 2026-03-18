@@ -44,6 +44,8 @@ func (e *ClickhouseScrapper) IsPermissionError(err error) bool {
 	return strings.Contains(err.Error(), "Not enough privileges")
 }
 
+func (e *ClickhouseScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *ClickhouseScrapper) DialectType() string {
 	return "clickhouse"
 }

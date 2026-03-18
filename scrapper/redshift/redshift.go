@@ -49,6 +49,8 @@ func (e *RedshiftScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
+func (e *RedshiftScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *RedshiftScrapper) DialectType() string {
 	return "redshift"
 }

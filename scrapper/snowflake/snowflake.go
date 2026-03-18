@@ -115,6 +115,8 @@ func (e *SnowflakeScrapper) IsPermissionError(err error) bool {
 	return false
 }
 
+func (e *SnowflakeScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *SnowflakeScrapper) DialectType() string {
 	return "snowflake"
 }

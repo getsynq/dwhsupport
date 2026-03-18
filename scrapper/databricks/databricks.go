@@ -47,6 +47,8 @@ type DatabricksScrapper struct {
 	scope        *scope.ScopeFilter
 }
 
+func (e *DatabricksScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+
 func (e *DatabricksScrapper) DialectType() string {
 	return "databricks"
 }
