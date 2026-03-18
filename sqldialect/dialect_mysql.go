@@ -95,7 +95,7 @@ func (d *MySQLDialect) CurrentTimestamp() Expr {
 }
 
 func (d *MySQLDialect) Identifier(identifier string) string {
-	return identifier
+	return QuoteWithBackticks(identifier)
 }
 
 func (d *MySQLDialect) StringLiteral(s string) string {

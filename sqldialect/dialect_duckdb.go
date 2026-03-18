@@ -84,7 +84,7 @@ func (d *DuckDBDialect) CurrentTimestamp() Expr {
 }
 
 func (d *DuckDBDialect) Identifier(identifier string) string {
-	return identifier
+	return QuoteWithDoubleQuotes(identifier)
 }
 
 func (d *DuckDBDialect) StringLiteral(s string) string {

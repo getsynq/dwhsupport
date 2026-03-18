@@ -84,7 +84,7 @@ func (d *ClickHouseDialect) CurrentTimestamp() Expr {
 }
 
 func (d *ClickHouseDialect) Identifier(identifier string) string {
-	return identifier
+	return QuoteWithBackticks(identifier)
 }
 
 func (d *ClickHouseDialect) StringLiteral(s string) string {
