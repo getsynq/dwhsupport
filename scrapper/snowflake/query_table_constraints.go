@@ -47,17 +47,33 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 
 	scopeFilter := scope.GetScope(ctx)
 
+	// Determine which databases we'll actually query
+	var databasesToQuery []string
+	for _, database := range e.conf.Databases {
+		if existingDbs[database] && scopeFilter.IsDatabaseAccepted(database) {
+			databasesToQuery = append(databasesToQuery, database)
+		}
+	}
+
+	// Check if CLUSTER_BY column is available using the first database.
+	// On Snowflake Standard edition, information_schema.tables does not expose CLUSTER_BY.
+	clusterByAvailable := false
+	if len(databasesToQuery) > 0 {
+		available, err := e.hasClusterByColumn(ctx, databasesToQuery[0])
+		if err != nil {
+			logging.GetLogger(ctx).WithError(err).Debug("Failed to check CLUSTER_BY column availability, skipping clustering keys")
+		} else {
+			clusterByAvailable = available
+		}
+		if !clusterByAvailable {
+			logging.GetLogger(ctx).Debug("CLUSTER_BY column not available in information_schema.tables (Snowflake Standard edition), skipping clustering keys")
+		}
+	}
+
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(4)
 
-	for _, database := range e.conf.Databases {
-		if !existingDbs[database] {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(database) {
-			continue
-		}
-
+	for _, database := range databasesToQuery {
 		select {
 		case <-groupCtx.Done():
 			return nil, groupCtx.Err()
@@ -79,22 +95,19 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 			}
 			results = append(results, pkRows...)
 
-			// Query clustering keys for the database
-			ckRows, err := e.queryClusteringKeysInDatabase(groupCtx, database)
-			if err != nil {
-				if isSharedDatabaseUnavailableError(err) {
-					logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
-						Warn("Shared database is no longer available, skipping")
-					return nil
+			// Query clustering keys for the database (only if CLUSTER_BY column is available)
+			if clusterByAvailable {
+				ckRows, err := e.queryClusteringKeysInDatabase(groupCtx, database)
+				if err != nil {
+					if isSharedDatabaseUnavailableError(err) {
+						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
+							Warn("Shared database is no longer available, skipping")
+						return nil
+					}
+					return errors.Wrapf(err, "failed to query clustering keys for database %s", database)
 				}
-				if isClusterByUnsupportedError(err) {
-					logging.GetLogger(groupCtx).WithField("database", database).
-						Debug("CLUSTER_BY column not available (Snowflake Standard edition), skipping clustering keys")
-					return nil
-				}
-				return errors.Wrapf(err, "failed to query clustering keys for database %s", database)
+				results = append(results, ckRows...)
 			}
-			results = append(results, ckRows...)
 
 			m.Lock()
 			defer m.Unlock()
@@ -138,6 +151,22 @@ func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, data
 	}
 
 	return results, nil
+}
+
+// hasClusterByColumn checks whether the CLUSTER_BY column exists in information_schema.tables
+// by describing the table. This avoids failing queries on Snowflake Standard edition.
+func (e *SnowflakeScrapper) hasClusterByColumn(ctx context.Context, database string) (bool, error) {
+	tableName := fmt.Sprintf("%s.information_schema.tables", database)
+	columns, err := e.findTableColumns(ctx, tableName)
+	if err != nil {
+		return false, err
+	}
+	for _, col := range columns {
+		if strings.EqualFold(col, "CLUSTER_BY") {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (e *SnowflakeScrapper) queryClusteringKeysInDatabase(ctx context.Context, database string) ([]*scrapper.TableConstraintRow, error) {
