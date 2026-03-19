@@ -144,7 +144,7 @@ func (c *MetricConf) PrefixedAliasForMetric(metricId MetricId) TextExpr {
 	if c.AliasPrefix == "" {
 		return Identifier(string(metricId))
 	}
-	return Identifier(fmt.Sprintf("%s$%s", c.AliasPrefix, string(metricId)))
+	return Identifier(fmt.Sprintf("%s__%s", c.AliasPrefix, string(metricId)))
 }
 
 type MetricConfOption func(*MetricConf)

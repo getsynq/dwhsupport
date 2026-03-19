@@ -84,7 +84,7 @@ func (d *TrinoDialect) CurrentTimestamp() Expr {
 }
 
 func (d *TrinoDialect) Identifier(identifier string) string {
-	return identifier
+	return QuoteWithDoubleQuotes(identifier)
 }
 
 func (d *TrinoDialect) StringLiteral(s string) string {

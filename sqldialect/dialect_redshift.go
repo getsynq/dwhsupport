@@ -84,7 +84,7 @@ func (d *RedshiftDialect) CurrentTimestamp() Expr {
 }
 
 func (d *RedshiftDialect) Identifier(identifier string) string {
-	return identifier
+	return QuoteWithDoubleQuotes(identifier)
 }
 
 func (d *RedshiftDialect) StringLiteral(s string) string {

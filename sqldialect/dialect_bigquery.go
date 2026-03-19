@@ -84,7 +84,7 @@ func (d *BigQueryDialect) CurrentTimestamp() Expr {
 }
 
 func (d *BigQueryDialect) Identifier(identifier string) string {
-	return identifier
+	return QuoteWithBackticks(identifier)
 }
 
 func (d *BigQueryDialect) StringLiteral(s string) string {

@@ -3,17 +3,17 @@
 select
   COALESCE(workspace, '') as segment, 
   COALESCE(run_type, '') as segment_2, 
-  count(workspace) as workspace$num_not_null, 
-  count(distinct workspace) as workspace$num_unique, 
-  countif(workspace = '') as workspace$num_empty, 
-  count(run_type) as run_type$num_not_null, 
-  count(distinct run_type) as run_type$num_unique, 
-  countif(run_type = 0) as run_type$num_empty, 
-  CAST(avg(run_type) AS FLOAT64) as run_type$mean, 
-  CAST(min(run_type) AS FLOAT64) as run_type$min, 
-  CAST(max(run_type) AS FLOAT64) as run_type$max, 
-  CAST(approx_quantiles(run_type, 2)[offset(1)] AS FLOAT64) as run_type$median, 
-  CAST(stddev_samp(run_type) AS FLOAT64) as run_type$stddev
+  count(workspace) as workspace__num_not_null, 
+  count(distinct workspace) as workspace__num_unique, 
+  countif(workspace = '') as workspace__num_empty, 
+  count(run_type) as run_type__num_not_null, 
+  count(distinct run_type) as run_type__num_unique, 
+  countif(run_type = 0) as run_type__num_empty, 
+  CAST(avg(run_type) AS FLOAT64) as run_type__mean, 
+  CAST(min(run_type) AS FLOAT64) as run_type__min, 
+  CAST(max(run_type) AS FLOAT64) as run_type__max, 
+  CAST(approx_quantiles(run_type, 2)[offset(1)] AS FLOAT64) as run_type__median, 
+  CAST(stddev_samp(run_type) AS FLOAT64) as run_type__stddev
 from `db.default.runs` 
 group by
   COALESCE(workspace, ''), 
