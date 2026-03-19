@@ -141,6 +141,38 @@ func Trino(ctx context.Context, trino *agentdwhv1.TrinoConf) (scrapper.Scrapper,
 	})
 }
 
+// EffectiveDatabaseName returns the database name that the scraper post-processor
+// will set on row.Database for this connection type. This matches what each
+// warehouse scraper does in its QueryTableMetrics post-processor.
+// Returns "" for multi-catalog scrapers (Snowflake with multiple databases,
+// Databricks, Trino) where the scope filter's Database field should be left as-is.
+func EffectiveDatabaseName(conf *agentdwhv1.Connection) string {
+	switch t := conf.Config.(type) {
+	case *agentdwhv1.Connection_Clickhouse:
+		return t.Clickhouse.GetHost()
+	case *agentdwhv1.Connection_Postgres:
+		return t.Postgres.GetDatabase()
+	case *agentdwhv1.Connection_Redshift:
+		return t.Redshift.GetDatabase()
+	case *agentdwhv1.Connection_Bigquery:
+		return t.Bigquery.GetProjectId()
+	case *agentdwhv1.Connection_Mysql:
+		return t.Mysql.GetHost()
+	case *agentdwhv1.Connection_Snowflake:
+		dbs := t.Snowflake.GetDatabases()
+		if len(dbs) == 1 {
+			return dbs[0]
+		}
+		return ""
+	case *agentdwhv1.Connection_Databricks:
+		return ""
+	case *agentdwhv1.Connection_Trino:
+		return ""
+	default:
+		return ""
+	}
+}
+
 func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrapper, error) {
 	switch t := conf.Config.(type) {
 	case *agentdwhv1.Connection_Bigquery:
