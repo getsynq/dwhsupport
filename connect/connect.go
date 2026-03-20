@@ -147,8 +147,14 @@ func Trino(ctx context.Context, trino *agentdwhv1.TrinoConf) (scrapper.Scrapper,
 // Returns "" for multi-catalog scrapers (Snowflake with multiple databases,
 // Databricks, Trino) where the scope filter's Database field should be left as-is.
 func EffectiveDatabaseName(conf *agentdwhv1.Connection) string {
+	if conf == nil || conf.Config == nil {
+		return ""
+	}
 	switch t := conf.Config.(type) {
 	case *agentdwhv1.Connection_Clickhouse:
+		if db := t.Clickhouse.GetDatabase(); db != "" {
+			return db
+		}
 		return t.Clickhouse.GetHost()
 	case *agentdwhv1.Connection_Postgres:
 		return t.Postgres.GetDatabase()
@@ -159,7 +165,7 @@ func EffectiveDatabaseName(conf *agentdwhv1.Connection) string {
 	case *agentdwhv1.Connection_Mysql:
 		return t.Mysql.GetHost()
 	case *agentdwhv1.Connection_Snowflake:
-		dbs := t.Snowflake.GetDatabases()
+		dbs := lo.Uniq(t.Snowflake.GetDatabases())
 		if len(dbs) == 1 {
 			return dbs[0]
 		}

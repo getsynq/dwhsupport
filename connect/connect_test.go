@@ -14,12 +14,33 @@ func TestEffectiveDatabaseName(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "clickhouse returns host",
+			name:     "nil connection returns empty",
+			conf:     nil,
+			expected: "",
+		},
+		{
+			name:     "nil config returns empty",
+			conf:     &agentdwhv1.Connection{},
+			expected: "",
+		},
+		{
+			name: "clickhouse prefers database over host",
 			conf: &agentdwhv1.Connection{
 				Config: &agentdwhv1.Connection_Clickhouse{
 					Clickhouse: &agentdwhv1.ClickhouseConf{
 						Host:     "MY_HOST.region-1.provider.cloud",
-						Database: "default",
+						Database: "my_database",
+					},
+				},
+			},
+			expected: "my_database",
+		},
+		{
+			name: "clickhouse falls back to host when database is empty",
+			conf: &agentdwhv1.Connection{
+				Config: &agentdwhv1.Connection_Clickhouse{
+					Clickhouse: &agentdwhv1.ClickhouseConf{
+						Host: "MY_HOST.region-1.provider.cloud",
 					},
 				},
 			},
@@ -77,6 +98,17 @@ func TestEffectiveDatabaseName(t *testing.T) {
 				Config: &agentdwhv1.Connection_Snowflake{
 					Snowflake: &agentdwhv1.SnowflakeConf{
 						Databases: []string{"MY_DB"},
+					},
+				},
+			},
+			expected: "MY_DB",
+		},
+		{
+			name: "snowflake with duplicate databases returns it",
+			conf: &agentdwhv1.Connection{
+				Config: &agentdwhv1.Connection_Snowflake{
+					Snowflake: &agentdwhv1.SnowflakeConf{
+						Databases: []string{"MY_DB", "MY_DB"},
 					},
 				},
 			},
