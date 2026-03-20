@@ -57,7 +57,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 		g.Go(
 			func() error {
 				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(catalogQuery, database), "", "c.table_schema", "c.table_name")
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
+				rows, err := e.executor.QueryRows(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).

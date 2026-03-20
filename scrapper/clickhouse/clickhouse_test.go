@@ -468,8 +468,6 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {
 	if !s.fixturesAvailable {
 		s.T().Skip("Skipping: test fixtures not available (no CREATE TABLE permission)")
 	}
-	db := s.clickhouseScrapper.executor.GetDb()
-
 	sql := `SELECT
 		name as segment_name,
 		big_number as big_value,
@@ -477,7 +475,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {
 	FROM test_clickhouse_scrapper
 	ORDER BY id`
 
-	result, err := scrapperstdsql.QueryCustomMetrics(s.ctx, db, sql)
+	result, err := scrapperstdsql.QueryCustomMetrics(s.ctx, s.clickhouseScrapper.executor, sql)
 	s.Require().NoError(err)
 	s.Require().Len(result, 2)
 

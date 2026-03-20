@@ -53,7 +53,7 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 				var tmpResults []*scrapper.TableMetricsRow
 
 				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(tableMetricsSql, database), "", "table_schema", "table_name")
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
+				rows, err := e.executor.QueryRows(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).

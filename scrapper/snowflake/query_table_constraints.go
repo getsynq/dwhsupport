@@ -113,7 +113,7 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, database string) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
-	rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf("SHOW PRIMARY KEYS IN DATABASE %s", database))
+	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW PRIMARY KEYS IN DATABASE %s", database))
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (e *SnowflakeScrapper) queryClusteringKeysInDatabase(ctx context.Context, d
 		"", "table_schema", "table_name",
 	)
 
-	rows, err := e.executor.GetDb().QueryxContext(ctx, query)
+	rows, err := e.executor.QueryRows(ctx, query)
 	if err != nil {
 		return nil, err
 	}

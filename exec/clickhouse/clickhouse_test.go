@@ -32,7 +32,6 @@ type res struct {
 	TableType    string `db:"table_type"`
 }
 
-
 func (s *ClickhouseSuite) TestSomething() {
 	ctx := context.TODO()
 	execer, err := NewClickhouseExecutor(ctx, &ClickhouseConf{

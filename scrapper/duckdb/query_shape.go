@@ -8,5 +8,5 @@ import (
 )
 
 func (e *DuckDBScrapper) QueryShape(ctx context.Context, sql string) ([]*scrapper.QueryShapeColumn, error) {
-	return scrappersqtsql.QueryShape(ctx, e.executor.GetDb(), sql)
+	return scrappersqtsql.QueryShape(ctx, e.executor, sql)
 }

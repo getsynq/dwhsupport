@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
+	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
@@ -99,9 +99,9 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 	return res, nil
 }
 
-func (e *DatabricksScrapper) queryTags(ctx context.Context, sqlClient *sqlx.DB, catalog, informationSchemaTable string) ([]*Tags, error) {
+func (e *DatabricksScrapper) queryTags(ctx context.Context, executor *dwhexecdatabricks.DatabricksExecutor, catalog, informationSchemaTable string) ([]*Tags, error) {
 	var tags []*Tags
-	err := sqlClient.SelectContext(ctx, &tags, fmt.Sprintf("SELECT * FROM `%s`.information_schema.%s", catalog, informationSchemaTable))
+	err := executor.Select(ctx, &tags, fmt.Sprintf("SELECT * FROM `%s`.information_schema.%s", catalog, informationSchemaTable))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to fetch tags from %s.INFORMATION_SCHEMA.%s", catalog, informationSchemaTable)
 	}
@@ -125,21 +125,19 @@ func (e *DatabricksScrapper) createTagsLookup(ctx context.Context, catalogName s
 			return nil, err
 		}
 
-		sqlClient := databricksExecutor.GetDb()
-
-		catalogTags, err := e.queryTags(ctx, sqlClient, catalogName, "CATALOG_TAGS")
+		catalogTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "CATALOG_TAGS")
 		if err != nil {
 			return nil, err
 		}
-		schemaTags, err := e.queryTags(ctx, sqlClient, catalogName, "SCHEMA_TAGS")
+		schemaTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "SCHEMA_TAGS")
 		if err != nil {
 			return nil, err
 		}
-		tableTags, err := e.queryTags(ctx, sqlClient, catalogName, "TABLE_TAGS")
+		tableTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "TABLE_TAGS")
 		if err != nil {
 			return nil, err
 		}
-		columnTags, err := e.queryTags(ctx, sqlClient, catalogName, "COLUMN_TAGS")
+		columnTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "COLUMN_TAGS")
 		if err != nil {
 			return nil, err
 		}

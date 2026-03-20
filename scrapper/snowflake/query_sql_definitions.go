@@ -66,7 +66,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 				var tmpResults []*scrapper.SqlDefinitionRow
 
 				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(sqlDefinitionsQuery, database), "", "table_schema", "table_name")
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
+				rows, err := e.executor.QueryRows(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
@@ -296,7 +296,7 @@ func UnQuote(key string) string {
 
 func (e *SnowflakeScrapper) getDdl(ctx context.Context, kind string, parts ...string) (string, error) {
 	var res []string
-	var err = e.executor.GetDb().SelectContext(ctx, &res, fmt.Sprintf("SELECT GET_DDL('%s', '%s', TRUE)", kind, strings.Join(parts, ".")))
+	var err = e.executor.Select(ctx, &res, fmt.Sprintf("SELECT GET_DDL('%s', '%s', TRUE)", kind, strings.Join(parts, ".")))
 	if len(res) > 0 {
 		return fixDdl(res[0]), nil
 	}

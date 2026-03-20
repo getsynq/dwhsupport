@@ -42,9 +42,9 @@ func (s *ScopedScrapper) effectiveFilter(ctx context.Context) *ScopeFilter {
 
 func (s *ScopedScrapper) Capabilities() scrapper.Capabilities { return s.inner.Capabilities() }
 func (s *ScopedScrapper) DialectType() string                 { return s.inner.DialectType() }
-func (s *ScopedScrapper) SqlDialect() sqldialect.Dialect   { return s.inner.SqlDialect() }
-func (s *ScopedScrapper) IsPermissionError(err error) bool { return s.inner.IsPermissionError(err) }
-func (s *ScopedScrapper) Close() error                     { return s.inner.Close() }
+func (s *ScopedScrapper) SqlDialect() sqldialect.Dialect      { return s.inner.SqlDialect() }
+func (s *ScopedScrapper) IsPermissionError(err error) bool    { return s.inner.IsPermissionError(err) }
+func (s *ScopedScrapper) Close() error                        { return s.inner.Close() }
 
 func (s *ScopedScrapper) ValidateConfiguration(ctx context.Context) (warnings []string, err error) {
 	return s.inner.ValidateConfiguration(ctx)

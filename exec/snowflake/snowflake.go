@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/logging"
@@ -206,8 +207,30 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	return &SnowflakeExecutor{conf: conf, db: db}, nil
 }
 
+// enrichCtx adds Snowflake-specific context enrichment: query tag from QueryContext
+// and query ID channel for stats collection.
+func (e *SnowflakeExecutor) enrichCtx(ctx context.Context) context.Context {
+	ctx = EnrichSnowflakeContext(ctx, e.db.DB)
+	if qc := querycontext.GetQueryContext(ctx); qc != nil {
+		if tag := qc.FormatAsJSON(); tag != "" {
+			ctx = gosnowflake.WithQueryTag(ctx, tag)
+		}
+	}
+	return ctx
+}
+
 func (e *SnowflakeExecutor) QueryRows(ctx context.Context, q string, args ...any) (*sqlx.Rows, error) {
+	q = querycontext.AppendSQLComment(ctx, q)
+	ctx = e.enrichCtx(ctx)
 	return e.db.QueryxContext(ctx, q, args...)
+}
+
+func (e *SnowflakeExecutor) Select(ctx context.Context, dest any, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	ctx = e.enrichCtx(ctx)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	return e.db.SelectContext(ctx, dest, query, args...)
 }
 
 // EnrichSnowflakeContext wraps the context with a query ID channel so the Snowflake driver
@@ -267,8 +290,12 @@ func fetchSnowflakeQueryStats(ctx context.Context, db *sql.DB, ds *querystats.Dr
 	}
 }
 
-func (e *SnowflakeExecutor) Exec(ctx context.Context, sql string) error {
-	_, err := e.db.ExecContext(ctx, sql)
+func (e *SnowflakeExecutor) Exec(ctx context.Context, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	ctx = e.enrichCtx(ctx)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	_, err := e.db.ExecContext(ctx, query, args...)
 	return err
 }
 

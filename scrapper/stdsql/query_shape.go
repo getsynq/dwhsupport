@@ -4,20 +4,39 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/jmoiron/sqlx"
 )
 
-func QueryShape(ctx context.Context, db *sqlx.DB, sql string) ([]*scrapper.QueryShapeColumn, error) {
+// RowQuerier is the minimal interface for executing queries that return rows.
+// It is satisfied by all StdSqlExecutor implementations (which add SQL comment
+// enrichment, query tagging, and stats collection) and by RawDB for tests.
+type RowQuerier interface {
+	QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error)
+}
+
+// RawDB wraps a *sqlx.DB to satisfy RowQuerier without any enrichment.
+// Use this only in tests; production code should pass an executor.
+type RawDB struct{ DB *sqlx.DB }
+
+func (r *RawDB) QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error) {
+	return r.DB.QueryxContext(ctx, q, args...)
+}
+
+func QueryShape(ctx context.Context, db RowQuerier, sql string) ([]*scrapper.QueryShapeColumn, error) {
 	wrappedSQL := fmt.Sprintf("WITH _synq_shape_cte AS (%s) SELECT * FROM _synq_shape_cte LIMIT 0", sql)
 
-	sqlRows, err := db.QueryContext(ctx, wrappedSQL)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+
+	rows, err := db.QueryRows(ctx, wrappedSQL)
 	if err != nil {
 		return nil, err
 	}
-	defer sqlRows.Close()
+	defer rows.Close()
 
-	columnTypes, err := sqlRows.ColumnTypes()
+	columnTypes, err := rows.ColumnTypes()
 	if err != nil {
 		return nil, err
 	}

@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
-	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
-	"github.com/snowflakedb/gosnowflake"
 )
 
 func (e *SnowflakeScrapper) FetchTableChangeHistory(
@@ -27,13 +24,6 @@ func (e *SnowflakeScrapper) FetchTableChangeHistory(
 		sql = e.buildAccessHistorySQL(fqn, from, to, limit)
 	} else {
 		sql = e.buildDMLHistorySQL(fqn, from, to, limit)
-	}
-	sql = querycontext.AppendSQLComment(ctx, sql)
-	ctx = dwhexecsnowflake.EnrichSnowflakeContext(ctx, e.executor.GetDb().DB)
-	if qc := querycontext.GetQueryContext(ctx); qc != nil {
-		if tag := qc.FormatAsJSON(); tag != "" {
-			ctx = gosnowflake.WithQueryTag(ctx, tag)
-		}
 	}
 	events, err := e.queryTableChangeEvents(ctx, sql)
 	collector.SetRowsProduced(int64(len(events)))
@@ -94,7 +84,7 @@ type snowflakeTableChangeRow struct {
 }
 
 func (e *SnowflakeScrapper) queryTableChangeEvents(ctx context.Context, sql string) ([]*scrapper.TableChangeEvent, error) {
-	rows, err := e.executor.GetDb().QueryxContext(ctx, sql)
+	rows, err := e.executor.QueryRows(ctx, sql)
 	if err != nil {
 		return nil, err
 	}

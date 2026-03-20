@@ -12,5 +12,5 @@ func (e *DatabricksScrapper) QueryShape(ctx context.Context, sql string) ([]*scr
 	if err != nil {
 		return nil, err
 	}
-	return scrappersqtsql.QueryShape(ctx, executor.GetDb(), sql)
+	return scrappersqtsql.QueryShape(ctx, executor, sql)
 }

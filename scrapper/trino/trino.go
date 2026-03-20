@@ -115,7 +115,10 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 		// We use a simple query against information_schema which will fail if the catalog is unavailable
 		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.schemata LIMIT 1", catalog)
-		_, probeErr := e.executor.GetDb().QueryContext(probeCtx, probeQuery)
+		probeRows, probeErr := e.executor.QueryRows(probeCtx, probeQuery)
+		if probeRows != nil {
+			probeRows.Close()
+		}
 		cancel()
 
 		if probeErr != nil {

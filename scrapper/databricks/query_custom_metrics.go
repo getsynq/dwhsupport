@@ -12,5 +12,5 @@ func (e *DatabricksScrapper) QueryCustomMetrics(ctx context.Context, sql string,
 	if err != nil {
 		return nil, err
 	}
-	return scrappersqtsql.QueryCustomMetrics(ctx, executor.GetDb(), sql, args...)
+	return scrappersqtsql.QueryCustomMetrics(ctx, executor, sql, args...)
 }
