@@ -9,15 +9,11 @@ import (
 	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
 )
-
-type formatSetter interface {
-	SetFormatter(formatter logrus.Formatter)
-}
 
 func init() {
 	gosnowflake.GetLogger().SetLogLevel("fatal")
@@ -52,14 +48,14 @@ func QuoteLiteral(literal string) string {
 	// https://git.postgresql.org/gitweb/?p=postgresql.git;a=blob;f=src/interfaces/libpq/fe-exec.c
 	//
 	// substitute any single-quotes (') with two single-quotes ('')
-	literal = strings.Replace(literal, `'`, `''`, -1)
+	literal = strings.ReplaceAll(literal, `'`, `''`)
 	// determine if the string has any backslashes (\) in it.
 	// if it does, replace any backslashes (\) with two backslashes (\\)
 	// then, we need to wrap the entire string with a PostgreSQL
 	// C-style escape. Per how "PQEscapeStringInternal" handles this case, we
 	// also add a space before the "E"
 	if strings.Contains(literal, `\`) {
-		literal = strings.Replace(literal, `\`, `\\`, -1)
+		literal = strings.ReplaceAll(literal, `\`, `\\`)
 		literal = ` E'` + literal + `'`
 	} else {
 		// otherwise, we can just wrap the literal with a pair of single quotes
@@ -82,8 +78,8 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 		return nil, err
 	}
 
-	lazyExistingDbs := lazy.New[[]*DbDesc](func() ([]*DbDesc, error) {
-		rows, err := executor.GetDb().QueryxContext(ctx, fmt.Sprintf("SHOW DATABASES"))
+	lazyExistingDbs := lazy.New(func() ([]*DbDesc, error) {
+		rows, err := executor.GetDb().QueryxContext(ctx, "SHOW DATABASES")
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +88,7 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 		var allDatabases []*DbDesc
 		for rows.Next() {
 			db := &DbDesc{}
-			tmp := map[string]interface{}{}
+			tmp := map[string]any{}
 			if err := rows.MapScan(tmp); err != nil {
 				return nil, err
 			}
@@ -127,6 +123,31 @@ func (e *SnowflakeScrapper) SqlDialect() sqldialect.Dialect {
 
 func (e *SnowflakeScrapper) GetExistingDbs(ctx context.Context) ([]*DbDesc, error) {
 	return e.existingDbs.Get()
+}
+
+// GetDatabasesToQuery returns the configured databases filtered to only those that
+// exist and are accepted by the scope filter. This is the standard way to get the
+// list of databases to iterate over in scrapper query methods.
+func (e *SnowflakeScrapper) GetDatabasesToQuery(ctx context.Context) ([]string, error) {
+	allDatabases, err := e.GetExistingDbs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	existingDbs := make(map[string]bool, len(allDatabases))
+	for _, database := range allDatabases {
+		existingDbs[database.Name] = true
+	}
+
+	scopeFilter := scope.GetScope(ctx)
+
+	var result []string
+	for _, database := range e.conf.Databases {
+		if existingDbs[database] && scopeFilter.IsDatabaseAccepted(database) {
+			result = append(result, database)
+		}
+	}
+	return result, nil
 }
 
 func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
@@ -220,23 +241,6 @@ func ignoreShare(ownerAccount string) bool {
 		return true
 	}
 	return false
-}
-
-// isClusterByUnsupportedError checks if the error indicates the CLUSTER_BY column is unavailable.
-// This happens on Snowflake Standard edition where information_schema.tables does not expose
-// the CLUSTER_BY column (only available on Enterprise and above).
-func isClusterByUnsupportedError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// Snowflake returns SQL compilation error code 904 for invalid identifiers
-	var snowflakeErr *gosnowflake.SnowflakeError
-	if errors.As(err, &snowflakeErr) {
-		return snowflakeErr.Number == 904 && strings.Contains(strings.ToUpper(snowflakeErr.Message), "CLUSTER_BY")
-	}
-	// Fallback: check the error string directly (handles cases where errors.As doesn't unwrap the driver error)
-	errStr := strings.ToUpper(err.Error())
-	return strings.Contains(errStr, "INVALID IDENTIFIER") && strings.Contains(errStr, "CLUSTER_BY")
 }
 
 // isSharedDatabaseUnavailableError checks if the error is a Snowflake shared database unavailable error

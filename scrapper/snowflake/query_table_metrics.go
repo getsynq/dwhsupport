@@ -32,29 +32,15 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 	var finalResults []*scrapper.TableMetricsRow
 	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(origCtx)
+	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
-	}
-
-	existingDbs := map[string]bool{}
-	for _, database := range allDatabases {
-		existingDbs[database.Name] = true
 	}
 
 	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 
-	scopeFilter := scope.GetScope(origCtx)
-
-	for _, database := range e.conf.Databases {
-		if !existingDbs[database] {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(database) {
-			continue
-		}
-
+	for _, database := range databasesToQuery {
 		select {
 		case <-groupCtx.Done():
 			return nil, groupCtx.Err()

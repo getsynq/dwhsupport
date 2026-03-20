@@ -40,29 +40,15 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 	var finalResults []*scrapper.CatalogColumnRow
 	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(origCtx)
+	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
-	}
-
-	existingDbs := map[string]bool{}
-	for _, database := range allDatabases {
-		existingDbs[database.Name] = true
 	}
 
 	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(4)
 
-	scopeFilter := scope.GetScope(origCtx)
-
-	for _, database := range e.conf.Databases {
-		if !existingDbs[database] {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(database) {
-			continue
-		}
-
+	for _, database := range databasesToQuery {
 		select {
 		case <-groupCtx.Done():
 			return nil, groupCtx.Err()
@@ -195,5 +181,5 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
-	return scope.FilterRows(finalResults, scopeFilter), nil
+	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), nil
 }

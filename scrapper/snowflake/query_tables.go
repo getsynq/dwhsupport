@@ -35,29 +35,15 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 	var finalResults []*scrapper.TableRow
 	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(origCtx)
+	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
-	}
-
-	existingDbs := map[string]bool{}
-	for _, database := range allDatabases {
-		existingDbs[database.Name] = true
 	}
 
 	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
 
-	scopeFilter := scope.GetScope(origCtx)
-
-	for _, database := range e.conf.Databases {
-		if !existingDbs[database] {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(database) {
-			continue
-		}
-
+	for _, database := range databasesToQuery {
 		select {
 		case <-groupCtx.Done():
 			return nil, groupCtx.Err()
@@ -147,7 +133,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
-	return scope.FilterRows(finalResults, scopeFilter), nil
+	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), nil
 }
 
 // ShowStreamsRow represents the structure of a row returned by SHOW STREAMS command
