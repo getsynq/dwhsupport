@@ -74,6 +74,34 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_DefaultAuthType_Unrecognize
 	s.Equal(gosnowflake.ConfigBoolTrue, c.DisableConsoleLogin)
 }
 
+func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_OAuthToken() {
+	conf := &SnowflakeConf{
+		Account: "myaccount",
+		Token:   "my-oauth-access-token",
+		Role:    "PUBLIC",
+	}
+	c := buildSnowflakeConfig(conf)
+
+	s.Equal(gosnowflake.AuthTypeOAuth, c.Authenticator)
+	s.Equal("my-oauth-access-token", c.Token)
+	s.Equal("PUBLIC", c.Role)
+	s.Equal(gosnowflake.ConfigBoolTrue, c.DisableConsoleLogin)
+}
+
+func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_OAuthTokenTakesPrecedence() {
+	// When both Token and Password are set, Token should win
+	conf := &SnowflakeConf{
+		Account:  "myaccount",
+		User:     "user@example.com",
+		Password: "password123",
+		Token:    "my-oauth-access-token",
+	}
+	c := buildSnowflakeConfig(conf)
+
+	s.Equal(gosnowflake.AuthTypeOAuth, c.Authenticator)
+	s.Equal("my-oauth-access-token", c.Token)
+}
+
 func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_DefaultAuthType_WithPrivateKey() {
 	keyBytes, err := os.ReadFile("test_rsa_key_unencrypted.pem")
 	s.Require().NoError(err)

@@ -38,6 +38,9 @@ type SnowflakeConf struct {
 	Warehouse            string
 	Databases            []string
 	Role                 string
+	// Token is an OAuth access token for token-based authentication.
+	// When set, AuthTypeOAuth is used automatically.
+	Token string
 	// AuthType specifies the authentication method: empty (default, uses password or private_key),
 	// "externalbrowser" (SSO via browser). When set to "externalbrowser", opens browser for SSO login
 	// and caches the ID token locally in the OS credential manager (Keychain on macOS, Credential Manager on Windows).
@@ -154,8 +157,12 @@ func buildSnowflakeConfig(conf *SnowflakeConf) *gosnowflake.Config {
 	}
 
 	// Handle authentication type
-	switch strings.ToLower(conf.AuthType) {
-	case "externalbrowser":
+	switch {
+	case conf.Token != "":
+		// OAuth token-based authentication (e.g., user OAuth credentials)
+		c.Authenticator = gosnowflake.AuthTypeOAuth
+		c.Token = conf.Token
+	case strings.ToLower(conf.AuthType) == "externalbrowser":
 		// SSO via browser - opens browser for login and caches ID token
 		c.Authenticator = gosnowflake.AuthTypeExternalBrowser
 		c.ExternalBrowserTimeout = 120 * time.Second

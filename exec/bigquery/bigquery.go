@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pkg/errors"
+	"golang.org/x/oauth2"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/exec"
@@ -19,6 +20,9 @@ type BigQueryConf struct {
 	Region          string
 	CredentialsJson string
 	CredentialsFile string
+	// AccessToken is an OAuth access token for user-level authentication.
+	// When set, it takes precedence over CredentialsJson and CredentialsFile.
+	AccessToken string
 }
 
 type Executor interface {
@@ -34,10 +38,12 @@ func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExec
 
 	var options []option.ClientOption
 	options = append(options, option.WithUserAgent("synq-bq-client-v1.0.0"))
-	if len(conf.CredentialsJson) > 0 {
+	if conf.AccessToken != "" {
+		tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: conf.AccessToken})
+		options = append(options, option.WithTokenSource(tokenSource))
+	} else if len(conf.CredentialsJson) > 0 {
 		options = append(options, option.WithCredentialsJSON([]byte(conf.CredentialsJson)))
-	}
-	if len(conf.CredentialsFile) > 0 {
+	} else if len(conf.CredentialsFile) > 0 {
 		options = append(options, option.WithCredentialsFile(conf.CredentialsFile))
 	}
 
