@@ -32,7 +32,9 @@ The library is organized into three main layers:
 1. **Executor Layer** (`exec/`)
    - Low-level database connection and query execution
    - Each warehouse type has its own executor (e.g., `exec/snowflake`, `exec/bigquery`)
-   - Executors implement connection logic, `GetDb()`, `QueryRows()`, `Exec()`, `Close()`
+   - Executors implement `StdSqlExecutor`: `GetDb()`, `QueryRows()`, `Select()`, `Exec()`, `Close()`
+   - `QueryRows`, `Select`, `Exec` automatically apply `querycontext.AppendSQLComment` and warehouse-specific enrichment (Snowflake query tag, ClickHouse log_comment) — **scrappers must use these instead of `GetDb()` for queries**
+   - `GetDb()` is only for passing to `stdsql.QueryMany`/`NewQuerier` helpers (which handle enrichment internally)
    - Uses `querier.Querier[T]` pattern for type-safe query execution
    - Generic executor functionality in `exec/generic.go` including `QueryMany[T]` for batch processing
 
@@ -131,6 +133,7 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 - **Metrics Extraction**: `metrics/` contains logic for extracting and processing metrics from different warehouses
 - **Scope Filtering**: `scrapper/scope/` provides include/exclude scope filtering. SQL files use `/* SYNQ_SCOPE_FILTER */` placeholder at the injection point; `AppendScopeConditions` replaces it with `AND <conditions>` or empty string. Never use heuristic WHERE-append.
 - **Scope Compliance Testing**: `scrapper/scrappertest/ScopeComplianceSuite` is an embeddable test suite for validating scope filtering — embed alongside `ComplianceSuite` in warehouse integration tests
+- **Query Helpers**: `scrapper/stdsql/` helpers (`QueryShape`, `QueryCustomMetrics`) accept `RowQuerier` interface — pass the executor directly, not `GetDb()`. Use `stdsql.RawDB{DB: db}` wrapper only in tests with raw `*sqlx.DB`.
 
 ## Snowflake DDL Parsing
 
