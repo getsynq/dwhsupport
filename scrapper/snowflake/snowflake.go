@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
@@ -122,6 +123,31 @@ func (e *SnowflakeScrapper) SqlDialect() sqldialect.Dialect {
 
 func (e *SnowflakeScrapper) GetExistingDbs(ctx context.Context) ([]*DbDesc, error) {
 	return e.existingDbs.Get()
+}
+
+// GetDatabasesToQuery returns the configured databases filtered to only those that
+// exist and are accepted by the scope filter. This is the standard way to get the
+// list of databases to iterate over in scrapper query methods.
+func (e *SnowflakeScrapper) GetDatabasesToQuery(ctx context.Context) ([]string, error) {
+	allDatabases, err := e.GetExistingDbs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	existingDbs := make(map[string]bool, len(allDatabases))
+	for _, database := range allDatabases {
+		existingDbs[database.Name] = true
+	}
+
+	scopeFilter := scope.GetScope(ctx)
+
+	var result []string
+	for _, database := range e.conf.Databases {
+		if existingDbs[database] && scopeFilter.IsDatabaseAccepted(database) {
+			result = append(result, database)
+		}
+	}
+	return result, nil
 }
 
 func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {

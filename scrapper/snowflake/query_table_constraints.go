@@ -35,24 +35,9 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 	var finalResults []*scrapper.TableConstraintRow
 	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(ctx)
+	databasesToQuery, err := e.GetDatabasesToQuery(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	existingDbs := map[string]bool{}
-	for _, database := range allDatabases {
-		existingDbs[database.Name] = true
-	}
-
-	scopeFilter := scope.GetScope(ctx)
-
-	// Determine which databases we'll actually query
-	var databasesToQuery []string
-	for _, database := range e.conf.Databases {
-		if existingDbs[database] && scopeFilter.IsDatabaseAccepted(database) {
-			databasesToQuery = append(databasesToQuery, database)
-		}
 	}
 
 	// Check if CLUSTER_BY column is available using the first database.
@@ -66,7 +51,8 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 			clusterByAvailable = available
 		}
 		if !clusterByAvailable {
-			logging.GetLogger(ctx).Debug("CLUSTER_BY column not available in information_schema.tables (Snowflake Standard edition), skipping clustering keys")
+			logging.GetLogger(ctx).
+				Debug("CLUSTER_BY column not available in information_schema.tables (Snowflake Standard edition), skipping clustering keys")
 		}
 	}
 
@@ -121,7 +107,7 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 	}
 
 	// Post-filter results for SHOW PRIMARY KEYS which doesn't support WHERE clauses.
-	return scope.FilterRows(finalResults, scopeFilter), nil
+	return scope.FilterRows(finalResults, scope.GetScope(ctx)), nil
 }
 
 func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, database string) ([]*scrapper.TableConstraintRow, error) {

@@ -46,28 +46,14 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	var finalResults []*scrapper.SqlDefinitionRow
 	var m sync.Mutex
 
-	allDatabases, err := e.GetExistingDbs(origCtx)
+	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	existingDbs := map[string]bool{}
-	for _, database := range allDatabases {
-		existingDbs[database.Name] = true
-	}
-
-	scopeFilter := scope.GetScope(origCtx)
-
 	g, groupCtx := errgroup.WithContext(origCtx)
 	g.SetLimit(8)
-	for _, database := range e.conf.Databases {
-		if !existingDbs[database] {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(database) {
-			continue
-		}
-
+	for _, database := range databasesToQuery {
 		select {
 		case <-groupCtx.Done():
 			return nil, groupCtx.Err()
@@ -135,13 +121,17 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
-	finalResults = scope.FilterRows(finalResults, scopeFilter)
+	finalResults = scope.FilterRows(finalResults, scope.GetScope(origCtx))
 
 	if e.conf.NoGetDll {
 		logging.GetLogger(origCtx).Info("skipping get ddl in sql definitions")
 		return finalResults, nil
 	}
 
+	allDatabases, err := e.GetExistingDbs(origCtx)
+	if err != nil {
+		return nil, err
+	}
 	ignoreDbDdls := map[string]bool{}
 	for _, db := range allDatabases {
 		ignoreDbDdls[db.Name] = db.Kind == "IMPORTED DATABASE"
