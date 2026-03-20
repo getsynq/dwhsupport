@@ -12,6 +12,8 @@ import (
 	dbsql "github.com/databricks/databricks-sql-go"
 	"github.com/databricks/databricks-sql-go/auth/oauth/m2m"
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
@@ -140,6 +142,22 @@ func NewDatabricksExecutor(ctx context.Context, conf *DatabricksConf) (*Databric
 	return &DatabricksExecutor{sqlClient: sqlClient}, nil
 }
 
+func (e *DatabricksExecutor) Exec(ctx context.Context, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	_, err := e.sqlClient.ExecContext(ctx, query, args...)
+	return err
+}
+
 func (e *DatabricksExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
+	sql = querycontext.AppendSQLComment(ctx, sql)
 	return e.sqlClient.QueryxContext(ctx, sql, args...)
+}
+
+func (e *DatabricksExecutor) Select(ctx context.Context, dest any, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	return e.sqlClient.SelectContext(ctx, dest, query, args...)
 }

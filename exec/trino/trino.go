@@ -6,6 +6,8 @@ import (
 	"net/url"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/jmoiron/sqlx"
 	"github.com/samber/lo"
@@ -65,11 +67,22 @@ func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, err
 }
 
 func (e *TrinoExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
-	return e.db.QueryxContext(ctx, trimRightSemicolons(sql), args...)
+	sql = querycontext.AppendSQLComment(ctx, trimRightSemicolons(sql))
+	return e.db.QueryxContext(ctx, sql, args...)
 }
 
-func (e *TrinoExecutor) Exec(ctx context.Context, q string) error {
-	_, err := e.db.Exec(trimRightSemicolons(q))
+func (e *TrinoExecutor) Select(ctx context.Context, dest any, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, trimRightSemicolons(query))
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	return e.db.SelectContext(ctx, dest, query, args...)
+}
+
+func (e *TrinoExecutor) Exec(ctx context.Context, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, trimRightSemicolons(query))
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	_, err := e.db.ExecContext(ctx, query, args...)
 	return err
 }
 

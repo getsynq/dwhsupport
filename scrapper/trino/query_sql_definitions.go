@@ -83,7 +83,7 @@ func (e *TrinoScrapper) showCreate(
 	}
 	query := fmt.Sprintf("SHOW CREATE %s %s.%s.%s", entity, database, schema, table)
 	var res []string
-	err := e.executor.GetDb().SelectContext(ctx, &res, query)
+	err := e.executor.Select(ctx, &res, query)
 	if err != nil {
 		if strings.Contains(err.Error(), "is a materialized view, not a table") {
 			return e.showCreate(ctx, database, schema, table, isView, true)

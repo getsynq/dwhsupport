@@ -116,7 +116,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 							"last_analyzed_at": lastMetricsFetchTime.Format(time.RFC3339),
 						}).Infof("Analyzing table %s", tableInfo.FullName)
 						if sqlClient, err := e.lazyExecutor.Get(); err == nil {
-							_, err := sqlClient.GetDb().ExecContext(groupCtx, sql)
+							err := sqlClient.Exec(groupCtx, sql)
 							if err != nil {
 								err = errors.Wrapf(err, "failed to %s", sql)
 								log.Warn(err)

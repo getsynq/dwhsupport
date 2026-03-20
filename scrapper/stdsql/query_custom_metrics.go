@@ -10,15 +10,14 @@ import (
 
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/jmoiron/sqlx"
 )
 
-func QueryCustomMetrics(ctx context.Context, db *sqlx.DB, sqlQuery string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
+func QueryCustomMetrics(ctx context.Context, db RowQuerier, sqlQuery string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
 	var rowCount int64
 
-	sqlRows, err := db.QueryContext(ctx, sqlQuery, args...)
+	sqlRows, err := db.QueryRows(ctx, sqlQuery, args...)
 	if err != nil {
 		return nil, err
 	}

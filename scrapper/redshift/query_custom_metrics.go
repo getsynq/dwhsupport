@@ -8,5 +8,5 @@ import (
 )
 
 func (e *RedshiftScrapper) QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
-	return scrappersqtsql.QueryCustomMetrics(ctx, e.executor.GetDb(), sql, args...)
+	return scrappersqtsql.QueryCustomMetrics(ctx, e.executor, sql, args...)
 }

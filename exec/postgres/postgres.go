@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/getsynq/dwhsupport/exec/querycontext"
+	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/sshtunnel"
@@ -96,15 +98,23 @@ func NewPostgresExecutor(ctx context.Context, conf *PostgresConf) (*PostgresExec
 }
 
 func (e *PostgresExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
+	sql = querycontext.AppendSQLComment(ctx, sql)
 	return e.db.QueryxContext(ctx, sql, args...)
 }
 
-func (e *PostgresExecutor) Exec(ctx context.Context, q string) error {
-	if _, err := e.db.Exec(q); err != nil {
-		return err
-	}
+func (e *PostgresExecutor) Select(ctx context.Context, dest any, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	return e.db.SelectContext(ctx, dest, query, args...)
+}
 
-	return nil
+func (e *PostgresExecutor) Exec(ctx context.Context, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	_, err := e.db.ExecContext(ctx, query, args...)
+	return err
 }
 
 func (e *PostgresExecutor) Close() error {

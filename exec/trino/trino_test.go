@@ -27,7 +27,6 @@ type res struct {
 	TableType    string `db:"table_type"`
 }
 
-
 func (s *TrinoSuite) TestBasicQuery() {
 	// please run locally to make test pass:
 	// docker run --name trino -d -p 8080:8080 trinodb/trino

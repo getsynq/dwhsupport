@@ -89,7 +89,7 @@ func (e *MySQLScrapper) showCreateView(ctx context.Context, schema string, table
 		CharacterSetClient  string `db:"character_set_client"`
 		CollationConnection string `db:"collation_connection"`
 	}
-	if err := e.executor.GetDb().SelectContext(ctx, &outSql, sql); err != nil {
+	if err := e.executor.Select(ctx, &outSql, sql); err != nil {
 		return "", err
 	}
 	if len(outSql) == 0 {
@@ -105,7 +105,7 @@ func (e *MySQLScrapper) showCreateTable(ctx context.Context, schema string, tabl
 		Table       string `db:"Table"`
 		CreateTable string `db:"Create Table"`
 	}
-	if err := e.executor.GetDb().SelectContext(ctx, &outSql, sql); err != nil {
+	if err := e.executor.Select(ctx, &outSql, sql); err != nil {
 		return "", err
 	}
 	if len(outSql) == 0 {

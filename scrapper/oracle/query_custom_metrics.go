@@ -8,5 +8,5 @@ import (
 )
 
 func (e *OracleScrapper) QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
-	return scrapperstdsql.QueryCustomMetrics(ctx, e.executor.GetDb(), sql, args...)
+	return scrapperstdsql.QueryCustomMetrics(ctx, e.executor, sql, args...)
 }

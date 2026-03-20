@@ -56,7 +56,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 				var tmpResults []*scrapper.TableRow
 
 				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(tablesQuery, database), "", "t.table_schema", "t.table_name")
-				rows, err := e.executor.GetDb().QueryxContext(groupCtx, query)
+				rows, err := e.executor.QueryRows(groupCtx, query)
 				if err != nil {
 					if isSharedDatabaseUnavailableError(err) {
 						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
@@ -173,7 +173,7 @@ type ShowStreamsRow struct {
 func (e *SnowflakeScrapper) showStreamsInDatabase(ctx context.Context, database string) ([]*ShowStreamsRow, error) {
 	var results []*ShowStreamsRow
 
-	rows, err := e.executor.GetDb().QueryxContext(ctx, fmt.Sprintf("SHOW STREAMS IN DATABASE %s", database))
+	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW STREAMS IN DATABASE %s", database))
 	if err != nil {
 		return nil, err
 	}
@@ -191,7 +191,7 @@ func (e *SnowflakeScrapper) showStreamsInDatabase(ctx context.Context, database 
 }
 
 func (e *SnowflakeScrapper) showShares(ctx context.Context) ([]*ShareDesc, error) {
-	rows, err := e.executor.GetDb().QueryxContext(ctx, "SHOW SHARES")
+	rows, err := e.executor.QueryRows(ctx, "SHOW SHARES")
 	if err != nil {
 		return nil, err
 	}
@@ -223,14 +223,14 @@ func (e *SnowflakeScrapper) showShares(ctx context.Context) ([]*ShareDesc, error
 		}
 
 		if share.Kind == "INBOUND" {
-			if err := e.executor.GetDb().SelectContext(
+			if err := e.executor.Select(
 				ctx, &share.Objects, fmt.Sprintf("DESCRIBE SHARE %s.%s", share.OwnerAccount, share.Name),
 			); err != nil {
 				return nil, err
 			}
 		}
 		if share.Kind == "OUTBOUND" {
-			if err := e.executor.GetDb().SelectContext(ctx, &share.Objects, fmt.Sprintf("DESCRIBE SHARE %s", share.Name)); err != nil {
+			if err := e.executor.Select(ctx, &share.Objects, fmt.Sprintf("DESCRIBE SHARE %s", share.Name)); err != nil {
 				return nil, err
 			}
 		}

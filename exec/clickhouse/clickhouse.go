@@ -87,6 +87,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 }
 
 func (e *ClickhouseExecutor) QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error) {
+	q = querycontext.AppendSQLComment(ctx, q)
 	ctx = EnrichClickhouseContext(ctx)
 	rows, err := e.db.QueryxContext(ctx, q, args...)
 	if err != nil {
@@ -94,6 +95,14 @@ func (e *ClickhouseExecutor) QueryRows(ctx context.Context, q string, args ...in
 	}
 
 	return rows, nil
+}
+
+func (e *ClickhouseExecutor) Select(ctx context.Context, dest any, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	ctx = EnrichClickhouseContext(ctx)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	return e.db.SelectContext(ctx, dest, query, args...)
 }
 
 // EnrichClickhouseContext wraps the context with ClickHouse-specific options:
@@ -141,8 +150,12 @@ func EnrichClickhouseContext(ctx context.Context) context.Context {
 	return clickhouse.Context(ctx, chOpts...)
 }
 
-func (e *ClickhouseExecutor) Exec(ctx context.Context, q string) error {
-	_, err := e.db.ExecContext(ctx, q)
+func (e *ClickhouseExecutor) Exec(ctx context.Context, query string, args ...any) error {
+	query = querycontext.AppendSQLComment(ctx, query)
+	ctx = EnrichClickhouseContext(ctx)
+	collector, ctx := querystats.Start(ctx)
+	defer collector.Finish()
+	_, err := e.db.ExecContext(ctx, query, args...)
 	return err
 }
 

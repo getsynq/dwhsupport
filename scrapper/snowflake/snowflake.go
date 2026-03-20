@@ -79,7 +79,7 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 	}
 
 	lazyExistingDbs := lazy.New(func() ([]*DbDesc, error) {
-		rows, err := executor.GetDb().QueryxContext(ctx, "SHOW DATABASES")
+		rows, err := executor.QueryRows(ctx, "SHOW DATABASES")
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +175,10 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 		// Probe the database to check if it's an unavailable shared database
 		// We use a simple query against information_schema which will fail if the shared database is unavailable
 		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.tables LIMIT 1", database)
-		_, probeErr := e.executor.GetDb().QueryContext(ctx, probeQuery)
+		probeRows, probeErr := e.executor.QueryRows(ctx, probeQuery)
+		if probeRows != nil {
+			probeRows.Close()
+		}
 		if probeErr != nil {
 			if isSharedDatabaseUnavailableError(probeErr) {
 				logging.GetLogger(ctx).WithField("database", database).WithError(probeErr).
