@@ -55,31 +55,33 @@ func execStatements(db *sqlx.DB, script string) error {
 	return nil
 }
 
-func newOracleConf() *dwhexecoracle.OracleConf {
+func newOracleConf(user, password string) *dwhexecoracle.OracleConf {
 	return &dwhexecoracle.OracleConf{
-		User:        testenv.EnvOrDefault("ORACLE_USER", "system"),
-		Password:    testenv.EnvOrDefault("ORACLE_PASSWORD", "SynqTest1"),
+		User:        user,
+		Password:    password,
 		Host:        testenv.EnvOrDefault("ORACLE_HOST", "127.0.0.1"),
 		Port:        testenv.EnvOrDefaultInt("ORACLE_PORT", 1521),
 		ServiceName: testenv.EnvOrDefault("ORACLE_SERVICE", "FREEPDB1"),
 	}
 }
 
-// setupDatabase connects as system, runs init.sql to create schemas and fixtures,
-// then returns a scrapper connected as system (which can see all schemas).
+// setupDatabase connects as system to create schemas, fixtures, and a restricted
+// synq monitoring user. Returns a scrapper connected as the synq user with
+// realistic minimal permissions (catalog metadata + SELECT ANY TABLE + V$PARAMETER).
 func setupDatabase(t *testing.T, ctx context.Context) *OracleScrapper {
 	t.Helper()
 
-	conf := newOracleConf()
+	sysConf := newOracleConf("system", testenv.EnvOrDefault("ORACLE_SYS_PASSWORD", "SynqTest1"))
 
 	// Connect as system to create users/schemas and fixtures.
-	sysExec, err := dwhexecoracle.NewOracleExecutor(ctx, conf)
+	sysExec, err := dwhexecoracle.NewOracleExecutor(ctx, sysConf)
 	if err != nil {
 		t.Skipf("Skipping: could not connect to local Oracle: %v", err)
 	}
 
 	// Clean up previous test runs (ignore errors if objects don't exist).
 	for _, stmt := range []string{
+		"BEGIN EXECUTE IMMEDIATE 'DROP USER synq CASCADE'; EXCEPTION WHEN OTHERS THEN NULL; END;",
 		"BEGIN EXECUTE IMMEDIATE 'DROP USER synq_b CASCADE'; EXCEPTION WHEN OTHERS THEN NULL; END;",
 		"BEGIN EXECUTE IMMEDIATE 'DROP VIEW synq_a.order_summary'; EXCEPTION WHEN OTHERS THEN NULL; END;",
 		"BEGIN EXECUTE IMMEDIATE 'DROP VIEW synq_a.active_products'; EXCEPTION WHEN OTHERS THEN NULL; END;",
@@ -95,10 +97,14 @@ func setupDatabase(t *testing.T, ctx context.Context) *OracleScrapper {
 	}
 	sysExec.Close()
 
-	// Reconnect for the scrapper.
-	sc, err := NewOracleScrapper(ctx, conf)
+	// Connect as the restricted synq monitoring user.
+	synqConf := newOracleConf(
+		testenv.EnvOrDefault("ORACLE_USER", "synq"),
+		testenv.EnvOrDefault("ORACLE_PASSWORD", "SynqTest1"),
+	)
+	sc, err := NewOracleScrapper(ctx, synqConf)
 	if err != nil {
-		t.Fatalf("Failed to create Oracle scrapper: %v", err)
+		t.Fatalf("Failed to create Oracle scrapper as synq user: %v", err)
 	}
 	return sc
 }

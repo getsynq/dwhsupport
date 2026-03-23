@@ -1,15 +1,6 @@
--- Schema synq_a is created by Docker via APP_USER env var.
--- Schema synq_b must be created manually.
-
--- Create second user/schema for scope filtering tests
-CREATE USER synq_b IDENTIFIED BY "SynqTest1" DEFAULT TABLESPACE USERS QUOTA UNLIMITED ON USERS
-;
-
-GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW, CREATE SEQUENCE TO synq_b
-;
-
 -- ============================================================
 -- Schema: synq_a (primary test schema)
+-- Created by Docker via APP_USER env var.
 -- ============================================================
 
 -- Table with various column types
@@ -121,6 +112,12 @@ END;
 -- Schema: synq_b (secondary schema for scope filtering)
 -- ============================================================
 
+CREATE USER synq_b IDENTIFIED BY "SynqTest1" DEFAULT TABLESPACE USERS QUOTA UNLIMITED ON USERS
+;
+
+GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW, CREATE SEQUENCE TO synq_b
+;
+
 CREATE TABLE synq_b.customers (
     id NUMBER(10) NOT NULL PRIMARY KEY,
     email NVARCHAR2(255) NOT NULL,
@@ -150,4 +147,29 @@ END;
 ;
 
 COMMIT
+;
+
+-- ============================================================
+-- SYNQ monitoring user with realistic minimal permissions
+-- Mirrors what a real SYNQ integration would use:
+-- 1. Catalog ingestion: metadata from ALL_* views
+-- 2. Automated metrics: row counts/sizes from ALL_TABLES stats
+-- 3. Custom monitors: SELECT on monitored schemas
+-- ============================================================
+
+CREATE USER synq IDENTIFIED BY "SynqTest1" DEFAULT TABLESPACE USERS
+;
+
+-- Basic connectivity
+GRANT CREATE SESSION TO synq
+;
+
+-- Catalog & metrics: ALL_* views only show objects the user has access to,
+-- so we grant SELECT on the target schemas' tables/views.
+GRANT SELECT ANY TABLE TO synq
+;
+
+-- Dictionary access for V$PARAMETER (table size = BLOCKS * db_block_size)
+-- and full visibility into ALL_* catalog views across schemas
+GRANT SELECT ANY DICTIONARY TO synq
 ;
