@@ -17,31 +17,57 @@ import (
 	_ "github.com/microsoft/go-mssqldb/azuread"
 )
 
+// MSSQLConf configures a connection to Microsoft SQL Server or Azure SQL Database.
+//
+// Authentication methods (in order of priority):
+//  1. Access Token: set AccessToken to a pre-acquired Azure AD OAuth token.
+//  2. Azure AD Federated Auth: set FedAuth to an Azure AD method (e.g. ActiveDirectoryDefault,
+//     ActiveDirectoryMSI, ActiveDirectoryServicePrincipal). Used with Azure SQL Database.
+//  3. SQL Server Authentication: set User and Password for standard username/password auth.
+//
+// For Azure SQL Database, Azure AD authentication (options 1-2) is recommended.
+// For on-premises SQL Server, use SQL Server Authentication (option 3).
 type MSSQLConf struct {
-	User     string
+	// User is the SQL Server login or Azure AD username.
+	// For Azure AD Service Principal, this is the Application (Client) ID.
+	// Leave empty when using AccessToken or Azure AD Managed Identity.
+	User string
+	// Password is the SQL Server login password or Azure AD client secret.
 	Password string
-	Host     string
-	Port     int
+	// Host is the hostname or IP address.
+	// For Azure SQL: e.g. "yourserver.database.windows.net"
+	Host string
+	// Port is the SQL Server port. Default: 1433.
+	Port int
+	// Database is the database name to connect to.
+	// SQL Server is database-scoped — create a separate connection per database.
 	Database string
 
-	// TrustCert skips TLS certificate verification.
+	// TrustCert skips TLS server certificate verification.
+	// Not recommended for production Azure SQL connections.
 	TrustCert bool
-	// Encrypt controls connection encryption: "disable", "false", "true" (default).
+	// Encrypt controls connection encryption.
+	// Values: "true" (default, required for Azure SQL), "false", "disable".
 	Encrypt string
 
-	// FedAuth specifies the Azure AD authentication method.
+	// FedAuth specifies the Azure AD federated authentication method.
 	// When set, the azuread driver is used instead of the standard sqlserver driver.
-	// Supported values: ActiveDirectoryDefault, ActiveDirectoryPassword,
-	// ActiveDirectoryMSI, ActiveDirectoryServicePrincipal, ActiveDirectoryAzCli, etc.
-	// See https://pkg.go.dev/github.com/microsoft/go-mssqldb/azuread
+	// Common values for cloud deployments:
+	//   - "ActiveDirectoryDefault": chained credential (Managed Identity → environment → CLI)
+	//   - "ActiveDirectoryMSI": Azure Managed Identity (system or user-assigned)
+	//   - "ActiveDirectoryServicePrincipal": app registration with client ID + secret
+	//   - "ActiveDirectoryAzCli": reuse Azure CLI authentication
+	// See https://pkg.go.dev/github.com/microsoft/go-mssqldb/azuread for all options.
 	FedAuth string
 
-	// AccessToken is a pre-acquired Azure AD access token.
+	// AccessToken is a pre-acquired Azure AD OAuth access token.
 	// When set, it takes precedence over all other authentication methods.
+	// The token is passed directly to the driver via NewAccessTokenConnector.
 	AccessToken string
 
-	// ApplicationClientID is the Azure AD application (client) ID.
-	// Used with ActiveDirectoryServicePrincipal and ActiveDirectoryMSI (user-assigned).
+	// ApplicationClientID is the Azure AD Application (Client) ID.
+	// Used with ActiveDirectoryServicePrincipal (identifies the app registration)
+	// and ActiveDirectoryMSI with user-assigned managed identity (resource ID).
 	ApplicationClientID string
 }
 
