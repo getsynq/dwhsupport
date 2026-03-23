@@ -3,12 +3,10 @@ SELECT
     t.TABLE_NAME                AS "table",
     t.NUM_ROWS                  AS "row_count",
     t.LAST_ANALYZED             AS "updated_at",
-    s.BYTES                     AS "size_bytes"
+    (t.BLOCKS * p.VALUE)        AS "size_bytes"
 FROM
     ALL_TABLES t
-    LEFT JOIN ALL_SEGMENTS s
-        ON t.OWNER = s.OWNER AND t.TABLE_NAME = s.SEGMENT_NAME
-        AND s.SEGMENT_TYPE IN ('TABLE', 'TABLE PARTITION', 'TABLE SUBPARTITION')
+    CROSS JOIN (SELECT VALUE FROM V$PARAMETER WHERE NAME = 'db_block_size') p
 WHERE
     t.OWNER NOT IN (
         'SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
