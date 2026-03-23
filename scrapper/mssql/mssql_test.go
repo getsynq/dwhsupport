@@ -62,6 +62,7 @@ func newMSSQLConf(user, password, database string) *dwhexecmssql.MSSQLConf {
 		Port:      testenv.EnvOrDefaultInt("MSSQL_PORT", 1433),
 		Database:  database,
 		TrustCert: true,
+		Encrypt:   testenv.EnvOrDefault("MSSQL_ENCRYPT", "disable"),
 	}
 }
 
