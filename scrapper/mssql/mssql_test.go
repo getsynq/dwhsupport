@@ -54,52 +54,67 @@ func splitGoBatches(script string) []string {
 	return batches
 }
 
-func newMSSQLConf() *dwhexecmssql.MSSQLConf {
+func newMSSQLConf(user, password, database string) *dwhexecmssql.MSSQLConf {
 	return &dwhexecmssql.MSSQLConf{
-		User:      testenv.EnvOrDefault("MSSQL_USER", "sa"),
-		Password:  testenv.EnvOrDefault("MSSQL_PASSWORD", "SynqTest1!"),
+		User:      user,
+		Password:  password,
 		Host:      testenv.EnvOrDefault("MSSQL_HOST", "127.0.0.1"),
 		Port:      testenv.EnvOrDefaultInt("MSSQL_PORT", 1433),
-		Database:  testenv.EnvOrDefault("MSSQL_DATABASE", "synq_test"),
+		Database:  database,
 		TrustCert: true,
 	}
 }
 
-// setupDatabase connects to master, creates/resets the test database,
-// runs init.sql to populate fixtures, then returns a scrapper connected to the test database.
+// setupDatabase connects as sa to create/reset the test database, schemas,
+// fixtures, and a restricted synq monitoring user. Returns a scrapper connected
+// as the synq user with realistic minimal permissions:
+// - VIEW DATABASE STATE (catalog/metrics from sys.* views)
+// - VIEW DEFINITION (view SQL from sys.sql_modules)
+// - SELECT on monitored schemas (custom monitors)
 func setupDatabase(t *testing.T, ctx context.Context) *MSSQLScrapper {
 	t.Helper()
 
-	conf := newMSSQLConf()
+	dbName := testenv.EnvOrDefault("MSSQL_DATABASE", "synq_test")
 
-	// Connect to master to create the test database.
-	masterConf := *conf
-	masterConf.Database = "master"
-	masterExec, err := dwhexecmssql.NewMSSQLExecutor(ctx, &masterConf)
+	// Connect to master as sa to create the test database.
+	saConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), "master")
+	masterExec, err := dwhexecmssql.NewMSSQLExecutor(ctx, saConf)
 	if err != nil {
 		t.Skipf("Skipping: could not connect to local MSSQL: %v", err)
 	}
 
-	// Drop and recreate to ensure clean state.
-	masterExec.GetDb().Exec("ALTER DATABASE [" + conf.Database + "] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-	masterExec.GetDb().Exec("DROP DATABASE IF EXISTS [" + conf.Database + "]")
-	_, err = masterExec.GetDb().Exec("CREATE DATABASE [" + conf.Database + "]")
+	// Drop synq login and recreate database to ensure clean state.
+	masterExec.GetDb().Exec("IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'synq') DROP LOGIN synq")
+	masterExec.GetDb().Exec("ALTER DATABASE [" + dbName + "] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
+	masterExec.GetDb().Exec("DROP DATABASE IF EXISTS [" + dbName + "]")
+	_, err = masterExec.GetDb().Exec("CREATE DATABASE [" + dbName + "]")
 	masterExec.Close()
 	if err != nil {
-		t.Fatalf("Failed to create database %s: %v", conf.Database, err)
+		t.Fatalf("Failed to create database %s: %v", dbName, err)
 	}
 
-	// Connect to the test database and run init SQL to create schemas, tables, and data.
-	sc, err := NewMSSQLScrapper(ctx, conf)
+	// Connect as sa to the test database and run init SQL (schemas, tables, data, synq user).
+	saDbConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), dbName)
+	saExec, err := dwhexecmssql.NewMSSQLExecutor(ctx, saDbConf)
 	if err != nil {
-		t.Fatalf("Failed to connect to test database: %v", err)
+		t.Fatalf("Failed to connect to test database as sa: %v", err)
 	}
-
-	if err := execBatches(sc.executor.GetDb(), initSQL); err != nil {
-		sc.Close()
+	if err := execBatches(saExec.GetDb(), initSQL); err != nil {
+		saExec.Close()
 		t.Fatalf("Failed to execute init SQL: %v", err)
 	}
+	saExec.Close()
 
+	// Connect as the restricted synq monitoring user.
+	synqConf := newMSSQLConf(
+		testenv.EnvOrDefault("MSSQL_USER", "synq"),
+		testenv.EnvOrDefault("MSSQL_PASSWORD", "SynqTest1!"),
+		dbName,
+	)
+	sc, err := NewMSSQLScrapper(ctx, synqConf)
+	if err != nil {
+		t.Fatalf("Failed to create MSSQL scrapper as synq user: %v", err)
+	}
 	return sc
 }
 

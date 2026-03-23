@@ -141,3 +141,37 @@ GO
 CREATE VIEW schema_b.customer_regions AS
 SELECT DISTINCT region FROM schema_b.customers WHERE region IS NOT NULL;
 GO
+
+-- ============================================================
+-- SYNQ monitoring login/user with realistic minimal permissions
+-- Mirrors what a real SYNQ integration would use:
+-- 1. Catalog ingestion: sys.objects, sys.columns, sys.schemas, extended properties
+-- 2. Automated metrics: sys.partitions, sys.allocation_units, sys.indexes
+-- 3. Custom monitors: SELECT on monitored schemas
+-- ============================================================
+
+CREATE LOGIN synq WITH PASSWORD = 'SynqTest1!';
+GO
+
+CREATE USER synq FOR LOGIN synq;
+GO
+
+-- Server-level: list databases (sys.databases, sys.server_principals)
+-- Note: in production, this requires a server-level GRANT on master:
+--   USE master; GRANT VIEW ANY DATABASE TO synq;
+-- In Azure SQL Edge, any login can see sys.databases by default.
+
+-- Catalog & metrics: read sys catalog views (objects, columns, partitions, indexes)
+GRANT VIEW DATABASE STATE TO synq;
+GO
+
+-- View definitions: read view SQL from sys.sql_modules
+GRANT VIEW DEFINITION TO synq;
+GO
+
+-- Custom monitors: SELECT on data in all schemas
+GRANT SELECT ON SCHEMA::schema_a TO synq;
+GO
+
+GRANT SELECT ON SCHEMA::schema_b TO synq;
+GO
