@@ -6,5 +6,5 @@ import (
 )
 
 func NewQuerier[T any](conn *OracleExecutor) querier.Querier[T] {
-	return stdsql.NewQuerier(conn.db, stdsql.Querier_WithSshTunnelDialer[T](conn.sshTunnelDialer))
+	return stdsql.NewQuerier[T](conn.db)
 }
