@@ -11,7 +11,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-type MySQLScrapperConf = dwhexecmysql.MySQLConf
+type MySQLScrapperConf struct {
+	dwhexecmysql.MySQLConf
+}
 
 type Executor interface {
 	queryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error)
@@ -25,12 +27,16 @@ type MySQLScrapper struct {
 }
 
 func NewMySQLScrapper(ctx context.Context, conf *MySQLScrapperConf) (*MySQLScrapper, error) {
-	executor, err := dwhexecmysql.NewMySQLExecutor(ctx, conf)
+	executor, err := dwhexecmysql.NewMySQLExecutor(ctx, &conf.MySQLConf)
 	if err != nil {
 		return nil, err
 	}
 
 	return &MySQLScrapper{conf: conf, executor: executor}, nil
+}
+
+func (e *MySQLScrapper) Executor() *dwhexecmysql.MySQLExecutor {
+	return e.executor
 }
 
 func (e *MySQLScrapper) IsPermissionError(err error) bool {

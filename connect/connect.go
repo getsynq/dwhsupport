@@ -7,6 +7,8 @@ import (
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
+	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
+	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	dwhexecredshift "github.com/getsynq/dwhsupport/exec/redshift"
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	dwhexectrino "github.com/getsynq/dwhsupport/exec/trino"
@@ -70,24 +72,28 @@ func Databricks(ctx context.Context, t *agentdwhv1.DatabricksConf) (*scrapperdat
 
 func MySQL(ctx context.Context, t *agentdwhv1.MySQLConf) (*scrappermysql.MySQLScrapper, error) {
 	return scrappermysql.NewMySQLScrapper(ctx, &scrappermysql.MySQLScrapperConf{
-		User:          t.GetUsername(),
-		Password:      t.GetPassword(),
-		Host:          t.GetHost(),
-		Port:          int(t.GetPort()),
-		Database:      t.GetDatabase(),
-		AllowInsecure: t.GetAllowInsecure(),
-		Params:        t.GetParams(),
+		MySQLConf: dwhexecmysql.MySQLConf{
+			User:          t.GetUsername(),
+			Password:      t.GetPassword(),
+			Host:          t.GetHost(),
+			Port:          int(t.GetPort()),
+			Database:      t.GetDatabase(),
+			AllowInsecure: t.GetAllowInsecure(),
+			Params:        t.GetParams(),
+		},
 	})
 }
 
 func Postgres(ctx context.Context, t *agentdwhv1.PostgresConf) (*scrapperpostgres.PostgresScrapper, error) {
 	return scrapperpostgres.NewPostgresScrapper(ctx, &scrapperpostgres.PostgresScapperConf{
-		User:          t.GetUsername(),
-		Password:      t.GetPassword(),
-		Database:      t.GetDatabase(),
-		Host:          t.GetHost(),
-		Port:          int(t.GetPort()),
-		AllowInsecure: t.GetAllowInsecure(),
+		PostgresConf: dwhexecpostgres.PostgresConf{
+			User:          t.GetUsername(),
+			Password:      t.GetPassword(),
+			Database:      t.GetDatabase(),
+			Host:          t.GetHost(),
+			Port:          int(t.GetPort()),
+			AllowInsecure: t.GetAllowInsecure(),
+		},
 	})
 }
 
