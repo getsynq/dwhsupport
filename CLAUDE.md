@@ -126,6 +126,8 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 
 ## Special Patterns
 
+- **Query Logs**: `querylogs/` defines `QueryLogsProvider` interface with `FetchQueryLogs` returning a `QueryLogIterator`. Implementations use `querylogs.NewSqlxRowsIterator[T]` with a warehouse-specific schema struct and converter function. See `scrapper/redshift/query_logs.go` for the canonical pattern.
+- **Scrapper Configs**: All scrapper configs must be proper structs embedding their executor config (not type aliases). Each scrapper should have an `Executor()` accessor method. Example: `type MSSQLScrapperConf struct { dwhexecmssql.MSSQLConf }`.
 - **Lazy Loading**: `lazy/lazy.go` provides lazy initialization pattern
 - **SSH Tunneling**: `sshtunnel/ssh_tunnel.go` supports SSH tunnel connections
 - **Query Building**: `querybuilder/` provides utilities for dynamic query construction
@@ -146,3 +148,10 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 ## Important Rules
 
 - **Public repo**: Never include customer-specific data (table names, schemas, tag values) in test files — use generic placeholders like `MY_DB.MY_SCHEMA.MY_TABLE`
+
+## Oracle & MSSQL Gotchas
+
+- **go-ora time.Time binding**: go-ora's `time.Time` bind parameters don't compare correctly with Oracle DATE columns. Use `TO_DATE(:1, 'YYYY-MM-DD HH24:MI:SS')` with `t.UTC().Format("2006-01-02 15:04:05")` string parameters instead.
+- **MSSQL DB_NAME() consistency**: Always use `DB_NAME()` in SQL queries to populate the database field, never `conf.Database` — avoids casing mismatches between user config and SQL Server's canonical name.
+- **sqldialect ResolveTime timezone**: Dialects that format time without timezone info (Oracle, MSSQL, ClickHouse) must call `.UTC()` before formatting to prevent wrong comparisons when Go runs in non-UTC timezone.
+- **MSSQL Query Store testing**: Azure SQL Edge defaults to `QUERY_CAPTURE_MODE = AUTO` (skips infrequent queries). Tests need `QUERY_CAPTURE_MODE = ALL` and `EXEC sp_query_store_flush_db` before asserting.
