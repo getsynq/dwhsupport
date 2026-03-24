@@ -1,6 +1,6 @@
 module github.com/getsynq/dwhsupport
 
-go 1.25.7
+go 1.25.5
 
 require (
 	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260324141730-859a5d6c27f3.1
@@ -19,7 +19,7 @@ require (
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
-	github.com/microsoft/go-mssqldb v1.9.8
+	github.com/microsoft/go-mssqldb v1.9.7
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.51.0
 	github.com/sijms/go-ora/v2 v2.9.0
