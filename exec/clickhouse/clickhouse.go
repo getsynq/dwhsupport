@@ -42,6 +42,9 @@ func (e *ClickhouseExecutor) Close() error {
 }
 
 func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*ClickhouseExecutor, error) {
+	if conf.Port == 0 {
+		conf.Port = 9000
+	}
 
 	clickhouseOptions := &clickhouse.Options{
 		Protocol:    clickhouse.Native,

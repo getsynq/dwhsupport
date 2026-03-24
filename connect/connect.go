@@ -7,7 +7,9 @@ import (
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
+	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
+	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	dwhexecredshift "github.com/getsynq/dwhsupport/exec/redshift"
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
@@ -16,7 +18,9 @@ import (
 	scrapperbigquery "github.com/getsynq/dwhsupport/scrapper/bigquery"
 	scrapperclickhouse "github.com/getsynq/dwhsupport/scrapper/clickhouse"
 	scrapperdatabricks "github.com/getsynq/dwhsupport/scrapper/databricks"
+	scrappermssql "github.com/getsynq/dwhsupport/scrapper/mssql"
 	scrappermysql "github.com/getsynq/dwhsupport/scrapper/mysql"
+	scrapperoracle "github.com/getsynq/dwhsupport/scrapper/oracle"
 	scrapperpostgres "github.com/getsynq/dwhsupport/scrapper/postgres"
 	scrapperredshift "github.com/getsynq/dwhsupport/scrapper/redshift"
 	scrappersnowflake "github.com/getsynq/dwhsupport/scrapper/snowflake"
@@ -147,6 +151,50 @@ func Trino(ctx context.Context, trino *agentdwhv1.TrinoConf) (scrapper.Scrapper,
 	})
 }
 
+func MSSQL(ctx context.Context, t *agentdwhv1.MSSQLConf) (*scrappermssql.MSSQLScrapper, error) {
+	return scrappermssql.NewMSSQLScrapper(ctx, &scrappermssql.MSSQLScrapperConf{
+		MSSQLConf: dwhexecmssql.MSSQLConf{
+			User:                t.GetUsername(),
+			Password:            t.GetPassword(),
+			Host:                t.GetHost(),
+			Port:                int(t.GetPort()),
+			Database:            t.GetDatabase(),
+			TrustCert:           t.GetTrustCert(),
+			Encrypt:             t.GetEncrypt(),
+			FedAuth:             t.GetFedAuth(),
+			AccessToken:         t.GetAccessToken(),
+			ApplicationClientID: t.GetApplicationClientId(),
+		},
+	})
+}
+
+func Oracle(ctx context.Context, t *agentdwhv1.OracleConf) (*scrapperoracle.OracleScrapper, error) {
+	return scrapperoracle.NewOracleScrapper(ctx, &scrapperoracle.OracleScrapperConf{
+		OracleConf: dwhexecoracle.OracleConf{
+			User:        t.GetUsername(),
+			Password:    t.GetPassword(),
+			Host:        t.GetHost(),
+			Port:        int(t.GetPort()),
+			ServiceName: t.GetServiceName(),
+			SSL:         t.GetSsl(),
+			SSLVerify:   t.GetSslVerify(),
+			WalletPath:  t.GetWalletPath(),
+		},
+		UseDiagnosticsPack: t.GetUseDiagnosticsPack(),
+	})
+}
+
+// duckDBConnector is set by connect_duckdb.go when building with CGO enabled.
+// DuckDB requires CGO due to its native C library dependency.
+var duckDBConnector func(ctx context.Context, conf *agentdwhv1.DuckDBConf) (scrapper.Scrapper, error)
+
+func DuckDB(ctx context.Context, conf *agentdwhv1.DuckDBConf) (scrapper.Scrapper, error) {
+	if duckDBConnector == nil {
+		return nil, errors.New("duckdb support not available (requires CGO-enabled build)")
+	}
+	return duckDBConnector(ctx, conf)
+}
+
 func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrapper, error) {
 	switch t := conf.Config.(type) {
 	case *agentdwhv1.Connection_Bigquery:
@@ -165,6 +213,12 @@ func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrappe
 		return Snowflake(ctx, t.Snowflake)
 	case *agentdwhv1.Connection_Trino:
 		return Trino(ctx, t.Trino)
+	case *agentdwhv1.Connection_Mssql:
+		return MSSQL(ctx, t.Mssql)
+	case *agentdwhv1.Connection_Oracle:
+		return Oracle(ctx, t.Oracle)
+	case *agentdwhv1.Connection_Duckdb:
+		return DuckDB(ctx, t.Duckdb)
 	default:
 		return nil, errors.New("unsupported database type")
 	}

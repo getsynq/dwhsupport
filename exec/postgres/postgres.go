@@ -47,7 +47,7 @@ func (e *PostgresExecutor) GetDb() *sqlx.DB {
 
 func NewPostgresExecutor(ctx context.Context, conf *PostgresConf) (*PostgresExecutor, error) {
 	if conf.Port == 0 {
-		conf.Port = 5439
+		conf.Port = 5432
 	}
 
 	queryStringBuilder := url.URL{}
