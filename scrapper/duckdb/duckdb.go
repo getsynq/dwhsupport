@@ -11,7 +11,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-type DuckDBScapperConf = dwhexecduckdb.DuckDBConf
+type DuckDBScapperConf struct {
+	dwhexecduckdb.DuckDBConf
+}
 
 var _ scrapper.Scrapper = &DuckDBScrapper{}
 
@@ -21,7 +23,7 @@ type DuckDBScrapper struct {
 }
 
 func NewDuckDBScrapper(ctx context.Context, conf *DuckDBScapperConf) (*DuckDBScrapper, error) {
-	executor, err := dwhexecduckdb.NewDuckDBExecutor(ctx, conf)
+	executor, err := dwhexecduckdb.NewDuckDBExecutor(ctx, &conf.DuckDBConf)
 	if err != nil {
 		return nil, err
 	}
@@ -41,9 +43,13 @@ func NewLocalDuckDBScrapper(ctx context.Context, dsn string, instanceName string
 	}
 
 	return &DuckDBScrapper{
-		conf:     &DuckDBScapperConf{MotherduckAccount: instanceName},
+		conf:     &DuckDBScapperConf{DuckDBConf: dwhexecduckdb.DuckDBConf{MotherduckAccount: instanceName}},
 		executor: executor,
 	}, nil
+}
+
+func (e *DuckDBScrapper) Executor() *dwhexecduckdb.DuckDBExecutor {
+	return e.executor
 }
 
 func (e *DuckDBScrapper) IsPermissionError(err error) bool {

@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"io"
+
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
+	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
@@ -98,10 +101,12 @@ func setupDatabase(t *testing.T, ctx context.Context) *OracleScrapper {
 	sysExec.Close()
 
 	// Connect as the restricted synq monitoring user.
-	synqConf := newOracleConf(
-		testenv.EnvOrDefault("ORACLE_USER", "synq"),
-		testenv.EnvOrDefault("ORACLE_PASSWORD", "SynqTest1"),
-	)
+	synqConf := &OracleScrapperConf{
+		OracleConf: *newOracleConf(
+			testenv.EnvOrDefault("ORACLE_USER", "synq"),
+			testenv.EnvOrDefault("ORACLE_PASSWORD", "SynqTest1"),
+		),
+	}
 	sc, err := NewOracleScrapper(ctx, synqConf)
 	if err != nil {
 		t.Fatalf("Failed to create Oracle scrapper as synq user: %v", err)
@@ -394,6 +399,46 @@ func (s *OracleScrapperSuite) TestQueryShape() {
 
 	s.Equal("IS_ACTIVE", columns[4].Name)
 	s.Equal(int32(5), columns[4].Position)
+}
+
+func (s *OracleScrapperSuite) TestFetchQueryLogs() {
+	// Run a query through the scrapper executor to ensure V$SQL has recent entries.
+	s.scrapper.executor.GetDb().Exec("SELECT COUNT(*) FROM synq_a.products WHERE category = 'Electronics'")
+
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	s.Require().NoError(err)
+
+	from := time.Now().Add(-1 * time.Hour)
+	to := time.Now().Add(1 * time.Hour)
+
+	iter, err := s.scrapper.FetchQueryLogs(s.ctx, from, to, obfuscator)
+	s.Require().NoError(err)
+	defer iter.Close()
+
+	var logs []*querylogs.QueryLog
+	for {
+		log, iterErr := iter.Next(s.ctx)
+		if iterErr != nil {
+			s.Require().ErrorIs(iterErr, io.EOF, "Iterator should end with EOF, got: %v", iterErr)
+			break
+		}
+		logs = append(logs, log)
+	}
+
+	s.NotEmpty(logs, "Should return query logs from V$SQL")
+
+	for _, log := range logs {
+		s.NotEmpty(log.SQL, "SQL should not be empty")
+		s.NotEmpty(log.QueryID, "QueryID (sql_id) should not be empty")
+		s.Equal("oracle", log.SqlDialect)
+		s.NotNil(log.DwhContext)
+		s.Equal("127.0.0.1", log.DwhContext.Instance)
+		s.Equal(s.serviceName, log.DwhContext.Database)
+		s.NotEmpty(log.DwhContext.Schema, "Schema (parsing_schema_name) should be set")
+		s.Equal("SUCCESS", log.Status)
+		s.False(log.CreatedAt.IsZero(), "CreatedAt should be set")
+		s.NotEmpty(log.QueryType, "QueryType should be mapped from command_type")
+	}
 }
 
 // OracleComplianceSuite runs the standard compliance test suite.

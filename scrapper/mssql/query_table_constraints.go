@@ -17,7 +17,6 @@ func (e *MSSQLScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.
 	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "s.name", "t.name")
 	return dwhexecmssql.NewQuerier[scrapper.TableConstraintRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
-			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
 			return row, nil
 		}),

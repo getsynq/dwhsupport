@@ -11,7 +11,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-type PostgresScapperConf = dwhexecpostgres.PostgresConf
+type PostgresScapperConf struct {
+	dwhexecpostgres.PostgresConf
+}
 
 var _ scrapper.Scrapper = &PostgresScrapper{}
 
@@ -21,7 +23,7 @@ type PostgresScrapper struct {
 }
 
 func NewPostgresScrapper(ctx context.Context, conf *PostgresScapperConf) (*PostgresScrapper, error) {
-	executor, err := dwhexecpostgres.NewPostgresExecutor(ctx, conf)
+	executor, err := dwhexecpostgres.NewPostgresExecutor(ctx, &conf.PostgresConf)
 	if err != nil {
 		return nil, err
 	}
@@ -30,6 +32,10 @@ func NewPostgresScrapper(ctx context.Context, conf *PostgresScapperConf) (*Postg
 		conf:     conf,
 		executor: executor,
 	}, nil
+}
+
+func (e *PostgresScrapper) Executor() *dwhexecpostgres.PostgresExecutor {
+	return e.executor
 }
 
 func (e *PostgresScrapper) IsPermissionError(err error) bool {

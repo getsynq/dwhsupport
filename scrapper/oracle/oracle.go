@@ -9,7 +9,19 @@ import (
 	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
-type OracleScrapperConf = dwhexecoracle.OracleConf
+type OracleScrapperConf struct {
+	dwhexecoracle.OracleConf
+
+	// UseDiagnosticsPack enables use of AWR (Automatic Workload Repository) views
+	// for query log collection. AWR is part of the Oracle Diagnostics Pack, which
+	// requires a separate license for Oracle Database Enterprise Edition.
+	// When false (default), query logs come from V$SQL (no additional license needed).
+	// V$SQL provides in-memory cached SQL statements that age out under memory pressure.
+	// When true, query logs come from DBA_HIST_SQLSTAT + DBA_HIST_SQLTEXT which
+	// provides persistent AWR snapshots (typically hourly, retained for days/weeks).
+	// Requires Diagnostics Pack license and SELECT ANY DICTIONARY or SELECT_CATALOG_ROLE grant.
+	UseDiagnosticsPack bool
+}
 
 var _ scrapper.Scrapper = &OracleScrapper{}
 
@@ -19,7 +31,7 @@ type OracleScrapper struct {
 }
 
 func NewOracleScrapper(ctx context.Context, conf *OracleScrapperConf) (*OracleScrapper, error) {
-	executor, err := dwhexecoracle.NewOracleExecutor(ctx, conf)
+	executor, err := dwhexecoracle.NewOracleExecutor(ctx, &conf.OracleConf)
 	if err != nil {
 		return nil, err
 	}
@@ -28,6 +40,10 @@ func NewOracleScrapper(ctx context.Context, conf *OracleScrapperConf) (*OracleSc
 		conf:     conf,
 		executor: executor,
 	}, nil
+}
+
+func (e *OracleScrapper) Executor() *dwhexecoracle.OracleExecutor {
+	return e.executor
 }
 
 func (e *OracleScrapper) IsPermissionError(err error) bool {

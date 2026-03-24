@@ -46,7 +46,7 @@ func (d *OracleDialect) Stddev(expr Expr) Expr {
 }
 
 func (d *OracleDialect) ResolveTime(t time.Time) (string, error) {
-	return fmt.Sprintf("TO_TIMESTAMP('%s', 'YYYY-MM-DD HH24:MI:SS')", t.Format("2006-01-02 15:04:05")), nil
+	return fmt.Sprintf("TO_TIMESTAMP('%s', 'YYYY-MM-DD HH24:MI:SS')", t.UTC().Format("2006-01-02 15:04:05")), nil
 }
 
 func (d *OracleDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
