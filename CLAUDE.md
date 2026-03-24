@@ -122,7 +122,8 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 
 - Tags with `-rcX` suffix (e.g. `v0.9.0-rc6`) are pre-releases — use `--prerelease` flag when creating with `gh release create`
 - RC release changelogs must include all changes since the last **stable** release, not just since the previous RC
-- Example: `v0.9.0-rc6` changelog lists changes since `v0.8.3` (last stable), not since `v0.9.0-rc5`
+- Use `gh release create v0.X.0-rcN --prerelease --generate-notes --notes-start-tag <last-stable-tag>`
+- Example: `v0.9.0-rc6` uses `--notes-start-tag v0.8.3` (last stable), not `v0.9.0-rc5`
 
 ## Special Patterns
 
