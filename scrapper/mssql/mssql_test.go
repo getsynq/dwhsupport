@@ -8,7 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"io"
+
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
+	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
@@ -94,6 +97,16 @@ func setupDatabase(t *testing.T, ctx context.Context) *MSSQLScrapper {
 		t.Fatalf("Failed to create database %s: %v", dbName, err)
 	}
 
+	// Enable Query Store before running init SQL so it captures the schema setup queries.
+	masterConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), "master")
+	masterExec2, err := dwhexecmssql.NewMSSQLExecutor(ctx, masterConf)
+	if err != nil {
+		t.Fatalf("Failed to reconnect to master: %v", err)
+	}
+	masterExec2.GetDb().Exec("ALTER DATABASE [" + dbName + "] SET QUERY_STORE = ON")
+	masterExec2.GetDb().Exec("ALTER DATABASE [" + dbName + "] SET QUERY_STORE (QUERY_CAPTURE_MODE = ALL)")
+	masterExec2.Close()
+
 	// Connect as sa to the test database and run init SQL (schemas, tables, data, synq user).
 	saDbConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), dbName)
 	saExec, err := dwhexecmssql.NewMSSQLExecutor(ctx, saDbConf)
@@ -104,14 +117,18 @@ func setupDatabase(t *testing.T, ctx context.Context) *MSSQLScrapper {
 		saExec.Close()
 		t.Fatalf("Failed to execute init SQL: %v", err)
 	}
+	// Run a query that Query Store will capture.
+	saExec.GetDb().Exec("SELECT COUNT(*) FROM schema_a.products WHERE category = 'Electronics'")
 	saExec.Close()
 
 	// Connect as the restricted synq monitoring user.
-	synqConf := newMSSQLConf(
-		testenv.EnvOrDefault("MSSQL_USER", "synq"),
-		testenv.EnvOrDefault("MSSQL_PASSWORD", "SynqTest1!"),
-		dbName,
-	)
+	synqConf := &MSSQLScrapperConf{
+		MSSQLConf: *newMSSQLConf(
+			testenv.EnvOrDefault("MSSQL_USER", "synq"),
+			testenv.EnvOrDefault("MSSQL_PASSWORD", "SynqTest1!"),
+			dbName,
+		),
+	}
 	sc, err := NewMSSQLScrapper(ctx, synqConf)
 	if err != nil {
 		t.Fatalf("Failed to create MSSQL scrapper as synq user: %v", err)
@@ -405,6 +422,53 @@ func (s *MSSQLScrapperSuite) TestQueryShape() {
 
 	s.Equal("is_active", columns[4].Name)
 	s.Equal(int32(5), columns[4].Position)
+}
+
+func (s *MSSQLScrapperSuite) TestFetchQueryLogs() {
+	// Run a recognisable query through the scrapper's executor so Query Store captures it.
+	s.scrapper.executor.GetDb().Exec("SELECT COUNT(*) FROM schema_a.products WHERE category = 'Electronics'")
+
+	// Force a Query Store flush so captured queries become visible.
+	// Use sa to flush since synq user may not have ALTER permission.
+	saDbConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), s.databaseName)
+	saExec, err := dwhexecmssql.NewMSSQLExecutor(s.ctx, saDbConf)
+	s.Require().NoError(err)
+	_, err = saExec.GetDb().Exec("EXEC sp_query_store_flush_db")
+	s.Require().NoError(err, "Query Store flush should succeed")
+	saExec.Close()
+
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	s.Require().NoError(err)
+
+	from := time.Now().Add(-1 * time.Hour)
+	to := time.Now().Add(1 * time.Hour)
+
+	iter, err := s.scrapper.FetchQueryLogs(s.ctx, from, to, obfuscator)
+	s.Require().NoError(err)
+	defer iter.Close()
+
+	var logs []*querylogs.QueryLog
+	for {
+		log, iterErr := iter.Next(s.ctx)
+		if iterErr != nil {
+			s.Require().ErrorIs(iterErr, io.EOF, "Iterator should end with EOF, got: %v", iterErr)
+			break
+		}
+		logs = append(logs, log)
+	}
+
+	s.NotEmpty(logs, "Should return query logs from Query Store")
+
+	for _, log := range logs {
+		s.NotEmpty(log.SQL, "SQL should not be empty")
+		s.NotEmpty(log.QueryID, "QueryID should not be empty")
+		s.Equal("mssql", log.SqlDialect)
+		s.NotNil(log.DwhContext)
+		s.Equal("127.0.0.1", log.DwhContext.Instance)
+		s.Equal(s.databaseName, log.DwhContext.Database)
+		s.Contains([]string{"SUCCESS", "ABORTED", "FAILED", "UNKNOWN"}, log.Status)
+		s.False(log.CreatedAt.IsZero(), "CreatedAt should be set")
+	}
 }
 
 // MSSQLComplianceSuite runs the standard compliance test suite.

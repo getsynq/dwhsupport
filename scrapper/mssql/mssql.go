@@ -9,7 +9,9 @@ import (
 	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
-type MSSQLScrapperConf = dwhexecmssql.MSSQLConf
+type MSSQLScrapperConf struct {
+	dwhexecmssql.MSSQLConf
+}
 
 var _ scrapper.Scrapper = &MSSQLScrapper{}
 
@@ -19,7 +21,7 @@ type MSSQLScrapper struct {
 }
 
 func NewMSSQLScrapper(ctx context.Context, conf *MSSQLScrapperConf) (*MSSQLScrapper, error) {
-	executor, err := dwhexecmssql.NewMSSQLExecutor(ctx, conf)
+	executor, err := dwhexecmssql.NewMSSQLExecutor(ctx, &conf.MSSQLConf)
 	if err != nil {
 		return nil, err
 	}
@@ -28,6 +30,10 @@ func NewMSSQLScrapper(ctx context.Context, conf *MSSQLScrapperConf) (*MSSQLScrap
 		conf:     conf,
 		executor: executor,
 	}, nil
+}
+
+func (e *MSSQLScrapper) Executor() *dwhexecmssql.MSSQLExecutor {
+	return e.executor
 }
 
 func (e *MSSQLScrapper) IsPermissionError(err error) bool {

@@ -46,7 +46,7 @@ func (d *MSSQLDialect) Stddev(expr Expr) Expr {
 }
 
 func (d *MSSQLDialect) ResolveTime(t time.Time) (string, error) {
-	return fmt.Sprintf("CAST('%s' AS DATETIME2)", t.Format("2006-01-02 15:04:05")), nil
+	return fmt.Sprintf("CAST('%s' AS DATETIME2)", t.UTC().Format("2006-01-02 15:04:05")), nil
 }
 
 func (d *MSSQLDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {

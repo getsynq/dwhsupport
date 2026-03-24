@@ -1,4 +1,5 @@
 SELECT
+    DB_NAME() AS [database],
     s.name AS [schema],
     t.name AS [table],
     i.name AS [constraint_name],
