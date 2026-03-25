@@ -1,0 +1,117 @@
+agent:
+  log_level: trace
+synq:
+  client_id: "${SYNQ_CLIENT_ID}"
+  client_secret: "${SYNQ_CLIENT_SECRET}"
+
+connections:
+  "pg-local":
+    name: "PG Local"
+    postgres:
+      host: localhost
+      port: 54320
+      username: postgres
+      password: ${PG_PASSWORD}
+      database: kernel_ext_dwh_metrics
+      allow_insecure: true
+
+  "mysql-prod":
+    name: "MySQL Production"
+    parallelism: 4
+    mysql:
+      host: mysql.example.com
+      port: 3306
+      username: root
+      password: ${MYSQL_PASSWORD}
+      database: analytics
+      allow_insecure: false
+      params:
+        charset: utf8mb4
+        parseTime: "true"
+
+  "bq-project":
+    disabled: true
+    bigquery:
+      project_id: my-gcp-project
+      region: europe-west2
+      service_account_key_file: "keys/service-account.json"
+
+  "ch-staging":
+    name: Clickhouse
+    clickhouse:
+      host: clickhouse.example.com
+      port: 9440
+      username: default
+      password: ${CH_PASSWORD}
+
+  "sf-main":
+    snowflake:
+      username: SYNQ_USER
+      account: xy12345.eu-west-1
+      warehouse: SYNQ_WH
+      role: SYNQ_ROLE
+      private_key_file: keys/snowflake.p8
+      private_key_passphrase: ${SF_PASSPHRASE}
+      databases:
+        - ANALYTICS
+        - STAGING
+      use_get_ddl: true
+      account_usage_db: SNOWFLAKE
+
+  "trino-galaxy":
+    trino:
+      host: trino.example.com
+      username: ${TRINO_USER}
+      password: ${TRINO_PASSWORD}
+      catalogs:
+        - tpch
+        - iceberg_gcs
+      fetch_table_comments: true
+
+  "databricks-prod":
+    databricks:
+      workspace_url: https://dbc-12345.cloud.databricks.com
+      auth_client: ${DBR_CLIENT_ID}
+      auth_secret: ${DBR_CLIENT_SECRET}
+      warehouse: abc123def456
+      refresh_table_metrics: true
+      fetch_table_tags: true
+
+  "mssql-azure":
+    mssql:
+      host: myserver.database.windows.net
+      port: 1433
+      database: analytics
+      username: sa
+      password: ${MSSQL_PASSWORD}
+      trust_cert: true
+      encrypt: "true"
+
+  "oracle-prod":
+    oracle:
+      host: oracle.example.com
+      port: 1521
+      service_name: ORCL
+      username: synq
+      password: ${ORACLE_PASSWORD}
+      ssl: true
+      ssl_verify: true
+      use_diagnostics_pack: true
+
+  "duckdb-local":
+    duckdb:
+      database: ":memory:"
+
+  "motherduck":
+    duckdb:
+      motherduck_account: my-org
+      motherduck_token: ${MOTHERDUCK_TOKEN}
+
+  "redshift-prod":
+    redshift:
+      host: redshift.example.com
+      port: 5439
+      database: analytics
+      username: synq
+      password: ${REDSHIFT_PASSWORD}
+      freshness_from_query_logs: true

@@ -1,0 +1,9 @@
+connections:
+  "pg-plain":
+    name: "Plain Postgres"
+    postgres:
+      host: localhost
+      port: 5432
+      username: admin
+      password: plainpassword
+      database: mydb
