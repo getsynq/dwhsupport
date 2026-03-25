@@ -7,12 +7,12 @@ SELECT
         WHEN 'p' THEN 'PRIMARY KEY'
         WHEN 'u' THEN 'UNIQUE INDEX'
     END AS "constraint_type",
-    ord.position AS "column_position"
+    idx AS "column_position"
 FROM pg_catalog.pg_constraint con
 JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ord(attnum, position)
-JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ord.attnum
+JOIN generate_series(1, 1600) idx ON idx <= array_upper(con.conkey, 1)
+JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = con.conkey[idx]
 WHERE con.contype IN ('p', 'u')
   /* SYNQ_SCOPE_FILTER */
-ORDER BY n.nspname, c.relname, con.conname, ord.position
+ORDER BY n.nspname, c.relname, con.conname, idx
