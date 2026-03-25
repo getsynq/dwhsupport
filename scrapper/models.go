@@ -258,14 +258,16 @@ type CustomMetricsRow struct {
 // as well as warehouse-specific concepts like BigQuery partitioning/clustering,
 // ClickHouse sorting keys, and Snowflake clustering keys.
 type TableConstraintRow struct {
-	Instance       string `db:"instance"        json:"instance"        ch:"instance"        bigquery:"instance"`
-	Database       string `db:"database"        json:"database"        ch:"_database"       bigquery:"database"`
-	Schema         string `db:"schema"          json:"schema"          ch:"schema"          bigquery:"schema"`
-	Table          string `db:"table"           json:"table"           ch:"table"           bigquery:"table"`
-	ConstraintName string `db:"constraint_name" json:"constraint_name" ch:"constraint_name" bigquery:"constraint_name"`
-	ColumnName     string `db:"column_name"     json:"column_name"     ch:"column_name"     bigquery:"column_name"`
-	ConstraintType string `db:"constraint_type" json:"constraint_type" ch:"constraint_type" bigquery:"constraint_type"`
-	ColumnPosition int32  `db:"column_position" json:"column_position" ch:"column_position" bigquery:"column_position"`
+	Instance             string `db:"instance"              json:"instance"              ch:"instance"              bigquery:"instance"`
+	Database             string `db:"database"              json:"database"              ch:"_database"             bigquery:"database"`
+	Schema               string `db:"schema"                json:"schema"                ch:"schema"                bigquery:"schema"`
+	Table                string `db:"table"                 json:"table"                 ch:"table"                 bigquery:"table"`
+	ConstraintName       string `db:"constraint_name"       json:"constraint_name"       ch:"constraint_name"       bigquery:"constraint_name"`
+	ColumnName           string `db:"column_name"           json:"column_name"           ch:"column_name"           bigquery:"column_name"`
+	ConstraintType       string `db:"constraint_type"       json:"constraint_type"       ch:"constraint_type"       bigquery:"constraint_type"`
+	ColumnPosition       int32  `db:"column_position"       json:"column_position"       ch:"column_position"       bigquery:"column_position"`
+	ConstraintExpression string `db:"constraint_expression" json:"constraint_expression" ch:"constraint_expression" bigquery:"constraint_expression"`
+	IsEnforced           *bool  `db:"is_enforced"           json:"is_enforced"           ch:"is_enforced"           bigquery:"is_enforced"`
 }
 
 func (r TableConstraintRow) TableFqn() DwhFqn {
@@ -287,4 +289,5 @@ const (
 	ConstraintTypeClusterBy       = "CLUSTER BY"
 	ConstraintTypeDistributionKey = "DISTRIBUTION KEY"
 	ConstraintTypeProjection      = "PROJECTION"
+	ConstraintTypeCheck           = "CHECK"
 )

@@ -35,7 +35,7 @@ func (e *TrinoScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.
 
 func (e *TrinoScrapper) queryTableConstraintsForCatalog(ctx context.Context, catalogName string) ([]*scrapper.TableConstraintRow, error) {
 	query := strings.ReplaceAll(queryTableConstraintsSql, "{{catalog}}", catalogName)
-	query = scope.AppendScopeConditions(ctx, query, "", "tc.constraint_schema", "tc.table_name")
+	query = scope.AppendScopeConditions(ctx, query, "", "\"schema\"", "\"table\"")
 
 	res, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), query,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {

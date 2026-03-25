@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 
-	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
@@ -13,13 +12,40 @@ import (
 //go:embed query_table_constraints.sql
 var queryTableConstraintsSql string
 
+type oracleConstraintRow struct {
+	Schema               string `db:"schema"`
+	Table                string `db:"table"`
+	ConstraintName       string `db:"constraint_name"`
+	ColumnName           string `db:"column_name"`
+	ConstraintType       string `db:"constraint_type"`
+	ColumnPosition       int32  `db:"column_position"`
+	ConstraintExpression string `db:"constraint_expression"`
+	IsEnforced           int    `db:"is_enforced"`
+}
+
 func (e *OracleScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
-	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "cc.owner", "cc.table_name")
-	return dwhexecoracle.NewQuerier[scrapper.TableConstraintRow](e.executor).QueryMany(ctx, sql,
-		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
-			row.Database = e.conf.ServiceName
-			row.Instance = e.conf.Host
-			return row, nil
-		}),
-	)
+	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "\"schema\"", "\"table\"")
+	rows, err := dwhexecoracle.NewQuerier[oracleConstraintRow](e.executor).QueryMany(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []*scrapper.TableConstraintRow
+	for _, row := range rows {
+		enforced := row.IsEnforced == 1
+		results = append(results, &scrapper.TableConstraintRow{
+			Instance:             e.conf.Host,
+			Database:             e.conf.ServiceName,
+			Schema:               row.Schema,
+			Table:                row.Table,
+			ConstraintName:       row.ConstraintName,
+			ColumnName:           row.ColumnName,
+			ConstraintType:       row.ConstraintType,
+			ColumnPosition:       row.ColumnPosition,
+			ConstraintExpression: row.ConstraintExpression,
+			IsEnforced:           &enforced,
+		})
+	}
+
+	return results, nil
 }

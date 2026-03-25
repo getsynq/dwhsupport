@@ -114,6 +114,11 @@ func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, data
 			return nil, err
 		}
 		keySequence, _ := strconv.ParseInt(fmt.Sprint(tmp["key_sequence"]), 10, 32)
+		var isEnforced *bool
+		if rely, ok := tmp["rely"]; ok && fmt.Sprint(rely) != "" {
+			v := strings.EqualFold(fmt.Sprint(rely), "true")
+			isEnforced = &v
+		}
 		results = append(results, &scrapper.TableConstraintRow{
 			Instance:       e.conf.Account,
 			Database:       fmt.Sprint(tmp["database_name"]),
@@ -123,6 +128,7 @@ func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, data
 			ColumnName:     fmt.Sprint(tmp["column_name"]),
 			ConstraintType: scrapper.ConstraintTypePrimaryKey,
 			ColumnPosition: int32(keySequence),
+			IsEnforced:     isEnforced,
 		})
 	}
 
