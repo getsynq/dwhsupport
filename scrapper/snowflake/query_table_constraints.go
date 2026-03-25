@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -12,18 +13,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
-
-type showPrimaryKeyRow struct {
-	CreatedOn       string `db:"created_on"`
-	DatabaseName    string `db:"database_name"`
-	SchemaName      string `db:"schema_name"`
-	TableName       string `db:"table_name"`
-	ColumnName      string `db:"column_name"`
-	KeySequence     int32  `db:"key_sequence"`
-	ConstraintName  string `db:"constraint_name"`
-	Comment         string `db:"comment"`
-	SchemaEvolution string `db:"schema_evolution_record"`
-}
 
 type clusteringKeyRow struct {
 	TableSchema string `db:"table_schema"`
@@ -120,19 +109,20 @@ func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, data
 	defer rows.Close()
 
 	for rows.Next() {
-		row := &showPrimaryKeyRow{}
-		if err := rows.StructScan(row); err != nil {
+		tmp := map[string]any{}
+		if err := rows.MapScan(tmp); err != nil {
 			return nil, err
 		}
+		keySequence, _ := strconv.ParseInt(fmt.Sprint(tmp["key_sequence"]), 10, 32)
 		results = append(results, &scrapper.TableConstraintRow{
 			Instance:       e.conf.Account,
-			Database:       row.DatabaseName,
-			Schema:         row.SchemaName,
-			Table:          row.TableName,
-			ConstraintName: row.ConstraintName,
-			ColumnName:     row.ColumnName,
+			Database:       fmt.Sprint(tmp["database_name"]),
+			Schema:         fmt.Sprint(tmp["schema_name"]),
+			Table:          fmt.Sprint(tmp["table_name"]),
+			ConstraintName: fmt.Sprint(tmp["constraint_name"]),
+			ColumnName:     fmt.Sprint(tmp["column_name"]),
 			ConstraintType: scrapper.ConstraintTypePrimaryKey,
-			ColumnPosition: row.KeySequence,
+			ColumnPosition: int32(keySequence),
 		})
 	}
 
