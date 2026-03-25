@@ -1,0 +1,57 @@
+analytics:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: xy12345.eu-west-1
+      user: dbt_user
+      password: "{{ env_var('DBT_SNOWFLAKE_PASSWORD', 'default_pass') }}"
+      database: ANALYTICS
+      warehouse: TRANSFORMING
+      schema: dbt_dev
+      role: DBT_ROLE
+    prod:
+      type: snowflake
+      account: xy12345.eu-west-1
+      user: dbt_prod
+      password: "{{ env_var('DBT_SNOWFLAKE_PROD_PASSWORD') }}"
+      database: ANALYTICS_PROD
+      warehouse: TRANSFORMING
+      schema: public
+      role: DBT_PROD_ROLE
+
+warehouse:
+  target: local
+  outputs:
+    local:
+      type: postgres
+      host: localhost
+      port: 5432
+      user: postgres
+      password: localpass
+      dbname: warehouse
+    staging:
+      type: redshift
+      host: redshift.example.com
+      port: 5439
+      user: dbt
+      password: "{{ env_var('DBT_REDSHIFT_PASSWORD') }}"
+      dbname: staging_db
+
+bigquery_project:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      project: my-gcp-project
+      location: US
+      keyfile: /path/to/keyfile.json
+
+databricks_project:
+  target: dev
+  outputs:
+    dev:
+      type: databricks
+      host: dbc-12345.cloud.databricks.com
+      http_path: /sql/1.0/warehouses/abc123
+      token: "{{ env_var('DBT_DATABRICKS_TOKEN') }}"
