@@ -12,7 +12,7 @@ connections:
       port: 54320
       username: postgres
       password: ${PG_PASSWORD}
-      database: kernel_ext_dwh_metrics
+      database: my_database
       allow_insecure: true
 
   "mysql-prod":
