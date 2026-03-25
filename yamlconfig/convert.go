@@ -1,3 +1,4 @@
+
 package yamlconfig
 
 import (
@@ -241,9 +242,17 @@ func oracleConfToProto(c *OracleConf) *agentdwhv1.OracleConf {
 }
 
 func duckdbConfToProto(c *DuckDBConf) *agentdwhv1.DuckDBConf {
-	return &agentdwhv1.DuckDBConf{
+	d := &agentdwhv1.DuckDBConf{
 		Database:          c.Database,
 		MotherduckAccount: c.MotherduckAccount,
 		MotherduckToken:   c.MotherduckToken,
 	}
+	// When motherduck_token is set but account is empty, the database field
+	// serves as the motherduck account name. Clear database to satisfy proto
+	// validation (cloud mode requires motherduck_account + motherduck_token, no database).
+	if d.MotherduckToken != "" && d.MotherduckAccount == "" {
+		d.MotherduckAccount = d.Database
+		d.Database = ""
+	}
+	return d
 }

@@ -1,17 +1,32 @@
+// Package yamlconfig provides YAML-based DWH connection config parsing and proto conversion.
 package yamlconfig
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // ParseOptions controls how YAML config is parsed.
 type ParseOptions struct {
-	// ExpandEnv expands ${VAR} references in YAML scalar values using the process environment.
+	// ExpandEnv expands ${VAR} references in YAML scalar values.
+	// When true and LookupVar is nil, os.Getenv is used.
+	// When true and LookupVar is set, LookupVar is used instead.
 	ExpandEnv bool
+
+	// LookupVar resolves variable names to values during ${VAR} expansion.
+	// Called with the variable name (without ${}); returns the value and whether it was found.
+	// When nil and ExpandEnv is true, os.LookupEnv is used.
+	// Use this to read variables from a secrets manager instead of the process environment.
+	LookupVar func(name string) (string, bool)
+
+	// StrictEnv makes expansion fail when a referenced variable is not found.
+	// Only applies when ExpandEnv is true. Unset variables in ${VAR} syntax cause
+	// a parse error. Use ${VAR:-default} to provide a fallback, or ${VAR:-} for empty string.
+	StrictEnv bool
 
 	// BaseDir is the directory against which relative file paths are resolved.
 	// Typically filepath.Dir(configPath). Only used when ReadFile is set.
@@ -44,7 +59,13 @@ func Parse(data []byte, target any, opts ParseOptions) error {
 	}
 
 	if opts.ExpandEnv {
-		expandEnvNodes(&doc)
+		lookup := opts.LookupVar
+		if lookup == nil {
+			lookup = os.LookupEnv
+		}
+		if err := expandEnvNodes(&doc, lookup, opts.StrictEnv); err != nil {
+			return err
+		}
 	}
 
 	if err := doc.Decode(target); err != nil {
@@ -85,15 +106,41 @@ func ParseConnectionsOnly(data []byte, opts ParseOptions) (map[string]*Connectio
 	return conns, nil
 }
 
-// expandEnvNodes recursively expands ${VAR} references in YAML scalar node values.
+// expandEnvNodes recursively expands ${VAR} and ${VAR:-default} references in YAML
+// scalar node values using the provided lookup function.
+//
+// Supported syntax:
+//   - ${VAR}          — replaced with lookup result; empty string if not found (or error in strict mode)
+//   - ${VAR:-default} — replaced with lookup result if found, otherwise "default"
+//   - ${VAR:-}        — replaced with lookup result if found, otherwise empty string (never fails in strict mode)
+//
 // After expansion, the node tag is cleared so yaml.v3 re-infers the type from the
 // expanded value (e.g., "5432" → int when the target field is int).
-func expandEnvNodes(node *yaml.Node) {
+func expandEnvNodes(node *yaml.Node, lookup func(string) (string, bool), strict bool) error {
 	if node == nil {
-		return
+		return nil
 	}
 	if node.Kind == yaml.ScalarNode {
-		expanded := os.ExpandEnv(node.Value)
+		var expandErr error
+		expanded := os.Expand(node.Value, func(key string) string {
+			// Handle ${VAR:-default} syntax
+			name, defaultVal, hasDefault := parseVarDefault(key)
+
+			val, found := lookup(name)
+			if found {
+				return val
+			}
+			if hasDefault {
+				return defaultVal
+			}
+			if strict {
+				expandErr = fmt.Errorf("yamlconfig: variable %q not found", name)
+			}
+			return ""
+		})
+		if expandErr != nil {
+			return expandErr
+		}
 		if expanded != node.Value {
 			node.Value = expanded
 			// Clear the tag so yaml.v3 re-infers the type from the new value.
@@ -101,11 +148,23 @@ func expandEnvNodes(node *yaml.Node) {
 			// remain a string even after expanding to "5432".
 			node.Tag = ""
 		}
-		return
+		return nil
 	}
 	for _, child := range node.Content {
-		expandEnvNodes(child)
+		if err := expandEnvNodes(child, lookup, strict); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+// parseVarDefault splits "VAR:-default" into (name, default, hasDefault).
+// For plain "VAR", returns (VAR, "", false).
+func parseVarDefault(key string) (string, string, bool) {
+	if idx := strings.Index(key, ":-"); idx >= 0 {
+		return key[:idx], key[idx+2:], true
+	}
+	return key, "", false
 }
 
 // fileFieldPair associates a file path field with the inline content field it populates.
@@ -143,6 +202,16 @@ func ResolveFiles(connections map[string]*Connection, opts ParseOptions) error {
 		}
 	}
 	return nil
+}
+
+// ApplyDefaults sets default values on parsed connections.
+// Currently sets Parallelism to 8 when not explicitly configured.
+func ApplyDefaults(conns map[string]*Connection) {
+	for _, conn := range conns {
+		if conn.Parallelism == 0 {
+			conn.Parallelism = 8
+		}
+	}
 }
 
 // collectFileFields returns all file field pairs for a connection.

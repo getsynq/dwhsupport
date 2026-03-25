@@ -1,6 +1,12 @@
+// Package yamlconfig provides YAML-based DWH connection config parsing and proto conversion.
 package yamlconfig
 
-import "github.com/invopop/jsonschema"
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/invopop/jsonschema"
+)
 
 // Connection is a single database connection entry in a connections map.
 // The map key serves as the connection ID.
@@ -58,29 +64,40 @@ func (c *Connection) DialectType() string {
 
 // PostgresConf contains PostgreSQL connection parameters.
 type PostgresConf struct {
-	Host          string `yaml:"host"                     jsonschema:"required"`
-	Port          int    `yaml:"port,omitempty"           jsonschema:"minimum=1,maximum=65535"`
-	Database      string `yaml:"database"                 jsonschema:"required"`
-	Username      string `yaml:"username"                 jsonschema:"required"`
-	Password      string `yaml:"password"                 jsonschema:"required"`
-	AllowInsecure bool   `yaml:"allow_insecure,omitempty"`
+	Host     string `yaml:"host"           jsonschema:"required"`
+	Port     int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	Database string `yaml:"database"       jsonschema:"required"`
+	Username string `yaml:"username"       jsonschema:"required"`
+	Password string `yaml:"password"       jsonschema:"required"`
+	// Disable SSL certificate verification.
+	AllowInsecure bool `yaml:"allow_insecure,omitempty"`
 }
 
 // SnowflakeConf contains Snowflake connection parameters.
 // Authentication: provide password, private_key/private_key_file, or set auth_type to "externalbrowser".
 type SnowflakeConf struct {
-	Account              string   `yaml:"account"                          jsonschema:"required"`
-	Warehouse            string   `yaml:"warehouse"                        jsonschema:"required"`
-	Role                 string   `yaml:"role"                             jsonschema:"required"`
-	Username             string   `yaml:"username"                         jsonschema:"required"`
-	Password             string   `yaml:"password,omitempty"`
-	PrivateKey           string   `yaml:"private_key,omitempty"`
-	PrivateKeyFile       string   `yaml:"private_key_file,omitempty"`
-	PrivateKeyPassphrase string   `yaml:"private_key_passphrase,omitempty"`
-	Databases            []string `yaml:"databases,omitempty"`
-	UseGetDdl            bool     `yaml:"use_get_ddl,omitempty"`
-	AccountUsageDb       string   `yaml:"account_usage_db,omitempty"`
-	AuthType             string   `yaml:"auth_type,omitempty"`
+	// Snowflake account identifier.
+	Account string `yaml:"account" jsonschema:"required"`
+	// Virtual warehouse to use for queries.
+	Warehouse string `yaml:"warehouse" jsonschema:"required"`
+	// Role to assume after connecting.
+	Role     string `yaml:"role"     jsonschema:"required"`
+	Username string `yaml:"username" jsonschema:"required"`
+	Password string `yaml:"password,omitempty"`
+	// PEM-encoded private key content for key-pair authentication.
+	PrivateKey string `yaml:"private_key,omitempty"`
+	// Path to a PEM-encoded private key file.
+	PrivateKeyFile string `yaml:"private_key_file,omitempty"`
+	// Passphrase to decrypt the private key.
+	PrivateKeyPassphrase string `yaml:"private_key_passphrase,omitempty"`
+	// Databases to include. If empty, all accessible databases are scraped.
+	Databases []string `yaml:"databases,omitempty"`
+	// Use GET_DDL() to retrieve DDL for tables and views.
+	UseGetDdl bool `yaml:"use_get_ddl,omitempty"`
+	// Database containing the ACCOUNT_USAGE schema. Defaults to SNOWFLAKE.
+	AccountUsageDb string `yaml:"account_usage_db,omitempty"`
+	// Set to "externalbrowser" to use SSO browser-based authentication.
+	AuthType string `yaml:"auth_type,omitempty"`
 }
 
 // fileFields returns a list of (pointer to file field, pointer to inline field) pairs
@@ -94,9 +111,13 @@ func (c *SnowflakeConf) fileFields() []fileFieldPair {
 // BigQueryConf contains BigQuery connection parameters.
 // Exactly one of service_account_key or service_account_key_file should be set.
 type BigQueryConf struct {
-	ProjectId             string `yaml:"project_id"                         jsonschema:"required"`
-	Region                string `yaml:"region"                             jsonschema:"required"`
-	ServiceAccountKey     string `yaml:"service_account_key,omitempty"`
+	// GCP project ID.
+	ProjectId string `yaml:"project_id" jsonschema:"required"`
+	// Region for BigQuery resources.
+	Region string `yaml:"region" jsonschema:"required"`
+	// Inline JSON content of the service account key.
+	ServiceAccountKey string `yaml:"service_account_key,omitempty"`
+	// Path to the service account key JSON file.
 	ServiceAccountKeyFile string `yaml:"service_account_key_file,omitempty"`
 }
 
@@ -109,42 +130,49 @@ func (c *BigQueryConf) fileFields() []fileFieldPair {
 
 // RedshiftConf contains Amazon Redshift connection parameters.
 type RedshiftConf struct {
-	Host                   string `yaml:"host"                                jsonschema:"required"`
-	Port                   int    `yaml:"port"                                jsonschema:"required,minimum=1,maximum=65535"`
-	Database               string `yaml:"database"                            jsonschema:"required"`
-	Username               string `yaml:"username"                            jsonschema:"required"`
-	Password               string `yaml:"password"                            jsonschema:"required"`
-	FreshnessFromQueryLogs bool   `yaml:"freshness_from_query_logs,omitempty"`
+	Host     string `yaml:"host"     jsonschema:"required"`
+	Port     int    `yaml:"port"     jsonschema:"required,minimum=1,maximum=65535"`
+	Database string `yaml:"database" jsonschema:"required"`
+	Username string `yaml:"username" jsonschema:"required"`
+	Password string `yaml:"password" jsonschema:"required"`
+	// Estimate table freshness from Redshift query logs instead of metadata.
+	FreshnessFromQueryLogs bool `yaml:"freshness_from_query_logs,omitempty"`
 }
 
 // MySQLConf contains MySQL connection parameters.
 type MySQLConf struct {
-	Host          string            `yaml:"host"                     jsonschema:"required"`
-	Port          int               `yaml:"port"                     jsonschema:"required,minimum=1,maximum=65535"`
-	Database      string            `yaml:"database,omitempty"`
-	Username      string            `yaml:"username"                 jsonschema:"required"`
-	Password      string            `yaml:"password"                 jsonschema:"required"`
-	AllowInsecure bool              `yaml:"allow_insecure,omitempty"`
-	Params        map[string]string `yaml:"params,omitempty"`
+	Host     string `yaml:"host"           jsonschema:"required"`
+	Port     int    `yaml:"port"           jsonschema:"required,minimum=1,maximum=65535"`
+	Database string `yaml:"database,omitempty"`
+	Username string `yaml:"username"       jsonschema:"required"`
+	Password string `yaml:"password"       jsonschema:"required"`
+	// Disable SSL certificate verification.
+	AllowInsecure bool `yaml:"allow_insecure,omitempty"`
+	// Additional DSN parameters passed to the driver.
+	Params map[string]string `yaml:"params,omitempty"`
 }
 
 // ClickhouseConf contains ClickHouse connection parameters.
 type ClickhouseConf struct {
-	Host          string `yaml:"host"                     jsonschema:"required"`
-	Port          int    `yaml:"port,omitempty"           jsonschema:"minimum=1,maximum=65535"`
-	Database      string `yaml:"database,omitempty"`
-	Username      string `yaml:"username"                 jsonschema:"required"`
-	Password      string `yaml:"password"                 jsonschema:"required"`
-	AllowInsecure bool   `yaml:"allow_insecure,omitempty"`
+	Host string `yaml:"host"           jsonschema:"required"`
+	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	// Database to connect to. If empty, all databases are scraped.
+	Database string `yaml:"database,omitempty"`
+	Username string `yaml:"username" jsonschema:"required"`
+	Password string `yaml:"password" jsonschema:"required"`
+	// Disable SSL certificate verification.
+	AllowInsecure bool `yaml:"allow_insecure,omitempty"`
 }
 
 // TrinoConf contains Trino / Starburst connection parameters.
 type TrinoConf struct {
-	Host                string   `yaml:"host"                            jsonschema:"required"`
-	Port                int      `yaml:"port,omitempty"                  jsonschema:"minimum=1,maximum=65535"`
-	UsePlaintext        bool     `yaml:"use_plaintext,omitempty"`
-	Username            string   `yaml:"username,omitempty"`
-	Password            string   `yaml:"password,omitempty"`
+	Host string `yaml:"host" jsonschema:"required"`
+	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	// Use a plain HTTP connection instead of HTTPS.
+	UsePlaintext bool   `yaml:"use_plaintext,omitempty"`
+	Username     string `yaml:"username,omitempty"`
+	Password     string `yaml:"password,omitempty"`
+	// Catalogs to include. Required for most Trino deployments.
 	Catalogs            []string `yaml:"catalogs,omitempty"`
 	NoShowCreateView    bool     `yaml:"no_show_create_view,omitempty"`
 	NoShowCreateTable   bool     `yaml:"no_show_create_table,omitempty"`
@@ -155,10 +183,15 @@ type TrinoConf struct {
 // DatabricksConf contains Databricks connection parameters.
 // Authentication: set auth_token, or set both auth_client and auth_secret.
 type DatabricksConf struct {
-	WorkspaceUrl               string `yaml:"workspace_url"                            jsonschema:"required"`
-	AuthToken                  string `yaml:"auth_token,omitempty"`
-	AuthClient                 string `yaml:"auth_client,omitempty"`
-	AuthSecret                 string `yaml:"auth_secret,omitempty"`
+	// Databricks workspace URL.
+	WorkspaceUrl string `yaml:"workspace_url" jsonschema:"required"`
+	// Personal access token for authentication.
+	AuthToken string `yaml:"auth_token,omitempty"`
+	// OAuth client ID (M2M authentication).
+	AuthClient string `yaml:"auth_client,omitempty"`
+	// OAuth client secret (M2M authentication).
+	AuthSecret string `yaml:"auth_secret,omitempty"`
+	// SQL warehouse ID to use for queries.
 	Warehouse                  string `yaml:"warehouse,omitempty"`
 	RefreshTableMetrics        bool   `yaml:"refresh_table_metrics,omitempty"`
 	RefreshTableMetricsUseScan bool   `yaml:"refresh_table_metrics_use_scan,omitempty"`
@@ -168,36 +201,49 @@ type DatabricksConf struct {
 
 // MSSQLConf contains Microsoft SQL Server / Azure SQL Database connection parameters.
 type MSSQLConf struct {
-	Host                string `yaml:"host"                            jsonschema:"required"`
-	Port                int    `yaml:"port,omitempty"                  jsonschema:"minimum=1,maximum=65535"`
-	Database            string `yaml:"database"                        jsonschema:"required"`
-	Username            string `yaml:"username,omitempty"`
-	Password            string `yaml:"password,omitempty"`
-	TrustCert           bool   `yaml:"trust_cert,omitempty"`
-	Encrypt             string `yaml:"encrypt,omitempty"`
-	FedAuth             string `yaml:"fed_auth,omitempty"`
-	AccessToken         string `yaml:"access_token,omitempty"`
+	Host     string `yaml:"host"           jsonschema:"required"`
+	Port     int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	Database string `yaml:"database"       jsonschema:"required"`
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"password,omitempty"`
+	// Trust the server certificate without validation.
+	TrustCert bool `yaml:"trust_cert,omitempty"`
+	// Encryption mode (e.g. "true", "false", "strict").
+	Encrypt string `yaml:"encrypt,omitempty"`
+	// Federated authentication method (e.g. "ActiveDirectoryDefault").
+	FedAuth string `yaml:"fed_auth,omitempty"`
+	// Pre-acquired access token for Azure AD authentication.
+	AccessToken string `yaml:"access_token,omitempty"`
+	// Azure AD application client ID for service principal auth.
 	ApplicationClientId string `yaml:"application_client_id,omitempty"`
 }
 
 // OracleConf contains Oracle Database connection parameters.
 type OracleConf struct {
-	Host               string `yaml:"host"                           jsonschema:"required"`
-	Port               int    `yaml:"port,omitempty"                 jsonschema:"minimum=1,maximum=65535"`
-	ServiceName        string `yaml:"service_name"                   jsonschema:"required"`
-	Username           string `yaml:"username,omitempty"`
-	Password           string `yaml:"password,omitempty"`
-	SSL                bool   `yaml:"ssl,omitempty"`
-	SSLVerify          bool   `yaml:"ssl_verify,omitempty"`
-	WalletPath         string `yaml:"wallet_path,omitempty"`
-	UseDiagnosticsPack bool   `yaml:"use_diagnostics_pack,omitempty"`
+	Host string `yaml:"host" jsonschema:"required"`
+	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	// Oracle service name.
+	ServiceName string `yaml:"service_name" jsonschema:"required"`
+	Username    string `yaml:"username,omitempty"`
+	Password    string `yaml:"password,omitempty"`
+	// Enable SSL/TLS for the connection.
+	SSL bool `yaml:"ssl,omitempty"`
+	// Verify the server's SSL certificate.
+	SSLVerify bool `yaml:"ssl_verify,omitempty"`
+	// Path to Oracle Wallet directory for authentication.
+	WalletPath string `yaml:"wallet_path,omitempty"`
+	// Enable Oracle Diagnostics Pack features (AWR, ASH).
+	UseDiagnosticsPack bool `yaml:"use_diagnostics_pack,omitempty"`
 }
 
 // DuckDBConf contains DuckDB / MotherDuck connection parameters.
 type DuckDBConf struct {
-	Database          string `yaml:"database,omitempty"`
+	// File path, ':memory:' for in-memory, or MotherDuck database name.
+	Database string `yaml:"database,omitempty"`
+	// MotherDuck organization/account name (for cloud mode).
 	MotherduckAccount string `yaml:"motherduck_account,omitempty"`
-	MotherduckToken   string `yaml:"motherduck_token,omitempty"`
+	// MotherDuck authentication token (required for cloud MotherDuck).
+	MotherduckToken string `yaml:"motherduck_token,omitempty"`
 }
 
 // ConnectionsSchema returns a JSON schema for a map of connections,
@@ -210,10 +256,45 @@ func ConnectionsSchema() *jsonschema.Schema {
 	return r.Reflect(&wrapper{})
 }
 
+// ReflectorOption configures a jsonschema.Reflector.
+type ReflectorOption func(*jsonschema.Reflector)
+
+// WithGoComments adds Go doc comments from a package as JSON schema descriptions.
+// The base is the import path and srcDir is the local filesystem path to the source
+// (can be relative to the working directory).
+// Errors are silently ignored (source may not be available in CI or production).
+func WithGoComments(base, srcDir string) ReflectorOption {
+	return func(r *jsonschema.Reflector) {
+		// AddGoComments joins base + path via path.Join to build comment map keys.
+		// When path is ".", the key becomes just "base" which matches fullyQualifiedTypeName.
+		// For relative or absolute paths, we need to chdir to the source directory
+		// so we can pass "." as the path.
+		abs, err := filepath.Abs(srcDir)
+		if err != nil {
+			return
+		}
+		cwd, err := os.Getwd()
+		if err != nil {
+			return
+		}
+		if err := os.Chdir(abs); err != nil {
+			return
+		}
+		_ = r.AddGoComments(base, ".")
+		_ = os.Chdir(cwd)
+	}
+}
+
+
 // NewReflector returns a jsonschema.Reflector configured for YAML config structs.
-func NewReflector() *jsonschema.Reflector {
-	return &jsonschema.Reflector{
+// Use WithGoComments or WithYAMLConfigComments to add descriptions from Go doc comments.
+func NewReflector(opts ...ReflectorOption) *jsonschema.Reflector {
+	r := &jsonschema.Reflector{
 		ExpandedStruct: true,
 		FieldNameTag:   "yaml",
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
