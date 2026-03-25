@@ -340,6 +340,7 @@ func (s *OracleScrapperSuite) TestQueryTableConstraints() {
 		case c.ConstraintType == scrapper.ConstraintTypeCheck:
 			foundCheckConstraint = true
 			s.Empty(c.ColumnName, "CHECK constraints should have empty column name")
+			s.NotEmpty(c.ConstraintExpression, "CHECK constraints should have expression")
 		}
 	}
 

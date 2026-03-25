@@ -27,7 +27,7 @@ FROM (
         '' AS "column_name",
         'CHECK' AS "constraint_type",
         0 AS "column_position",
-        '' AS "constraint_expression",
+        c.search_condition_vc AS "constraint_expression",
         CASE WHEN c.status = 'ENABLED' AND c.validated = 'VALIDATED' THEN 1 ELSE 0 END AS "is_enforced"
     FROM all_constraints c
     WHERE c.constraint_type = 'C'
