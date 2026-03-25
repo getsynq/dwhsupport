@@ -318,28 +318,35 @@ func (s *OracleScrapperSuite) TestQueryTableConstraints() {
 
 	var foundProductsPK, foundOrderItemsCompositePK bool
 	var foundOrderItemsUniqueConstraint bool
+	var foundCheckConstraint bool
 	for _, c := range constraints {
 		s.Equal("127.0.0.1", c.Instance)
 		s.Equal(s.serviceName, c.Database)
 		s.NotEmpty(c.ConstraintName)
-		s.NotEmpty(c.ColumnName)
+		s.NotNil(c.IsEnforced, "IsEnforced should always be set for Oracle constraints")
+
+		if c.ConstraintType != scrapper.ConstraintTypeCheck {
+			s.NotEmpty(c.ColumnName)
+		}
 
 		switch {
 		case c.Schema == "SYNQ_A" && c.Table == "PRODUCTS" && c.ConstraintType == scrapper.ConstraintTypePrimaryKey && c.ColumnName == "ID":
 			foundProductsPK = true
+			s.True(*c.IsEnforced, "PRIMARY KEY should be enforced")
 		case c.Schema == "SYNQ_A" && c.Table == "ORDER_ITEMS" && c.ConstraintType == scrapper.ConstraintTypePrimaryKey:
 			foundOrderItemsCompositePK = true
 		case c.Schema == "SYNQ_A" && c.Table == "ORDER_ITEMS" && c.ConstraintType == scrapper.ConstraintTypeUniqueIndex:
 			foundOrderItemsUniqueConstraint = true
+		case c.ConstraintType == scrapper.ConstraintTypeCheck:
+			foundCheckConstraint = true
+			s.Empty(c.ColumnName, "CHECK constraints should have empty column name")
 		}
 	}
 
 	s.True(foundProductsPK, "Should find PRIMARY KEY for PRODUCTS.ID")
 	s.True(foundOrderItemsCompositePK, "Should find composite PRIMARY KEY for ORDER_ITEMS")
 	s.True(foundOrderItemsUniqueConstraint, "Should find UNIQUE constraint on ORDER_ITEMS")
-	// Note: standalone CREATE UNIQUE INDEX (idx_products_sku) is not reported by
-	// query_table_constraints.sql which only queries all_constraints (P, U types).
-	// Indexes created via CREATE INDEX don't appear in all_constraints.
+	s.True(foundCheckConstraint, "Should find at least one CHECK constraint")
 }
 
 func (s *OracleScrapperSuite) TestQuerySegments() {

@@ -146,7 +146,9 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		s.NotEmptyf(row.Table, "QueryTableConstraints row[%d].Table", i)
 		s.NotEmptyf(row.ConstraintName, "QueryTableConstraints row[%d].ConstraintName", i)
 		s.NotEmptyf(row.ConstraintType, "QueryTableConstraints row[%d].ConstraintType", i)
-		s.NotEmptyf(row.ColumnName, "QueryTableConstraints row[%d].ColumnName", i)
+		if row.ConstraintType != scrapper.ConstraintTypeCheck {
+			s.NotEmptyf(row.ColumnName, "QueryTableConstraints row[%d].ColumnName", i)
+		}
 		if row.Instance != "" {
 			allInstances = append(allInstances, row.Instance)
 		}

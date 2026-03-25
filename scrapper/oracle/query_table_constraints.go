@@ -13,14 +13,14 @@ import (
 var queryTableConstraintsSql string
 
 type oracleConstraintRow struct {
-	Schema               string `db:"schema"`
-	Table                string `db:"table"`
-	ConstraintName       string `db:"constraint_name"`
-	ColumnName           string `db:"column_name"`
-	ConstraintType       string `db:"constraint_type"`
-	ColumnPosition       int32  `db:"column_position"`
-	ConstraintExpression string `db:"constraint_expression"`
-	IsEnforced           int    `db:"is_enforced"`
+	Schema               string  `db:"schema"`
+	Table                string  `db:"table"`
+	ConstraintName       string  `db:"constraint_name"`
+	ColumnName           *string `db:"column_name"`
+	ConstraintType       string  `db:"constraint_type"`
+	ColumnPosition       int32   `db:"column_position"`
+	ConstraintExpression *string `db:"constraint_expression"`
+	IsEnforced           int     `db:"is_enforced"`
 }
 
 func (e *OracleScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
@@ -33,18 +33,23 @@ func (e *OracleScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper
 	var results []*scrapper.TableConstraintRow
 	for _, row := range rows {
 		enforced := row.IsEnforced == 1
-		results = append(results, &scrapper.TableConstraintRow{
-			Instance:             e.conf.Host,
-			Database:             e.conf.ServiceName,
-			Schema:               row.Schema,
-			Table:                row.Table,
-			ConstraintName:       row.ConstraintName,
-			ColumnName:           row.ColumnName,
-			ConstraintType:       row.ConstraintType,
-			ColumnPosition:       row.ColumnPosition,
-			ConstraintExpression: row.ConstraintExpression,
-			IsEnforced:           &enforced,
-		})
+		r := &scrapper.TableConstraintRow{
+			Instance:       e.conf.Host,
+			Database:       e.conf.ServiceName,
+			Schema:         row.Schema,
+			Table:          row.Table,
+			ConstraintName: row.ConstraintName,
+			ConstraintType: row.ConstraintType,
+			ColumnPosition: row.ColumnPosition,
+			IsEnforced:     &enforced,
+		}
+		if row.ColumnName != nil {
+			r.ColumnName = *row.ColumnName
+		}
+		if row.ConstraintExpression != nil {
+			r.ConstraintExpression = *row.ConstraintExpression
+		}
+		results = append(results, r)
 	}
 
 	return results, nil
