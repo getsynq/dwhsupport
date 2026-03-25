@@ -1,3 +1,4 @@
+
 package yamlconfig
 
 import (
@@ -419,6 +420,200 @@ func TestParseConnectionsOnly(t *testing.T) {
 	assert.Len(t, conns, 2)
 	assert.NotNil(t, conns["conn-1"].Postgres)
 	assert.NotNil(t, conns["conn-2"].MySQL)
+}
+
+func TestParseConnections_CustomLookupVar(t *testing.T) {
+	data := []byte(`
+connections:
+  "pg":
+    postgres:
+      host: ${DB_HOST}
+      port: ${DB_PORT}
+      username: ${DB_USER}
+      password: ${DB_PASS}
+      database: mydb
+`)
+
+	secrets := map[string]string{
+		"DB_HOST": "secrets-manager.example.com",
+		"DB_PORT": "5433",
+		"DB_USER": "admin",
+		"DB_PASS": "from-vault",
+	}
+
+	conns, err := ParseConnections(data, ParseOptions{
+		ExpandEnv: true,
+		LookupVar: func(name string) (string, bool) {
+			v, ok := secrets[name]
+			return v, ok
+		},
+	})
+	require.NoError(t, err)
+
+	pg := conns["pg"]
+	require.NotNil(t, pg)
+	require.NotNil(t, pg.Postgres)
+	assert.Equal(t, "secrets-manager.example.com", pg.Postgres.Host)
+	assert.Equal(t, 5433, pg.Postgres.Port)
+	assert.Equal(t, "admin", pg.Postgres.Username)
+	assert.Equal(t, "from-vault", pg.Postgres.Password)
+}
+
+func TestParseConnections_LookupVarDoesNotFallbackToEnv(t *testing.T) {
+	t.Setenv("DB_HOST", "from-env")
+
+	data := []byte(`
+connections:
+  "pg":
+    postgres:
+      host: ${DB_HOST}
+      port: 5432
+      username: u
+      password: p
+      database: db
+`)
+
+	conns, err := ParseConnections(data, ParseOptions{
+		ExpandEnv: true,
+		LookupVar: func(name string) (string, bool) {
+			return "", false // not found
+		},
+	})
+	require.NoError(t, err)
+
+	pg := conns["pg"]
+	require.NotNil(t, pg)
+	assert.Equal(t, "", pg.Postgres.Host, "should use LookupVar result, not os.Getenv")
+}
+
+func TestParseConnections_StrictEnvFailsOnMissing(t *testing.T) {
+	data := []byte(`
+connections:
+  "pg":
+    postgres:
+      host: ${MISSING_VAR}
+      port: 5432
+      username: u
+      password: p
+      database: db
+`)
+
+	_, err := ParseConnections(data, ParseOptions{
+		ExpandEnv: true,
+		StrictEnv: true,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "MISSING_VAR")
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func TestParseConnections_StrictEnvWithDefault(t *testing.T) {
+	data := []byte(`
+connections:
+  "pg":
+    postgres:
+      host: ${MISSING_VAR:-localhost}
+      port: 5432
+      username: u
+      password: p
+      database: db
+`)
+
+	conns, err := ParseConnections(data, ParseOptions{
+		ExpandEnv: true,
+		StrictEnv: true,
+	})
+	require.NoError(t, err, "should not fail when default is provided")
+
+	pg := conns["pg"]
+	require.NotNil(t, pg)
+	assert.Equal(t, "localhost", pg.Postgres.Host)
+}
+
+func TestParseConnections_StrictEnvWithEmptyDefault(t *testing.T) {
+	data := []byte(`
+connections:
+  "pg":
+    postgres:
+      host: localhost
+      port: 5432
+      username: u
+      password: ${OPTIONAL_PASS:-}
+      database: db
+`)
+
+	conns, err := ParseConnections(data, ParseOptions{
+		ExpandEnv: true,
+		StrictEnv: true,
+	})
+	require.NoError(t, err, "should not fail when empty default is provided via ${VAR:-}")
+
+	pg := conns["pg"]
+	require.NotNil(t, pg)
+	assert.Equal(t, "", pg.Postgres.Password)
+}
+
+func TestParseConnections_DefaultValueUsed(t *testing.T) {
+	data := []byte(`
+connections:
+  "pg":
+    postgres:
+      host: ${DB_HOST:-fallback.example.com}
+      port: ${DB_PORT:-5432}
+      username: u
+      password: p
+      database: db
+`)
+
+	conns, err := ParseConnections(data, ParseOptions{ExpandEnv: true})
+	require.NoError(t, err)
+
+	pg := conns["pg"]
+	require.NotNil(t, pg)
+	assert.Equal(t, "fallback.example.com", pg.Postgres.Host)
+	assert.Equal(t, 5432, pg.Postgres.Port)
+}
+
+func TestParseConnections_DefaultValueOverriddenByEnv(t *testing.T) {
+	t.Setenv("DB_HOST", "real-host.example.com")
+
+	data := []byte(`
+connections:
+  "pg":
+    postgres:
+      host: ${DB_HOST:-fallback.example.com}
+      port: 5432
+      username: u
+      password: p
+      database: db
+`)
+
+	conns, err := ParseConnections(data, ParseOptions{ExpandEnv: true})
+	require.NoError(t, err)
+
+	pg := conns["pg"]
+	require.NotNil(t, pg)
+	assert.Equal(t, "real-host.example.com", pg.Postgres.Host)
+}
+
+func TestApplyDefaults_SetsParallelism(t *testing.T) {
+	conns := map[string]*Connection{
+		"a": {Parallelism: 0, Postgres: &PostgresConf{Host: "localhost"}},
+		"b": {Parallelism: 16, Postgres: &PostgresConf{Host: "localhost"}},
+		"c": {Parallelism: 0, MySQL: &MySQLConf{Host: "localhost"}},
+	}
+
+	ApplyDefaults(conns)
+
+	assert.Equal(t, 8, conns["a"].Parallelism, "zero parallelism should default to 8")
+	assert.Equal(t, 16, conns["b"].Parallelism, "explicit parallelism should be preserved")
+	assert.Equal(t, 8, conns["c"].Parallelism, "zero parallelism should default to 8")
+}
+
+func TestApplyDefaults_EmptyMap(t *testing.T) {
+	conns := map[string]*Connection{}
+	ApplyDefaults(conns) // should not panic
+	assert.Empty(t, conns)
 }
 
 func TestCLIOptions(t *testing.T) {

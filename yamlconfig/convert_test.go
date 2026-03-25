@@ -1,3 +1,4 @@
+
 package yamlconfig
 
 import (
@@ -253,6 +254,58 @@ func TestRoundTrip_AllTypes(t *testing.T) {
 			assert.Equal(t, original.Name, rt.Name, "name mismatch for %s", id)
 		}
 	}
+}
+
+func TestToProtoConnection_DuckDBMotherduckNormalization(t *testing.T) {
+	// When motherduck_token is set but account is empty, database becomes account
+	conn := &Connection{
+		DuckDB: &DuckDBConf{
+			Database:        "my-db",
+			MotherduckToken: "tok_abc123",
+		},
+	}
+
+	proto, err := ToProtoConnection("duck", conn)
+	require.NoError(t, err)
+	duckConf := proto.GetDuckdb()
+	require.NotNil(t, duckConf)
+	assert.Equal(t, "my-db", duckConf.GetMotherduckAccount(), "database should become motherduck_account")
+	assert.Equal(t, "", duckConf.GetDatabase(), "database should be cleared")
+	assert.Equal(t, "tok_abc123", duckConf.GetMotherduckToken())
+}
+
+func TestToProtoConnection_DuckDBMotherduckExplicitAccount(t *testing.T) {
+	// When both account and token are set, no normalization should happen
+	conn := &Connection{
+		DuckDB: &DuckDBConf{
+			Database:          "some-db",
+			MotherduckAccount: "explicit-account",
+			MotherduckToken:   "tok_abc123",
+		},
+	}
+
+	proto, err := ToProtoConnection("duck", conn)
+	require.NoError(t, err)
+	duckConf := proto.GetDuckdb()
+	require.NotNil(t, duckConf)
+	assert.Equal(t, "explicit-account", duckConf.GetMotherduckAccount())
+	assert.Equal(t, "some-db", duckConf.GetDatabase(), "database should be preserved when account is explicit")
+}
+
+func TestToProtoConnection_DuckDBLocalNoNormalization(t *testing.T) {
+	// Local DuckDB (no token) should not normalize
+	conn := &Connection{
+		DuckDB: &DuckDBConf{
+			Database: ":memory:",
+		},
+	}
+
+	proto, err := ToProtoConnection("duck", conn)
+	require.NoError(t, err)
+	duckConf := proto.GetDuckdb()
+	require.NotNil(t, duckConf)
+	assert.Equal(t, ":memory:", duckConf.GetDatabase())
+	assert.Equal(t, "", duckConf.GetMotherduckAccount())
 }
 
 func TestFromProtoConnection_Nil(t *testing.T) {
