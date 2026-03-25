@@ -11,7 +11,7 @@ SELECT
 FROM pg_catalog.pg_constraint con
 JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-JOIN generate_series(1, 1600) idx ON idx <= array_upper(con.conkey, 1)
+JOIN generate_series(1, 32) idx ON idx <= array_upper(con.conkey, 1)
 JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = con.conkey[idx]
 WHERE con.contype IN ('p', 'u')
   /* SYNQ_SCOPE_FILTER */
