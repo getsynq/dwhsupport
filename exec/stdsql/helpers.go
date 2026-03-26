@@ -32,10 +32,8 @@ func QueryAndProcessMany[T any](
 		return err
 	}
 
-	counter := 0
-	results := make([]*T, 0)
+	results := make([]*T, 0, queryMany.ProcessBatchSize)
 	for rows.Next() {
-		counter++
 		rowCount++
 		err = rows.Err()
 		if err != nil {
@@ -64,16 +62,13 @@ func QueryAndProcessMany[T any](
 			results = append(results, processed)
 		}
 
-		if len(results) >= 1000 {
-			// Process the page of rows here
+		if len(results) >= queryMany.ProcessBatchSize {
 			err = handler(ctx, results)
-
 			if err != nil {
 				collector.SetRowsProduced(rowCount)
 				return err
 			}
-			// clear the slice
-			results = nil
+			results = results[:0]
 		}
 	}
 
