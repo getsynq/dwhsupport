@@ -14,7 +14,7 @@ import (
 var queryTableConstraintsSql string
 
 func (e *MySQLScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
-	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "s.TABLE_SCHEMA", "s.TABLE_NAME")
+	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "`schema`", "`table`")
 	return dwhexecmysql.NewQuerier[scrapper.TableConstraintRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Instance = e.conf.Host
