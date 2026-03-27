@@ -33,6 +33,12 @@ FROM (
     WHERE c.constraint_type = 'C'
         AND c.constraint_name NOT LIKE 'SYS_%'
 )
-WHERE 1=1
+WHERE "schema" NOT IN (
+    'SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
+    'GGSYS', 'GSMADMIN_INTERNAL', 'XDB', 'WMSYS', 'OJVMSYS',
+    'CTXSYS', 'ORDSYS', 'ORDDATA', 'MDSYS', 'LBACSYS',
+    'DVSYS', 'AUDSYS', 'OLAPSYS', 'REMOTE_SCHEDULER_AGENT',
+    'VECSYS', 'RASADM', 'GSMCATUSER', 'GSMUSER'
+)
     /* SYNQ_SCOPE_FILTER */
 ORDER BY "schema", "table", "constraint_name", "column_position"

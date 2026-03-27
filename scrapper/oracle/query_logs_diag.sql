@@ -24,7 +24,8 @@ WHERE sn.end_interval_time >= TO_DATE(:1, 'YYYY-MM-DD HH24:MI:SS')
       'SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
       'GGSYS', 'GSMADMIN_INTERNAL', 'XDB', 'WMSYS', 'OJVMSYS',
       'CTXSYS', 'ORDSYS', 'ORDDATA', 'MDSYS', 'LBACSYS',
-      'DVSYS', 'AUDSYS', 'OLAPSYS', 'REMOTE_SCHEDULER_AGENT'
+      'DVSYS', 'AUDSYS', 'OLAPSYS', 'REMOTE_SCHEDULER_AGENT',
+      'VECSYS', 'RASADM', 'GSMCATUSER', 'GSMUSER'
   )
   AND s.executions_delta > 0
 ORDER BY sn.end_interval_time

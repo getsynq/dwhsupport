@@ -18,7 +18,7 @@ FROM
 WHERE
     o.type IN ('U', 'V')
     AND o.is_ms_shipped = 0
-    AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
+    AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest', 'cdc')
     /* SYNQ_SCOPE_FILTER */
 ORDER BY
     s.name, o.name
