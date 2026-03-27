@@ -221,6 +221,63 @@ func (stats *MetricTableStats) ToDefault(timeSegment time.Time, segment string) 
 }
 
 //
+// TABLE STATS BQ
+//
+
+// MetricTableStatsBQ is a BigQuery-compatible version of MetricTableStats.
+// BigQuery's Go client cannot assign INTEGER to *int64 or TIMESTAMP to *time.Time,
+// so nullable fields must use the bigquery.Null* wrapper types.
+type MetricTableStatsBQ struct {
+	Segment      string                 `ch:"segment"        bigquery:"segment"        db:"segment"        json:"segment"`
+	TimeSegment  time.Time              `ch:"time_segment"   bigquery:"time_segment"   db:"time_segment"   json:"time_segment"`
+	LastLoadedAt bigquery.NullTimestamp `ch:"last_loaded_at" bigquery:"last_loaded_at" db:"last_loaded_at" json:"last_loaded_at"`
+	NumRows      bigquery.NullInt64     `ch:"num_rows"       bigquery:"num_rows"       db:"num_rows"       json:"num_rows"`
+	SizeBytes    bigquery.NullInt64     `ch:"size_bytes"     bigquery:"size_bytes"     db:"size_bytes"     json:"size_bytes"`
+}
+
+func (stats *MetricTableStatsBQ) GetIdentity() MetricIdentity {
+	return MetricIdentity{
+		stats.TimeSegment,
+		stats.Segment,
+	}
+}
+
+func (stats *MetricTableStatsBQ) WithPartition(timeSegment time.Time, segment string) {
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+}
+
+func (stats *MetricTableStatsBQ) ToDefault(timeSegment time.Time, segment string) {
+	stats.Segment = segment
+	stats.TimeSegment = timeSegment
+}
+
+func (stats *MetricTableStatsBQ) ToMetricTableStats() *MetricTableStats {
+	var numRows *int64
+	if stats.NumRows.Valid {
+		n := stats.NumRows.Int64
+		numRows = &n
+	}
+	var sizeBytes *int64
+	if stats.SizeBytes.Valid {
+		s := stats.SizeBytes.Int64
+		sizeBytes = &s
+	}
+	var lastLoadedAt *time.Time
+	if stats.LastLoadedAt.Valid {
+		t := stats.LastLoadedAt.Timestamp
+		lastLoadedAt = &t
+	}
+	return &MetricTableStats{
+		Segment:      stats.Segment,
+		TimeSegment:  stats.TimeSegment,
+		LastLoadedAt: lastLoadedAt,
+		NumRows:      numRows,
+		SizeBytes:    sizeBytes,
+	}
+}
+
+//
 // FIELD DISTRIBUTION
 //
 
