@@ -32,7 +32,7 @@ FROM
         ON cp.major_id = c.object_id AND cp.minor_id = c.column_id AND cp.name = 'MS_Description'
 WHERE
     t.type IN ('U', 'V')
-    AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
+    AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest', 'cdc')
     AND t.is_ms_shipped = 0
     /* SYNQ_SCOPE_FILTER */
 ORDER BY

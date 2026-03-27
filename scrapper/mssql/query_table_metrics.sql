@@ -33,7 +33,7 @@ FROM
     ) au ON t.object_id = au.object_id
 WHERE
     t.is_ms_shipped = 0
-    AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest')
+    AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest', 'cdc')
     AND t.type = 'U'
     /* SYNQ_SCOPE_FILTER */
 ORDER BY
