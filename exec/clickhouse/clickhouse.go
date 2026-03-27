@@ -90,7 +90,10 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 }
 
 func (e *ClickhouseExecutor) QueryRows(ctx context.Context, q string, args ...interface{}) (*sqlx.Rows, error) {
-	q = querycontext.AppendSQLComment(ctx, q)
+	// Do NOT append a SQL comment here: the ClickHouse Go driver uses the regex {.+:.+} to
+	// detect named-parameter protocol, which matches JSON like {"key":"value"} in comments and
+	// causes "unsupported query parameter type" errors. Query context is already passed via
+	// the log_comment setting in EnrichClickhouseContext.
 	ctx = EnrichClickhouseContext(ctx)
 	rows, err := e.db.QueryxContext(ctx, q, args...)
 	if err != nil {
@@ -101,7 +104,7 @@ func (e *ClickhouseExecutor) QueryRows(ctx context.Context, q string, args ...in
 }
 
 func (e *ClickhouseExecutor) Select(ctx context.Context, dest any, query string, args ...any) error {
-	query = querycontext.AppendSQLComment(ctx, query)
+	// Do not append SQL comment — see QueryRows for explanation.
 	ctx = EnrichClickhouseContext(ctx)
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
@@ -154,7 +157,7 @@ func EnrichClickhouseContext(ctx context.Context) context.Context {
 }
 
 func (e *ClickhouseExecutor) Exec(ctx context.Context, query string, args ...any) error {
-	query = querycontext.AppendSQLComment(ctx, query)
+	// Do not append SQL comment — see QueryRows for explanation.
 	ctx = EnrichClickhouseContext(ctx)
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
