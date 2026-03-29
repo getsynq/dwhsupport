@@ -12,7 +12,7 @@ select
   CAST(avg(run_type) AS FLOAT) as [run_type__mean], 
   CAST(min(run_type) AS FLOAT) as [run_type__min], 
   CAST(max(run_type) AS FLOAT) as [run_type__max], 
-  CAST(PERCENTILE_CONT(0.5) AS FLOAT) as [run_type__median], 
+  CAST(NULL AS FLOAT) as [run_type__median], 
   CAST(STDEV(run_type) AS FLOAT) as [run_type__stddev]
 from [default].[runs] 
 group by

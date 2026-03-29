@@ -4,7 +4,7 @@ select
   SUBSTR(SAFE_CAST(workspace AS STRING), 1, 100) as segment, 
   SUBSTR(SAFE_CAST(run_status AS STRING), 1, 100) as segment2, 
   SUBSTR(SAFE_CAST(run_type AS STRING), 1, 100) as segment3, 
-  count(*) as num_rows
+  count(*) as count
 from `db.default.runs` 
 where
   timestamp(createdAt) >= timestamp '1985-07-16T00:00:00Z' and 

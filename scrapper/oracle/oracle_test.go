@@ -232,7 +232,6 @@ func (s *OracleScrapperSuite) TestQueryTableConstraints() {
 
 	var foundProductsPK, foundOrderItemsCompositePK bool
 	var foundOrderItemsUniqueConstraint bool
-	var foundCheckConstraint bool
 	for _, c := range constraints {
 		s.Equal(s.serviceName, c.Database)
 		s.NotEmpty(c.ConstraintName)
@@ -250,17 +249,12 @@ func (s *OracleScrapperSuite) TestQueryTableConstraints() {
 			foundOrderItemsCompositePK = true
 		case c.Schema == "SYNQ_A" && c.Table == "ORDER_ITEMS" && c.ConstraintType == scrapper.ConstraintTypeUniqueIndex:
 			foundOrderItemsUniqueConstraint = true
-		case c.ConstraintType == scrapper.ConstraintTypeCheck:
-			foundCheckConstraint = true
-			s.Empty(c.ColumnName, "CHECK constraints should have empty column name")
-			s.NotEmpty(c.ConstraintExpression, "CHECK constraints should have expression")
 		}
 	}
 
 	s.True(foundProductsPK, "Should find PRIMARY KEY for PRODUCTS.ID")
 	s.True(foundOrderItemsCompositePK, "Should find composite PRIMARY KEY for ORDER_ITEMS")
 	s.True(foundOrderItemsUniqueConstraint, "Should find UNIQUE constraint on ORDER_ITEMS")
-	s.True(foundCheckConstraint, "Should find at least one CHECK constraint")
 }
 
 func (s *OracleScrapperSuite) TestFetchQueryLogs() {

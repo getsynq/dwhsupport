@@ -34,6 +34,7 @@ func ProfileColumns(
 
 	var expressions []Expr
 	var segmentColumns []string
+	var segmentExprs []Expr
 
 	for i, s := range args.Segmentation {
 		alias := fmt.Sprintf("segment%d", i+1)
@@ -41,7 +42,9 @@ func ProfileColumns(
 			alias = "segment"
 		}
 		segmentColumns = append(segmentColumns, alias)
-		expressions = append(expressions, As(SubString(ToString(s.Expression), 1, segmentLengthLimit), Identifier(alias)))
+		segmentExpr := SubString(ToString(s.Expression), 1, segmentLengthLimit)
+		segmentExprs = append(segmentExprs, segmentExpr)
+		expressions = append(expressions, As(segmentExpr, Identifier(alias)))
 	}
 	countColExpr := Identifier(string(METRIC_NUM_ROWS))
 	expressions = append(expressions, As(CountAll(), countColExpr))
@@ -63,7 +66,7 @@ func ProfileColumns(
 	query := querybuilder.NewQueryBuilder(tableFqn, expressions).OrderBy(Desc(countColExpr)).WithLimit(limit)
 
 	groupBy := lo.Map(segmentColumns, func(segmentColumn string, i int) Expr {
-		return AggregationColumnReference(expressions[i], segmentColumn)
+		return AggregationColumnReference(segmentExprs[i], segmentColumn)
 	})
 	query.WithGroupBy(groupBy...)
 

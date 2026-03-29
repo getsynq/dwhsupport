@@ -38,7 +38,10 @@ func (d *MSSQLDialect) Count(expr Expr) Expr {
 }
 
 func (d *MSSQLDialect) Median(expr Expr) Expr {
-	return Fn("PERCENTILE_CONT", Sql("0.5"))
+	// MSSQL's PERCENTILE_CONT is a window function, not an aggregate.
+	// It cannot be mixed with GROUP BY or other aggregates in the same SELECT.
+	// Return NULL to avoid runtime errors; the metric will be empty.
+	return Sql("NULL")
 }
 
 func (d *MSSQLDialect) Stddev(expr Expr) Expr {
@@ -54,7 +57,10 @@ func (d *MSSQLDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
 }
 
 func (d *MSSQLDialect) RoundTime(expr Expr, interval time.Duration) Expr {
-	return Fn("DATETRUNC", timeUnitSql(mssqlTimeUnit(interval)), expr)
+	// Use DATEADD+DATEDIFF pattern for broad SQL Server/Azure SQL Edge compatibility.
+	// DATETRUNC is SQL Server 2022+ only.
+	unit := timeUnitSql(mssqlTimeUnit(interval))
+	return WrapSql("DATEADD(%s, DATEDIFF(%s, 0, %s), 0)", unit, unit, expr)
 }
 
 func (d *MSSQLDialect) CeilTime(expr Expr, interval time.Duration) Expr {

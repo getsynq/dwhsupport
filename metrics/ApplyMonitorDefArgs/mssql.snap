@@ -29,7 +29,7 @@ select
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), '') as [segment], 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), '') as [segment_2], 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') as [segment_3], 
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -41,12 +41,12 @@ where
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), '') in ('1', '2', '3', '4') and 
   (run_status > 0) and (run_type > 0)
 group by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 order by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') 
@@ -66,7 +66,7 @@ where (run_status > 0) and (run_type > 0)
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_multi_condition_no_segmentation/partitioning - 1]
 select
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -74,8 +74,8 @@ select
   max([ingested_at]) as [max]
 from [default].[runs] 
 where (run_status > 0) and (run_type > 0)
-group by DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at]))
-order by DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) 
+group by DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0))
+order by DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_multi_condition_single_segmentation_all/no_partitioning - 1]
@@ -95,7 +95,7 @@ order by COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_multi_condition_single_segmentation_all/partitioning - 1]
 select
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') as [segment], 
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -104,10 +104,10 @@ select
 from [default].[runs] 
 where (run_status > 0) and (run_type > 0)
 group by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 order by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') 
 ---
 
@@ -140,7 +140,7 @@ select
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), '') as [segment], 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), '') as [segment_2], 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') as [segment_3], 
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -151,12 +151,12 @@ where
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), '') not in ('synq-demo') and 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), '') in ('1', '2', '3', '4')
 group by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 order by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') 
@@ -175,15 +175,15 @@ from [default].[runs]
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_no_conditions_no_segmentation/partitioning - 1]
 select
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
   min([ingested_at]) as [min], 
   max([ingested_at]) as [max]
 from [default].[runs] 
-group by DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at]))
-order by DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) 
+group by DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0))
+order by DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_no_conditions_single_segmentation_all/no_partitioning - 1]
@@ -202,7 +202,7 @@ order by COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_no_conditions_single_segmentation_all/partitioning - 1]
 select
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') as [segment], 
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -210,10 +210,10 @@ select
   max([ingested_at]) as [max]
 from [default].[runs] 
 group by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 order by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') 
 ---
 
@@ -247,7 +247,7 @@ select
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), '') as [segment], 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), '') as [segment_2], 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') as [segment_3], 
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -259,12 +259,12 @@ where
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), '') in ('1', '2', '3', '4') and 
   (1=1)
 group by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 order by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100), ''), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') 
@@ -284,7 +284,7 @@ where (1=1)
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_single_condition_no_segmentation/partitioning - 1]
 select
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -292,8 +292,8 @@ select
   max([ingested_at]) as [max]
 from [default].[runs] 
 where (1=1)
-group by DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at]))
-order by DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) 
+group by DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0))
+order by DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) 
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_single_condition_single_segmentation_all/no_partitioning - 1]
@@ -313,7 +313,7 @@ order by COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 [TestMetricsSuite/TestApplyMonitorDefArgs/mssql_single_condition_single_segmentation_all/partitioning - 1]
 select
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') as [segment], 
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])) as [time_segment], 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)) as [time_segment], 
   'ingested_at' as [field], 
   COUNT(*) as [num_rows], 
   COUNT([ingested_at]) as [num_not_null], 
@@ -322,9 +322,9 @@ select
 from [default].[runs] 
 where (1=1)
 group by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '')
 order by
-  DATEADD(HOUR, 1, DATETRUNC(HOUR, [ingested_at])), 
+  DATEADD(HOUR, 1, DATEADD(HOUR, DATEDIFF(HOUR, 0, [ingested_at]), 0)), 
   COALESCE(SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100), '') 
 ---

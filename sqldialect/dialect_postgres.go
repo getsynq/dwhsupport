@@ -42,7 +42,7 @@ func (d *PostgresDialect) Count(expr Expr) Expr {
 }
 
 func (d *PostgresDialect) Median(expr Expr) Expr {
-	return Fn("MEDIAN", expr)
+	return WrapSql("PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY %s)", expr)
 }
 
 func (d *PostgresDialect) Stddev(expr Expr) Expr {

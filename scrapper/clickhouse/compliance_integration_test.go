@@ -92,6 +92,10 @@ func (s *ClickHouseMonitorComplianceSuite) SetupSuite() {
 	if host == "" {
 		s.T().Skip("CLICKHOUSE_HOST env var not set")
 	}
+	testDB := testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "default")
+	if testDB == "default" {
+		s.T().Skip("CLICKHOUSE_DATABASE not set to a test database (e.g. synq_test)")
+	}
 
 	sc, err := newClickhouseScrapperFromEnv(s.Ctx())
 	if err != nil {
@@ -99,9 +103,9 @@ func (s *ClickHouseMonitorComplianceSuite) SetupSuite() {
 	}
 	s.Scrapper = sc
 	s.Config = scrappertest.MonitorComplianceConfig{
-		SegmentsSQL:          `SELECT DISTINCT category as segment FROM synq_test.products`,
-		CustomMetricsSQL:     `SELECT category as segment_name, SUM(price * quantity) as total_value, COUNT(*) as product_count FROM synq_test.products GROUP BY category`,
-		ShapeSQL:             `SELECT id, name, price, created_at, is_active FROM synq_test.products`,
+		SegmentsSQL:          `SELECT DISTINCT category as segment FROM ` + testDB + `.products`,
+		CustomMetricsSQL:     `SELECT category as segment_name, SUM(price * quantity) as total_value, COUNT(*) as product_count FROM ` + testDB + `.products GROUP BY category`,
+		ShapeSQL:             `SELECT id, name, price, created_at, is_active FROM ` + testDB + `.products`,
 		ExpectedSegments:     []string{"Electronics", "Accessories"},
 		ExpectedShapeColumns: []string{"id", "name", "price", "created_at", "is_active"},
 	}
@@ -130,6 +134,10 @@ func (s *ClickHouseMetricsExecutionSuite) SetupSuite() {
 	if host == "" {
 		s.T().Skip("CLICKHOUSE_HOST env var not set")
 	}
+	testDB := testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "default")
+	if testDB == "default" {
+		s.T().Skip("CLICKHOUSE_DATABASE not set to a test database (e.g. synq_test)")
+	}
 
 	sc, err := newClickhouseScrapperFromEnv(s.Ctx())
 	if err != nil {
@@ -137,7 +145,7 @@ func (s *ClickHouseMetricsExecutionSuite) SetupSuite() {
 	}
 	s.Scrapper = sc
 	s.Config = scrappertest.MetricsExecutionConfig{
-		TableFqn:          sqldialect.TableFqn("", "synq_test", "products"),
+		TableFqn:          sqldialect.TableFqn("", testDB, "products"),
 		PartitioningField: "created_at",
 		SegmentField:      "category",
 		NumericField:      "price",

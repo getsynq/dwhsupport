@@ -42,7 +42,9 @@ func (d *MySQLDialect) Count(expr Expr) Expr {
 }
 
 func (d *MySQLDialect) Median(expr Expr) Expr {
-	return Fn("MEDIAN", expr)
+	// MariaDB and MySQL do not have a built-in MEDIAN aggregate function.
+	// Return NULL to avoid runtime errors; the metric will be empty.
+	return Sql("NULL")
 }
 
 func (d *MySQLDialect) Stddev(expr Expr) Expr {
@@ -81,13 +83,13 @@ func (d *MySQLDialect) CeilTime(expr Expr, interval time.Duration) Expr {
 func (d *MySQLDialect) SubTime(expr Expr, duration time.Duration) Expr {
 	unit, interval := getTimeUnitWithInterval(duration)
 
-	return WrapSql("DATEADD(%s, %s, %s)", timeUnitSql(unit), Int64(-1*interval), expr)
+	return WrapSql("DATE_SUB(%s, INTERVAL %s %s)", expr, Int64(interval), timeUnitSql(unit))
 }
 
 func (d *MySQLDialect) AddTime(expr Expr, duration time.Duration) Expr {
 	unit, interval := getTimeUnitWithInterval(duration)
 
-	return WrapSql("DATEADD(%s, %s, %s)", timeUnitSql(unit), Int64(interval), expr)
+	return WrapSql("DATE_ADD(%s, INTERVAL %s %s)", expr, Int64(interval), timeUnitSql(unit))
 }
 
 func (d *MySQLDialect) CurrentTimestamp() Expr {
@@ -107,7 +109,7 @@ func (d *MySQLDialect) ToString(expr Expr) Expr {
 }
 
 func (d *MySQLDialect) ToFloat64(expr Expr) Expr {
-	return WrapSql("CAST(%s AS FLOAT)", expr)
+	return WrapSql("CAST(%s AS DOUBLE)", expr)
 }
 
 func (d *MySQLDialect) Coalesce(exprs ...Expr) Expr {
