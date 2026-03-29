@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"context"
+	"strings"
 
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -22,8 +23,9 @@ type Executor interface {
 var _ scrapper.Scrapper = &MySQLScrapper{}
 
 type MySQLScrapper struct {
-	conf     *MySQLScrapperConf
-	executor *dwhexecmysql.MySQLExecutor
+	conf      *MySQLScrapperConf
+	executor  *dwhexecmysql.MySQLExecutor
+	isMariaDB bool
 }
 
 func NewMySQLScrapper(ctx context.Context, conf *MySQLScrapperConf) (*MySQLScrapper, error) {
@@ -32,7 +34,11 @@ func NewMySQLScrapper(ctx context.Context, conf *MySQLScrapperConf) (*MySQLScrap
 		return nil, err
 	}
 
-	return &MySQLScrapper{conf: conf, executor: executor}, nil
+	var version string
+	_ = executor.GetDb().QueryRowContext(ctx, "SELECT VERSION()").Scan(&version)
+	isMariaDB := strings.Contains(strings.ToLower(version), "mariadb")
+
+	return &MySQLScrapper{conf: conf, executor: executor, isMariaDB: isMariaDB}, nil
 }
 
 func (e *MySQLScrapper) Executor() *dwhexecmysql.MySQLExecutor {
