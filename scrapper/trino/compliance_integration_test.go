@@ -56,6 +56,38 @@ func (s *TrinoComplianceSuite) TearDownSuite() {
 	}
 }
 
+// TrinoScopeComplianceSuite runs scope filtering compliance checks.
+type TrinoScopeComplianceSuite struct {
+	scrappertest.ScopeComplianceSuite
+}
+
+func TestTrinoScopeComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping Trino scope compliance tests in CI")
+	}
+	suite.Run(t, new(TrinoScopeComplianceSuite))
+}
+
+func (s *TrinoScopeComplianceSuite) SetupSuite() {
+	host := testenv.EnvOrDefault("STARBURST_HOST", "")
+	if host == "" {
+		s.T().Skip("STARBURST_HOST env var not set")
+	}
+
+	catalog := testenv.EnvOrDefault("STARBURST_CATALOG", "tpch")
+	sc, err := newTrinoScrapperFromEnv(s.Ctx(), catalog)
+	if err != nil {
+		s.T().Skipf("Could not connect to Trino: %v", err)
+	}
+	s.Scrapper = sc
+}
+
+func (s *TrinoScopeComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
 // TrinoMonitorComplianceSuite runs the monitor compliance checks using TPCH data.
 type TrinoMonitorComplianceSuite struct {
 	scrappertest.MonitorComplianceSuite
