@@ -25,7 +25,7 @@ FROM (
         'CHECK' AS `constraint_type`,
         0 AS `column_position`,
         cc.CHECK_CLAUSE AS `constraint_expression`,
-        CASE WHEN tc.ENFORCED = 'YES' THEN TRUE ELSE FALSE END AS `is_enforced`
+        TRUE AS `is_enforced`
     FROM information_schema.CHECK_CONSTRAINTS cc
     JOIN information_schema.TABLE_CONSTRAINTS tc
         ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
