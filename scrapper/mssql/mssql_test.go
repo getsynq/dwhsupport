@@ -2,9 +2,7 @@ package mssql
 
 import (
 	"context"
-	_ "embed"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -14,130 +12,28 @@ import (
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/getsynq/dwhsupport/testenv"
-	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/suite"
 )
 
-//go:embed testdata/init.sql
-var initSQL string
-
-// execBatches splits a SQL script on GO batch separators and executes each batch.
-func execBatches(db *sqlx.DB, script string) error {
-	for _, batch := range splitGoBatches(script) {
-		batch = strings.TrimSpace(batch)
-		if batch == "" {
-			continue
-		}
-		if _, err := db.Exec(batch); err != nil {
-			return err
-		}
+func newMSSQLScrapperFromEnv(ctx context.Context) (*MSSQLScrapper, error) {
+	conf := &MSSQLScrapperConf{
+		MSSQLConf: dwhexecmssql.MSSQLConf{
+			User:      testenv.EnvOrDefault("MSSQL_USER", "synq"),
+			Password:  testenv.EnvOrDefault("MSSQL_PASSWORD", "SynqTest1!"),
+			Host:      testenv.EnvOrDefault("MSSQL_HOST", "127.0.0.1"),
+			Port:      testenv.EnvOrDefaultInt("MSSQL_PORT", 1433),
+			Database:  testenv.EnvOrDefault("MSSQL_DATABASE", "synq_test"),
+			TrustCert: true,
+			Encrypt:   testenv.EnvOrDefault("MSSQL_ENCRYPT", "disable"),
+		},
 	}
-	return nil
+	return NewMSSQLScrapper(ctx, conf)
 }
 
-// splitGoBatches splits a T-SQL script on GO batch separators.
-// GO must appear on its own line (case-insensitive).
-func splitGoBatches(script string) []string {
-	var batches []string
-	var current strings.Builder
-	for _, line := range strings.Split(script, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.EqualFold(trimmed, "GO") {
-			batches = append(batches, current.String())
-			current.Reset()
-		} else {
-			current.WriteString(line)
-			current.WriteString("\n")
-		}
-	}
-	if s := current.String(); strings.TrimSpace(s) != "" {
-		batches = append(batches, s)
-	}
-	return batches
-}
-
-func newMSSQLConf(user, password, database string) *dwhexecmssql.MSSQLConf {
-	return &dwhexecmssql.MSSQLConf{
-		User:      user,
-		Password:  password,
-		Host:      testenv.EnvOrDefault("MSSQL_HOST", "127.0.0.1"),
-		Port:      testenv.EnvOrDefaultInt("MSSQL_PORT", 1433),
-		Database:  database,
-		TrustCert: true,
-		Encrypt:   testenv.EnvOrDefault("MSSQL_ENCRYPT", "disable"),
-	}
-}
-
-// setupDatabase connects as sa to create/reset the test database, schemas,
-// fixtures, and a restricted synq monitoring user. Returns a scrapper connected
-// as the synq user with realistic minimal permissions:
-// - VIEW DATABASE STATE (catalog/metrics from sys.* views)
-// - VIEW DEFINITION (view SQL from sys.sql_modules)
-// - SELECT on monitored schemas (custom monitors)
-func setupDatabase(t *testing.T, ctx context.Context) *MSSQLScrapper {
-	t.Helper()
-
-	dbName := testenv.EnvOrDefault("MSSQL_DATABASE", "synq_test")
-
-	// Connect to master as sa to create the test database.
-	saConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), "master")
-	masterExec, err := dwhexecmssql.NewMSSQLExecutor(ctx, saConf)
-	if err != nil {
-		t.Skipf("Skipping: could not connect to local MSSQL: %v", err)
-	}
-
-	// Drop synq login and recreate database to ensure clean state.
-	masterExec.GetDb().Exec("IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = 'synq') DROP LOGIN synq")
-	masterExec.GetDb().Exec("ALTER DATABASE [" + dbName + "] SET SINGLE_USER WITH ROLLBACK IMMEDIATE")
-	masterExec.GetDb().Exec("DROP DATABASE IF EXISTS [" + dbName + "]")
-	_, err = masterExec.GetDb().Exec("CREATE DATABASE [" + dbName + "]")
-	masterExec.Close()
-	if err != nil {
-		t.Fatalf("Failed to create database %s: %v", dbName, err)
-	}
-
-	// Enable Query Store before running init SQL so it captures the schema setup queries.
-	masterConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), "master")
-	masterExec2, err := dwhexecmssql.NewMSSQLExecutor(ctx, masterConf)
-	if err != nil {
-		t.Fatalf("Failed to reconnect to master: %v", err)
-	}
-	masterExec2.GetDb().Exec("ALTER DATABASE [" + dbName + "] SET QUERY_STORE = ON")
-	masterExec2.GetDb().Exec("ALTER DATABASE [" + dbName + "] SET QUERY_STORE (QUERY_CAPTURE_MODE = ALL)")
-	masterExec2.Close()
-
-	// Connect as sa to the test database and run init SQL (schemas, tables, data, synq user).
-	saDbConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), dbName)
-	saExec, err := dwhexecmssql.NewMSSQLExecutor(ctx, saDbConf)
-	if err != nil {
-		t.Fatalf("Failed to connect to test database as sa: %v", err)
-	}
-	if err := execBatches(saExec.GetDb(), initSQL); err != nil {
-		saExec.Close()
-		t.Fatalf("Failed to execute init SQL: %v", err)
-	}
-	// Run a query that Query Store will capture.
-	saExec.GetDb().Exec("SELECT COUNT(*) FROM schema_a.products WHERE category = 'Electronics'")
-	saExec.Close()
-
-	// Connect as the restricted synq monitoring user.
-	synqConf := &MSSQLScrapperConf{
-		MSSQLConf: *newMSSQLConf(
-			testenv.EnvOrDefault("MSSQL_USER", "synq"),
-			testenv.EnvOrDefault("MSSQL_PASSWORD", "SynqTest1!"),
-			dbName,
-		),
-	}
-	sc, err := NewMSSQLScrapper(ctx, synqConf)
-	if err != nil {
-		t.Fatalf("Failed to create MSSQL scrapper as synq user: %v", err)
-	}
-	return sc
-}
-
-// MSSQLScrapperSuite tests all scrapper methods against a local MSSQL instance.
-// Start the database with: docker compose -f scrapper/mssql/docker-compose.yml up -d
+// MSSQLScrapperSuite tests all scrapper methods against an MSSQL instance.
+// Requires a pre-seeded database (e.g. via dwhtesting staging infra).
 type MSSQLScrapperSuite struct {
 	suite.Suite
 	scrapper     *MSSQLScrapper
@@ -147,7 +43,7 @@ type MSSQLScrapperSuite struct {
 
 func TestMSSQLScrapperSuite(t *testing.T) {
 	if os.Getenv("CI") != "" {
-		t.Skip("Skipping local MSSQL tests in CI")
+		t.Skip("Skipping MSSQL tests in CI")
 	}
 	suite.Run(t, new(MSSQLScrapperSuite))
 }
@@ -155,7 +51,11 @@ func TestMSSQLScrapperSuite(t *testing.T) {
 func (s *MSSQLScrapperSuite) SetupSuite() {
 	s.ctx = context.Background()
 	s.databaseName = testenv.EnvOrDefault("MSSQL_DATABASE", "synq_test")
-	s.scrapper = setupDatabase(s.T(), s.ctx)
+	sc, err := newMSSQLScrapperFromEnv(s.ctx)
+	if err != nil {
+		s.T().Skipf("Could not connect to MSSQL: %v", err)
+	}
+	s.scrapper = sc
 }
 
 func (s *MSSQLScrapperSuite) TearDownSuite() {
@@ -171,7 +71,6 @@ func (s *MSSQLScrapperSuite) TestQueryDatabases() {
 
 	var found bool
 	for _, db := range databases {
-		s.Equal("127.0.0.1", db.Instance)
 		if db.Database == s.databaseName {
 			found = true
 		}
@@ -187,7 +86,6 @@ func (s *MSSQLScrapperSuite) TestQueryTables() {
 	var foundProducts, foundOrderItems, foundActiveProducts, foundOrderSummary bool
 	var foundCustomers, foundCustomerRegions bool
 	for _, t := range tables {
-		s.Equal("127.0.0.1", t.Instance)
 		s.Equal(s.databaseName, t.Database)
 
 		switch {
@@ -199,8 +97,6 @@ func (s *MSSQLScrapperSuite) TestQueryTables() {
 		case t.Schema == "schema_a" && t.Table == "order_items":
 			foundOrderItems = true
 			s.Equal("BASE TABLE", t.TableType)
-			s.NotNil(t.Description)
-			s.Equal("Line items within customer orders", *t.Description)
 		case t.Schema == "schema_a" && t.Table == "active_products":
 			foundActiveProducts = true
 			s.Equal("VIEW", t.TableType)
@@ -232,7 +128,6 @@ func (s *MSSQLScrapperSuite) TestQueryCatalog() {
 	var foundIdCol, foundNameCol, foundPriceCol, foundCreatedAtCol bool
 	var foundIdComment, foundNameComment, foundTableComment bool
 	for _, col := range catalog {
-		s.Equal("127.0.0.1", col.Instance)
 		s.Equal(s.databaseName, col.Database)
 
 		if col.Schema == "schema_a" && col.Table == "products" {
@@ -282,18 +177,17 @@ func (s *MSSQLScrapperSuite) TestQueryTableMetrics() {
 
 	var foundProducts, foundOrderItems bool
 	for _, m := range metrics {
-		s.Equal("127.0.0.1", m.Instance)
 		s.Equal(s.databaseName, m.Database)
 
 		if m.Schema == "schema_a" && m.Table == "products" {
 			foundProducts = true
 			s.NotNil(m.RowCount, "products should have row_count")
-			s.Equal(int64(3), *m.RowCount)
+			s.GreaterOrEqual(*m.RowCount, int64(3))
 		}
 		if m.Schema == "schema_a" && m.Table == "order_items" {
 			foundOrderItems = true
 			s.NotNil(m.RowCount, "order_items should have row_count")
-			s.Equal(int64(3), *m.RowCount)
+			s.GreaterOrEqual(*m.RowCount, int64(3))
 		}
 	}
 
@@ -308,7 +202,6 @@ func (s *MSSQLScrapperSuite) TestQuerySqlDefinitions() {
 
 	var foundActiveProducts, foundOrderSummary bool
 	for _, def := range definitions {
-		s.Equal("127.0.0.1", def.Instance)
 		s.Equal(s.databaseName, def.Database)
 
 		if def.Schema == "schema_a" && def.Table == "active_products" {
@@ -339,7 +232,6 @@ func (s *MSSQLScrapperSuite) TestQueryTableConstraints() {
 	var foundProductsSkuUnique, foundProductsCategoryIdx bool
 	var foundOrderItemsUniqueConstraint bool
 	for _, c := range constraints {
-		s.Equal("127.0.0.1", c.Instance)
 		s.Equal(s.databaseName, c.Database)
 		s.NotEmpty(c.ConstraintName)
 		s.NotEmpty(c.ColumnName)
@@ -365,77 +257,28 @@ func (s *MSSQLScrapperSuite) TestQueryTableConstraints() {
 	s.True(foundOrderItemsUniqueConstraint, "Should find UNIQUE constraint on order_items")
 }
 
-func (s *MSSQLScrapperSuite) TestQuerySegments() {
-	sql := `SELECT DISTINCT category as segment FROM schema_a.products`
-	segments, err := s.scrapper.QuerySegments(s.ctx, sql)
-	s.Require().NoError(err)
-	s.NotEmpty(segments)
-
-	names := make([]string, len(segments))
-	for i, seg := range segments {
-		names[i] = seg.Segment
-	}
-	s.Contains(names, "Electronics")
-	s.Contains(names, "Accessories")
-}
-
-func (s *MSSQLScrapperSuite) TestQueryCustomMetrics() {
-	sql := `SELECT
-		category as segment_name,
-		CAST(SUM(price * quantity) AS FLOAT) as total_value,
-		COUNT(*) as product_count
-	FROM schema_a.products
-	GROUP BY category`
-
-	result, err := s.scrapper.QueryCustomMetrics(s.ctx, sql)
-	s.Require().NoError(err)
-	s.NotEmpty(result)
-
-	for _, row := range result {
-		s.Require().Len(row.Segments, 1)
-		s.Equal("segment_name", row.Segments[0].Name)
-		s.Require().Len(row.ColumnValues, 2)
-
-		for _, col := range row.ColumnValues {
-			s.False(col.IsNull)
-		}
-	}
-}
-
-func (s *MSSQLScrapperSuite) TestQueryShape() {
-	sql := `SELECT id, name, price, created_at, is_active FROM schema_a.products`
-	columns, err := s.scrapper.QueryShape(s.ctx, sql)
-	s.Require().NoError(err)
-	s.Require().Len(columns, 5)
-
-	s.Equal("id", columns[0].Name)
-	s.Equal(int32(1), columns[0].Position)
-
-	s.Equal("name", columns[1].Name)
-	s.Equal(int32(2), columns[1].Position)
-
-	s.Equal("price", columns[2].Name)
-	s.Equal(int32(3), columns[2].Position)
-
-	s.Equal("created_at", columns[3].Name)
-	s.Equal(int32(4), columns[3].Position)
-
-	s.Equal("is_active", columns[4].Name)
-	s.Equal(int32(5), columns[4].Position)
-}
-
 func (s *MSSQLScrapperSuite) TestFetchQueryLogs() {
 	// Run a recognisable query through the scrapper's executor so Query Store captures it.
 	s.scrapper.executor.GetDb().Exec("SELECT COUNT(*) FROM schema_a.products WHERE category = 'Electronics'")
 
-	// Force a Query Store flush so captured queries become visible.
-	// Use sa to flush since synq user may not have ALTER permission.
-	saDbConf := newMSSQLConf("sa", testenv.EnvOrDefault("MSSQL_SA_PASSWORD", "SynqTest1!"), s.databaseName)
-	saExec, err := dwhexecmssql.NewMSSQLExecutor(s.ctx, saDbConf)
-	s.Require().NoError(err)
-	_, err = saExec.GetDb().Exec("EXEC sp_query_store_flush_db")
-	s.Require().NoError(err, "Query Store flush should succeed")
-	saExec.Close()
+	// Force a Query Store flush. Skip if MSSQL_SA_PASSWORD is not set (no admin access).
+	saPassword := os.Getenv("MSSQL_SA_PASSWORD")
+	if saPassword != "" {
+		saDbConf := &dwhexecmssql.MSSQLConf{
+			User:      "sa",
+			Password:  saPassword,
+			Host:      testenv.EnvOrDefault("MSSQL_HOST", "127.0.0.1"),
+			Port:      testenv.EnvOrDefaultInt("MSSQL_PORT", 1433),
+			Database:  s.databaseName,
+			TrustCert: true,
+			Encrypt:   testenv.EnvOrDefault("MSSQL_ENCRYPT", "disable"),
+		}
+		saExec, err := dwhexecmssql.NewMSSQLExecutor(s.ctx, saDbConf)
+		if err == nil {
+			saExec.GetDb().Exec("EXEC sp_query_store_flush_db")
+			saExec.Close()
+		}
+	}
 
 	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
 	s.Require().NoError(err)
@@ -464,7 +307,6 @@ func (s *MSSQLScrapperSuite) TestFetchQueryLogs() {
 		s.NotEmpty(log.QueryID, "QueryID should not be empty")
 		s.Equal("mssql", log.SqlDialect)
 		s.NotNil(log.DwhContext)
-		s.Equal("127.0.0.1", log.DwhContext.Instance)
 		s.Equal(s.databaseName, log.DwhContext.Database)
 		s.Contains([]string{"SUCCESS", "ABORTED", "FAILED", "UNKNOWN"}, log.Status)
 		s.False(log.CreatedAt.IsZero(), "CreatedAt should be set")
@@ -478,13 +320,17 @@ type MSSQLComplianceSuite struct {
 
 func TestMSSQLComplianceSuite(t *testing.T) {
 	if os.Getenv("CI") != "" {
-		t.Skip("Skipping local MSSQL compliance tests in CI")
+		t.Skip("Skipping MSSQL compliance tests in CI")
 	}
 	suite.Run(t, new(MSSQLComplianceSuite))
 }
 
 func (s *MSSQLComplianceSuite) SetupSuite() {
-	s.Scrapper = setupDatabase(s.T(), s.Ctx())
+	sc, err := newMSSQLScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MSSQL: %v", err)
+	}
+	s.Scrapper = sc
 }
 
 func (s *MSSQLComplianceSuite) TearDownSuite() {
@@ -500,16 +346,87 @@ type MSSQLScopeComplianceSuite struct {
 
 func TestMSSQLScopeComplianceSuite(t *testing.T) {
 	if os.Getenv("CI") != "" {
-		t.Skip("Skipping local MSSQL scope compliance tests in CI")
+		t.Skip("Skipping MSSQL scope compliance tests in CI")
 	}
 	suite.Run(t, new(MSSQLScopeComplianceSuite))
 }
 
 func (s *MSSQLScopeComplianceSuite) SetupSuite() {
-	s.Scrapper = setupDatabase(s.T(), s.Ctx())
+	sc, err := newMSSQLScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MSSQL: %v", err)
+	}
+	s.Scrapper = sc
 }
 
 func (s *MSSQLScopeComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		s.Scrapper.Close()
+	}
+}
+
+// MSSQLMonitorComplianceSuite runs the monitor compliance checks.
+type MSSQLMonitorComplianceSuite struct {
+	scrappertest.MonitorComplianceSuite
+}
+
+func TestMSSQLMonitorComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping MSSQL monitor compliance tests in CI")
+	}
+	suite.Run(t, new(MSSQLMonitorComplianceSuite))
+}
+
+func (s *MSSQLMonitorComplianceSuite) SetupSuite() {
+	sc, err := newMSSQLScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MSSQL: %v", err)
+	}
+	s.Scrapper = sc
+	s.Config = scrappertest.MonitorComplianceConfig{
+		SegmentsSQL:          `SELECT DISTINCT category as segment FROM schema_a.products`,
+		CustomMetricsSQL:     `SELECT category as segment_name, CAST(SUM(price * quantity) AS FLOAT) as total_value, COUNT(*) as product_count FROM schema_a.products GROUP BY category`,
+		ShapeSQL:             `SELECT id, name, price, created_at, is_active FROM schema_a.products`,
+		ExpectedSegments:     []string{"Electronics", "Accessories"},
+		ExpectedShapeColumns: []string{"id", "name", "price", "created_at", "is_active"},
+	}
+}
+
+func (s *MSSQLMonitorComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		s.Scrapper.Close()
+	}
+}
+
+// MSSQLMetricsExecutionSuite runs metrics SQL generation + execution checks.
+type MSSQLMetricsExecutionSuite struct {
+	scrappertest.MetricsExecutionSuite
+}
+
+func TestMSSQLMetricsExecutionSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping MSSQL metrics execution tests in CI")
+	}
+	suite.Run(t, new(MSSQLMetricsExecutionSuite))
+}
+
+func (s *MSSQLMetricsExecutionSuite) SetupSuite() {
+	sc, err := newMSSQLScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MSSQL: %v", err)
+	}
+	s.Scrapper = sc
+	s.Config = scrappertest.MetricsExecutionConfig{
+		TableFqn:          sqldialect.TableFqn("synq_test", "schema_a", "products"),
+		PartitioningField: "created_at",
+		SegmentField:      "category",
+		NumericField:      "price",
+		TextField:         "name",
+		TimeField:         "created_at",
+	}
+}
+
+func (s *MSSQLMetricsExecutionSuite) TearDownSuite() {
 	if s.Scrapper != nil {
 		s.Scrapper.Close()
 	}

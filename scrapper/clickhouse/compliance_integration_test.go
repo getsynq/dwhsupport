@@ -7,6 +7,7 @@ import (
 
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
@@ -69,6 +70,83 @@ func (s *ClickHouseScopeComplianceSuite) SetupSuite() {
 }
 
 func (s *ClickHouseScopeComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+// ClickHouseMonitorComplianceSuite runs the monitor compliance checks.
+type ClickHouseMonitorComplianceSuite struct {
+	scrappertest.MonitorComplianceSuite
+}
+
+func TestClickHouseMonitorComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping ClickHouse monitor compliance tests in CI")
+	}
+	suite.Run(t, new(ClickHouseMonitorComplianceSuite))
+}
+
+func (s *ClickHouseMonitorComplianceSuite) SetupSuite() {
+	host := testenv.EnvOrDefault("CLICKHOUSE_HOST", "")
+	if host == "" {
+		s.T().Skip("CLICKHOUSE_HOST env var not set")
+	}
+
+	sc, err := newClickhouseScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to ClickHouse: %v", err)
+	}
+	s.Scrapper = sc
+	s.Config = scrappertest.MonitorComplianceConfig{
+		SegmentsSQL:          `SELECT DISTINCT category as segment FROM synq_test.products`,
+		CustomMetricsSQL:     `SELECT category as segment_name, SUM(price * quantity) as total_value, COUNT(*) as product_count FROM synq_test.products GROUP BY category`,
+		ShapeSQL:             `SELECT id, name, price, created_at, is_active FROM synq_test.products`,
+		ExpectedSegments:     []string{"Electronics", "Accessories"},
+		ExpectedShapeColumns: []string{"id", "name", "price", "created_at", "is_active"},
+	}
+}
+
+func (s *ClickHouseMonitorComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+// ClickHouseMetricsExecutionSuite runs metrics SQL generation + execution checks.
+type ClickHouseMetricsExecutionSuite struct {
+	scrappertest.MetricsExecutionSuite
+}
+
+func TestClickHouseMetricsExecutionSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping ClickHouse metrics execution tests in CI")
+	}
+	suite.Run(t, new(ClickHouseMetricsExecutionSuite))
+}
+
+func (s *ClickHouseMetricsExecutionSuite) SetupSuite() {
+	host := testenv.EnvOrDefault("CLICKHOUSE_HOST", "")
+	if host == "" {
+		s.T().Skip("CLICKHOUSE_HOST env var not set")
+	}
+
+	sc, err := newClickhouseScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to ClickHouse: %v", err)
+	}
+	s.Scrapper = sc
+	s.Config = scrappertest.MetricsExecutionConfig{
+		TableFqn:          sqldialect.TableFqn("", "synq_test", "products"),
+		PartitioningField: "created_at",
+		SegmentField:      "category",
+		NumericField:      "price",
+		TextField:         "name",
+		TimeField:         "created_at",
+	}
+}
+
+func (s *ClickHouseMetricsExecutionSuite) TearDownSuite() {
 	if s.Scrapper != nil {
 		_ = s.Scrapper.Close()
 	}
