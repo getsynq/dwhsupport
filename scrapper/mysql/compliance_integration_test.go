@@ -12,7 +12,170 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// MySQLComplianceSuite runs the generic scrapper compliance checks.
+// ================================================================================
+// MariaDB test suites (MARIADB_* env vars)
+// ================================================================================
+
+func newMariaDBScrapperFromEnv(ctx context.Context) (*MySQLScrapper, error) {
+	conf := &MySQLScrapperConf{
+		MySQLConf: dwhexecmysql.MySQLConf{
+			User:          testenv.EnvOrDefault("MARIADB_USER", "synq"),
+			Password:      testenv.EnvOrDefault("MARIADB_PASSWORD", "SynqTest1!"),
+			Host:          testenv.EnvOrDefault("MARIADB_HOST", ""),
+			Port:          testenv.EnvOrDefaultInt("MARIADB_PORT", 3306),
+			Database:      testenv.EnvOrDefault("MARIADB_DATABASE", "synq_test"),
+			AllowInsecure: true,
+		},
+	}
+	return NewMySQLScrapper(ctx, conf)
+}
+
+type MariaDBComplianceSuite struct {
+	scrappertest.ComplianceSuite
+}
+
+func TestMariaDBComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping MariaDB compliance tests in CI")
+	}
+	suite.Run(t, new(MariaDBComplianceSuite))
+}
+
+func (s *MariaDBComplianceSuite) SetupSuite() {
+	if testenv.EnvOrDefault("MARIADB_HOST", "") == "" {
+		s.T().Skip("MARIADB_HOST env var not set")
+	}
+	sc, err := newMariaDBScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MariaDB: %v", err)
+	}
+	s.Scrapper = sc
+}
+
+func (s *MariaDBComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+type MariaDBScopeComplianceSuite struct {
+	scrappertest.ScopeComplianceSuite
+}
+
+func TestMariaDBScopeComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping MariaDB scope compliance tests in CI")
+	}
+	suite.Run(t, new(MariaDBScopeComplianceSuite))
+}
+
+func (s *MariaDBScopeComplianceSuite) SetupSuite() {
+	if testenv.EnvOrDefault("MARIADB_HOST", "") == "" {
+		s.T().Skip("MARIADB_HOST env var not set")
+	}
+	sc, err := newMariaDBScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MariaDB: %v", err)
+	}
+	s.Scrapper = sc
+}
+
+func (s *MariaDBScopeComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+type MariaDBMonitorComplianceSuite struct {
+	scrappertest.MonitorComplianceSuite
+}
+
+func TestMariaDBMonitorComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping MariaDB monitor compliance tests in CI")
+	}
+	suite.Run(t, new(MariaDBMonitorComplianceSuite))
+}
+
+func (s *MariaDBMonitorComplianceSuite) SetupSuite() {
+	if testenv.EnvOrDefault("MARIADB_HOST", "") == "" {
+		s.T().Skip("MARIADB_HOST env var not set")
+	}
+	sc, err := newMariaDBScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MariaDB: %v", err)
+	}
+	s.Scrapper = sc
+	s.Config = scrappertest.MonitorComplianceConfig{
+		SegmentsSQL:          "SELECT DISTINCT category as segment FROM schema_a_products",
+		CustomMetricsSQL:     "SELECT category as segment_name, SUM(price * quantity) as total_value, COUNT(*) as product_count FROM schema_a_products GROUP BY category",
+		ShapeSQL:             "SELECT id, name, price, created_at, is_active FROM schema_a_products",
+		ExpectedSegments:     []string{"Electronics", "Accessories"},
+		ExpectedShapeColumns: []string{"id", "name", "price", "created_at", "is_active"},
+	}
+}
+
+func (s *MariaDBMonitorComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+type MariaDBMetricsExecutionSuite struct {
+	scrappertest.MetricsExecutionSuite
+}
+
+func TestMariaDBMetricsExecutionSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping MariaDB metrics execution tests in CI")
+	}
+	suite.Run(t, new(MariaDBMetricsExecutionSuite))
+}
+
+func (s *MariaDBMetricsExecutionSuite) SetupSuite() {
+	if testenv.EnvOrDefault("MARIADB_HOST", "") == "" {
+		s.T().Skip("MARIADB_HOST env var not set")
+	}
+	sc, err := newMariaDBScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to MariaDB: %v", err)
+	}
+	s.Scrapper = sc
+	dbName := testenv.EnvOrDefault("MARIADB_DATABASE", "synq_test")
+	s.Config = scrappertest.MetricsExecutionConfig{
+		TableFqn:          sqldialect.TableFqn("", dbName, "schema_a_products"),
+		PartitioningField: "created_at",
+		SegmentField:      "category",
+		NumericField:      "price",
+		TextField:         "name",
+		TimeField:         "created_at",
+	}
+}
+
+func (s *MariaDBMetricsExecutionSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+// ================================================================================
+// MySQL test suites (MYSQL_* env vars)
+// ================================================================================
+
+func newMySQLScrapperFromEnv(ctx context.Context) (*MySQLScrapper, error) {
+	conf := &MySQLScrapperConf{
+		MySQLConf: dwhexecmysql.MySQLConf{
+			User:          testenv.EnvOrDefault("MYSQL_USER", "synq"),
+			Password:      testenv.EnvOrDefault("MYSQL_PASSWORD", "SynqTest1!"),
+			Host:          testenv.EnvOrDefault("MYSQL_HOST", ""),
+			Port:          testenv.EnvOrDefaultInt("MYSQL_PORT", 3306),
+			Database:      testenv.EnvOrDefault("MYSQL_DATABASE", "synq_test"),
+			AllowInsecure: true,
+		},
+	}
+	return NewMySQLScrapper(ctx, conf)
+}
+
 type MySQLComplianceSuite struct {
 	scrappertest.ComplianceSuite
 }
@@ -25,8 +188,7 @@ func TestMySQLComplianceSuite(t *testing.T) {
 }
 
 func (s *MySQLComplianceSuite) SetupSuite() {
-	host := testenv.EnvOrDefault("MYSQL_HOST", "")
-	if host == "" {
+	if testenv.EnvOrDefault("MYSQL_HOST", "") == "" {
 		s.T().Skip("MYSQL_HOST env var not set")
 	}
 	sc, err := newMySQLScrapperFromEnv(s.Ctx())
@@ -42,7 +204,6 @@ func (s *MySQLComplianceSuite) TearDownSuite() {
 	}
 }
 
-// MySQLScopeComplianceSuite runs scope filtering compliance checks.
 type MySQLScopeComplianceSuite struct {
 	scrappertest.ScopeComplianceSuite
 }
@@ -55,8 +216,7 @@ func TestMySQLScopeComplianceSuite(t *testing.T) {
 }
 
 func (s *MySQLScopeComplianceSuite) SetupSuite() {
-	host := testenv.EnvOrDefault("MYSQL_HOST", "")
-	if host == "" {
+	if testenv.EnvOrDefault("MYSQL_HOST", "") == "" {
 		s.T().Skip("MYSQL_HOST env var not set")
 	}
 	sc, err := newMySQLScrapperFromEnv(s.Ctx())
@@ -72,7 +232,6 @@ func (s *MySQLScopeComplianceSuite) TearDownSuite() {
 	}
 }
 
-// MySQLMonitorComplianceSuite runs the monitor compliance checks.
 type MySQLMonitorComplianceSuite struct {
 	scrappertest.MonitorComplianceSuite
 }
@@ -85,8 +244,7 @@ func TestMySQLMonitorComplianceSuite(t *testing.T) {
 }
 
 func (s *MySQLMonitorComplianceSuite) SetupSuite() {
-	host := testenv.EnvOrDefault("MYSQL_HOST", "")
-	if host == "" {
+	if testenv.EnvOrDefault("MYSQL_HOST", "") == "" {
 		s.T().Skip("MYSQL_HOST env var not set")
 	}
 	sc, err := newMySQLScrapperFromEnv(s.Ctx())
@@ -94,7 +252,6 @@ func (s *MySQLMonitorComplianceSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to MySQL: %v", err)
 	}
 	s.Scrapper = sc
-	// MariaDB/MySQL uses flat table names with schema prefix
 	s.Config = scrappertest.MonitorComplianceConfig{
 		SegmentsSQL:          "SELECT DISTINCT category as segment FROM schema_a_products",
 		CustomMetricsSQL:     "SELECT category as segment_name, SUM(price * quantity) as total_value, COUNT(*) as product_count FROM schema_a_products GROUP BY category",
@@ -110,7 +267,6 @@ func (s *MySQLMonitorComplianceSuite) TearDownSuite() {
 	}
 }
 
-// MySQLMetricsExecutionSuite runs metrics SQL generation + execution checks.
 type MySQLMetricsExecutionSuite struct {
 	scrappertest.MetricsExecutionSuite
 }
@@ -123,8 +279,7 @@ func TestMySQLMetricsExecutionSuite(t *testing.T) {
 }
 
 func (s *MySQLMetricsExecutionSuite) SetupSuite() {
-	host := testenv.EnvOrDefault("MYSQL_HOST", "")
-	if host == "" {
+	if testenv.EnvOrDefault("MYSQL_HOST", "") == "" {
 		s.T().Skip("MYSQL_HOST env var not set")
 	}
 	sc, err := newMySQLScrapperFromEnv(s.Ctx())
@@ -133,9 +288,8 @@ func (s *MySQLMetricsExecutionSuite) SetupSuite() {
 	}
 	s.Scrapper = sc
 	dbName := testenv.EnvOrDefault("MYSQL_DATABASE", "synq_test")
-	// MariaDB/MySQL uses flat table names, so TableFqn uses db as project, empty schema
 	s.Config = scrappertest.MetricsExecutionConfig{
-		TableFqn:          sqldialect.TableFqn(dbName, "", "schema_a_products"),
+		TableFqn:          sqldialect.TableFqn("", dbName, "schema_a_products"),
 		PartitioningField: "created_at",
 		SegmentField:      "category",
 		NumericField:      "price",
@@ -148,18 +302,4 @@ func (s *MySQLMetricsExecutionSuite) TearDownSuite() {
 	if s.Scrapper != nil {
 		_ = s.Scrapper.Close()
 	}
-}
-
-func newMySQLScrapperFromEnv(ctx context.Context) (*MySQLScrapper, error) {
-	conf := &MySQLScrapperConf{
-		MySQLConf: dwhexecmysql.MySQLConf{
-			User:          testenv.EnvOrDefault("MYSQL_USER", "synq"),
-			Password:      testenv.EnvOrDefault("MYSQL_PASSWORD", "SynqTest1!"),
-			Host:          testenv.EnvOrDefault("MYSQL_HOST", ""),
-			Port:          testenv.EnvOrDefaultInt("MYSQL_PORT", 3306),
-			Database:      testenv.EnvOrDefault("MYSQL_DATABASE", "synq_test"),
-			AllowInsecure: true,
-		},
-	}
-	return NewMySQLScrapper(ctx, conf)
 }
