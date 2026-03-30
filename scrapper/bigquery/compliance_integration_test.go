@@ -1,49 +1,66 @@
 package bigquery
 
 import (
+	"context"
 	"os"
 	"testing"
+	"time"
 
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
+	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
 
-// BigQueryComplianceSuite runs the generic scrapper compliance checks against
-// a real BigQuery instance configured via environment variables.
+// newBigQueryScrapperFromEnv creates a BigQuery scrapper configured from
+// environment variables, restricted to synq_test_* datasets via blocklist.
+func newBigQueryScrapperFromEnv(ctx context.Context) (*BigQueryScrapper, error) {
+	credentialsFile := testenv.EnvOrDefault("BIGQUERY_CREDENTIALS_FILE", "../../../cloud/synq-recon/nifty-motif-341212-88499dbfc22e.json")
+	credentialsJson, err := os.ReadFile(credentialsFile)
+	if err != nil {
+		return nil, err
+	}
+
+	conf := &BigQueryScrapperConf{
+		BigQueryConf: dwhexecbigquery.BigQueryConf{
+			ProjectId:       os.Getenv("BIGQUERY_PROJECT_ID"),
+			Region:          testenv.EnvOrDefault("BIGQUERY_REGION", "EU"),
+			CredentialsJson: string(credentialsJson),
+		},
+		// Exclude everything except synq_test_* datasets to speed up tests
+		// and avoid interference from other datasets in the shared project.
+		Blocklist: "analytics,analytics*,dbt*,elementary*,fivetran*,gitlab*,google_sheets,in_ecom*,kuba,lukas*,marketing,mini_dbt,petr,petr*,runtime,snapshots,sqlmesh,sqlmesh*,synq_ci,synq_demo,synq_recon,test,test_scrapper",
+	}
+
+	return NewBigQueryScrapper(ctx, conf)
+}
+
+func skipIfNoBigQuery(t *testing.T) {
+	t.Helper()
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping BigQuery tests in CI")
+	}
+	if os.Getenv("BIGQUERY_PROJECT_ID") == "" {
+		t.Skip("BIGQUERY_PROJECT_ID env var not set")
+	}
+}
+
+// --- ComplianceSuite ---
+
 type BigQueryComplianceSuite struct {
 	scrappertest.ComplianceSuite
 }
 
 func TestBigQueryComplianceSuite(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping BigQuery compliance tests in CI")
-	}
+	skipIfNoBigQuery(t)
 	suite.Run(t, new(BigQueryComplianceSuite))
 }
 
 func (s *BigQueryComplianceSuite) SetupSuite() {
-	projectID := os.Getenv("BIGQUERY_PROJECT_ID")
-	if projectID == "" {
-		s.T().Skip("BIGQUERY_PROJECT_ID env var not set")
-	}
-
-	credentialsFile := testenv.EnvOrDefault("BIGQUERY_CREDENTIALS_FILE", "../../nifty-motif-341212-88499dbfc22e.json")
-	credentialsJson, err := os.ReadFile(credentialsFile)
-	if err != nil {
-		s.T().Skipf("Could not read BigQuery credentials file: %v", err)
-	}
-
-	conf := &BigQueryScrapperConf{
-		BigQueryConf: dwhexecbigquery.BigQueryConf{
-			ProjectId:       projectID,
-			Region:          testenv.EnvOrDefault("BIGQUERY_REGION", "EU"),
-			CredentialsJson: string(credentialsJson),
-		},
-	}
-
-	sc, err := NewBigQueryScrapper(s.Ctx(), conf)
+	sc, err := newBigQueryScrapperFromEnv(s.Ctx())
 	if err != nil {
 		s.T().Skipf("Could not connect to BigQuery: %v", err)
 	}
@@ -53,5 +70,231 @@ func (s *BigQueryComplianceSuite) SetupSuite() {
 func (s *BigQueryComplianceSuite) TearDownSuite() {
 	if s.Scrapper != nil {
 		_ = s.Scrapper.Close()
+	}
+}
+
+// --- ScopeComplianceSuite ---
+
+type BigQueryScopeComplianceSuite struct {
+	scrappertest.ScopeComplianceSuite
+	inner *BigQueryScrapper
+}
+
+func TestBigQueryScopeComplianceSuite(t *testing.T) {
+	skipIfNoBigQuery(t)
+	suite.Run(t, new(BigQueryScopeComplianceSuite))
+}
+
+func (s *BigQueryScopeComplianceSuite) SetupSuite() {
+	sc, err := newBigQueryScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to BigQuery: %v", err)
+	}
+	s.inner = sc
+	// Wrap with ScopedScrapper so context-based scope filtering works.
+	// BigQuery's own scope handling uses API-level dataset filtering via blocklist,
+	// but ScopeComplianceSuite passes scope via context — ScopedScrapper bridges that gap.
+	s.Scrapper = scope.NewScopedScrapper(sc, nil)
+}
+
+func (s *BigQueryScopeComplianceSuite) TearDownSuite() {
+	if s.inner != nil {
+		_ = s.inner.Close()
+	}
+}
+
+// --- MonitorComplianceSuite ---
+
+type BigQueryMonitorComplianceSuite struct {
+	scrappertest.MonitorComplianceSuite
+}
+
+func TestBigQueryMonitorComplianceSuite(t *testing.T) {
+	skipIfNoBigQuery(t)
+	suite.Run(t, new(BigQueryMonitorComplianceSuite))
+}
+
+func (s *BigQueryMonitorComplianceSuite) SetupSuite() {
+	sc, err := newBigQueryScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to BigQuery: %v", err)
+	}
+	s.Scrapper = sc
+
+	projectID := os.Getenv("BIGQUERY_PROJECT_ID")
+	fqn := func(table string) string {
+		return "`" + projectID + ".synq_test_a." + table + "`"
+	}
+
+	s.Config = scrappertest.MonitorComplianceConfig{
+		SegmentsSQL:          `SELECT DISTINCT category as segment FROM ` + fqn("products"),
+		CustomMetricsSQL:     `SELECT category as segment_name, SUM(CAST(price AS FLOAT64) * quantity) as total_value, COUNT(*) as product_count FROM ` + fqn("products") + ` GROUP BY category`,
+		ShapeSQL:             `SELECT id, name, price, created_at, is_active FROM ` + fqn("products"),
+		ExpectedSegments:     []string{"Electronics", "Accessories"},
+		ExpectedShapeColumns: []string{"id", "name", "price", "created_at", "is_active"},
+	}
+}
+
+func (s *BigQueryMonitorComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+// --- MetricsExecutionSuite ---
+
+type BigQueryMetricsExecutionSuite struct {
+	scrappertest.MetricsExecutionSuite
+}
+
+func TestBigQueryMetricsExecutionSuite(t *testing.T) {
+	skipIfNoBigQuery(t)
+	suite.Run(t, new(BigQueryMetricsExecutionSuite))
+}
+
+func (s *BigQueryMetricsExecutionSuite) SetupSuite() {
+	sc, err := newBigQueryScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to BigQuery: %v", err)
+	}
+	s.Scrapper = sc
+
+	projectID := os.Getenv("BIGQUERY_PROJECT_ID")
+	s.Config = scrappertest.MetricsExecutionConfig{
+		TableFqn:          sqldialect.TableFqn(projectID, "synq_test_a", "products"),
+		PartitioningField: "created_at",
+		SegmentField:      "category",
+		NumericField:      "price",
+		TextField:         "name",
+		TimeField:         "created_at",
+	}
+}
+
+func (s *BigQueryMetricsExecutionSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+// --- BigQueryScrapperSuite: warehouse-specific tests ---
+// Tests BigQuery-specific behaviour not covered by the generic compliance suites:
+// type handling (NUMERIC, BIGNUMERIC, TIMESTAMP, BOOL) and FetchTableChangeHistory.
+// Uses seeded synq_test_a.test_bigquery_types table — run the seed script first:
+//
+//	go run ./scrapper/bigquery/testdata/seed/
+
+type BigQueryScrapperSuite struct {
+	suite.Suite
+	scrapper *BigQueryScrapper
+}
+
+func TestBigQueryScrapperSuite(t *testing.T) {
+	skipIfNoBigQuery(t)
+	suite.Run(t, new(BigQueryScrapperSuite))
+}
+
+func (s *BigQueryScrapperSuite) SetupSuite() {
+	sc, err := newBigQueryScrapperFromEnv(context.Background())
+	if err != nil {
+		s.T().Skipf("Could not connect to BigQuery: %v", err)
+	}
+	s.scrapper = sc
+}
+
+func (s *BigQueryScrapperSuite) TearDownSuite() {
+	if s.scrapper != nil {
+		_ = s.scrapper.Close()
+	}
+}
+
+func (s *BigQueryScrapperSuite) typesTable() string {
+	return "`" + s.scrapper.conf.ProjectId + ".synq_test_a.test_bigquery_types`"
+}
+
+func (s *BigQueryScrapperSuite) ctx() context.Context {
+	return context.Background()
+}
+
+func (s *BigQueryScrapperSuite) TestQueryCustomMetrics_WithNumeric() {
+	sql := `SELECT name as segment_name, amount as numeric_value FROM ` + s.typesTable() + ` ORDER BY id`
+
+	result, err := s.scrapper.QueryCustomMetrics(s.ctx(), sql)
+	s.Require().NoError(err)
+	s.Require().Len(result, 2)
+
+	for _, row := range result {
+		s.Require().Len(row.ColumnValues, 1)
+		col := row.ColumnValues[0]
+		s.Equal("numeric_value", col.Name)
+		s.False(col.IsNull)
+		s.NotNil(col.Value, "NUMERIC value should not be nil")
+	}
+}
+
+func (s *BigQueryScrapperSuite) TestQueryCustomMetrics_WithBigNumeric() {
+	sql := `SELECT name as segment_name, big_amount as bignumeric_value FROM ` + s.typesTable() + ` ORDER BY id`
+
+	result, err := s.scrapper.QueryCustomMetrics(s.ctx(), sql)
+	s.Require().NoError(err)
+	s.Require().Len(result, 2)
+
+	for _, row := range result {
+		s.Require().Len(row.ColumnValues, 1)
+		col := row.ColumnValues[0]
+		s.Equal("bignumeric_value", col.Name)
+		s.False(col.IsNull)
+		s.NotNil(col.Value, "BIGNUMERIC value should not be nil")
+	}
+}
+
+func (s *BigQueryScrapperSuite) TestQueryCustomMetrics_WithTimestamp() {
+	sql := `SELECT name as segment_name, created_at as timestamp_value FROM ` + s.typesTable() + ` ORDER BY id`
+
+	result, err := s.scrapper.QueryCustomMetrics(s.ctx(), sql)
+	s.Require().NoError(err)
+	s.Require().Len(result, 2)
+
+	for _, row := range result {
+		s.Require().Len(row.ColumnValues, 1)
+		col := row.ColumnValues[0]
+		s.Equal("timestamp_value", col.Name)
+		s.False(col.IsNull)
+		_, ok := col.Value.(scrapper.TimeValue)
+		s.True(ok, "Timestamp should be converted to TimeValue")
+	}
+}
+
+func (s *BigQueryScrapperSuite) TestQueryCustomMetrics_WithBoolean() {
+	sql := `SELECT name as segment_name, is_active as bool_value FROM ` + s.typesTable() + ` ORDER BY id`
+
+	result, err := s.scrapper.QueryCustomMetrics(s.ctx(), sql)
+	s.Require().NoError(err)
+	s.Require().Len(result, 2)
+
+	s.Equal("Alice", result[0].Segments[0].Value)
+	s.IsType(scrapper.IntValue(0), result[0].ColumnValues[0].Value)
+	s.Equal(scrapper.IntValue(1), result[0].ColumnValues[0].Value)
+
+	s.Equal("Bob", result[1].Segments[0].Value)
+	s.IsType(scrapper.IntValue(0), result[1].ColumnValues[0].Value)
+	s.Equal(scrapper.IntValue(0), result[1].ColumnValues[0].Value)
+}
+
+func (s *BigQueryScrapperSuite) TestFetchTableChangeHistory() {
+	to := time.Now().UTC()
+	from := to.Add(-24 * time.Hour)
+
+	fqn := scrapper.DwhFqn{
+		DatabaseName: s.scrapper.conf.ProjectId,
+		SchemaName:   "synq_test_a",
+		ObjectName:   "test_bigquery_types",
+	}
+
+	events, err := s.scrapper.FetchTableChangeHistory(s.ctx(), fqn, from, to, 100)
+	s.Require().NoError(err)
+	for _, event := range events {
+		s.NotZero(event.Timestamp)
+		s.NotEmpty(event.Version, "BigQuery events should have a job_id as version")
+		s.NotEmpty(event.Operation)
 	}
 }
