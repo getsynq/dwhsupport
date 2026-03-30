@@ -25,7 +25,8 @@ import (
 
 type BigQueryScrapperConf struct {
 	dwhexecbigquery.BigQueryConf
-	Blocklist string
+	Blocklist    string
+	RateLimitCfg *RateLimitConfig
 }
 
 type Executor interface {
@@ -35,9 +36,10 @@ type Executor interface {
 var _ scrapper.Scrapper = &BigQueryScrapper{}
 
 type BigQueryScrapper struct {
-	conf     *BigQueryScrapperConf
-	scope    *scope.ScopeFilter
-	executor *dwhexecbigquery.BigQueryExecutor
+	conf         *BigQueryScrapperConf
+	scope        *scope.ScopeFilter
+	executor     *dwhexecbigquery.BigQueryExecutor
+	rateLimitCfg RateLimitConfig
 }
 
 func (e *BigQueryScrapper) IsPermissionError(err error) bool {
@@ -78,7 +80,6 @@ var BaseExpectedPermissions = []string{
 }
 
 func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQueryScrapper, error) {
-
 	executor, err := dwhexecbigquery.NewBigqueryExecutor(ctx, &conf.BigQueryConf)
 	if err != nil {
 		return nil, err
@@ -86,7 +87,17 @@ func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQ
 
 	scopeFilter := ScopeFromConf(conf)
 
-	return &BigQueryScrapper{executor: executor, conf: conf, scope: scopeFilter}, nil
+	rateLimitCfg := DefaultRateLimitConfig
+	if conf.RateLimitCfg != nil {
+		rateLimitCfg = *conf.RateLimitCfg
+	}
+
+	return &BigQueryScrapper{
+		executor:     executor,
+		conf:         conf,
+		scope:        scopeFilter,
+		rateLimitCfg: rateLimitCfg,
+	}, nil
 }
 
 func (e *BigQueryScrapper) Executor() *dwhexecbigquery.BigQueryExecutor {
@@ -182,6 +193,22 @@ func errIsAccessDenied(err error) bool {
 	var e *googleapi.Error
 	if errors.As(err, &e) {
 		if e.Code == 403 {
+			return true
+		}
+	}
+	return false
+}
+
+func errIsRateLimited(err error) bool {
+	if err == nil {
+		return false
+	}
+	if e := status.Code(err); e == codes.ResourceExhausted {
+		return true
+	}
+	var e *googleapi.Error
+	if errors.As(err, &e) {
+		if e.Code == 429 {
 			return true
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
@@ -28,7 +29,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 	var mutex sync.Mutex
 
 	g, groupCtx := errgroup.WithContext(ctx)
-	g.SetLimit(50)
+	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
 
 	numTablesTotal := 0
 
@@ -55,7 +56,9 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 
 		log = log.WithField("dataset", dataset.DatasetID)
 
-		datasetMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(groupCtx)
+		datasetMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.DatasetMetadata, error) {
+			return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(groupCtx)
+		})
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get dataset metadata")
 		}
@@ -111,7 +114,9 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 
 			includeConstraints := cfg.IncludeConstraints
 			g.Go(func() error {
-				tableMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
+				tableMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.TableMetadata, error) {
+					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
+				})
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
 						return nil
