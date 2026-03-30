@@ -50,7 +50,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 	var mutex sync.Mutex
 
 	g, groupCtx := errgroup.WithContext(ctx)
-	g.SetLimit(50)
+	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
 
 	numTablesTotal := 0
 	for {
@@ -130,8 +130,9 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 			}
 
 			g.Go(func() error {
-				meta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
-
+				meta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.TableMetadata, error) {
+					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
+				})
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
 						return nil

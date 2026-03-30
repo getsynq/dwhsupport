@@ -29,7 +29,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 	var mutex sync.Mutex
 
 	g, groupCtx := errgroup.WithContext(ctx)
-	g.SetLimit(50)
+	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
 
 	numTablesTotal := 0
 
@@ -56,7 +56,9 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 
 		log = log.WithField("dataset", dataset.DatasetID)
 
-		datasetMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(groupCtx)
+		datasetMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.DatasetMetadata, error) {
+			return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(groupCtx)
+		})
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get dataset metadata")
 		}
@@ -111,7 +113,9 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 			}
 
 			g.Go(func() error {
-				tableMeta, err := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
+				tableMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.TableMetadata, error) {
+					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
+				})
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
 						return nil
