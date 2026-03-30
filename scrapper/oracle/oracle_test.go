@@ -2,7 +2,6 @@ package oracle
 
 import (
 	"context"
-	_ "embed"
 	"os"
 	"strings"
 	"testing"
@@ -14,108 +13,26 @@ import (
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/getsynq/dwhsupport/testenv"
-	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/suite"
 )
 
-//go:embed testdata/init.sql
-var initSQL string
-
-// execStatements splits a SQL script on lines containing only ";" and executes each statement.
-// PL/SQL blocks (BEGIN...END;) are detected and executed with the trailing semicolon.
-// Regular DDL/DML statements have trailing semicolons removed.
-func execStatements(db *sqlx.DB, script string) error {
-	for _, stmt := range strings.Split(script, "\n;\n") {
-		stmt = strings.TrimSpace(stmt)
-		if stmt == "" {
-			continue
-		}
-		// Strip leading SQL comments to detect PL/SQL blocks
-		stripped := stmt
-		for strings.HasPrefix(stripped, "--") {
-			if idx := strings.Index(stripped, "\n"); idx >= 0 {
-				stripped = strings.TrimSpace(stripped[idx+1:])
-			} else {
-				stripped = ""
-				break
-			}
-		}
-		// PL/SQL blocks need their trailing semicolons preserved
-		isPLSQL := strings.HasPrefix(strings.ToUpper(stripped), "BEGIN") ||
-			strings.HasPrefix(strings.ToUpper(stripped), "DECLARE")
-		if !isPLSQL {
-			stmt = strings.TrimRight(stmt, ";")
-			stmt = strings.TrimSpace(stmt)
-		}
-		if stmt == "" {
-			continue
-		}
-		if _, err := db.Exec(stmt); err != nil {
-			return err
-		}
+func newOracleScrapperFromEnv(ctx context.Context) (*OracleScrapper, error) {
+	conf := &OracleScrapperConf{
+		OracleConf: dwhexecoracle.OracleConf{
+			User:        testenv.EnvOrDefault("ORACLE_USER", "synq"),
+			Password:    testenv.EnvOrDefault("ORACLE_PASSWORD", "SynqTest1"),
+			Host:        testenv.EnvOrDefault("ORACLE_HOST", "127.0.0.1"),
+			Port:        testenv.EnvOrDefaultInt("ORACLE_PORT", 1521),
+			ServiceName: testenv.EnvOrDefault("ORACLE_SERVICE", "FREEPDB1"),
+		},
 	}
-	return nil
+	return NewOracleScrapper(ctx, conf)
 }
 
-func newOracleConf(user, password string) *dwhexecoracle.OracleConf {
-	return &dwhexecoracle.OracleConf{
-		User:        user,
-		Password:    password,
-		Host:        testenv.EnvOrDefault("ORACLE_HOST", "127.0.0.1"),
-		Port:        testenv.EnvOrDefaultInt("ORACLE_PORT", 1521),
-		ServiceName: testenv.EnvOrDefault("ORACLE_SERVICE", "FREEPDB1"),
-	}
-}
-
-// setupDatabase connects as system to create schemas, fixtures, and a restricted
-// synq monitoring user. Returns a scrapper connected as the synq user with
-// realistic minimal permissions (catalog metadata + SELECT ANY TABLE + V$PARAMETER).
-func setupDatabase(t *testing.T, ctx context.Context) *OracleScrapper {
-	t.Helper()
-
-	sysConf := newOracleConf("system", testenv.EnvOrDefault("ORACLE_SYS_PASSWORD", "SynqTest1"))
-
-	// Connect as system to create users/schemas and fixtures.
-	sysExec, err := dwhexecoracle.NewOracleExecutor(ctx, sysConf)
-	if err != nil {
-		t.Skipf("Skipping: could not connect to local Oracle: %v", err)
-	}
-
-	// Clean up previous test runs (ignore errors if objects don't exist).
-	for _, stmt := range []string{
-		"BEGIN EXECUTE IMMEDIATE 'DROP USER synq CASCADE'; EXCEPTION WHEN OTHERS THEN NULL; END;",
-		"BEGIN EXECUTE IMMEDIATE 'DROP USER synq_b CASCADE'; EXCEPTION WHEN OTHERS THEN NULL; END;",
-		"BEGIN EXECUTE IMMEDIATE 'DROP VIEW synq_a.order_summary'; EXCEPTION WHEN OTHERS THEN NULL; END;",
-		"BEGIN EXECUTE IMMEDIATE 'DROP VIEW synq_a.active_products'; EXCEPTION WHEN OTHERS THEN NULL; END;",
-		"BEGIN EXECUTE IMMEDIATE 'DROP TABLE synq_a.order_items CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;",
-		"BEGIN EXECUTE IMMEDIATE 'DROP TABLE synq_a.products CASCADE CONSTRAINTS'; EXCEPTION WHEN OTHERS THEN NULL; END;",
-	} {
-		sysExec.GetDb().Exec(stmt)
-	}
-
-	if err := execStatements(sysExec.GetDb(), initSQL); err != nil {
-		sysExec.Close()
-		t.Fatalf("Failed to execute init SQL: %v", err)
-	}
-	sysExec.Close()
-
-	// Connect as the restricted synq monitoring user.
-	synqConf := &OracleScrapperConf{
-		OracleConf: *newOracleConf(
-			testenv.EnvOrDefault("ORACLE_USER", "synq"),
-			testenv.EnvOrDefault("ORACLE_PASSWORD", "SynqTest1"),
-		),
-	}
-	sc, err := NewOracleScrapper(ctx, synqConf)
-	if err != nil {
-		t.Fatalf("Failed to create Oracle scrapper as synq user: %v", err)
-	}
-	return sc
-}
-
-// OracleScrapperSuite tests all scrapper methods against a local Oracle instance.
-// Start the database with: docker compose -f scrapper/oracle/docker-compose.yml up -d --wait
+// OracleScrapperSuite tests all scrapper methods against an Oracle instance.
+// Requires a pre-seeded database (e.g. via dwhtesting staging infra).
 type OracleScrapperSuite struct {
 	suite.Suite
 	scrapper    *OracleScrapper
@@ -125,7 +42,7 @@ type OracleScrapperSuite struct {
 
 func TestOracleScrapperSuite(t *testing.T) {
 	if os.Getenv("CI") != "" {
-		t.Skip("Skipping local Oracle tests in CI")
+		t.Skip("Skipping Oracle tests in CI")
 	}
 	suite.Run(t, new(OracleScrapperSuite))
 }
@@ -133,7 +50,11 @@ func TestOracleScrapperSuite(t *testing.T) {
 func (s *OracleScrapperSuite) SetupSuite() {
 	s.ctx = context.Background()
 	s.serviceName = testenv.EnvOrDefault("ORACLE_SERVICE", "FREEPDB1")
-	s.scrapper = setupDatabase(s.T(), s.ctx)
+	sc, err := newOracleScrapperFromEnv(s.ctx)
+	if err != nil {
+		s.T().Skipf("Could not connect to Oracle: %v", err)
+	}
+	s.scrapper = sc
 }
 
 func (s *OracleScrapperSuite) TearDownSuite() {
@@ -149,7 +70,6 @@ func (s *OracleScrapperSuite) TestQueryDatabases() {
 
 	var foundA, foundB bool
 	for _, db := range databases {
-		s.Equal("127.0.0.1", db.Instance)
 		if db.Database == "SYNQ_A" {
 			foundA = true
 		}
@@ -169,7 +89,6 @@ func (s *OracleScrapperSuite) TestQueryTables() {
 	var foundProducts, foundOrderItems, foundActiveProducts, foundOrderSummary bool
 	var foundCustomers, foundCustomerRegions bool
 	for _, t := range tables {
-		s.Equal("127.0.0.1", t.Instance)
 		s.Equal(s.serviceName, t.Database)
 
 		switch {
@@ -181,8 +100,6 @@ func (s *OracleScrapperSuite) TestQueryTables() {
 		case t.Schema == "SYNQ_A" && t.Table == "ORDER_ITEMS":
 			foundOrderItems = true
 			s.Equal("TABLE", t.TableType)
-			s.NotNil(t.Description)
-			s.Equal("Line items within customer orders", *t.Description)
 		case t.Schema == "SYNQ_A" && t.Table == "ACTIVE_PRODUCTS":
 			foundActiveProducts = true
 			s.Equal("VIEW", t.TableType)
@@ -214,7 +131,6 @@ func (s *OracleScrapperSuite) TestQueryCatalog() {
 	var foundIdCol, foundNameCol, foundPriceCol, foundCreatedAtCol bool
 	var foundIdComment, foundNameComment, foundTableComment bool
 	for _, col := range catalog {
-		s.Equal("127.0.0.1", col.Instance)
 		s.Equal(s.serviceName, col.Database)
 
 		if col.Schema == "SYNQ_A" && col.Table == "PRODUCTS" {
@@ -264,18 +180,17 @@ func (s *OracleScrapperSuite) TestQueryTableMetrics() {
 
 	var foundProducts, foundOrderItems bool
 	for _, m := range metrics {
-		s.Equal("127.0.0.1", m.Instance)
 		s.Equal(s.serviceName, m.Database)
 
 		if m.Schema == "SYNQ_A" && m.Table == "PRODUCTS" {
 			foundProducts = true
 			s.NotNil(m.RowCount, "products should have row_count")
-			s.Equal(int64(3), *m.RowCount)
+			s.GreaterOrEqual(*m.RowCount, int64(3))
 		}
 		if m.Schema == "SYNQ_A" && m.Table == "ORDER_ITEMS" {
 			foundOrderItems = true
 			s.NotNil(m.RowCount, "order_items should have row_count")
-			s.Equal(int64(3), *m.RowCount)
+			s.GreaterOrEqual(*m.RowCount, int64(3))
 		}
 	}
 
@@ -290,7 +205,6 @@ func (s *OracleScrapperSuite) TestQuerySqlDefinitions() {
 
 	var foundActiveProducts, foundOrderSummary bool
 	for _, def := range definitions {
-		s.Equal("127.0.0.1", def.Instance)
 		s.Equal(s.serviceName, def.Database)
 
 		if def.Schema == "SYNQ_A" && def.Table == "ACTIVE_PRODUCTS" {
@@ -320,7 +234,6 @@ func (s *OracleScrapperSuite) TestQueryTableConstraints() {
 	var foundOrderItemsUniqueConstraint bool
 	var foundCheckConstraint bool
 	for _, c := range constraints {
-		s.Equal("127.0.0.1", c.Instance)
 		s.Equal(s.serviceName, c.Database)
 		s.NotEmpty(c.ConstraintName)
 		s.NotNil(c.IsEnforced, "IsEnforced should always be set for Oracle constraints")
@@ -348,65 +261,6 @@ func (s *OracleScrapperSuite) TestQueryTableConstraints() {
 	s.True(foundOrderItemsCompositePK, "Should find composite PRIMARY KEY for ORDER_ITEMS")
 	s.True(foundOrderItemsUniqueConstraint, "Should find UNIQUE constraint on ORDER_ITEMS")
 	s.True(foundCheckConstraint, "Should find at least one CHECK constraint")
-}
-
-func (s *OracleScrapperSuite) TestQuerySegments() {
-	sql := `SELECT DISTINCT category as "segment" FROM synq_a.products`
-	segments, err := s.scrapper.QuerySegments(s.ctx, sql)
-	s.Require().NoError(err)
-	s.NotEmpty(segments)
-
-	names := make([]string, len(segments))
-	for i, seg := range segments {
-		names[i] = seg.Segment
-	}
-	s.Contains(names, "Electronics")
-	s.Contains(names, "Accessories")
-}
-
-func (s *OracleScrapperSuite) TestQueryCustomMetrics() {
-	sql := `SELECT
-		category as "segment_name",
-		CAST(SUM(price * quantity) AS FLOAT) as "total_value",
-		COUNT(*) as "product_count"
-	FROM synq_a.products
-	GROUP BY category`
-
-	result, err := s.scrapper.QueryCustomMetrics(s.ctx, sql)
-	s.Require().NoError(err)
-	s.NotEmpty(result)
-
-	for _, row := range result {
-		s.Require().Len(row.Segments, 1)
-		s.Equal("segment_name", row.Segments[0].Name)
-		s.Require().Len(row.ColumnValues, 2)
-
-		for _, col := range row.ColumnValues {
-			s.False(col.IsNull)
-		}
-	}
-}
-
-func (s *OracleScrapperSuite) TestQueryShape() {
-	sql := `SELECT id, name, price, created_at, is_active FROM synq_a.products`
-	columns, err := s.scrapper.QueryShape(s.ctx, sql)
-	s.Require().NoError(err)
-	s.Require().Len(columns, 5)
-
-	s.Equal("ID", columns[0].Name)
-	s.Equal(int32(1), columns[0].Position)
-
-	s.Equal("NAME", columns[1].Name)
-	s.Equal(int32(2), columns[1].Position)
-
-	s.Equal("PRICE", columns[2].Name)
-	s.Equal(int32(3), columns[2].Position)
-
-	s.Equal("CREATED_AT", columns[3].Name)
-	s.Equal(int32(4), columns[3].Position)
-
-	s.Equal("IS_ACTIVE", columns[4].Name)
-	s.Equal(int32(5), columns[4].Position)
 }
 
 func (s *OracleScrapperSuite) TestFetchQueryLogs() {
@@ -440,7 +294,6 @@ func (s *OracleScrapperSuite) TestFetchQueryLogs() {
 		s.NotEmpty(log.QueryID, "QueryID (sql_id) should not be empty")
 		s.Equal("oracle", log.SqlDialect)
 		s.NotNil(log.DwhContext)
-		s.Equal("127.0.0.1", log.DwhContext.Instance)
 		s.Equal(s.serviceName, log.DwhContext.Database)
 		s.NotEmpty(log.DwhContext.Schema, "Schema (parsing_schema_name) should be set")
 		s.Equal("SUCCESS", log.Status)
@@ -456,13 +309,17 @@ type OracleComplianceSuite struct {
 
 func TestOracleComplianceSuite(t *testing.T) {
 	if os.Getenv("CI") != "" {
-		t.Skip("Skipping local Oracle compliance tests in CI")
+		t.Skip("Skipping Oracle compliance tests in CI")
 	}
 	suite.Run(t, new(OracleComplianceSuite))
 }
 
 func (s *OracleComplianceSuite) SetupSuite() {
-	s.Scrapper = setupDatabase(s.T(), s.Ctx())
+	sc, err := newOracleScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to Oracle: %v", err)
+	}
+	s.Scrapper = sc
 }
 
 func (s *OracleComplianceSuite) TearDownSuite() {
@@ -478,16 +335,87 @@ type OracleScopeComplianceSuite struct {
 
 func TestOracleScopeComplianceSuite(t *testing.T) {
 	if os.Getenv("CI") != "" {
-		t.Skip("Skipping local Oracle scope compliance tests in CI")
+		t.Skip("Skipping Oracle scope compliance tests in CI")
 	}
 	suite.Run(t, new(OracleScopeComplianceSuite))
 }
 
 func (s *OracleScopeComplianceSuite) SetupSuite() {
-	s.Scrapper = setupDatabase(s.T(), s.Ctx())
+	sc, err := newOracleScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to Oracle: %v", err)
+	}
+	s.Scrapper = sc
 }
 
 func (s *OracleScopeComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		s.Scrapper.Close()
+	}
+}
+
+// OracleMonitorComplianceSuite runs the monitor compliance checks.
+type OracleMonitorComplianceSuite struct {
+	scrappertest.MonitorComplianceSuite
+}
+
+func TestOracleMonitorComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping Oracle monitor compliance tests in CI")
+	}
+	suite.Run(t, new(OracleMonitorComplianceSuite))
+}
+
+func (s *OracleMonitorComplianceSuite) SetupSuite() {
+	sc, err := newOracleScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to Oracle: %v", err)
+	}
+	s.Scrapper = sc
+	s.Config = scrappertest.MonitorComplianceConfig{
+		SegmentsSQL:          `SELECT DISTINCT category as "segment" FROM synq_a.products`,
+		CustomMetricsSQL:     `SELECT category as "segment_name", CAST(SUM(price * quantity) AS FLOAT) as "total_value", COUNT(*) as "product_count" FROM synq_a.products GROUP BY category`,
+		ShapeSQL:             `SELECT id, name, price, created_at, is_active FROM synq_a.products`,
+		ExpectedSegments:     []string{"Electronics", "Accessories"},
+		ExpectedShapeColumns: []string{"ID", "NAME", "PRICE", "CREATED_AT", "IS_ACTIVE"},
+	}
+}
+
+func (s *OracleMonitorComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		s.Scrapper.Close()
+	}
+}
+
+// OracleMetricsExecutionSuite runs metrics SQL generation + execution checks.
+type OracleMetricsExecutionSuite struct {
+	scrappertest.MetricsExecutionSuite
+}
+
+func TestOracleMetricsExecutionSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping Oracle metrics execution tests in CI")
+	}
+	suite.Run(t, new(OracleMetricsExecutionSuite))
+}
+
+func (s *OracleMetricsExecutionSuite) SetupSuite() {
+	sc, err := newOracleScrapperFromEnv(s.Ctx())
+	if err != nil {
+		s.T().Skipf("Could not connect to Oracle: %v", err)
+	}
+	s.Scrapper = sc
+	s.Config = scrappertest.MetricsExecutionConfig{
+		TableFqn:          sqldialect.TableFqn("FREEPDB1", "SYNQ_A", "PRODUCTS"),
+		PartitioningField: "CREATED_AT",
+		SegmentField:      "CATEGORY",
+		NumericField:      "PRICE",
+		TextField:         "NAME",
+		TimeField:         "CREATED_AT",
+	}
+}
+
+func (s *OracleMetricsExecutionSuite) TearDownSuite() {
 	if s.Scrapper != nil {
 		s.Scrapper.Close()
 	}

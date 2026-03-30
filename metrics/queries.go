@@ -113,7 +113,7 @@ func ApplyMonitorDefArgs(
 		}
 	}
 
-	if partitioning != nil {
+	if partitioning != nil && partitioning.Field != "" {
 		if partitioning.ScheduleTimeShift == 0 {
 			qb = qb.WithTimeSegment(TimeCol(partitioning.Field), partitioning.Interval)
 		} else {
