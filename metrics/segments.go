@@ -39,7 +39,7 @@ func SegmentsListQuery(
 		selectExpressions = append(selectExpressions, As(SubString(ToString(s.Expression), 1, segmentLengthLimit), Identifier(alias)))
 		aggregationExpressions = append(aggregationExpressions, SubString(ToString(s.Expression), 1, segmentLengthLimit))
 	}
-	countColExpr := Identifier("count")
+	countColExpr := Identifier(string(METRIC_NUM_ROWS))
 	selectExpressions = append(selectExpressions, As(CountAll(), countColExpr))
 
 	query := querybuilder.NewQueryBuilder(tableFqn, selectExpressions)
@@ -57,7 +57,7 @@ func SegmentsListQuery(
 		query = query.WithFilter(condition)
 	}
 
-	query = query.OrderBy(Desc(AggregationColumnReference(CountAll(), "count"))).WithLimit(rowsLimit)
+	query = query.OrderBy(Desc(AggregationColumnReference(CountAll(), string(METRIC_NUM_ROWS)))).WithLimit(rowsLimit)
 
 	return query, nil
 }

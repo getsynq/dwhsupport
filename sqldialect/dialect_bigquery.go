@@ -129,6 +129,10 @@ func (d *BigQueryDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTR", expr, Int64(start), Int64(length))
 }
 
+func (d *BigQueryDialect) StringLength(expr Expr) Expr {
+	return Fn("LENGTH", expr)
+}
+
 func (d *BigQueryDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }

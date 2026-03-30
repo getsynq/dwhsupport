@@ -116,6 +116,10 @@ func (d *MSSQLDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
+func (d *MSSQLDialect) StringLength(expr Expr) Expr {
+	return Fn("LEN", expr)
+}
+
 func (d *MSSQLDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("OFFSET 0 ROWS FETCH NEXT %s ROWS ONLY", rowsSql)
 }

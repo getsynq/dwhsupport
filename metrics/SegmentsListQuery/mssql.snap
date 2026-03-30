@@ -4,7 +4,7 @@ select
   SUBSTRING(CAST(workspace AS NVARCHAR(MAX)), 1, 100) as [segment], 
   SUBSTRING(CAST(run_status AS NVARCHAR(MAX)), 1, 100) as [segment2], 
   SUBSTRING(CAST(run_type AS NVARCHAR(MAX)), 1, 100) as [segment3], 
-  COUNT(*) as [count]
+  COUNT(*) as [num_rows]
 from [default].[runs] 
 where
   [createdAt] >= CAST('1985-07-16 00:00:00' AS DATETIME2) and 
