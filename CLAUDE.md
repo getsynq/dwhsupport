@@ -90,6 +90,7 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
    - Return `ErrUnsupported` for unimplemented methods
 
 3. Implement `SqlDialect` in `sqldialect/` if needed
+   - All SQL functions that differ across databases (string length, substring, etc.) must go through the `Dialect` interface — never hardcode function names like `Fn("length", ...)` in `metrics/` code
 
 4. Register the new dialect in `sqldialect/dialects.go` `DialectsToTest()` and regenerate snapshots:
    - `UPDATE_SNAPS=true go test ./sqldialect/... ./metrics/... -count=1`
@@ -179,4 +180,5 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - **sqldialect ResolveTime timezone**: Dialects that format time without timezone info (Oracle, MSSQL, ClickHouse) must call `.UTC()` before formatting to prevent wrong comparisons when Go runs in non-UTC timezone.
 - **MSSQL Query Store testing**: Azure SQL Edge defaults to `QUERY_CAPTURE_MODE = AUTO` (skips infrequent queries). Tests need `QUERY_CAPTURE_MODE = ALL` and `EXEC sp_query_store_flush_db` before asserting.
 - **MSSQL dialect compatibility**: Use `DATEADD+DATEDIFF` pattern for time truncation (not `DATETRUNC` — SQL Server 2022+ only, not in Azure SQL Edge). `MEDIAN` returns `NULL` (PERCENTILE_CONT is a window function, can't mix with aggregates).
+- **MSSQL string length**: MSSQL uses `LEN()` not `LENGTH()`. Always use `dialect.StringLength()` — never hardcode `Fn("length", ...)` in metrics queries.
 - **PostgreSQL MEDIAN**: Use `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY expr)` — no built-in `MEDIAN` function.
