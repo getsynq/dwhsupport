@@ -113,10 +113,25 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 - Tests use `github.com/gkampitakis/go-snaps` for snapshot testing
 - To create/update snapshots: `UPDATE_SNAPS=true go test ./path/to/package -count=1`
 - Trino scrapper uses snapshot tests for SQL queries — changes to `scrapper/trino/*.sql` require snapshot updates
+- Changes to `metrics/` or `sqldialect/` SQL generation require snapshot updates for both: `UPDATE_SNAPS=true go test ./sqldialect/... ./metrics/... -count=1`
 - `CI=true` and `UPDATE_SNAPS=true` are mutually exclusive — don't use both
 - Mock generation uses `go.uber.org/mock` via `go tool` — regenerate with `go generate ./...`
 - Test files follow `*_test.go` naming convention
 - Integration tests exist for most warehouse implementations
+
+### Integration Test Suites
+
+Four embeddable test suites in `scrapper/scrappertest/`:
+- **ComplianceSuite** — validates all scrapper methods work or return ErrUnsupported
+- **ScopeComplianceSuite** — validates scope filtering (include/exclude)
+- **MonitorComplianceSuite** — tests QuerySegments/QueryCustomMetrics/QueryShape with dialect-specific SQL
+- **MetricsExecutionSuite** — generates SQL via `metrics/querybuilder` and executes against real databases
+
+Integration tests connect to dwhtesting staging databases via Twingate (no port-forwarding needed). Each scrapper package has a `base_test.go` that loads `../../.env` via `godotenv`. Env var prefixes per database:
+- `ORACLE_`, `MSSQL_`, `POSTGRES_`, `CLICKHOUSE_` — dwhtesting staging
+- `MARIADB_` — MariaDB on dwhtesting staging
+- `MYSQL_` — real MySQL on dwhtesting staging
+- `STARBURST_` — Starburst Galaxy (HTTPS), `TRINO_` — self-hosted Trino (plaintext HTTP)
 
 ## Releases
 
@@ -153,6 +168,9 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 ## MySQL Gotchas
 
 - **Post-processor pattern**: MySQL sets only `row.Database = e.conf.Host` (not `Instance`) in scrapper post-processors. `ResolveExternalDatabase` for MySQL uses `database` as the `HostId` and ignores `instance` entirely — consistent with BigQuery's pattern.
+- **MariaDB vs MySQL detection**: `MySQLScrapper` detects MariaDB at construction via `SELECT VERSION()` (contains "mariadb"). Used for SQL branching — e.g., MySQL has `ENFORCED` column in `TABLE_CONSTRAINTS` for CHECK constraints, MariaDB does not.
+- **MySQL FQN mapping**: MySQL `ResolveFqn` uses `datasetId.tableId`. When constructing `TableFqn` for MySQL, put database name in `datasetId` (second arg), not `projectId` (first arg): `TableFqn("", dbName, tableName)`.
+- **MySQL dialect compatibility**: `DATE_ADD`/`DATE_SUB` (not `DATEADD`), `CAST AS DOUBLE` (not `FLOAT`), `NULL` for `MEDIAN` (no built-in aggregate). These work on both MySQL and MariaDB.
 
 ## Oracle & MSSQL Gotchas
 
@@ -160,3 +178,5 @@ Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
 - **MSSQL DB_NAME() consistency**: Always use `DB_NAME()` in SQL queries to populate the database field, never `conf.Database` — avoids casing mismatches between user config and SQL Server's canonical name.
 - **sqldialect ResolveTime timezone**: Dialects that format time without timezone info (Oracle, MSSQL, ClickHouse) must call `.UTC()` before formatting to prevent wrong comparisons when Go runs in non-UTC timezone.
 - **MSSQL Query Store testing**: Azure SQL Edge defaults to `QUERY_CAPTURE_MODE = AUTO` (skips infrequent queries). Tests need `QUERY_CAPTURE_MODE = ALL` and `EXEC sp_query_store_flush_db` before asserting.
+- **MSSQL dialect compatibility**: Use `DATEADD+DATEDIFF` pattern for time truncation (not `DATETRUNC` — SQL Server 2022+ only, not in Azure SQL Edge). `MEDIAN` returns `NULL` (PERCENTILE_CONT is a window function, can't mix with aggregates).
+- **PostgreSQL MEDIAN**: Use `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY expr)` — no built-in `MEDIAN` function.

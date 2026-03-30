@@ -31,9 +31,9 @@ select
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
 group by
-  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
-  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
-  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3
+  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), 
+  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), 
+  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100)
 order by num_rows desc limit 1000
 ---
 
@@ -97,7 +97,7 @@ select
   max(created_at) as created_at__max
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
-group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
+group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100)
 order by num_rows desc limit 1000
 ---
 
@@ -132,9 +132,9 @@ select
   max(created_at) as created_at__max
 from db.default.runs 
 group by
-  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
-  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
-  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3
+  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), 
+  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), 
+  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100)
 order by num_rows desc limit 1000
 ---
 
@@ -196,7 +196,7 @@ select
   min(created_at) as created_at__min, 
   max(created_at) as created_at__max
 from db.default.runs 
-group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
+group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100)
 order by num_rows desc limit 1000
 ---
 
@@ -232,9 +232,9 @@ select
 from db.default.runs 
 where (1=1)
 group by
-  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100) as segment, 
-  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100) as segment2, 
-  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment3
+  SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), 
+  SUBSTRING(CAST(run_status AS VARCHAR), 1, 100), 
+  SUBSTRING(CAST(run_type AS VARCHAR), 1, 100)
 order by num_rows desc limit 1000
 ---
 
@@ -298,6 +298,6 @@ select
   max(created_at) as created_at__max
 from db.default.runs 
 where (1=1)
-group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100) as segment
+group by SUBSTRING(CAST(run_type AS VARCHAR), 1, 100)
 order by num_rows desc limit 1000
 ---
