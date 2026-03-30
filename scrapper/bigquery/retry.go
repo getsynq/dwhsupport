@@ -24,7 +24,7 @@ var DefaultRateLimitConfig = RateLimitConfig{
 	MaxRetries:          5,
 	BaseDelay:           1 * time.Second,
 	MaxDelay:            30 * time.Second,
-	MetadataConcurrency: 10,
+	MetadataConcurrency: 20,
 }
 
 // withRateLimitRetry retries fn when it returns a rate-limit error (HTTP 429 /
