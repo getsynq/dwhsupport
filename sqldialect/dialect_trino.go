@@ -118,6 +118,10 @@ func (d *TrinoDialect) SubString(expr Expr, start int64, length int64) Expr {
 	return Fn("SUBSTRING", expr, Int64(start), Int64(length))
 }
 
+func (d *TrinoDialect) StringLength(expr Expr) Expr {
+	return Fn("LENGTH", expr)
+}
+
 func (d *TrinoDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }

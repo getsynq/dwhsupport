@@ -473,13 +473,13 @@ func (m *TextMetricExpr) ToSql(dialect Dialect) (string, error) {
 		return As(dialect.CountIf(Eq(m.Column, String(""))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MEAN_LENGTH:
-		return As(dialect.ToFloat64(Fn("avg", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(Fn("avg", dialect.StringLength(m.Column))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MIN_LENGTH:
-		return As(dialect.ToFloat64(Fn("min", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(Fn("min", dialect.StringLength(m.Column))), m.OutColumnAlias()).ToSql(dialect)
 
 	case METRIC_MAX_LENGTH:
-		return As(dialect.ToFloat64(Fn("max", Fn("length", m.Column))), m.OutColumnAlias()).ToSql(dialect)
+		return As(dialect.ToFloat64(Fn("max", dialect.StringLength(m.Column))), m.OutColumnAlias()).ToSql(dialect)
 
 	default:
 		return "", fmt.Errorf("unknown TEXT metric type for : %s", m.MetricId)

@@ -118,6 +118,10 @@ func (d *ClickHouseDialect) SubString(expr Expr, start int64, length int64) Expr
 	return Fn("substring", expr, Int64(start), Int64(length))
 }
 
+func (d *ClickHouseDialect) StringLength(expr Expr) Expr {
+	return Fn("length", expr)
+}
+
 func (d *ClickHouseDialect) FormatLimit(rowsSql string) string {
 	return fmt.Sprintf("limit %s", rowsSql)
 }

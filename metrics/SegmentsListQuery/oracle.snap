@@ -4,7 +4,7 @@ select
   SUBSTR(TO_CHAR(workspace), 1, 100) as "segment", 
   SUBSTR(TO_CHAR(run_status), 1, 100) as "segment2", 
   SUBSTR(TO_CHAR(run_type), 1, 100) as "segment3", 
-  COUNT(*) as "count"
+  COUNT(*) as "num_rows"
 from "default"."runs" 
 where
   "createdAt" >= TO_TIMESTAMP('1985-07-16 00:00:00', 'YYYY-MM-DD HH24:MI:SS') and 

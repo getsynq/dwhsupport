@@ -28,6 +28,7 @@ type Dialect interface {
 	ConcatWithSeparator(separator string, exprs ...Expr) Expr
 	ToFloat64(Expr) Expr
 	SubString(expr Expr, start int64, length int64) Expr
+	StringLength(expr Expr) Expr
 
 	ResolveTime(time.Time) (string, error)
 	ResolveTimeColumn(col *TimeColExpr) (string, error)
