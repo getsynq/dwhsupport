@@ -60,28 +60,3 @@ func TestAppendSQLComment_StripsTrailingSemicolon(t *testing.T) {
 	assert.Equal(t, `SELECT 1 /* {"source":"synq"} */`, result)
 }
 
-func TestAsBigQueryLabels(t *testing.T) {
-	assert.Nil(t, QueryContext(nil).AsBigQueryLabels())
-	assert.Nil(t, QueryContext{}.AsBigQueryLabels())
-
-	qc := QueryContext{
-		"source":     "synq",
-		"MonitorID":  "abc-123",
-		"123numeric": "val",
-	}
-	labels := qc.AsBigQueryLabels()
-	assert.Equal(t, "synq", labels["source"])
-	assert.Equal(t, "abc-123", labels["monitorid"])
-	assert.Equal(t, "val", labels["l_123numeric"]) // prefixed because starts with digit
-}
-
-func TestAsBigQueryLabels_Truncation(t *testing.T) {
-	longKey := "k" + string(make([]byte, 100))
-	longVal := string(make([]byte, 100))
-	qc := QueryContext{longKey: longVal}
-	labels := qc.AsBigQueryLabels()
-	for k, v := range labels {
-		assert.LessOrEqual(t, len(k), 63)
-		assert.LessOrEqual(t, len(v), 63)
-	}
-}

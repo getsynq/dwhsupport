@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/metrics"
 	"github.com/getsynq/dwhsupport/querybuilder"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -52,7 +53,7 @@ func (s *MetricsExecutionSuite) Ctx() context.Context {
 }
 
 func (s *MetricsExecutionSuite) ctx() context.Context {
-	return context.Background()
+	return querycontext.WithQueryContext(context.Background(), complianceQueryContext)
 }
 
 func (s *MetricsExecutionSuite) skipIfNil() {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/stretchr/testify/suite"
 )
@@ -48,7 +49,7 @@ func (s *MonitorComplianceSuite) Ctx() context.Context {
 }
 
 func (s *MonitorComplianceSuite) ctx() context.Context {
-	return context.Background()
+	return querycontext.WithQueryContext(context.Background(), complianceQueryContext)
 }
 
 func (s *MonitorComplianceSuite) TestMonitorCompliance_QuerySegments() {

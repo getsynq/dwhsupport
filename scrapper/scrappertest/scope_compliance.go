@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/stretchr/testify/suite"
@@ -38,7 +39,7 @@ func (s *ScopeComplianceSuite) Ctx() context.Context {
 }
 
 func (s *ScopeComplianceSuite) ctx() context.Context {
-	return context.Background()
+	return querycontext.WithQueryContext(context.Background(), complianceQueryContext)
 }
 
 // TestScopeCompliance_ExcludeFilterReducesResults applies an exclude filter for a schema

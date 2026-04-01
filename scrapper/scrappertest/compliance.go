@@ -18,9 +18,21 @@ import (
 	"errors"
 	"time"
 
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/stretchr/testify/suite"
 )
+
+// complianceQueryContext is a realistic query context used by all compliance
+// suites to verify that query context propagation (SQL comments, BigQuery labels,
+// Snowflake query tags, etc.) works end-to-end without errors.
+var complianceQueryContext = querycontext.QueryContext{
+	"app":            "synq",
+	"workspace":      "test-workspace",
+	"integration_id": "int-abc-123",
+	"task":           "fetch_monitor_metrics",
+	"path":           "monitor::my-project::my_dataset::",
+}
 
 // ComplianceSuite validates that a scrapper.Scrapper implementation follows the expected
 // contract. Embed this in warehouse-specific integration test suites and set Scrapper
@@ -36,7 +48,7 @@ func (s *ComplianceSuite) Ctx() context.Context {
 }
 
 func (s *ComplianceSuite) ctx() context.Context {
-	return context.Background()
+	return querycontext.WithQueryContext(context.Background(), complianceQueryContext)
 }
 
 // isAcceptableError returns true if err is nil or ErrUnsupported.
