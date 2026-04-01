@@ -3,7 +3,6 @@ package querycontext
 import (
 	"context"
 	"encoding/json"
-	"regexp"
 	"strings"
 )
 
@@ -67,37 +66,4 @@ func AppendSQLComment(ctx context.Context, sql string) string {
 		return sql
 	}
 	return strings.TrimRight(sql, " \t\n\r;") + comment
-}
-
-// BigQuery label keys must contain only lowercase letters, numeric characters,
-// underscores, and dashes. Keys must start with a letter. Max 63 chars for both key and value.
-var bigQueryLabelKeyRegexp = regexp.MustCompile(`[^a-z0-9_-]`)
-
-// AsBigQueryLabels converts the query context to BigQuery-compatible job labels.
-// Keys are lowercased and sanitized (non-alphanumeric/underscore/dash replaced with underscore).
-// Keys and values are truncated to 63 characters.
-func (qc QueryContext) AsBigQueryLabels() map[string]string {
-	if len(qc) == 0 {
-		return nil
-	}
-	labels := make(map[string]string, len(qc))
-	for k, v := range qc {
-		key := strings.ToLower(k)
-		key = bigQueryLabelKeyRegexp.ReplaceAllString(key, "_")
-		if len(key) == 0 {
-			continue
-		}
-		// Keys must start with a letter
-		if key[0] < 'a' || key[0] > 'z' {
-			key = "l_" + key
-		}
-		if len(key) > 63 {
-			key = key[:63]
-		}
-		if len(v) > 63 {
-			v = v[:63]
-		}
-		labels[key] = v
-	}
-	return labels
 }

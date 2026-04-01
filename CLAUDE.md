@@ -77,8 +77,6 @@ All data models are in `scrapper/models.go`:
 
 ### Adding New Data Warehouse Support
 
-Follow the rules in `RULE_FOR_NEW_EXECUTER_AND_SCRAPPER.md`:
-
 1. Create executor in `exec/yourwarehouse/`
    - Implement connection logic and `Executor` interface
    - Create `query.go` with `NewQuerier[T]` function

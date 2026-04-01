@@ -2,6 +2,8 @@ package bigquery
 
 import (
 	"context"
+	"regexp"
+	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
@@ -73,7 +75,7 @@ func (e *BigQueryExecutor) Exec(ctx context.Context, sql string) error {
 	sql = querycontext.AppendSQLComment(ctx, sql)
 	query := e.client.Query(sql)
 	if qc := querycontext.GetQueryContext(ctx); qc != nil {
-		query.Labels = qc.AsBigQueryLabels()
+		query.Labels = queryContextToBigQueryLabels(qc)
 	}
 	job, err := query.Run(ctx)
 	if err != nil {
@@ -96,7 +98,7 @@ func (e *BigQueryExecutor) QueryRowsIterator(
 	sql = querycontext.AppendSQLComment(ctx, sql)
 	query := e.client.Query(sql)
 	if qc := querycontext.GetQueryContext(ctx); qc != nil {
-		query.Labels = qc.AsBigQueryLabels()
+		query.Labels = queryContextToBigQueryLabels(qc)
 	}
 	for _, arg := range args {
 		query.Parameters = append(query.Parameters, bigquery.QueryParameter{Value: arg})
@@ -140,6 +142,45 @@ func CollectBigQueryStats(ctx context.Context, job *bigquery.Job) {
 	}
 
 	ds.Set(stats)
+}
+
+// BigQuery label keys and values must contain only lowercase letters, numeric characters,
+// underscores, and dashes. Keys must start with a letter. Max 63 chars for both key and value.
+var bigQueryLabelSanitizer = regexp.MustCompile(`[^a-z0-9_-]`)
+var consecutiveUnderscores = regexp.MustCompile(`_{2,}`)
+
+// queryContextToBigQueryLabels converts a query context to BigQuery-compatible job labels.
+func queryContextToBigQueryLabels(qc querycontext.QueryContext) map[string]string {
+	if len(qc) == 0 {
+		return nil
+	}
+	labels := make(map[string]string, len(qc))
+	for k, v := range qc {
+		key := sanitizeBigQueryLabel(k)
+		if len(key) == 0 {
+			continue
+		}
+		// Keys must start with a letter
+		if key[0] < 'a' || key[0] > 'z' {
+			key = "l_" + key
+		}
+		if len(key) > 63 {
+			key = key[:63]
+		}
+		val := sanitizeBigQueryLabel(v)
+		if len(val) > 63 {
+			val = val[:63]
+		}
+		labels[key] = val
+	}
+	return labels
+}
+
+func sanitizeBigQueryLabel(s string) string {
+	s = strings.ToLower(s)
+	s = bigQueryLabelSanitizer.ReplaceAllString(s, "_")
+	s = consecutiveUnderscores.ReplaceAllString(s, "_")
+	return s
 }
 
 func (e *BigQueryExecutor) GetBigQueryClient() *bigquery.Client {
