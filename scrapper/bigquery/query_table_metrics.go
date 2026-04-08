@@ -73,6 +73,10 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 			q := fmt.Sprintf(tableMetricsSql, quoteTable(dataset.ProjectID), quoteTable(dataset.DatasetID))
 			rows, err := e.queryRows(groupCtx, q)
 			if err != nil {
+				if errIsAccessDenied(err) || errIsNotFound(err) {
+					log.Warnf("skipping dataset %s for metrics: %v", dataset.DatasetID, err)
+					return nil
+				}
 				return err
 			}
 
