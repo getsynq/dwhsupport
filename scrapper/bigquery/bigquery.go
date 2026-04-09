@@ -20,13 +20,26 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
+// BigQueryScrapperConf configures BigQuery metadata scrapping.
 type BigQueryScrapperConf struct {
 	dwhexecbigquery.BigQueryConf
-	Blocklist    string
+	// Blocklist is a comma-separated list of dataset name patterns to exclude.
+	Blocklist string
+	// RateLimitCfg overrides the default rate limit configuration for BQ API calls.
 	RateLimitCfg *RateLimitConfig
+	// UseInformationSchema switches table metrics from __TABLES__ (legacy, requires
+	// bigquery.tables.getData) to INFORMATION_SCHEMA.TABLES+PARTITIONS (requires only
+	// bigquery.tables.get + bigquery.tables.list, covered by metadataViewer role).
+	UseInformationSchema bool
+	// Datasets is an explicit list of dataset names to scrape. When set, only these
+	// datasets are queried instead of listing all datasets in the project via API.
+	// This is required for customers who grant permissions at the dataset level and
+	// lack project-level bigquery.datasets.list permission.
+	Datasets []string
 }
 
 type Executor interface {
@@ -104,6 +117,39 @@ func (e *BigQueryScrapper) Executor() *dwhexecbigquery.BigQueryExecutor {
 	return e.executor
 }
 
+// listDatasets returns the datasets to scrape. When conf.Datasets is set,
+// returns those explicitly; otherwise lists all visible datasets via the API.
+func (e *BigQueryScrapper) listDatasets(ctx context.Context) ([]*bigquery.Dataset, error) {
+	if len(e.conf.Datasets) > 0 {
+		client := e.executor.GetBigQueryClient()
+		var result []*bigquery.Dataset
+		for _, name := range e.conf.Datasets {
+			result = append(result, client.Dataset(name))
+		}
+		return result, nil
+	}
+
+	client := e.executor.GetBigQueryClient()
+	it := client.Datasets(ctx)
+	it.ListHidden = true
+
+	var result []*bigquery.Dataset
+	for {
+		ds, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			if errIsNotFound(err) || errIsAccessDenied(err) {
+				continue
+			}
+			return nil, err
+		}
+		result = append(result, ds)
+	}
+	return result, nil
+}
+
 func (e *BigQueryScrapper) queryRows(ctx context.Context, q string, args ...interface{}) (*bigquery.RowIterator, error) {
 	query := e.executor.GetBigQueryClient().Query(q)
 	job, err := query.Run(ctx)
@@ -120,6 +166,13 @@ func (e *BigQueryScrapper) queryRows(ctx context.Context, q string, args ...inte
 }
 
 func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
+	// When explicit datasets are configured, permissions are granted at dataset level
+	// and project-level TestIamPermissions would report false negatives.
+	if len(e.conf.Datasets) > 0 {
+		logging.GetLogger(ctx).Info("skipping project-level permission check: explicit datasets configured")
+		return nil, nil
+	}
+
 	crm, err := cloudresourcemanager.NewService(
 		ctx,
 		option.WithCredentialsJSON([]byte(e.conf.CredentialsJson)),
@@ -131,7 +184,14 @@ func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string,
 
 	var warnings []string
 
-	expectedPermissions := BaseExpectedPermissions
+	expectedPermissions := make([]string, len(BaseExpectedPermissions))
+	copy(expectedPermissions, BaseExpectedPermissions)
+
+	// bigquery.tables.getData is only needed for __TABLES__ queries;
+	// INFORMATION_SCHEMA requires only bigquery.tables.get + bigquery.tables.list.
+	if e.conf.UseInformationSchema {
+		expectedPermissions = lo.Without(expectedPermissions, "bigquery.tables.getData")
+	}
 
 	if permissions, err := crm.Projects.TestIamPermissions(e.conf.ProjectId, &cloudresourcemanager.TestIamPermissionsRequest{
 		Permissions: expectedPermissions,

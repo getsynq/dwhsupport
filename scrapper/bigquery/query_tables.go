@@ -22,8 +22,10 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 		WithField("executor", "bigquery").
 		WithField("project_id", e.conf.ProjectId)
 
-	datasets := e.executor.GetBigQueryClient().Datasets(ctx)
-	datasets.ListHidden = true
+	allDatasets, err := e.listDatasets(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var rows []*scrapper.TableRow
 	var mutex sync.Mutex
@@ -33,18 +35,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 
 	numTablesTotal := 0
 
-	for {
-		dataset, err := datasets.Next()
-		if errors.Is(err, iterator.Done) {
-			break
-		}
-		if err != nil {
-			if errIsNotFound(err) || errIsAccessDenied(err) {
-				continue
-			}
-			return nil, err
-		}
-
+	for _, dataset := range allDatasets {
 		if isPrivateDataset(dataset.DatasetID) {
 			continue
 		}
