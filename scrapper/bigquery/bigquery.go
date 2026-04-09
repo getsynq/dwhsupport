@@ -113,8 +113,13 @@ func (e *BigQueryScrapper) Executor() *dwhexecbigquery.BigQueryExecutor {
 func (e *BigQueryScrapper) listDatasets(ctx context.Context) ([]*bigquery.Dataset, error) {
 	if len(e.conf.Datasets) > 0 {
 		client := e.executor.GetBigQueryClient()
+		seen := make(map[string]bool)
 		var result []*bigquery.Dataset
 		for _, name := range e.conf.Datasets {
+			if seen[name] {
+				continue
+			}
+			seen[name] = true
 			result = append(result, client.Dataset(name))
 		}
 		return result, nil
