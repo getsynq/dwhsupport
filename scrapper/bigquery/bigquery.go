@@ -31,10 +31,6 @@ type BigQueryScrapperConf struct {
 	Blocklist string
 	// RateLimitCfg overrides the default rate limit configuration for BQ API calls.
 	RateLimitCfg *RateLimitConfig
-	// UseInformationSchema switches table metrics from __TABLES__ (legacy, requires
-	// bigquery.tables.getData) to INFORMATION_SCHEMA.TABLES+PARTITIONS (requires only
-	// bigquery.tables.get + bigquery.tables.list, covered by metadataViewer role).
-	UseInformationSchema bool
 	// Datasets is an explicit list of dataset names to scrape. When set, only these
 	// datasets are queried instead of listing all datasets in the project via API.
 	// This is required for customers who grant permissions at the dataset level and
@@ -83,13 +79,8 @@ var BaseExpectedPermissions = []string{
 	"bigquery.routines.get",
 	"bigquery.routines.list",
 	"bigquery.tables.get",
-	"bigquery.tables.getData",
 	"bigquery.tables.list",
 	"resourcemanager.projects.get",
-	//"storage.buckets.get",
-	//"storage.buckets.list",
-	//"storage.objects.get",
-	//"storage.objects.list",
 }
 
 func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQueryScrapper, error) {
@@ -184,22 +175,13 @@ func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string,
 
 	var warnings []string
 
-	expectedPermissions := make([]string, len(BaseExpectedPermissions))
-	copy(expectedPermissions, BaseExpectedPermissions)
-
-	// bigquery.tables.getData is only needed for __TABLES__ queries;
-	// INFORMATION_SCHEMA requires only bigquery.tables.get + bigquery.tables.list.
-	if e.conf.UseInformationSchema {
-		expectedPermissions = lo.Without(expectedPermissions, "bigquery.tables.getData")
-	}
-
 	if permissions, err := crm.Projects.TestIamPermissions(e.conf.ProjectId, &cloudresourcemanager.TestIamPermissionsRequest{
-		Permissions: expectedPermissions,
+		Permissions: BaseExpectedPermissions,
 	}).Context(ctx).Do(); err == nil {
 		gotPermissions := permissions.Permissions
 		sort.Strings(gotPermissions)
 
-		missingPermissions, _ := lo.Difference(expectedPermissions, gotPermissions)
+		missingPermissions, _ := lo.Difference(BaseExpectedPermissions, gotPermissions)
 		if len(missingPermissions) > 0 {
 			logging.GetLogger(ctx).WithField("missing_permissions", missingPermissions).Info("missing BigQuery permissions")
 			warnings = append(
