@@ -43,8 +43,10 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 		WithField("executor", "bigquery").
 		WithField("project_id", e.conf.ProjectId)
 
-	datasets := e.executor.GetBigQueryClient().Datasets(ctx)
-	datasets.ListHidden = true
+	allDatasets, err := e.listDatasets(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	var rows []*scrapper.SqlDefinitionRow
 	var mutex sync.Mutex
@@ -53,23 +55,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
 
 	numTablesTotal := 0
-	for {
-		dataset, err := datasets.Next()
-		if errors.Is(err, iterator.Done) {
-			break
-		}
-		if err != nil {
-			if errIsNotFound(err) {
-				log.Infof("dataset %s not found", dataset.DatasetID)
-				continue
-			}
-			if errIsAccessDenied(err) {
-				log.Infof("dataset %s access denied", dataset.DatasetID)
-				continue
-			}
-			return nil, err
-		}
-
+	for _, dataset := range allDatasets {
 		if isPrivateDataset(dataset.DatasetID) {
 			continue
 		}
