@@ -17,10 +17,16 @@ import (
 	"google.golang.org/api/option"
 )
 
+// BigQueryConf configures the BigQuery executor connection.
+// Authentication precedence: AccessToken > CredentialsJson > CredentialsFile.
 type BigQueryConf struct {
-	ProjectId       string
-	Region          string
+	// ProjectId is the GCP project containing BigQuery datasets.
+	ProjectId string
+	// Region restricts queries to a specific BQ region (e.g. "EU", "us-central1").
+	Region string
+	// CredentialsJson is a GCP service account key in JSON format.
 	CredentialsJson string
+	// CredentialsFile is a path to a GCP service account key file.
 	CredentialsFile string
 	// AccessToken is an OAuth access token for user-level authentication.
 	// When set, it takes precedence over CredentialsJson and CredentialsFile.
