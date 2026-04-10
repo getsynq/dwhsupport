@@ -119,6 +119,9 @@ type BigQueryConf struct {
 	ServiceAccountKey string `yaml:"service_account_key,omitempty"`
 	// Path to the service account key JSON file.
 	ServiceAccountKeyFile string `yaml:"service_account_key_file,omitempty"`
+	// Explicit list of dataset names to scrape. When set, only these datasets are queried
+	// and project-level bigquery.datasets.list permission is not required.
+	Datasets []string `yaml:"datasets,omitempty"`
 }
 
 // fileFields returns file field pairs for BigQuery.

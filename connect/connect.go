@@ -37,6 +37,7 @@ func BigQuery(ctx context.Context, t *agentdwhv1.BigQueryConf) (*scrapperbigquer
 			CredentialsJson: t.GetServiceAccountKey(),
 			CredentialsFile: t.GetServiceAccountKeyFile(),
 		},
+		Datasets: t.GetDatasets(),
 	})
 }
 

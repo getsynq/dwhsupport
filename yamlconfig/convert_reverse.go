@@ -96,6 +96,7 @@ func bigqueryConfFromProto(c *agentdwhv1.BigQueryConf) *BigQueryConf {
 		Region:                c.GetRegion(),
 		ServiceAccountKey:     c.GetServiceAccountKey(),
 		ServiceAccountKeyFile: c.GetServiceAccountKeyFile(),
+		Datasets:              c.GetDatasets(),
 	}
 }
 
