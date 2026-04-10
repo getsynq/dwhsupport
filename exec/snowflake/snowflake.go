@@ -137,8 +137,12 @@ func cleanAccountName(account string) string {
 // This is separated from NewSnowflakeExecutor to allow unit testing of the configuration logic.
 // Note: This function does not handle PrivateKeyFile loading (requires file I/O) - that's done in NewSnowflakeExecutor.
 func buildSnowflakeConfig(conf *SnowflakeConf) *gosnowflake.Config {
+	// When connecting as an individual user (OAuth token or SSO browser), don't set a
+	// default database on the connection. The user's role may not have access to the
+	// databases configured in the workspace integration. Queries use fully qualified names.
+	isUserAuth := conf.Token != "" || strings.ToLower(conf.AuthType) == "externalbrowser"
 	database := ""
-	if len(conf.Databases) > 0 {
+	if !isUserAuth && len(conf.Databases) > 0 {
 		database = conf.Databases[0]
 	}
 

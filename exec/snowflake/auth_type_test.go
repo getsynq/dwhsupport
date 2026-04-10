@@ -19,9 +19,10 @@ func TestSnowflakeAuthTypeTestSuite(t *testing.T) {
 
 func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_ExternalBrowser() {
 	conf := &SnowflakeConf{
-		Account:  "myaccount",
-		User:     "user@example.com",
-		AuthType: "externalbrowser",
+		Account:   "myaccount",
+		User:      "user@example.com",
+		AuthType:  "externalbrowser",
+		Databases: []string{"DB1", "DB2"},
 	}
 	c := buildSnowflakeConfig(conf)
 
@@ -29,6 +30,9 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_ExternalBrowser() {
 	s.Equal(120*time.Second, c.ExternalBrowserTimeout)
 	s.Equal(gosnowflake.ConfigBoolTrue, c.ClientStoreTemporaryCredential)
 	s.Equal(gosnowflake.ConfigBoolFalse, c.DisableConsoleLogin)
+	// SSO connections should not set a default database — the user's role
+	// may not have access to the workspace integration's databases.
+	s.Empty(c.Database)
 }
 
 func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_ExternalBrowserCaseInsensitive() {
@@ -76,9 +80,10 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_DefaultAuthType_Unrecognize
 
 func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_OAuthToken() {
 	conf := &SnowflakeConf{
-		Account: "myaccount",
-		Token:   "my-oauth-access-token",
-		Role:    "PUBLIC",
+		Account:   "myaccount",
+		Token:     "my-oauth-access-token",
+		Role:      "PUBLIC",
+		Databases: []string{"DB1", "DB2"},
 	}
 	c := buildSnowflakeConfig(conf)
 
@@ -86,6 +91,21 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_OAuthToken() {
 	s.Equal("my-oauth-access-token", c.Token)
 	s.Equal("PUBLIC", c.Role)
 	s.Equal(gosnowflake.ConfigBoolTrue, c.DisableConsoleLogin)
+	// OAuth connections should not set a default database — the user's role
+	// may not have access to the workspace integration's databases.
+	s.Empty(c.Database)
+}
+
+func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_PasswordSetsDefaultDatabase() {
+	conf := &SnowflakeConf{
+		Account:   "myaccount",
+		User:      "svc_user",
+		Password:  "password",
+		Databases: []string{"DB1", "DB2"},
+	}
+	c := buildSnowflakeConfig(conf)
+
+	s.Equal("DB1", c.Database)
 }
 
 func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_OAuthTokenTakesPrecedence() {
