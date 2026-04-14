@@ -52,6 +52,29 @@ tables, err := inner.QueryTables(ctx) // filter conditions pushed into SQL
 - **SQL push-down** — scope conditions are injected directly into warehouse queries for efficiency
 - **Post-filtering** — results are filtered in-memory to guarantee compliance
 
+### String Sanitization
+
+NUL bytes (`\x00`) and invalid UTF-8 occasionally leak in from warehouse data (e.g. a
+Snowflake row containing a stray NUL) and break downstream systems that expect clean
+UTF-8 text. Two composable decorators cover the two reasonable responses:
+
+- `scrapper/sanitize` — strips bad bytes in place on every returned row. Clean strings
+  are returned unchanged with zero allocation. Safe for content fields (descriptions,
+  SQL, tag values) where a repaired string is still meaningful.
+- `scrapper/reject` — drops rows whose **identity** fields (those forming the FQN) are
+  invalid, logging each drop via logrus. Appropriate when a sanitised identifier
+  would either collide with another object or fail to resolve against the warehouse.
+  Bad nested items (tags, annotations, constraints, struct fields) are filtered out
+  individually rather than dropping the whole row.
+
+```go
+// Reject unusable rows first, then sanitise the content of what remains.
+safe := sanitize.NewSanitizingScrapper(reject.NewRejectingScrapper(inner))
+
+// Compose with ScopedScrapper as needed.
+scoped := scope.NewScopedScrapper(safe, filter)
+```
+
 ### Query Stats
 
 The `exec/querystats` package provides query execution statistics via context:
