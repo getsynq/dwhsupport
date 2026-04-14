@@ -27,6 +27,11 @@ func NewRejectingScrapper(inner scrapper.Scrapper) *RejectingScrapper {
 	return &RejectingScrapper{inner: inner}
 }
 
+// Unwrap returns the inner scrapper, letting callers walk the decorator chain
+// (via scrapper.As) to reach concrete types or interfaces this wrapper does
+// not itself implement.
+func (s *RejectingScrapper) Unwrap() scrapper.Scrapper { return s.inner }
+
 func (s *RejectingScrapper) Capabilities() scrapper.Capabilities { return s.inner.Capabilities() }
 func (s *RejectingScrapper) DialectType() string                 { return s.inner.DialectType() }
 func (s *RejectingScrapper) SqlDialect() sqldialect.Dialect      { return s.inner.SqlDialect() }

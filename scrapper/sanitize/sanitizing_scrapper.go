@@ -23,6 +23,11 @@ func NewSanitizingScrapper(inner scrapper.Scrapper) *SanitizingScrapper {
 	return &SanitizingScrapper{inner: inner}
 }
 
+// Unwrap returns the inner scrapper, letting callers walk the decorator chain
+// (via scrapper.As) to reach concrete types or interfaces this wrapper does
+// not itself implement.
+func (s *SanitizingScrapper) Unwrap() scrapper.Scrapper { return s.inner }
+
 func (s *SanitizingScrapper) Capabilities() scrapper.Capabilities { return s.inner.Capabilities() }
 func (s *SanitizingScrapper) DialectType() string                 { return s.inner.DialectType() }
 func (s *SanitizingScrapper) SqlDialect() sqldialect.Dialect      { return s.inner.SqlDialect() }
