@@ -27,6 +27,11 @@ func (s *ScopedScrapper) BaseScope() *ScopeFilter {
 	return s.baseScope
 }
 
+// Unwrap returns the inner scrapper, letting callers walk the decorator chain
+// (via scrapper.As) to reach concrete types or interfaces this wrapper does
+// not itself implement.
+func (s *ScopedScrapper) Unwrap() scrapper.Scrapper { return s.inner }
+
 func (s *ScopedScrapper) effectiveCtx(ctx context.Context) context.Context {
 	return WithScope(ctx, s.baseScope)
 }
