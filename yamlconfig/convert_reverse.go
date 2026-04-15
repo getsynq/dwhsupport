@@ -71,7 +71,7 @@ func snowflakeConfFromProto(c *agentdwhv1.SnowflakeConf) *SnowflakeConf {
 	if c == nil {
 		return nil
 	}
-	return &SnowflakeConf{
+	sf := &SnowflakeConf{
 		Account:              c.GetAccount(),
 		Warehouse:            c.GetWarehouse(),
 		Role:                 c.GetRole(),
@@ -85,19 +85,27 @@ func snowflakeConfFromProto(c *agentdwhv1.SnowflakeConf) *SnowflakeConf {
 		AccountUsageDb:       c.GetAccountUsageDb(),
 		AuthType:             c.GetAuthType(),
 	}
+	if sf.PrivateKey != "" {
+		sf.PrivateKeyFile = ""
+	}
+	return sf
 }
 
 func bigqueryConfFromProto(c *agentdwhv1.BigQueryConf) *BigQueryConf {
 	if c == nil {
 		return nil
 	}
-	return &BigQueryConf{
+	bq := &BigQueryConf{
 		ProjectId:             c.GetProjectId(),
 		Region:                c.GetRegion(),
 		ServiceAccountKey:     c.GetServiceAccountKey(),
 		ServiceAccountKeyFile: c.GetServiceAccountKeyFile(),
 		Datasets:              c.GetDatasets(),
 	}
+	if bq.ServiceAccountKey != "" {
+		bq.ServiceAccountKeyFile = ""
+	}
+	return bq
 }
 
 func redshiftConfFromProto(c *agentdwhv1.RedshiftConf) *RedshiftConf {
