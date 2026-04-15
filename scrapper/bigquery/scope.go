@@ -6,23 +6,38 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
-// ScopeFromConf translates the BigQuery config's Blocklist field into a ScopeFilter.
-// Blocklist patterns are comma-separated dataset (schema) patterns.
-// Returns nil if no filtering is configured.
+// ScopeFromConf translates the BigQuery config's Datasets allowlist and
+// Blocklist into a ScopeFilter.
+//
+//   - Datasets (allowlist) maps to Include rules at the schema level.
+//   - Blocklist (comma-separated patterns) maps to Exclude rules at the schema level.
+//
+// Returns nil if neither field is configured — callers treat nil as accept-all.
 func ScopeFromConf(conf *BigQueryScrapperConf) *scope.ScopeFilter {
-	if conf == nil || conf.Blocklist == "" {
+	if conf == nil {
 		return nil
 	}
-	patterns := strings.Split(conf.Blocklist, ",")
-	var rules []scope.ScopeRule
-	for _, p := range patterns {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			rules = append(rules, scope.ScopeRule{Schema: p})
+
+	var include []scope.ScopeRule
+	for _, ds := range conf.Datasets {
+		ds = strings.TrimSpace(ds)
+		if ds != "" {
+			include = append(include, scope.ScopeRule{Schema: ds})
 		}
 	}
-	if len(rules) == 0 {
+
+	var exclude []scope.ScopeRule
+	if conf.Blocklist != "" {
+		for _, p := range strings.Split(conf.Blocklist, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				exclude = append(exclude, scope.ScopeRule{Schema: p})
+			}
+		}
+	}
+
+	if len(include) == 0 && len(exclude) == 0 {
 		return nil
 	}
-	return &scope.ScopeFilter{Exclude: rules}
+	return &scope.ScopeFilter{Include: include, Exclude: exclude}
 }
