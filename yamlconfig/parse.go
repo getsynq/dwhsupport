@@ -199,6 +199,9 @@ func ResolveFiles(connections map[string]*Connection, opts ParseOptions) error {
 				return fmt.Errorf("yamlconfig: connection %q: reading file %q: %w", id, *p.fileField, err)
 			}
 			*p.inlineField = string(data)
+			// Clear the _file field so downstream proto validators that enforce
+			// "either inline or file, but not both" don't reject the config.
+			*p.fileField = ""
 		}
 	}
 	return nil

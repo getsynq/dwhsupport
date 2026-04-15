@@ -223,8 +223,8 @@ func TestResolveFiles_Snowflake(t *testing.T) {
 	err := ResolveFiles(conns, opts)
 	require.NoError(t, err)
 	assert.Equal(t, "PRIVATE_KEY_CONTENT", conns["sf"].Snowflake.PrivateKey)
-	// File path is preserved
-	assert.Equal(t, "keys/snowflake.p8", conns["sf"].Snowflake.PrivateKeyFile)
+	// File path is cleared so proto validators ("either inline or file, not both") pass.
+	assert.Equal(t, "", conns["sf"].Snowflake.PrivateKeyFile)
 }
 
 func TestResolveFiles_BigQuery(t *testing.T) {
@@ -249,6 +249,7 @@ func TestResolveFiles_BigQuery(t *testing.T) {
 	err := ResolveFiles(conns, opts)
 	require.NoError(t, err)
 	assert.Equal(t, `{"type":"service_account"}`, conns["bq"].BigQuery.ServiceAccountKey)
+	assert.Equal(t, "", conns["bq"].BigQuery.ServiceAccountKeyFile)
 }
 
 func TestResolveFiles_AbsolutePath(t *testing.T) {
@@ -275,6 +276,7 @@ func TestResolveFiles_AbsolutePath(t *testing.T) {
 	err := ResolveFiles(conns, opts)
 	require.NoError(t, err)
 	assert.Equal(t, "KEY", conns["sf"].Snowflake.PrivateKey)
+	assert.Equal(t, "", conns["sf"].Snowflake.PrivateKeyFile)
 }
 
 func TestResolveFiles_InlineFieldTakesPrecedence(t *testing.T) {
