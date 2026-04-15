@@ -15,10 +15,38 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// newBigQueryScrapperFromEnv creates a BigQuery scrapper configured from
-// environment variables, restricted to synq_test_* datasets via blocklist.
+// BigQuery compliance / integration tests.
+//
+// These suites expect the shared dwhtesting fixtures to be present:
+//
+//	getsynq/cloud/dev-infra/dwhtesting/lib/bigquery/seed.sql
+//
+// Apply the seed with:
+//
+//	cd dev-infra/dwhtesting && ./reseed.sh bigquery
+//
+// Required environment:
+//
+//	BIGQUERY_PROJECT_ID       — GCP project that hosts the seeded datasets
+//	BIGQUERY_CREDENTIALS_FILE — path to a service-account JSON key with
+//	                            at least the SynqDwhtestingJobs project role
+//	                            + bigquery.metadataViewer on both datasets
+//	BIGQUERY_REGION           — optional, default "EU"
+//	BIGQUERY_DATASET_A        — optional, default "synq_dwhtesting"
+//	BIGQUERY_DATASET_B        — optional, default "synq_dwhtesting_b"
+//
+// Tests are skipped when CI=1 or when BIGQUERY_PROJECT_ID /
+// BIGQUERY_CREDENTIALS_FILE are unset.
+
+const (
+	defaultDatasetA = "synq_dwhtesting"
+	defaultDatasetB = "synq_dwhtesting_b"
+)
+
+// newBigQueryScrapperFromEnv creates a BigQuery scrapper restricted to the
+// dwhtesting datasets via the Datasets allowlist.
 func newBigQueryScrapperFromEnv(ctx context.Context) (*BigQueryScrapper, error) {
-	credentialsFile := testenv.EnvOrDefault("BIGQUERY_CREDENTIALS_FILE", "../../../cloud/synq-recon/nifty-motif-341212-88499dbfc22e.json")
+	credentialsFile := os.Getenv("BIGQUERY_CREDENTIALS_FILE")
 	credentialsJson, err := os.ReadFile(credentialsFile)
 	if err != nil {
 		return nil, err
@@ -30,9 +58,12 @@ func newBigQueryScrapperFromEnv(ctx context.Context) (*BigQueryScrapper, error) 
 			Region:          testenv.EnvOrDefault("BIGQUERY_REGION", "EU"),
 			CredentialsJson: string(credentialsJson),
 		},
-		// Exclude everything except synq_test_* datasets to speed up tests
-		// and avoid interference from other datasets in the shared project.
-		Blocklist: "analytics,analytics*,dbt*,elementary*,fivetran*,gitlab*,google_sheets,in_ecom*,kuba,lukas*,marketing,mini_dbt,petr,petr*,runtime,snapshots,sqlmesh,sqlmesh*,synq_ci,synq_demo,synq_recon,test,test_scrapper",
+		// Allowlist both dwhtesting datasets so the scrapper never strays
+		// into unrelated customer-like datasets in the demo project.
+		Datasets: []string{
+			testenv.EnvOrDefault("BIGQUERY_DATASET_A", defaultDatasetA),
+			testenv.EnvOrDefault("BIGQUERY_DATASET_B", defaultDatasetB),
+		},
 	}
 
 	return NewBigQueryScrapper(ctx, conf)
@@ -46,6 +77,13 @@ func skipIfNoBigQuery(t *testing.T) {
 	if os.Getenv("BIGQUERY_PROJECT_ID") == "" {
 		t.Skip("BIGQUERY_PROJECT_ID env var not set")
 	}
+	if os.Getenv("BIGQUERY_CREDENTIALS_FILE") == "" {
+		t.Skip("BIGQUERY_CREDENTIALS_FILE env var not set")
+	}
+}
+
+func datasetA() string {
+	return testenv.EnvOrDefault("BIGQUERY_DATASET_A", defaultDatasetA)
 }
 
 // --- ComplianceSuite ---
@@ -92,8 +130,9 @@ func (s *BigQueryScopeComplianceSuite) SetupSuite() {
 	}
 	s.inner = sc
 	// Wrap with ScopedScrapper so context-based scope filtering works.
-	// BigQuery's own scope handling uses API-level dataset filtering via blocklist,
-	// but ScopeComplianceSuite passes scope via context — ScopedScrapper bridges that gap.
+	// BigQuery's own scope handling uses API-level dataset filtering via the
+	// Datasets allowlist; ScopeComplianceSuite layers an additional
+	// context-based scope filter on top to exercise that code path too.
 	s.Scrapper = scope.NewScopedScrapper(sc, nil)
 }
 
@@ -122,8 +161,9 @@ func (s *BigQueryMonitorComplianceSuite) SetupSuite() {
 	s.Scrapper = sc
 
 	projectID := os.Getenv("BIGQUERY_PROJECT_ID")
+	ds := datasetA()
 	fqn := func(table string) string {
-		return "`" + projectID + ".synq_test_a." + table + "`"
+		return "`" + projectID + "." + ds + "." + table + "`"
 	}
 
 	s.Config = scrappertest.MonitorComplianceConfig{
@@ -161,7 +201,7 @@ func (s *BigQueryMetricsExecutionSuite) SetupSuite() {
 
 	projectID := os.Getenv("BIGQUERY_PROJECT_ID")
 	s.Config = scrappertest.MetricsExecutionConfig{
-		TableFqn:          sqldialect.TableFqn(projectID, "synq_test_a", "products"),
+		TableFqn:          sqldialect.TableFqn(projectID, datasetA(), "products"),
 		PartitioningField: "created_at",
 		SegmentField:      "category",
 		NumericField:      "price",
@@ -177,11 +217,10 @@ func (s *BigQueryMetricsExecutionSuite) TearDownSuite() {
 }
 
 // --- BigQueryScrapperSuite: warehouse-specific tests ---
-// Tests BigQuery-specific behaviour not covered by the generic compliance suites:
-// type handling (NUMERIC, BIGNUMERIC, TIMESTAMP, BOOL) and FetchTableChangeHistory.
-// Uses seeded synq_test_a.test_bigquery_types table — run the seed script first:
 //
-//	go run ./scrapper/bigquery/testdata/seed/
+// Covers BigQuery-specific behaviour not exercised by the generic compliance
+// suites: type handling (NUMERIC, BIGNUMERIC, TIMESTAMP, BOOL) and
+// FetchTableChangeHistory. Uses the dwhtesting `test_bigquery_types` fixture.
 
 type BigQueryScrapperSuite struct {
 	suite.Suite
@@ -208,7 +247,7 @@ func (s *BigQueryScrapperSuite) TearDownSuite() {
 }
 
 func (s *BigQueryScrapperSuite) typesTable() string {
-	return "`" + s.scrapper.conf.ProjectId + ".synq_test_a.test_bigquery_types`"
+	return "`" + s.scrapper.conf.ProjectId + "." + datasetA() + ".test_bigquery_types`"
 }
 
 func (s *BigQueryScrapperSuite) ctx() context.Context {
@@ -286,7 +325,7 @@ func (s *BigQueryScrapperSuite) TestFetchTableChangeHistory() {
 
 	fqn := scrapper.DwhFqn{
 		DatabaseName: s.scrapper.conf.ProjectId,
-		SchemaName:   "synq_test_a",
+		SchemaName:   datasetA(),
 		ObjectName:   "test_bigquery_types",
 	}
 
