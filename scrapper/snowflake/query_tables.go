@@ -139,35 +139,35 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 // ShowStreamsRow represents the structure of a row returned by SHOW STREAMS command
 type ShowStreamsRow struct {
 	// CreatedOn is the timestamp when the stream was created
-	CreatedOn string `db:"created_on"`
+	CreatedOn string
 	// Name is the name of the stream
-	Name string `db:"name"`
+	Name string
 	// DatabaseName is the database containing the stream
-	DatabaseName string `db:"database_name"`
+	DatabaseName string
 	// SchemaName is the schema containing the stream
-	SchemaName string `db:"schema_name"`
+	SchemaName string
 	// Owner is the owner of the stream
-	Owner string `db:"owner"`
+	Owner string
 	// Comment is the comment/description for the stream
-	Comment string `db:"comment"`
+	Comment string
 	// TableName is the name of the source table the stream tracks
-	TableName string `db:"table_name"`
+	TableName string
 	// SourceType is the type of source object (Table, View, etc.)
-	SourceType string `db:"source_type"`
+	SourceType string
 	// BaseTables lists the base tables the stream tracks
-	BaseTables string `db:"base_tables"`
+	BaseTables string
 	// Type is the stream type (DELTA, etc.)
-	Type string `db:"type"`
+	Type string
 	// Stale indicates whether the stream is stale (true/false)
-	Stale string `db:"stale"`
+	Stale string
 	// Mode is the stream mode: DEFAULT (standard/delta), APPEND_ONLY, or INSERT_ONLY
-	Mode string `db:"mode"`
-	// StaleAfter is the timestamp when the stream becomes stale
-	StaleAfter string `db:"stale_after"`
-	// InvalidReason provides the reason if the stream is invalid
-	InvalidReason string `db:"invalid_reason"`
+	Mode string
+	// StaleAfter is the timestamp when the stream becomes stale (empty if NULL)
+	StaleAfter string
+	// InvalidReason provides the reason if the stream is invalid (empty if NULL)
+	InvalidReason string
 	// OwnerRoleType is the type of owner role
-	OwnerRoleType string `db:"owner_role_type"`
+	OwnerRoleType string
 }
 
 func (e *SnowflakeScrapper) showStreamsInDatabase(ctx context.Context, database string) ([]*ShowStreamsRow, error) {
@@ -179,15 +179,50 @@ func (e *SnowflakeScrapper) showStreamsInDatabase(ctx context.Context, database 
 	}
 	defer rows.Close()
 
+	// Use MapScan rather than StructScan: Snowflake's SHOW STREAMS returns NULL for
+	// several columns (stale_after, invalid_reason, ...) which cannot be scanned into
+	// a plain `string`. MapScan tolerates NULL and is also resilient to column set
+	// changes across Snowflake versions.
 	for rows.Next() {
-		result := &ShowStreamsRow{}
-		if err := rows.StructScan(result); err != nil {
+		tmp := map[string]any{}
+		if err := rows.MapScan(tmp); err != nil {
 			return nil, err
 		}
-		results = append(results, result)
+		results = append(results, &ShowStreamsRow{
+			CreatedOn:     mapStr(tmp, "created_on"),
+			Name:          mapStr(tmp, "name"),
+			DatabaseName:  mapStr(tmp, "database_name"),
+			SchemaName:    mapStr(tmp, "schema_name"),
+			Owner:         mapStr(tmp, "owner"),
+			Comment:       mapStr(tmp, "comment"),
+			TableName:     mapStr(tmp, "table_name"),
+			SourceType:    mapStr(tmp, "source_type"),
+			BaseTables:    mapStr(tmp, "base_tables"),
+			Type:          mapStr(tmp, "type"),
+			Stale:         mapStr(tmp, "stale"),
+			Mode:          mapStr(tmp, "mode"),
+			StaleAfter:    mapStr(tmp, "stale_after"),
+			InvalidReason: mapStr(tmp, "invalid_reason"),
+			OwnerRoleType: mapStr(tmp, "owner_role_type"),
+		})
 	}
 
 	return results, nil
+}
+
+func mapStr(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch s := v.(type) {
+	case string:
+		return s
+	case []byte:
+		return string(s)
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 func (e *SnowflakeScrapper) showShares(ctx context.Context) ([]*ShareDesc, error) {
