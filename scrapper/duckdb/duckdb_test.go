@@ -2,6 +2,7 @@ package duckdb
 
 import (
 	"context"
+	"io"
 	"testing"
 	"time"
 
@@ -455,4 +456,70 @@ func (s *LocalDuckDBScrapperSuite) TestQueryCustomMetrics_WithHugeInt() {
 	s.IsType((*scrapper.BigIntValue)(nil), result[1].ColumnValues[0].Value)
 	bigVal := result[1].ColumnValues[0].Value.(*scrapper.BigIntValue)
 	s.Equal("170141183460469231731687303715884105727", bigVal.String())
+}
+
+func (s *LocalDuckDBScrapperSuite) TestRunRawQuery_PreservesAllColumns() {
+	sql := `SELECT
+		name                                         AS name_col,
+		amount                                       AS amount_col,
+		created_at                                   AS ts_col,
+		is_active                                    AS bool_col,
+		big_number                                   AS huge_col,
+		NULL::VARCHAR                                AS null_col,
+		'not-a-segment'                              AS plain_string,
+		'seg-value'                                  AS segment_foo
+	FROM test_schema.test_table
+	ORDER BY id`
+
+	iter, err := s.duckdbScrapper.RunRawQuery(s.ctx, sql)
+	s.Require().NoError(err)
+	defer iter.Close()
+
+	cols := iter.Columns()
+	s.Require().Len(cols, 8)
+	s.Equal("name_col", cols[0].Name)
+	s.Equal("segment_foo", cols[7].Name)
+
+	row1, err := iter.Next(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Len(row1, 8)
+
+	// Plain string preserved verbatim (not collapsed to IgnoredValue).
+	s.Equal("name_col", row1[0].Name)
+	s.Equal(scrapper.StringValue("Alice"), row1[0].Value)
+
+	// Decimal → DoubleValue.
+	s.IsType(scrapper.DoubleValue(0), row1[1].Value)
+
+	// Timestamp → TimeValue.
+	s.IsType(scrapper.TimeValue(time.Time{}), row1[2].Value)
+
+	// Bool → IntValue(1/0) per existing convention.
+	s.Equal(scrapper.IntValue(1), row1[3].Value)
+
+	// Hugeint within int64 range → IntValue.
+	s.Equal(scrapper.IntValue(12345), row1[4].Value)
+
+	// NULL cell: IsNull=true, Value=nil, but the *ColumnValue slot is present.
+	s.True(row1[5].IsNull)
+	s.Nil(row1[5].Value)
+
+	// Non-segment string stays in the row (no sidelining).
+	s.Equal(scrapper.StringValue("not-a-segment"), row1[6].Value)
+
+	// segment* column stays in-row too (unlike QueryCustomMetrics which sidelines it).
+	s.Equal("segment_foo", row1[7].Name)
+	s.Equal(scrapper.StringValue("seg-value"), row1[7].Value)
+
+	row2, err := iter.Next(s.ctx)
+	s.Require().NoError(err)
+	s.Equal(scrapper.StringValue("Bob"), row2[0].Value)
+	s.IsType((*scrapper.BigIntValue)(nil), row2[4].Value)
+
+	// Iterator is exhausted.
+	_, err = iter.Next(s.ctx)
+	s.Equal(io.EOF, err)
+
+	// Close is idempotent after auto-close on EOF.
+	s.NoError(iter.Close())
 }

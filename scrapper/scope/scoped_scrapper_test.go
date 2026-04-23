@@ -63,6 +63,10 @@ func (m *mockScrapper) QueryShape(context.Context, string) ([]*scrapper.QuerySha
 	return nil, nil
 }
 
+func (m *mockScrapper) RunRawQuery(context.Context, string) (scrapper.RawQueryRowIterator, error) {
+	return nil, nil
+}
+
 func (m *mockScrapper) QueryTableConstraints(context.Context) ([]*scrapper.TableConstraintRow, error) {
 	return m.constraintRows, nil
 }

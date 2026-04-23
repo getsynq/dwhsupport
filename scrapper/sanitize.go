@@ -187,7 +187,9 @@ func (v *ColumnValue) Sanitize() {
 		return
 	}
 	v.Name = SanitizeString(v.Name)
-	// Value is a typed Value interface (numeric or time) — never carries strings.
+	if s, ok := v.Value.(StringValue); ok {
+		v.Value = StringValue(SanitizeString(string(s)))
+	}
 }
 
 func (r *CustomMetricsRow) Sanitize() {

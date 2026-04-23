@@ -149,6 +149,10 @@ func (s *RejectingScrapper) QueryShape(ctx context.Context, sql string) ([]*scra
 	return filterValid(cols, s.DialectType(), "QueryShape"), nil
 }
 
+func (s *RejectingScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
+	return s.inner.RunRawQuery(ctx, sql)
+}
+
 func (s *RejectingScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	rows, err := s.inner.QueryTableConstraints(ctx)
 	if err != nil {

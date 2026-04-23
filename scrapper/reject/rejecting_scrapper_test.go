@@ -64,6 +64,10 @@ func (s *stubScrapper) QueryShape(context.Context, string) ([]*scrapper.QuerySha
 	return s.shape, nil
 }
 
+func (s *stubScrapper) RunRawQuery(context.Context, string) (scrapper.RawQueryRowIterator, error) {
+	return nil, nil
+}
+
 func (s *stubScrapper) QueryTableConstraints(context.Context) ([]*scrapper.TableConstraintRow, error) {
 	return s.constraints, nil
 }

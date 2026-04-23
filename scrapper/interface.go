@@ -100,8 +100,40 @@ type Scrapper interface {
 	QuerySegments(ctx context.Context, sql string, args ...any) ([]*SegmentRow, error)
 	QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*CustomMetricsRow, error)
 	QueryShape(ctx context.Context, sql string) ([]*QueryShapeColumn, error)
+	// RunRawQuery executes an arbitrary user-supplied SELECT and returns a
+	// streaming iterator over typed rows. Unlike QueryCustomMetrics it does
+	// not filter segment* columns and does not collapse text columns to
+	// IgnoredValue — it is designed for generic "run this query" surfaces
+	// rather than the agent's metrics/profile/segments path.
+	//
+	// The caller must Close() the iterator. Callers that want a row cap
+	// should stop iteration after N calls to Next().
+	RunRawQuery(ctx context.Context, sql string) (RawQueryRowIterator, error)
 	QueryTableConstraints(ctx context.Context) ([]*TableConstraintRow, error)
 	// This will close underlying execer, such scrapper can't be used anymore
+	Close() error
+}
+
+// RawQueryRowIterator streams typed rows from RunRawQuery. Semantics mirror
+// querylogs.QueryLogIterator: Next returns io.EOF when exhausted, auto-closes
+// on EOF, and Close is idempotent.
+type RawQueryRowIterator interface {
+	// Columns describes the shape of the result. Stable for the lifetime of
+	// the iterator — valid before the first Next call and unchanged after.
+	Columns() []*QueryShapeColumn
+
+	// Next returns the next row or io.EOF when exhausted.
+	//
+	// The returned slice is positional with Columns(); each cell is a fresh
+	// *ColumnValue the caller may retain. NULL cells have IsNull=true and
+	// Value=nil.
+	//
+	// Implementations MUST auto-close resources before returning io.EOF.
+	// Safe to call after EOF (keeps returning io.EOF).
+	Next(ctx context.Context) ([]*ColumnValue, error)
+
+	// Close releases the underlying cursor / driver rows / warehouse job.
+	// Safe to call multiple times.
 	Close() error
 }
 

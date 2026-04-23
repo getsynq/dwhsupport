@@ -67,6 +67,10 @@ func (s *ScopedScrapper) QueryShape(ctx context.Context, sql string) ([]*scrappe
 	return s.inner.QueryShape(ctx, sql)
 }
 
+func (s *ScopedScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
+	return s.inner.RunRawQuery(ctx, sql)
+}
+
 // Scrapper interface — filtered methods.
 // These inject the base scope into the context (enabling SQL push-down in the inner scrapper)
 // and post-filter returned rows to guarantee scope compliance even when the inner scrapper
