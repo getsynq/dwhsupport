@@ -14,11 +14,11 @@ import (
 
 type stubLeaf struct{}
 
-func (stubLeaf) Capabilities() scrapper.Capabilities                    { return scrapper.Capabilities{} }
-func (stubLeaf) DialectType() string                                    { return "stub" }
-func (stubLeaf) SqlDialect() sqldialect.Dialect                         { return nil }
-func (stubLeaf) IsPermissionError(error) bool                           { return false }
-func (stubLeaf) Close() error                                           { return nil }
+func (stubLeaf) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (stubLeaf) DialectType() string                 { return "stub" }
+func (stubLeaf) SqlDialect() sqldialect.Dialect      { return nil }
+func (stubLeaf) IsPermissionError(error) bool        { return false }
+func (stubLeaf) Close() error                        { return nil }
 func (stubLeaf) ValidateConfiguration(context.Context) ([]string, error) {
 	return nil, nil
 }
@@ -44,6 +44,9 @@ func (stubLeaf) QueryCustomMetrics(context.Context, string, ...any) ([]*scrapper
 	return nil, nil
 }
 func (stubLeaf) QueryShape(context.Context, string) ([]*scrapper.QueryShapeColumn, error) {
+	return nil, nil
+}
+func (stubLeaf) RunRawQuery(context.Context, string) (scrapper.RawQueryRowIterator, error) {
 	return nil, nil
 }
 func (stubLeaf) QueryTableConstraints(context.Context) ([]*scrapper.TableConstraintRow, error) {

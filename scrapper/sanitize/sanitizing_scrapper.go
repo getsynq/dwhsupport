@@ -130,6 +130,40 @@ func (s *SanitizingScrapper) QueryShape(ctx context.Context, sql string) ([]*scr
 	return cols, nil
 }
 
+func (s *SanitizingScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
+	iter, err := s.inner.RunRawQuery(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range iter.Columns() {
+		c.Sanitize()
+	}
+	return &sanitizingRawQueryRows{inner: iter}, nil
+}
+
+type sanitizingRawQueryRows struct {
+	inner scrapper.RawQueryRowIterator
+}
+
+func (s *sanitizingRawQueryRows) Columns() []*scrapper.QueryShapeColumn {
+	return s.inner.Columns()
+}
+
+func (s *sanitizingRawQueryRows) Next(ctx context.Context) ([]*scrapper.ColumnValue, error) {
+	row, err := s.inner.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, cv := range row {
+		cv.Sanitize()
+	}
+	return row, nil
+}
+
+func (s *sanitizingRawQueryRows) Close() error {
+	return s.inner.Close()
+}
+
 func (s *SanitizingScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	rows, err := s.inner.QueryTableConstraints(ctx)
 	if err != nil {

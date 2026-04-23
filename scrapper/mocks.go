@@ -560,6 +560,45 @@ func (c *MockScrapperQueryTablesCall) DoAndReturn(f func(context.Context, ...Que
 	return c
 }
 
+// RunRawQuery mocks base method.
+func (m *MockScrapper) RunRawQuery(ctx context.Context, sql string) (RawQueryRowIterator, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RunRawQuery", ctx, sql)
+	ret0, _ := ret[0].(RawQueryRowIterator)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RunRawQuery indicates an expected call of RunRawQuery.
+func (mr *MockScrapperMockRecorder) RunRawQuery(ctx, sql any) *MockScrapperRunRawQueryCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunRawQuery", reflect.TypeOf((*MockScrapper)(nil).RunRawQuery), ctx, sql)
+	return &MockScrapperRunRawQueryCall{Call: call}
+}
+
+// MockScrapperRunRawQueryCall wrap *gomock.Call
+type MockScrapperRunRawQueryCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockScrapperRunRawQueryCall) Return(arg0 RawQueryRowIterator, arg1 error) *MockScrapperRunRawQueryCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockScrapperRunRawQueryCall) Do(f func(context.Context, string) (RawQueryRowIterator, error)) *MockScrapperRunRawQueryCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockScrapperRunRawQueryCall) DoAndReturn(f func(context.Context, string) (RawQueryRowIterator, error)) *MockScrapperRunRawQueryCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // SqlDialect mocks base method.
 func (m *MockScrapper) SqlDialect() sqldialect.Dialect {
 	m.ctrl.T.Helper()

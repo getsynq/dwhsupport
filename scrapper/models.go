@@ -217,6 +217,14 @@ type IgnoredValue struct{}
 
 func (IgnoredValue) isValue() {}
 
+// StringValue preserves text values verbatim. Used by RunRawQuery so generic
+// "run this query" surfaces see string columns as strings rather than having
+// them collapsed to IgnoredValue (as QueryCustomMetrics does, which is correct
+// for the metrics/profile agent path but wrong for raw data preview).
+type StringValue string
+
+func (StringValue) isValue() {}
+
 // BigIntValue represents arbitrary precision integers (e.g., DuckDB hugeint, uint128)
 type BigIntValue big.Int
 
