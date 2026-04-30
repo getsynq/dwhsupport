@@ -203,8 +203,11 @@ func convertDatabricksQueryInfoToQueryLog(
 		status = strings.ToUpper(string(queryInfo.Status))
 	}
 
-	// Get query text, sanitize and apply obfuscation
-	// Skip for INSERT statements (can be huge) and limit size
+	// Get query text, sanitize and apply obfuscation.
+	// Drop SQL for INSERT statements unconditionally: the parser-based obfuscator can
+	// fail-open on literal-dense `INSERT ... VALUES (...)` payloads and leak customer
+	// data. Also drop anything over 1 MB as a hard size cap. Empty SQL is its own
+	// signal to downstream consumers that lineage parsing is not possible.
 	queryText := ""
 	if queryInfo.StatementType != servicesql.QueryStatementTypeInsert && len(queryInfo.QueryText) <= 1*1024*1024 {
 		queryText = strings.TrimSpace(strings.ToValidUTF8(queryInfo.QueryText, ""))
