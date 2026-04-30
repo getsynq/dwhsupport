@@ -87,6 +87,11 @@ type SnowflakeQueryLogSchema struct {
 	QueryParameterizedHashVersion          *int64    `db:"QUERY_PARAMETERIZED_HASH_VERSION"`
 }
 
+// snowflakeQueryTextMaxLen is the maximum length of QUERY_TEXT in ACCOUNT_USAGE.QUERY_HISTORY
+// before Snowflake truncates it. Source:
+// https://docs.snowflake.com/en/sql-reference/account-usage/query_history
+const snowflakeQueryTextMaxLen = 100000
+
 var queryHistoryMandatoryColumns = []string{
 	"QUERY_ID",
 	"QUERY_TEXT",
@@ -424,6 +429,11 @@ func convertSnowflakeRowToQueryLog(
 		dwhContext.Role = *row.RoleName
 	}
 
+	// Snowflake's ACCOUNT_USAGE.QUERY_HISTORY truncates QUERY_TEXT at 100,000 characters
+	// (https://docs.snowflake.com/en/sql-reference/account-usage/query_history). Detect on
+	// the raw value before sanitization since that may shorten the string.
+	isTruncated := len(row.QueryText) >= snowflakeQueryTextMaxLen
+
 	// Sanitize and apply obfuscation to query text
 	// Replace $$$$ with '' (Snowflake-specific escaping) and clean up whitespace/invalid UTF-8
 	queryText := strings.ReplaceAll(strings.TrimSpace(strings.ToValidUTF8(row.QueryText, "")), "$$$$", "''")
@@ -448,5 +458,6 @@ func convertSnowflakeRowToQueryLog(
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Snowflake doesn't provide lineage in QUERY_HISTORY
 		NativeLineage:            nil,
+		IsTruncated:              isTruncated,
 	}, nil
 }
