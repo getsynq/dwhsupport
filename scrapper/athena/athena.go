@@ -21,6 +21,19 @@ import (
 
 type AthenaScrapperConf struct {
 	*dwhexecathena.AthenaConf
+
+	// UseShowCreateView, when true, calls `SHOW CREATE VIEW` per view to
+	// retrieve the full `CREATE OR REPLACE VIEW … AS …` DDL instead of just
+	// the rewritten Presto body from `information_schema.views.view_definition`.
+	// Each call is one Athena query (~$0.00005 at the 10MB scan minimum).
+	UseShowCreateView bool
+
+	// UseShowCreateTable, when true, calls `SHOW CREATE TABLE` per non-view
+	// object to retrieve the table DDL. This is the only way to get table DDL
+	// on Athena — `information_schema` exposes no equivalent. Required to see
+	// CTAS bodies (lineage), Iceberg `TBLPROPERTIES`, partitioning, and Hive
+	// external `LOCATION`/SerDe info. Each call is one Athena query.
+	UseShowCreateTable bool
 }
 
 var _ scrapper.Scrapper = &AthenaScrapper{}

@@ -3,6 +3,7 @@ package athena
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
@@ -92,7 +93,7 @@ func TestAthenaProbe(t *testing.T) {
 	require.Contains(t, allTypesCols["col_array_struct"], "array(row(")
 	require.Contains(t, allTypesCols["col_struct"], "row(")
 
-	// QuerySqlDefinitions — view bodies must come back non-empty.
+	// QuerySqlDefinitions — default mode: view bodies (information_schema.views).
 	defs, err := sc.QuerySqlDefinitions(ctx)
 	require.NoError(t, err)
 	defByName := map[string]string{}
@@ -104,6 +105,41 @@ func TestAthenaProbe(t *testing.T) {
 	for _, v := range []string{"active_products", "tools_only", "order_summary"} {
 		require.NotEmpty(t, defByName[v], "QuerySqlDefinitions[%q] empty", v)
 	}
+	// In default mode tables have no DDL — they should be filtered out.
+	require.NotContains(t, defByName, "products")
+	require.NotContains(t, defByName, "elb_logs_parquet")
+
+	// SHOW CREATE flags — opt-in DDL fetch. Build a fresh scrapper with both flags on.
+	scDDL, err := NewAthenaScrapper(ctx, &AthenaScrapperConf{
+		AthenaConf: &dwhexecathena.AthenaConf{
+			Region: region, Workgroup: wg,
+			AccessKeyID: accessKeyID, SecretAccessKey: secret,
+		},
+		UseShowCreateView:  true,
+		UseShowCreateTable: true,
+	})
+	require.NoError(t, err)
+	defer scDDL.Close()
+
+	ddls, err := scDDL.QuerySqlDefinitions(ctx)
+	require.NoError(t, err)
+	ddlByName := map[string]string{}
+	for _, d := range ddls {
+		if d.Schema == "synq_dwhtesting" {
+			ddlByName[d.Table] = d.Sql
+		}
+	}
+	// Tables now have DDL — assert SHOW CREATE TABLE actually returned a CREATE statement.
+	require.Contains(t, ddlByName, "products", "products DDL missing under UseShowCreateTable")
+	require.Contains(t, strings.ToUpper(ddlByName["products"]), "CREATE TABLE")
+	require.Contains(t, ddlByName, "elb_logs_parquet")
+	require.Contains(t, strings.ToUpper(ddlByName["elb_logs_parquet"]), "CREATE EXTERNAL TABLE")
+	// Iceberg properties leaked through SHOW CREATE TABLE (proves we got more than information_schema gives).
+	require.Contains(t, ddlByName["products"], "table_type",
+		"products DDL should mention table_type (Iceberg TBLPROPERTIES)")
+	// Views now have full CREATE OR REPLACE VIEW DDL.
+	require.Contains(t, strings.ToUpper(ddlByName["active_products"]), "CREATE")
+	require.Contains(t, strings.ToUpper(ddlByName["active_products"]), "VIEW")
 
 	// Scope filter — restrict to a single table and verify both QueryTables
 	// and QueryCatalog narrow accordingly.
