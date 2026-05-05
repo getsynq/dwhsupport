@@ -230,19 +230,25 @@ func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrappe
 	}
 }
 
+// Athena builds an AthenaScrapper for the on-prem agent. AllowDefaultChain is
+// true here so the agent host's instance role / env vars / shared config are
+// usable when the customer leaves explicit auth fields empty. The cloud-side
+// translator MUST construct AthenaConf without AllowDefaultChain so a
+// misconfigured customer integration cannot inherit SYNQ's AWS identity.
 func Athena(ctx context.Context, t *agentdwhv1.AthenaConf) (*scrapperathena.AthenaScrapper, error) {
 	return scrapperathena.NewAthenaScrapper(ctx, &scrapperathena.AthenaScrapperConf{
 		AthenaConf: &dwhexecathena.AthenaConf{
-			Region:          t.GetRegion(),
-			Workgroup:       t.GetWorkgroup(),
-			Catalog:         t.GetCatalog(),
-			AccessKeyID:     t.GetAccessKeyId(),
-			SecretAccessKey: t.GetSecretAccessKey(),
-			SessionToken:    t.GetSessionToken(),
-			AwsProfile:      t.GetAwsProfile(),
-			RoleArn:         t.GetRoleArn(),
-			ExternalID:      t.GetExternalId(),
-			RoleSessionName: t.GetRoleSessionName(),
+			Region:            t.GetRegion(),
+			Workgroup:         t.GetWorkgroup(),
+			Catalog:           t.GetCatalog(),
+			AccessKeyID:       t.GetAccessKeyId(),
+			SecretAccessKey:   t.GetSecretAccessKey(),
+			SessionToken:      t.GetSessionToken(),
+			AwsProfile:        t.GetAwsProfile(),
+			RoleArn:           t.GetRoleArn(),
+			ExternalID:        t.GetExternalId(),
+			RoleSessionName:   t.GetRoleSessionName(),
+			AllowDefaultChain: true,
 		},
 		UseShowCreateView:  t.GetUseShowCreateView(),
 		UseShowCreateTable: t.GetUseShowCreateTable(),

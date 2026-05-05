@@ -29,7 +29,10 @@ import (
 // Authentication is resolved in priority order:
 //  1. Explicit AccessKeyID + SecretAccessKey (+ optional SessionToken).
 //  2. AwsProfile — named profile from ~/.aws/credentials.
-//  3. AWS default credential chain (env vars, shared config, EC2/ECS/EKS instance role).
+//  3. AWS default credential chain (env vars, shared config, EC2/ECS/EKS instance
+//     role) — ONLY when AllowDefaultChain is set. Refused otherwise to prevent
+//     a customer configuration with empty fields from accidentally inheriting
+//     the host process's identity (a real risk on the SYNQ cloud backend).
 //
 // If RoleArn is set on top of any of the above, the executor wraps the base
 // credentials in an STS AssumeRole provider.
@@ -50,6 +53,14 @@ type AthenaConf struct {
 	RoleArn         string
 	ExternalID      string
 	RoleSessionName string // empty defaults to "synq-athena"
+
+	// AllowDefaultChain opts into the AWS default credential chain (env vars,
+	// shared config, EC2/ECS/EKS instance role) when no explicit auth method
+	// is configured. Safe to enable on the on-prem agent host — that's the
+	// customer's own AWS environment. MUST stay false on the SYNQ cloud
+	// backend so a misconfigured customer integration cannot fall through
+	// to SYNQ's own AWS identity.
+	AllowDefaultChain bool
 }
 
 type Executor interface {
@@ -174,15 +185,28 @@ func buildAwsConfig(ctx context.Context, conf *AthenaConf) (aws.Config, error) {
 	loadOpts := []func(*awsconfig.LoadOptions) error{
 		awsconfig.WithRegion(conf.Region),
 	}
+	hasExplicitAuth := false
 	switch {
 	case conf.AccessKeyID != "" && conf.SecretAccessKey != "":
 		loadOpts = append(loadOpts, awsconfig.WithCredentialsProvider(
 			awscredentials.NewStaticCredentialsProvider(conf.AccessKeyID, conf.SecretAccessKey, conf.SessionToken),
 		))
+		hasExplicitAuth = true
 	case conf.AccessKeyID != "" || conf.SecretAccessKey != "":
 		return aws.Config{}, errors.New("athena: AccessKeyID and SecretAccessKey must be provided together")
 	case conf.AwsProfile != "":
 		loadOpts = append(loadOpts, awsconfig.WithSharedConfigProfile(conf.AwsProfile))
+		hasExplicitAuth = true
+	}
+	if conf.RoleArn != "" {
+		hasExplicitAuth = true
+	}
+	if !hasExplicitAuth && !conf.AllowDefaultChain {
+		// Refuse to fall through to the AWS default credential chain (env vars,
+		// EC2/ECS/EKS instance role). On the cloud backend this would attach
+		// to SYNQ's own identity if a customer config had empty fields.
+		// On-prem agent paths must explicitly opt in via AllowDefaultChain.
+		return aws.Config{}, errors.New("athena: no authentication method configured — set AccessKeyID+SecretAccessKey, AwsProfile, RoleArn, or AllowDefaultChain")
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {
