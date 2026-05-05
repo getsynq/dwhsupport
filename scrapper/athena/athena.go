@@ -16,6 +16,7 @@ import (
 
 	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
@@ -34,6 +35,11 @@ type AthenaScrapperConf struct {
 	// CTAS bodies (lineage), Iceberg `TBLPROPERTIES`, partitioning, and Hive
 	// external `LOCATION`/SerDe info. Each call is one Athena query.
 	UseShowCreateTable bool
+
+	// Scope is the include/exclude filter for Glue catalog/database/table.
+	// Nil means accept-all. The cloud and agent protos both carry this as
+	// a synq.common.v1.ScopeFilter; callers translate via ScopeFromProto.
+	Scope *scope.ScopeFilter
 }
 
 var _ scrapper.Scrapper = &AthenaScrapper{}

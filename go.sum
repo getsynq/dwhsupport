@@ -4,6 +4,12 @@ buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260410075358-d0c97934
 buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260410075358-d0c979344098.1/go.mod h1:TOEu9lrXJ0CuMq3lFyZRfqabnKBXTBkwpWebF6tli90=
 buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260430084815-3bcfe473fdcd.1 h1:o4piALSSrXV6TwPa5YZ7F+pSsE/WX1FTtG+9p02KC9U=
 buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260430084815-3bcfe473fdcd.1/go.mod h1:TOEu9lrXJ0CuMq3lFyZRfqabnKBXTBkwpWebF6tli90=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260505233541-fcf2447baf62.1 h1:Sm9iFo3oC7EcV7IQngsJRunamHySKzTLdOsPCn9bhlw=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260505233541-fcf2447baf62.1/go.mod h1:TOEu9lrXJ0CuMq3lFyZRfqabnKBXTBkwpWebF6tli90=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260505234317-58b062878b78.1 h1:qsDjrKTPwIvlfsikSBPdEgprsb+uZoQSY0jxfiqhS0E=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260505234317-58b062878b78.1/go.mod h1:TOEu9lrXJ0CuMq3lFyZRfqabnKBXTBkwpWebF6tli90=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260505234533-10059e7be493.1 h1:sbauY9roTxJQEGkOPGkoiovPOqUx6QcCirbogePXfM0=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260505234533-10059e7be493.1/go.mod h1:TOEu9lrXJ0CuMq3lFyZRfqabnKBXTBkwpWebF6tli90=
 cel.dev/expr v0.24.0 h1:56OvJKSH3hDGL0ml5uSxZmz3/3Pq4tJ+fb1unVLAFcY=
 cel.dev/expr v0.24.0/go.mod h1:hLPLo1W4QUmuYdA72RBX06QTs6MXw941piREPl3Yfiw=
 cloud.google.com/go v0.121.6 h1:waZiuajrI28iAf40cWgycWNgaXPO06dupuS+sgibK6c=

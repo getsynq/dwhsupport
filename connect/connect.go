@@ -4,6 +4,7 @@ import (
 	"context"
 
 	agentdwhv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/agent/dwh/v1"
+	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
@@ -15,6 +16,7 @@ import (
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	dwhexectrino "github.com/getsynq/dwhsupport/exec/trino"
 	"github.com/getsynq/dwhsupport/scrapper"
+	scrapperathena "github.com/getsynq/dwhsupport/scrapper/athena"
 	scrapperbigquery "github.com/getsynq/dwhsupport/scrapper/bigquery"
 	scrapperclickhouse "github.com/getsynq/dwhsupport/scrapper/clickhouse"
 	scrapperdatabricks "github.com/getsynq/dwhsupport/scrapper/databricks"
@@ -25,6 +27,7 @@ import (
 	scrapperredshift "github.com/getsynq/dwhsupport/scrapper/redshift"
 	scrappersnowflake "github.com/getsynq/dwhsupport/scrapper/snowflake"
 	scrappertrino "github.com/getsynq/dwhsupport/scrapper/trino"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
@@ -220,7 +223,29 @@ func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrappe
 		return Oracle(ctx, t.Oracle)
 	case *agentdwhv1.Connection_Duckdb:
 		return DuckDB(ctx, t.Duckdb)
+	case *agentdwhv1.Connection_Athena:
+		return Athena(ctx, t.Athena)
 	default:
 		return nil, errors.New("unsupported database type")
 	}
+}
+
+func Athena(ctx context.Context, t *agentdwhv1.AthenaConf) (*scrapperathena.AthenaScrapper, error) {
+	return scrapperathena.NewAthenaScrapper(ctx, &scrapperathena.AthenaScrapperConf{
+		AthenaConf: &dwhexecathena.AthenaConf{
+			Region:          t.GetRegion(),
+			Workgroup:       t.GetWorkgroup(),
+			Catalog:         t.GetCatalog(),
+			AccessKeyID:     t.GetAccessKeyId(),
+			SecretAccessKey: t.GetSecretAccessKey(),
+			SessionToken:    t.GetSessionToken(),
+			AwsProfile:      t.GetAwsProfile(),
+			RoleArn:         t.GetRoleArn(),
+			ExternalID:      t.GetExternalId(),
+			RoleSessionName: t.GetRoleSessionName(),
+		},
+		UseShowCreateView:  t.GetUseShowCreateView(),
+		UseShowCreateTable: t.GetUseShowCreateTable(),
+		Scope:              scope.FromProto(t.GetScope()),
+	})
 }
