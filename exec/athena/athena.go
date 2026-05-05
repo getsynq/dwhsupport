@@ -1,8 +1,8 @@
 // Package athena provides a database/sql-style executor backed by
-// github.com/uber/athenadriver. The driver speaks to Amazon Athena via the
-// AWS Athena API (StartQueryExecution / GetQueryExecution / GetQueryResults)
-// but exposes a database/sql-compatible surface, which lets us reuse the
-// stdsql helpers other scrappers already use.
+// github.com/influxdata/athenadriver/v2. The driver speaks to Amazon Athena
+// via the AWS Athena API (StartQueryExecution / GetQueryExecution /
+// GetQueryResults) but exposes a database/sql-compatible surface, which lets
+// us reuse the stdsql helpers other scrappers already use.
 package athena
 
 import (
@@ -13,6 +13,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	awscredentials "github.com/aws/aws-sdk-go-v2/credentials"
+	awsstscreds "github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	awsathena "github.com/aws/aws-sdk-go-v2/service/athena"
 	awssts "github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/getsynq/dwhsupport/exec"
@@ -23,13 +24,32 @@ import (
 	athenadriver "github.com/influxdata/athenadriver/v2/go"
 )
 
+// AthenaConf carries everything the executor needs to open a connection.
+//
+// Authentication is resolved in priority order:
+//  1. Explicit AccessKeyID + SecretAccessKey (+ optional SessionToken).
+//  2. AwsProfile — named profile from ~/.aws/credentials.
+//  3. AWS default credential chain (env vars, shared config, EC2/ECS/EKS instance role).
+//
+// If RoleArn is set on top of any of the above, the executor wraps the base
+// credentials in an STS AssumeRole provider.
 type AthenaConf struct {
-	Region          string
-	Workgroup       string // empty defaults to "primary"
+	Region    string
+	Workgroup string // empty defaults to "primary"
+	Catalog   string // empty defaults to "AwsDataCatalog"
+
+	// Static credentials. Highest priority.
 	AccessKeyID     string
 	SecretAccessKey string
-	SessionToken    string // optional, only for short-lived STS creds
-	Catalog         string // defaults to "AwsDataCatalog"
+	SessionToken    string
+
+	// Named AWS shared-config profile. Used only when static credentials are absent.
+	AwsProfile string
+
+	// AssumeRole. Wraps whichever base credentials resolved above.
+	RoleArn         string
+	ExternalID      string
+	RoleSessionName string // empty defaults to "synq-athena"
 }
 
 type Executor interface {
@@ -39,14 +59,17 @@ type Executor interface {
 var _ stdsql.StdSqlExecutor = &AthenaExecutor{}
 
 type AthenaExecutor struct {
-	conf      *AthenaConf
-	db        *sqlx.DB
-	accountID string // sts:GetCallerIdentity, used as part of the canonical instance id
+	conf         *AthenaConf
+	awsCfg       aws.Config
+	athenaClient *awsathena.Client
+	db           *sqlx.DB
+	accountID    string // sts:GetCallerIdentity, used as part of the canonical instance id
 }
 
-func (e *AthenaExecutor) GetDb() *sqlx.DB { return e.db }
-func (e *AthenaExecutor) AccountID() string { return e.accountID }
-func (e *AthenaExecutor) Region() string { return e.conf.Region }
+func (e *AthenaExecutor) GetDb() *sqlx.DB              { return e.db }
+func (e *AthenaExecutor) AccountID() string            { return e.accountID }
+func (e *AthenaExecutor) Region() string               { return e.conf.Region }
+func (e *AthenaExecutor) AthenaClient() *awsathena.Client { return e.athenaClient }
 func (e *AthenaExecutor) Workgroup() string {
 	if e.conf.Workgroup != "" {
 		return e.conf.Workgroup
@@ -61,8 +84,8 @@ func (e *AthenaExecutor) Catalog() string {
 }
 
 // Instance returns the canonical instance identifier for an Athena endpoint:
-// "<account-id>.<region>". This disambiguates two Athena integrations across
-// AWS accounts that share a Glue database name.
+// "<account-id>.<region>". Disambiguates two Athena integrations across AWS
+// accounts that share a Glue database name.
 func (e *AthenaExecutor) Instance() string {
 	return fmt.Sprintf("%s.%s", e.accountID, e.conf.Region)
 }
@@ -71,25 +94,13 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	if conf.Region == "" {
 		return nil, errors.New("athena: Region is required")
 	}
-	if conf.AccessKeyID == "" || conf.SecretAccessKey == "" {
-		return nil, errors.New("athena: AccessKeyID and SecretAccessKey are required")
-	}
 
-	// Resolve the workgroup's configured S3 query result location via the
-	// Athena API. The customer is expected to have set this on the workgroup
-	// (with EnforceWorkGroupConfiguration=true so per-query overrides cannot
-	// escape the data-scan cap). We only pass it to the driver because
-	// athenadriver requires *some* output bucket in its DSN.
-	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
-		awsconfig.WithRegion(conf.Region),
-		awsconfig.WithCredentialsProvider(awscredentials.NewStaticCredentialsProvider(
-			conf.AccessKeyID, conf.SecretAccessKey, conf.SessionToken,
-		)),
-	)
+	awsCfg, err := buildAwsConfig(ctx, conf)
 	if err != nil {
-		return nil, fmt.Errorf("athena: load aws config: %w", err)
+		return nil, err
 	}
 
+	// sts:GetCallerIdentity validates auth + gives us the account ID for the instance string.
 	stsClient := awssts.NewFromConfig(awsCfg)
 	whoami, err := stsClient.GetCallerIdentity(ctx, &awssts.GetCallerIdentityInput{})
 	if err != nil {
@@ -98,6 +109,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	accountID := aws.ToString(whoami.Account)
 
 	athenaClient := awsathena.NewFromConfig(awsCfg)
+
 	wgName := conf.Workgroup
 	if wgName == "" {
 		wgName = "primary"
@@ -114,12 +126,22 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 		return nil, fmt.Errorf("athena: workgroup %q has no query result location configured — set ResultConfiguration.OutputLocation on the workgroup", wgName)
 	}
 
-	driverConf, err := athenadriver.NewDefaultConfig(outputLocation, conf.Region, conf.AccessKeyID, conf.SecretAccessKey)
+	// Resolve credentials once and pass the materialized triple to the driver.
+	// The influxdata driver doesn't accept a credentials provider, so for
+	// AssumeRole / profile / chain paths we snapshot the active creds here.
+	// For long-lived processes using STS creds the executor must be recreated
+	// before they expire (default 1h, max 12h for AssumeRole).
+	creds, err := awsCfg.Credentials.Retrieve(ctx)
+	if err != nil {
+		return nil, exec.NewAuthError(fmt.Errorf("athena: resolve credentials: %w", err))
+	}
+
+	driverConf, err := athenadriver.NewDefaultConfig(outputLocation, conf.Region, creds.AccessKeyID, creds.SecretAccessKey)
 	if err != nil {
 		return nil, fmt.Errorf("athena: build driver config: %w", err)
 	}
-	if conf.SessionToken != "" {
-		driverConf.SetSessionToken(conf.SessionToken)
+	if creds.SessionToken != "" {
+		driverConf.SetSessionToken(creds.SessionToken)
 	}
 	wgWrapper := athenadriver.NewDefaultWG(wgName, nil, nil)
 	if err := driverConf.SetWorkGroup(wgWrapper); err != nil {
@@ -137,10 +159,52 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	}
 
 	return &AthenaExecutor{
-		conf:      conf,
-		db:        db,
-		accountID: accountID,
+		conf:         conf,
+		awsCfg:       awsCfg,
+		athenaClient: athenaClient,
+		db:           db,
+		accountID:    accountID,
 	}, nil
+}
+
+// buildAwsConfig assembles an aws.Config from the configured authentication
+// method. Resolution order: static keys → profile → default chain. RoleArn
+// wraps whichever base credentials resolved.
+func buildAwsConfig(ctx context.Context, conf *AthenaConf) (aws.Config, error) {
+	loadOpts := []func(*awsconfig.LoadOptions) error{
+		awsconfig.WithRegion(conf.Region),
+	}
+	switch {
+	case conf.AccessKeyID != "" && conf.SecretAccessKey != "":
+		loadOpts = append(loadOpts, awsconfig.WithCredentialsProvider(
+			awscredentials.NewStaticCredentialsProvider(conf.AccessKeyID, conf.SecretAccessKey, conf.SessionToken),
+		))
+	case conf.AccessKeyID != "" || conf.SecretAccessKey != "":
+		return aws.Config{}, errors.New("athena: AccessKeyID and SecretAccessKey must be provided together")
+	case conf.AwsProfile != "":
+		loadOpts = append(loadOpts, awsconfig.WithSharedConfigProfile(conf.AwsProfile))
+	}
+	cfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)
+	if err != nil {
+		return aws.Config{}, fmt.Errorf("athena: load aws config: %w", err)
+	}
+
+	if conf.RoleArn != "" {
+		stsClient := awssts.NewFromConfig(cfg)
+		sessionName := conf.RoleSessionName
+		if sessionName == "" {
+			sessionName = "synq-athena"
+		}
+		provider := awsstscreds.NewAssumeRoleProvider(stsClient, conf.RoleArn, func(o *awsstscreds.AssumeRoleOptions) {
+			o.RoleSessionName = sessionName
+			if conf.ExternalID != "" {
+				o.ExternalID = aws.String(conf.ExternalID)
+			}
+		})
+		cfg.Credentials = aws.NewCredentialsCache(provider)
+	}
+
+	return cfg, nil
 }
 
 func (e *AthenaExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
@@ -153,11 +217,6 @@ func (e *AthenaExecutor) Select(ctx context.Context, dest any, query string, arg
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
 	return e.db.SelectContext(ctx, dest, query, args...)
-}
-
-func (e *AthenaExecutor) Get(ctx context.Context, dest any, query string, args ...any) error {
-	query = querycontext.AppendSQLComment(ctx, trimRightSemicolons(query))
-	return e.db.GetContext(ctx, dest, query, args...)
 }
 
 func (e *AthenaExecutor) Exec(ctx context.Context, query string, args ...any) error {

@@ -2,11 +2,14 @@ package athena
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
+	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/stretchr/testify/require"
 )
@@ -159,6 +162,61 @@ func TestAthenaProbe(t *testing.T) {
 		require.Equal(t, "products", c.Table, "scope filter leaked into catalog: %s.%s", c.Schema, c.Table)
 	}
 	require.NotEmpty(t, scopedCols)
+
+	// FetchQueryLogs — pages through ListQueryExecutions+BatchGetQueryExecution
+	// for the workgroup. The seed itself ran ~30 queries via reseed.sh, so the
+	// 24h window must contain at least the SELECT we just sent.
+	from := time.Now().Add(-24 * time.Hour)
+	to := time.Now().Add(time.Minute)
+	obf, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+	iter, err := sc.FetchQueryLogs(ctx, from, to, obf)
+	require.NoError(t, err)
+	defer iter.Close()
+
+	var (
+		count          int
+		sawShowCreate  bool
+		sawSelect      bool
+		anyHasContext  bool
+		anyHasFinished bool
+	)
+	for {
+		ql, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		count++
+		require.NotEmpty(t, ql.QueryID)
+		require.NotEmpty(t, ql.Status)
+		require.False(t, ql.CreatedAt.IsZero())
+		require.NotNil(t, ql.StartedAt)
+		require.False(t, ql.CreatedAt.Before(from))
+		require.False(t, ql.CreatedAt.After(to))
+
+		upper := strings.ToUpper(ql.SQL)
+		if strings.HasPrefix(upper, "SHOW CREATE") {
+			sawShowCreate = true
+		}
+		if strings.HasPrefix(upper, "SELECT") {
+			sawSelect = true
+		}
+		if ql.DwhContext != nil && ql.DwhContext.Schema != "" {
+			anyHasContext = true
+		}
+		if ql.FinishedAt != nil {
+			anyHasFinished = true
+		}
+		if count > 200 {
+			break // sanity cap; we only need a representative sample
+		}
+	}
+	require.NotZero(t, count, "FetchQueryLogs returned no rows in 24h window")
+	require.True(t, sawSelect, "expected at least one SELECT (we ran several earlier in this test)")
+	require.True(t, sawShowCreate, "expected at least one SHOW CREATE from the SHOW CREATE flag run")
+	require.True(t, anyHasContext, "expected at least one row with QueryExecutionContext.Database populated")
+	require.True(t, anyHasFinished, "expected at least one row with FinishedAt set")
 }
 
 func envOrDefault(k, d string) string {
