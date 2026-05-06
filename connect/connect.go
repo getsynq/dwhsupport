@@ -4,6 +4,7 @@ import (
 	"context"
 
 	agentdwhv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/agent/dwh/v1"
+	commonv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/common/v1"
 	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
@@ -252,6 +253,43 @@ func Athena(ctx context.Context, t *agentdwhv1.AthenaConf) (*scrapperathena.Athe
 		},
 		UseShowCreateView:  t.GetUseShowCreateView(),
 		UseShowCreateTable: t.GetUseShowCreateTable(),
-		Scope:              scope.FromProto(t.GetScope()),
+		Scope:              athenaScopeFromProto(t.GetScope()),
 	})
+}
+
+// athenaScopeFromProto inlines the buf-generated ScopeFilter → runtime
+// scope.ScopeFilter conversion. Kept here (not in scrapper/scope) on purpose:
+// the same proto file is also generated under github.com/getsynq/api/common/v1
+// in the cloud workspace, and any binary that links BOTH Go packages panics on
+// init because protobuf's global registry rejects duplicate registrations of
+// the same .proto file path. By only importing the buf flavor in this package
+// (which is exclusive to agent callers anyway), the runtime scope.ScopeFilter
+// type stays free of any proto generated package and is safe to import from
+// cloud handlers that already use the workspace flavor.
+func athenaScopeFromProto(p *commonv1.ScopeFilter) *scope.ScopeFilter {
+	if p == nil {
+		return nil
+	}
+	if len(p.GetInclude()) == 0 && len(p.GetExclude()) == 0 {
+		return nil
+	}
+	out := &scope.ScopeFilter{
+		Include: make([]scope.ScopeRule, 0, len(p.GetInclude())),
+		Exclude: make([]scope.ScopeRule, 0, len(p.GetExclude())),
+	}
+	for _, r := range p.GetInclude() {
+		out.Include = append(out.Include, scope.ScopeRule{
+			Database: r.GetDatabase(),
+			Schema:   r.GetSchema(),
+			Table:    r.GetTable(),
+		})
+	}
+	for _, r := range p.GetExclude() {
+		out.Exclude = append(out.Exclude, scope.ScopeRule{
+			Database: r.GetDatabase(),
+			Schema:   r.GetSchema(),
+			Table:    r.GetTable(),
+		})
+	}
+	return out
 }
