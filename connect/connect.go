@@ -251,9 +251,10 @@ func Athena(ctx context.Context, t *agentdwhv1.AthenaConf) (*scrapperathena.Athe
 			RoleSessionName:   t.GetRoleSessionName(),
 			AllowDefaultChain: true,
 		},
-		UseShowCreateView:  t.GetUseShowCreateView(),
-		UseShowCreateTable: t.GetUseShowCreateTable(),
-		Scope:              athenaScopeFromProto(t.GetScope()),
+		UseShowCreateView:     t.GetUseShowCreateView(),
+		UseShowCreateTable:    t.GetUseShowCreateTable(),
+		UseIcebergMetricsScan: t.GetUseIcebergMetricsScan(),
+		Scope:                 athenaScopeFromProto(t.GetScope()),
 	})
 }
 

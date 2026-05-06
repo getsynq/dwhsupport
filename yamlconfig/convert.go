@@ -1,10 +1,10 @@
-
 package yamlconfig
 
 import (
 	"fmt"
 
 	agentdwhv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/agent/dwh/v1"
+	commonv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/common/v1"
 )
 
 // ToProtoConnections converts all YAML connections to proto Connection messages.
@@ -82,6 +82,10 @@ func ToProtoConnection(id string, conn *Connection) (*agentdwhv1.Connection, err
 	case conn.DuckDB != nil:
 		proto.Config = &agentdwhv1.Connection_Duckdb{
 			Duckdb: duckdbConfToProto(conn.DuckDB),
+		}
+	case conn.Athena != nil:
+		proto.Config = &agentdwhv1.Connection_Athena{
+			Athena: athenaConfToProto(conn.Athena),
 		}
 	default:
 		return nil, fmt.Errorf("no database type configured")
@@ -240,6 +244,53 @@ func oracleConfToProto(c *OracleConf) *agentdwhv1.OracleConf {
 		WalletPath:         c.WalletPath,
 		UseDiagnosticsPack: c.UseDiagnosticsPack,
 	}
+}
+
+func athenaConfToProto(c *AthenaConf) *agentdwhv1.AthenaConf {
+	return &agentdwhv1.AthenaConf{
+		Region:                c.Region,
+		Workgroup:             c.Workgroup,
+		Catalog:               c.Catalog,
+		AccessKeyId:           c.AccessKeyID,
+		SecretAccessKey:       c.SecretAccessKey,
+		SessionToken:          c.SessionToken,
+		AwsProfile:            c.AwsProfile,
+		RoleArn:               c.RoleArn,
+		ExternalId:            c.ExternalID,
+		RoleSessionName:       c.RoleSessionName,
+		Scope:                 scopeConfToProto(c.Scope),
+		UseShowCreateTable:    c.UseShowCreateTable,
+		UseShowCreateView:     c.UseShowCreateView,
+		UseIcebergMetricsScan: c.UseIcebergMetricsScan,
+	}
+}
+
+func scopeConfToProto(c *ScopeConf) *commonv1.ScopeFilter {
+	if c == nil {
+		return nil
+	}
+	if len(c.Include) == 0 && len(c.Exclude) == 0 {
+		return nil
+	}
+	out := &commonv1.ScopeFilter{
+		Include: make([]*commonv1.ScopeRule, 0, len(c.Include)),
+		Exclude: make([]*commonv1.ScopeRule, 0, len(c.Exclude)),
+	}
+	for _, r := range c.Include {
+		out.Include = append(out.Include, &commonv1.ScopeRule{
+			Database: r.Database,
+			Schema:   r.Schema,
+			Table:    r.Table,
+		})
+	}
+	for _, r := range c.Exclude {
+		out.Exclude = append(out.Exclude, &commonv1.ScopeRule{
+			Database: r.Database,
+			Schema:   r.Schema,
+			Table:    r.Table,
+		})
+	}
+	return out
 }
 
 func duckdbConfToProto(c *DuckDBConf) *agentdwhv1.DuckDBConf {

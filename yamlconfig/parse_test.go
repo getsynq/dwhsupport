@@ -18,7 +18,7 @@ func TestParseConnections_FullExample(t *testing.T) {
 	// Parse without env expansion — env vars remain as literal "${VAR}"
 	conns, err := ParseConnections(data, ParseOptions{})
 	require.NoError(t, err)
-	assert.Len(t, conns, 12)
+	assert.Len(t, conns, 13)
 
 	// Postgres
 	pg := conns["pg-local"]

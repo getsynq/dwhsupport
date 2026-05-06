@@ -115,3 +115,19 @@ connections:
       username: synq
       password: ${REDSHIFT_PASSWORD}
       freshness_from_query_logs: true
+
+  "athena-prod":
+    athena:
+      region: eu-central-1
+      workgroup: synq-prod-wg
+      role_arn: arn:aws:iam::123456789012:role/synq-athena
+      external_id: ${ATHENA_EXTERNAL_ID}
+      use_show_create_table: true
+      use_iceberg_metrics_scan: true
+      scope:
+        include:
+          - schema: analytics
+          - schema: staging
+        exclude:
+          - schema: staging
+            table: tmp_*

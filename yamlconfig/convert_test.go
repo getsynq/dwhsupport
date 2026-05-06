@@ -19,7 +19,7 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 
 	protos, err := ToProtoConnections(conns)
 	require.NoError(t, err)
-	assert.Len(t, protos, 12)
+	assert.Len(t, protos, 13)
 
 	// Verify Postgres
 	pg := protos["pg-local"]
