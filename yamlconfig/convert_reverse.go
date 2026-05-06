@@ -2,6 +2,7 @@ package yamlconfig
 
 import (
 	agentdwhv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/agent/dwh/v1"
+	commonv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/common/v1"
 )
 
 // FromProtoConnections converts proto Connection messages back to YAML Connection structs.
@@ -48,6 +49,8 @@ func FromProtoConnection(proto *agentdwhv1.Connection) *Connection {
 		conn.Oracle = oracleConfFromProto(t.Oracle)
 	case *agentdwhv1.Connection_Duckdb:
 		conn.DuckDB = duckdbConfFromProto(t.Duckdb)
+	case *agentdwhv1.Connection_Athena:
+		conn.Athena = athenaConfFromProto(t.Athena)
 	}
 
 	return conn
@@ -230,4 +233,54 @@ func duckdbConfFromProto(c *agentdwhv1.DuckDBConf) *DuckDBConf {
 		MotherduckAccount: c.GetMotherduckAccount(),
 		MotherduckToken:   c.GetMotherduckToken(),
 	}
+}
+
+func athenaConfFromProto(c *agentdwhv1.AthenaConf) *AthenaConf {
+	if c == nil {
+		return nil
+	}
+	return &AthenaConf{
+		Region:                c.GetRegion(),
+		Workgroup:             c.GetWorkgroup(),
+		Catalog:               c.GetCatalog(),
+		AccessKeyID:           c.GetAccessKeyId(),
+		SecretAccessKey:       c.GetSecretAccessKey(),
+		SessionToken:          c.GetSessionToken(),
+		AwsProfile:            c.GetAwsProfile(),
+		RoleArn:               c.GetRoleArn(),
+		ExternalID:            c.GetExternalId(),
+		RoleSessionName:       c.GetRoleSessionName(),
+		Scope:                 scopeConfFromProto(c.GetScope()),
+		UseShowCreateTable:    c.GetUseShowCreateTable(),
+		UseShowCreateView:     c.GetUseShowCreateView(),
+		UseIcebergMetricsScan: c.GetUseIcebergMetricsScan(),
+	}
+}
+
+func scopeConfFromProto(p *commonv1.ScopeFilter) *ScopeConf {
+	if p == nil {
+		return nil
+	}
+	if len(p.GetInclude()) == 0 && len(p.GetExclude()) == 0 {
+		return nil
+	}
+	out := &ScopeConf{
+		Include: make([]ScopeRuleConf, 0, len(p.GetInclude())),
+		Exclude: make([]ScopeRuleConf, 0, len(p.GetExclude())),
+	}
+	for _, r := range p.GetInclude() {
+		out.Include = append(out.Include, ScopeRuleConf{
+			Database: r.GetDatabase(),
+			Schema:   r.GetSchema(),
+			Table:    r.GetTable(),
+		})
+	}
+	for _, r := range p.GetExclude() {
+		out.Exclude = append(out.Exclude, ScopeRuleConf{
+			Database: r.GetDatabase(),
+			Schema:   r.GetSchema(),
+			Table:    r.GetTable(),
+		})
+	}
+	return out
 }

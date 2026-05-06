@@ -30,6 +30,7 @@ type Connection struct {
 	MSSQL      *MSSQLConf      `yaml:"mssql,omitempty"`
 	Oracle     *OracleConf     `yaml:"oracle,omitempty"`
 	DuckDB     *DuckDBConf     `yaml:"duckdb,omitempty"`
+	Athena     *AthenaConf     `yaml:"athena,omitempty"`
 }
 
 // DialectType returns the warehouse type string for this connection, or empty if none is set.
@@ -57,6 +58,8 @@ func (c *Connection) DialectType() string {
 		return "oracle"
 	case c.DuckDB != nil:
 		return "duckdb"
+	case c.Athena != nil:
+		return "athena"
 	default:
 		return ""
 	}
@@ -81,8 +84,8 @@ type SnowflakeConf struct {
 	// Virtual warehouse to use for queries.
 	Warehouse string `yaml:"warehouse" jsonschema:"required"`
 	// Role to assume after connecting.
-	Role     string `yaml:"role"     jsonschema:"required"`
-	Username string `yaml:"username" jsonschema:"required"`
+	Role     string `yaml:"role"               jsonschema:"required"`
+	Username string `yaml:"username"           jsonschema:"required"`
 	Password string `yaml:"password,omitempty"`
 	// PEM-encoded private key content for key-pair authentication.
 	PrivateKey string `yaml:"private_key,omitempty"`
@@ -144,11 +147,11 @@ type RedshiftConf struct {
 
 // MySQLConf contains MySQL connection parameters.
 type MySQLConf struct {
-	Host     string `yaml:"host"           jsonschema:"required"`
-	Port     int    `yaml:"port"           jsonschema:"required,minimum=1,maximum=65535"`
+	Host     string `yaml:"host"               jsonschema:"required"`
+	Port     int    `yaml:"port"               jsonschema:"required,minimum=1,maximum=65535"`
 	Database string `yaml:"database,omitempty"`
-	Username string `yaml:"username"       jsonschema:"required"`
-	Password string `yaml:"password"       jsonschema:"required"`
+	Username string `yaml:"username"           jsonschema:"required"`
+	Password string `yaml:"password"           jsonschema:"required"`
 	// Disable SSL certificate verification.
 	AllowInsecure bool `yaml:"allow_insecure,omitempty"`
 	// Additional DSN parameters passed to the driver.
@@ -161,15 +164,15 @@ type ClickhouseConf struct {
 	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
 	// Database to connect to. If empty, all databases are scraped.
 	Database string `yaml:"database,omitempty"`
-	Username string `yaml:"username" jsonschema:"required"`
-	Password string `yaml:"password" jsonschema:"required"`
+	Username string `yaml:"username"           jsonschema:"required"`
+	Password string `yaml:"password"           jsonschema:"required"`
 	// Disable SSL certificate verification.
 	AllowInsecure bool `yaml:"allow_insecure,omitempty"`
 }
 
 // TrinoConf contains Trino / Starburst connection parameters.
 type TrinoConf struct {
-	Host string `yaml:"host" jsonschema:"required"`
+	Host string `yaml:"host"           jsonschema:"required"`
 	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
 	// Use a plain HTTP connection instead of HTTPS.
 	UsePlaintext bool   `yaml:"use_plaintext,omitempty"`
@@ -204,9 +207,9 @@ type DatabricksConf struct {
 
 // MSSQLConf contains Microsoft SQL Server / Azure SQL Database connection parameters.
 type MSSQLConf struct {
-	Host     string `yaml:"host"           jsonschema:"required"`
-	Port     int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
-	Database string `yaml:"database"       jsonschema:"required"`
+	Host     string `yaml:"host"               jsonschema:"required"`
+	Port     int    `yaml:"port,omitempty"     jsonschema:"minimum=1,maximum=65535"`
+	Database string `yaml:"database"           jsonschema:"required"`
 	Username string `yaml:"username,omitempty"`
 	Password string `yaml:"password,omitempty"`
 	// Trust the server certificate without validation.
@@ -223,10 +226,10 @@ type MSSQLConf struct {
 
 // OracleConf contains Oracle Database connection parameters.
 type OracleConf struct {
-	Host string `yaml:"host" jsonschema:"required"`
+	Host string `yaml:"host"           jsonschema:"required"`
 	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
 	// Oracle service name.
-	ServiceName string `yaml:"service_name" jsonschema:"required"`
+	ServiceName string `yaml:"service_name"       jsonschema:"required"`
 	Username    string `yaml:"username,omitempty"`
 	Password    string `yaml:"password,omitempty"`
 	// Enable SSL/TLS for the connection.
@@ -247,6 +250,77 @@ type DuckDBConf struct {
 	MotherduckAccount string `yaml:"motherduck_account,omitempty"`
 	// MotherDuck authentication token (required for cloud MotherDuck).
 	MotherduckToken string `yaml:"motherduck_token,omitempty"`
+}
+
+// AthenaConf contains Amazon Athena connection parameters. Authentication
+// resolves in priority order: explicit access_key_id + secret_access_key,
+// then aws_profile, then the agent host's default AWS credential chain
+// (env vars, shared config, EC2/ECS/EKS instance role). When role_arn is set
+// the resolved base credentials are wrapped in an STS AssumeRole provider.
+type AthenaConf struct {
+	// AWS region hosting the Athena service and Glue Data Catalog.
+	Region string `yaml:"region" jsonschema:"required"`
+	// Athena workgroup. Defaults to "primary" when empty. Must have a
+	// ResultConfiguration.OutputLocation configured.
+	Workgroup string `yaml:"workgroup,omitempty"`
+	// Glue Data Catalog name. Defaults to "AwsDataCatalog" when empty.
+	Catalog string `yaml:"catalog,omitempty"`
+
+	// Static AWS credentials. Pair access_key_id with secret_access_key.
+	AccessKeyID     string `yaml:"access_key_id,omitempty"`
+	SecretAccessKey string `yaml:"secret_access_key,omitempty"`
+	// Optional STS session token, when access_key_id+secret_access_key are
+	// short-lived STS credentials.
+	SessionToken string `yaml:"session_token,omitempty"`
+	// Named AWS shared-config profile (from ~/.aws/credentials or
+	// ~/.aws/config). Used only when static credentials are absent.
+	AwsProfile string `yaml:"aws_profile,omitempty"`
+
+	// IAM role ARN to assume via STS. Wraps whichever base credentials
+	// resolved above (or the host's default chain when no other auth is set).
+	RoleArn string `yaml:"role_arn,omitempty"`
+	// External ID required by the role's trust policy. Pair with role_arn.
+	ExternalID string `yaml:"external_id,omitempty"`
+	// Optional STS session name. Defaults to "synq-athena".
+	RoleSessionName string `yaml:"role_session_name,omitempty"`
+
+	// Scope filter for include/exclude filtering by Glue catalog, Glue
+	// database, and table. Mapping: ScopeRule.database = Glue catalog,
+	// ScopeRule.schema = Glue database, ScopeRule.table = Glue table/view.
+	Scope *ScopeConf `yaml:"scope,omitempty"`
+
+	// Use SHOW CREATE TABLE to retrieve full table DDL (CTAS bodies, Iceberg
+	// TBLPROPERTIES, Hive external LOCATION/SerDe). One Athena query per
+	// table — billed at the 10MB scan minimum each.
+	UseShowCreateTable bool `yaml:"use_show_create_table,omitempty"`
+	// Use SHOW CREATE VIEW to retrieve full view DDL instead of the
+	// rewritten body from information_schema.views.view_definition.
+	UseShowCreateView bool `yaml:"use_show_create_view,omitempty"`
+	// For Iceberg tables, fan out one Athena query per table to read row
+	// count, total file size, snapshot commit timestamp, and partition
+	// columns from the table's $files / $snapshots / $partitions metadata
+	// tables. Hive externals are unaffected.
+	UseIcebergMetricsScan bool `yaml:"use_iceberg_metrics_scan,omitempty"`
+}
+
+// ScopeConf is the YAML representation of synq.common.v1.ScopeFilter — the
+// shared include/exclude filter used by warehouses with hierarchical catalogs.
+type ScopeConf struct {
+	// Include rules. If non-empty, only matching objects are accepted.
+	Include []ScopeRuleConf `yaml:"include,omitempty"`
+	// Exclude rules. Matching objects are rejected, even if they match an include rule.
+	Exclude []ScopeRuleConf `yaml:"exclude,omitempty"`
+}
+
+// ScopeRuleConf is a single include/exclude rule. Empty fields match anything;
+// '*' acts as a glob wildcard. Matching is case-insensitive.
+type ScopeRuleConf struct {
+	// Database-level pattern (catalog for Athena/Trino/Databricks, project for BigQuery).
+	Database string `yaml:"database,omitempty"`
+	// Schema-level pattern (Glue database for Athena, dataset for BigQuery).
+	Schema string `yaml:"schema,omitempty"`
+	// Table or view name pattern.
+	Table string `yaml:"table,omitempty"`
 }
 
 // ConnectionsSchema returns a JSON schema for a map of connections,
@@ -287,7 +361,6 @@ func WithGoComments(base, srcDir string) ReflectorOption {
 		_ = os.Chdir(cwd)
 	}
 }
-
 
 // NewReflector returns a jsonschema.Reflector configured for YAML config structs.
 // Use WithGoComments or WithYAMLConfigComments to add descriptions from Go doc comments.
