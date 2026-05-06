@@ -15,13 +15,14 @@ import (
 	awscredentials "github.com/aws/aws-sdk-go-v2/credentials"
 	awsstscreds "github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	awsathena "github.com/aws/aws-sdk-go-v2/service/athena"
+	awsglue "github.com/aws/aws-sdk-go-v2/service/glue"
 	awssts "github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
-	"github.com/jmoiron/sqlx"
 	athenadriver "github.com/influxdata/athenadriver/v2/go"
+	"github.com/jmoiron/sqlx"
 )
 
 // AthenaConf carries everything the executor needs to open a connection.
@@ -73,14 +74,16 @@ type AthenaExecutor struct {
 	conf         *AthenaConf
 	awsCfg       aws.Config
 	athenaClient *awsathena.Client
+	glueClient   *awsglue.Client
 	db           *sqlx.DB
 	accountID    string // sts:GetCallerIdentity, used as part of the canonical instance id
 }
 
-func (e *AthenaExecutor) GetDb() *sqlx.DB              { return e.db }
-func (e *AthenaExecutor) AccountID() string            { return e.accountID }
-func (e *AthenaExecutor) Region() string               { return e.conf.Region }
+func (e *AthenaExecutor) GetDb() *sqlx.DB                 { return e.db }
+func (e *AthenaExecutor) AccountID() string               { return e.accountID }
+func (e *AthenaExecutor) Region() string                  { return e.conf.Region }
 func (e *AthenaExecutor) AthenaClient() *awsathena.Client { return e.athenaClient }
+func (e *AthenaExecutor) GlueClient() *awsglue.Client     { return e.glueClient }
 func (e *AthenaExecutor) Workgroup() string {
 	if e.conf.Workgroup != "" {
 		return e.conf.Workgroup
@@ -120,6 +123,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	accountID := aws.ToString(whoami.Account)
 
 	athenaClient := awsathena.NewFromConfig(awsCfg)
+	glueClient := awsglue.NewFromConfig(awsCfg)
 
 	wgName := conf.Workgroup
 	if wgName == "" {
@@ -134,7 +138,10 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 		outputLocation = aws.ToString(wg.WorkGroup.Configuration.ResultConfiguration.OutputLocation)
 	}
 	if outputLocation == "" {
-		return nil, fmt.Errorf("athena: workgroup %q has no query result location configured — set ResultConfiguration.OutputLocation on the workgroup", wgName)
+		return nil, fmt.Errorf(
+			"athena: workgroup %q has no query result location configured — set ResultConfiguration.OutputLocation on the workgroup",
+			wgName,
+		)
 	}
 
 	// Resolve credentials once and pass the materialized triple to the driver.
@@ -173,6 +180,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 		conf:         conf,
 		awsCfg:       awsCfg,
 		athenaClient: athenaClient,
+		glueClient:   glueClient,
 		db:           db,
 		accountID:    accountID,
 	}, nil
@@ -206,7 +214,9 @@ func buildAwsConfig(ctx context.Context, conf *AthenaConf) (aws.Config, error) {
 		// EC2/ECS/EKS instance role). On the cloud backend this would attach
 		// to SYNQ's own identity if a customer config had empty fields.
 		// On-prem agent paths must explicitly opt in via AllowDefaultChain.
-		return aws.Config{}, errors.New("athena: no authentication method configured — set AccessKeyID+SecretAccessKey, AwsProfile, RoleArn, or AllowDefaultChain")
+		return aws.Config{}, errors.New(
+			"athena: no authentication method configured — set AccessKeyID+SecretAccessKey, AwsProfile, RoleArn, or AllowDefaultChain",
+		)
 	}
 	cfg, err := awsconfig.LoadDefaultConfig(ctx, loadOpts...)
 	if err != nil {

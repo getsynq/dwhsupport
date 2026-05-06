@@ -36,6 +36,22 @@ type AthenaScrapperConf struct {
 	// external `LOCATION`/SerDe info. Each call is one Athena query.
 	UseShowCreateTable bool
 
+	// UseIcebergMetricsScan, when true, fans out per-Iceberg-table Athena
+	// queries against the table's metadata tables to recover information that
+	// Glue does not expose:
+	//
+	//  - `$files` aggregate → row count + total size (one query per Iceberg
+	//    table missing those numbers in Glue's table parameters; populated by
+	//    `ANALYZE TABLE COMPUTE STATISTICS`).
+	//  - `$partitions` `typeof(partition)` → partition-spec column names (one
+	//    query per partitioned Iceberg table; Glue's `PartitionKeys` is empty
+	//    for native Iceberg tables since the spec lives in the metadata.json).
+	//
+	// Each query costs ~$0.00005 at Athena's 10MB scan minimum. Hive-style
+	// tables and views are unaffected — those metrics/partitions come from
+	// Glue parameters and `PartitionKeys` for free. Default is false.
+	UseIcebergMetricsScan bool
+
 	// Scope is the include/exclude filter for Glue catalog/database/table.
 	// Nil means accept-all. The cloud and agent protos both carry this as
 	// a synq.common.v1.ScopeFilter; callers translate via ScopeFromProto.
