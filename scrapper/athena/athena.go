@@ -40,15 +40,19 @@ type AthenaScrapperConf struct {
 	// queries against the table's metadata tables to recover information that
 	// Glue does not expose:
 	//
-	//  - `$files` aggregate → row count + total size (one query per Iceberg
-	//    table missing those numbers in Glue's table parameters; populated by
-	//    `ANALYZE TABLE COMPUTE STATISTICS`).
-	//  - `$partitions` `typeof(partition)` → partition-spec column names (one
-	//    query per partitioned Iceberg table; Glue's `PartitionKeys` is empty
-	//    for native Iceberg tables since the spec lives in the metadata.json).
+	//  - `$files` aggregate → row count + total size.
+	//  - `$snapshots` MAX(committed_at) → exact data-freshness timestamp (the
+	//    moment of the most recent INSERT / MERGE / UPDATE / DELETE). Glue's
+	//    `UpdateTime` usually moves with the metadata pointer too, but the
+	//    snapshot timestamp is authoritative.
+	//  - `$partitions` `typeof(partition)` → partition-spec column names (Glue's
+	//    `PartitionKeys` is empty for native Iceberg tables since the spec
+	//    lives in the metadata.json).
 	//
-	// Each query costs ~$0.00005 at Athena's 10MB scan minimum. Hive-style
-	// tables and views are unaffected — those metrics/partitions come from
+	// Per Iceberg table: one combined query for row count + size + freshness,
+	// plus one query for the partition spec on partitioned tables. Each query
+	// costs ~$0.00005 at Athena's 10MB scan minimum. Hive-style tables and
+	// views are unaffected — those metrics / partitions / freshness come from
 	// Glue parameters and `PartitionKeys` for free. Default is false.
 	UseIcebergMetricsScan bool
 

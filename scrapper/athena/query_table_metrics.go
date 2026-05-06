@@ -99,7 +99,12 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime ti
 					row.SizeBytes = &size
 				}
 
-				if e.conf.UseIcebergMetricsScan && (row.RowCount == nil || row.SizeBytes == nil) && isIcebergTable(t) {
+				if e.conf.UseIcebergMetricsScan && isIcebergTable(t) {
+					// Always queue Iceberg tables for the metadata scan when
+					// the flag is on — even if Glue already had row count and
+					// size, we still want the precise commit timestamp from
+					// $snapshots for accurate data freshness. The combined
+					// $files + $snapshots query is one Athena call either way.
 					icebergPending = append(icebergPending, row)
 				}
 				out = append(out, row)
@@ -152,9 +157,10 @@ func (e *AthenaScrapper) listGlueDatabases(ctx context.Context, glueClient *awsg
 	return names, nil
 }
 
-// fillIcebergMetrics fans out one Athena query per Iceberg table that's missing
-// row count or size from Glue parameters. Failures are logged but not fatal —
-// a single table's metrics scan failing should not abort the entire fetch.
+// fillIcebergMetrics fans out one Athena query per Iceberg table to read row
+// count, on-disk size, and the latest snapshot commit timestamp from the
+// table's metadata tables. Failures are logged but not fatal — a single
+// table's scan failing should not abort the entire fetch.
 func (e *AthenaScrapper) fillIcebergMetrics(ctx context.Context, rows []*scrapper.TableMetricsRow) {
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(8)
@@ -166,12 +172,12 @@ func (e *AthenaScrapper) fillIcebergMetrics(ctx context.Context, rows []*scrappe
 		}
 		row := row
 		g.Go(func() error {
-			rc, sz, err := e.scanIcebergFiles(groupCtx, row.Schema, row.Table)
+			rc, sz, committedAt, err := e.scanIcebergMetadata(groupCtx, row.Schema, row.Table)
 			if err != nil {
 				logging.GetLogger(groupCtx).
 					WithField("table_fqn", row.TableFqn()).
 					WithError(err).
-					Warnf("athena: iceberg $files scan failed")
+					Warnf("athena: iceberg metadata scan failed")
 				return nil
 			}
 			mu.Lock()
@@ -181,6 +187,15 @@ func (e *AthenaScrapper) fillIcebergMetrics(ctx context.Context, rows []*scrappe
 			if sz != nil && row.SizeBytes == nil {
 				row.SizeBytes = sz
 			}
+			if committedAt != nil {
+				// Snapshot commit time is the truth for Iceberg data freshness:
+				// every INSERT / MERGE / UPDATE writes a snapshot. Glue's
+				// UpdateTime usually tracks this too (the metadata_location
+				// pointer flips on each commit) but the snapshot timestamp is
+				// authoritative — prefer it unconditionally when available.
+				ts := committedAt.UTC()
+				row.UpdatedAt = &ts
+			}
 			mu.Unlock()
 			return nil
 		})
@@ -188,28 +203,35 @@ func (e *AthenaScrapper) fillIcebergMetrics(ctx context.Context, rows []*scrappe
 	_ = g.Wait()
 }
 
-// scanIcebergFiles runs `SELECT SUM(record_count), SUM(file_size_in_bytes)
-// FROM "<db>"."<table>$files"` against Athena. Iceberg's `$files` metadata
-// table lists every active data file in the current snapshot — summing it
-// gives an exact row count and on-disk size without reading any data files.
-func (e *AthenaScrapper) scanIcebergFiles(ctx context.Context, db, table string) (*int64, *int64, error) {
+// scanIcebergMetadata reads row count + total size from `$files` and the
+// latest commit timestamp from `$snapshots` in a single Athena query.
+// Iceberg's `$files` metadata table lists every active data file in the
+// current snapshot; `$snapshots` lists every commit (INSERT, MERGE, UPDATE,
+// DELETE) with its `committed_at`. Both are cheap metadata reads — neither
+// touches the data files.
+func (e *AthenaScrapper) scanIcebergMetadata(ctx context.Context, db, table string) (*int64, *int64, *time.Time, error) {
+	dbQuoted := strings.ReplaceAll(db, `"`, `""`)
+	tQuoted := strings.ReplaceAll(table, `"`, `""`)
 	q := fmt.Sprintf(
-		`SELECT SUM(record_count) AS row_count, SUM(file_size_in_bytes) AS size_bytes FROM "%s"."%s$files"`,
-		strings.ReplaceAll(db, `"`, `""`),
-		strings.ReplaceAll(table, `"`, `""`),
+		`SELECT
+			(SELECT SUM(record_count)        FROM "%s"."%s$files")     AS row_count,
+			(SELECT SUM(file_size_in_bytes)  FROM "%s"."%s$files")     AS size_bytes,
+			(SELECT MAX(committed_at)        FROM "%s"."%s$snapshots") AS last_committed_at`,
+		dbQuoted, tQuoted, dbQuoted, tQuoted, dbQuoted, tQuoted,
 	)
 	type icebergRow struct {
-		RowCount  *int64 `db:"row_count"`
-		SizeBytes *int64 `db:"size_bytes"`
+		RowCount        *int64     `db:"row_count"`
+		SizeBytes       *int64     `db:"size_bytes"`
+		LastCommittedAt *time.Time `db:"last_committed_at"`
 	}
 	var rows []icebergRow
 	if err := e.executor.Select(ctx, &rows, q); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if len(rows) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
-	return rows[0].RowCount, rows[0].SizeBytes, nil
+	return rows[0].RowCount, rows[0].SizeBytes, rows[0].LastCommittedAt, nil
 }
 
 func isGlueView(t gluetypes.Table) bool {

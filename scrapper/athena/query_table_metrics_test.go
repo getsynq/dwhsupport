@@ -81,7 +81,7 @@ func TestAthenaTableMetricsAndConstraints(t *testing.T) {
 		}
 	})
 
-	t.Run("iceberg scan opt-in fills row counts", func(t *testing.T) {
+	t.Run("iceberg scan opt-in fills row counts and snapshot freshness", func(t *testing.T) {
 		sc.conf.UseIcebergMetricsScan = true
 		defer func() { sc.conf.UseIcebergMetricsScan = false }()
 
@@ -100,6 +100,9 @@ func TestAthenaTableMetricsAndConstraints(t *testing.T) {
 			require.GreaterOrEqualf(t, *r.RowCount, int64(3), "iceberg table %s row count too low", name)
 			require.NotNilf(t, r.SizeBytes, "iceberg table %s has no size", name)
 			require.Greaterf(t, *r.SizeBytes, int64(0), "iceberg table %s size is zero", name)
+			// Snapshot commit time should be set (data freshness signal).
+			require.NotNilf(t, r.UpdatedAt, "iceberg table %s missing snapshot commit time", name)
+			require.Falsef(t, r.UpdatedAt.IsZero(), "iceberg table %s snapshot commit time is zero", name)
 		}
 	})
 
