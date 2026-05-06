@@ -180,3 +180,21 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - **MSSQL dialect compatibility**: Use `DATEADD+DATEDIFF` pattern for time truncation (not `DATETRUNC` — SQL Server 2022+ only, not in Azure SQL Edge). `MEDIAN` returns `NULL` (PERCENTILE_CONT is a window function, can't mix with aggregates).
 - **MSSQL string length**: MSSQL uses `LEN()` not `LENGTH()`. Always use `dialect.StringLength()` — never hardcode `Fn("length", ...)` in metrics queries.
 - **PostgreSQL MEDIAN**: Use `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY expr)` — no built-in `MEDIAN` function.
+
+## Athena Gotchas
+
+- **AWS credential chain is opt-in.** `exec/athena/AthenaConf.AllowDefaultChain` gates fall-through to env vars / EC2/EKS instance role / shared config. Set it `true` only in callers running inside the customer's own infrastructure (e.g. on-prem agent — `connect.Athena()` does this). Hosted/SaaS callers MUST leave it `false` — otherwise a customer config with empty auth fields would inherit the host process's AWS identity.
+- **`SHOW CREATE` quoting is asymmetric** (and undocumented in AWS): `SHOW CREATE TABLE` accepts only backticks (ANSI double-quotes return "Queries of this type are not supported"); `SHOW CREATE VIEW` accepts only ANSI double-quotes (backticks return "backquoted identifiers are not supported"). Trailing `/* ... */` SQL comments are fine. The catalog prefix is rejected on both — connection is bound to a single Glue Data Catalog.
+- **`SHOW CREATE TABLE` for Hive externals probes the `default` Glue DB** internally, regardless of which DB the table lives in. The IAM principal must grant `glue:GetDatabase` on `arn:aws:glue:<region>:<account>:database/default` or every external-table DDL fetch fails with `AccessDeniedException`. Iceberg / managed tables are unaffected.
+- **Driver: `influxdata/athenadriver/v2`** (not the unmaintained `uber/athenadriver`) — uses `aws-sdk-go-v2`, matching the rest of our deps. Registers as `awsathena`.
+- **Workgroup result location is mandatory.** `NewAthenaExecutor` calls `athena:GetWorkGroup` at startup and refuses if `ResultConfiguration.OutputLocation` is empty. This forces customers to set `EnforceWorkGroupConfiguration=true` so per-query overrides cannot escape the workgroup's data-scan cap.
+- **Credentials are materialized once.** The driver doesn't accept a credentials provider, so AssumeRole / profile / chain paths get snapshot at executor construction. Long-lived processes using STS-backed creds must recreate the executor before token expiry (default 1h, max 12h for AssumeRole).
+
+## Two flavors of the same proto can't link in one binary
+
+The same `synq/common/v1/scope.proto` (and any other `proto_public/` proto) is generated under two different Go packages downstream consumers may use:
+
+- `buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/common/v1` — this repo's path
+- `github.com/getsynq/api/common/v1` — a downstream's workspace-resolved path
+
+Any single binary that links BOTH panics on init — protobuf's global registry rejects duplicate registrations of the same `.proto` file path. So **keep `scrapper/scope` (and any package that exposes runtime types like `*ScopeFilter`) free of proto-generated imports**. Put per-caller proto-conversion next to the call site instead — see `connect/connect.go`'s `athenaScopeFromProto`. The previously-tempting `scope.FromProto` helper was deleted for this reason.
