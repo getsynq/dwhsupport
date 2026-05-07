@@ -136,7 +136,7 @@ func cleanAccountName(account string) string {
 // buildSnowflakeConfig creates a gosnowflake.Config from SnowflakeConf.
 // This is separated from NewSnowflakeExecutor to allow unit testing of the configuration logic.
 // Note: This function does not handle PrivateKeyFile loading (requires file I/O) - that's done in NewSnowflakeExecutor.
-func buildSnowflakeConfig(conf *SnowflakeConf) *gosnowflake.Config {
+func buildSnowflakeConfig(conf *SnowflakeConf) (*gosnowflake.Config, error) {
 	// When connecting as an individual user (OAuth token or SSO browser), don't set a
 	// default database on the connection. The user's role may not have access to the
 	// databases configured in the workspace integration. Queries use fully qualified names.
@@ -175,22 +175,29 @@ func buildSnowflakeConfig(conf *SnowflakeConf) *gosnowflake.Config {
 		// Allow browser-based login (don't disable console login for SSO)
 		c.DisableConsoleLogin = gosnowflake.ConfigBoolFalse
 	default:
-		// Default: password or private key authentication
-		// Handle inline private key (PrivateKeyFile is handled in NewSnowflakeExecutor)
+		// Default: password or private key authentication.
+		// Handle inline private key (PrivateKeyFile is handled in NewSnowflakeExecutor).
+		// Surface parse errors instead of silently falling through to password auth —
+		// otherwise a bad PEM/passphrase combination becomes a misleading
+		// "260002: password is empty" from the driver.
 		if len(conf.PrivateKey) > 0 {
 			privKey, err := parsePrivateKey(conf.PrivateKey, conf.PrivateKeyPassphrase)
-			if err == nil {
-				c.PrivateKey = privKey
-				c.Authenticator = gosnowflake.AuthTypeJwt
+			if err != nil {
+				return nil, err
 			}
+			c.PrivateKey = privKey
+			c.Authenticator = gosnowflake.AuthTypeJwt
 		}
 	}
 
-	return c
+	return c, nil
 }
 
 func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeExecutor, error) {
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	if err != nil {
+		return nil, exec.NewAuthError(err)
+	}
 
 	// Handle private key file loading (not in buildSnowflakeConfig to keep it side-effect free for testing)
 	if strings.ToLower(conf.AuthType) != "externalbrowser" && c.PrivateKey == nil && len(conf.PrivateKeyFile) > 0 {
@@ -210,8 +217,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	stdDb := sql.OpenDB(connector)
 	db := sqlx.NewDb(stdDb, "snowflake")
 
-	err := db.PingContext(ctx)
-	if err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		return nil, exec.NewAuthError(err)
 	}
 
