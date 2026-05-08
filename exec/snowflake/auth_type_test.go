@@ -24,7 +24,8 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_ExternalBrowser() {
 		AuthType:  "externalbrowser",
 		Databases: []string{"DB1", "DB2"},
 	}
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	s.Require().NoError(err)
 
 	s.Equal(gosnowflake.AuthTypeExternalBrowser, c.Authenticator)
 	s.Equal(120*time.Second, c.ExternalBrowserTimeout)
@@ -44,7 +45,8 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_ExternalBrowserCaseInsensit
 			User:     "user@example.com",
 			AuthType: authType,
 		}
-		c := buildSnowflakeConfig(conf)
+		c, err := buildSnowflakeConfig(conf)
+		s.Require().NoError(err)
 
 		s.Equal(gosnowflake.AuthTypeExternalBrowser, c.Authenticator, "AuthType %q should be recognized as externalbrowser", authType)
 	}
@@ -57,7 +59,8 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_DefaultAuthType_Empty() {
 		Password: "password123",
 		AuthType: "",
 	}
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	s.Require().NoError(err)
 
 	// Default auth type should not set external browser authenticator
 	s.NotEqual(gosnowflake.AuthTypeExternalBrowser, c.Authenticator)
@@ -71,7 +74,8 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_DefaultAuthType_Unrecognize
 		Password: "password123",
 		AuthType: "unknowntype",
 	}
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	s.Require().NoError(err)
 
 	// Unrecognized auth type should fall back to default behavior
 	s.NotEqual(gosnowflake.AuthTypeExternalBrowser, c.Authenticator)
@@ -85,7 +89,8 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_OAuthToken() {
 		Role:      "PUBLIC",
 		Databases: []string{"DB1", "DB2"},
 	}
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	s.Require().NoError(err)
 
 	s.Equal(gosnowflake.AuthTypeOAuth, c.Authenticator)
 	s.Equal("my-oauth-access-token", c.Token)
@@ -103,7 +108,8 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_PasswordSetsDefaultDatabase
 		Password:  "password",
 		Databases: []string{"DB1", "DB2"},
 	}
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	s.Require().NoError(err)
 
 	s.Equal("DB1", c.Database)
 }
@@ -116,7 +122,8 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_OAuthTokenTakesPrecedence()
 		Password: "password123",
 		Token:    "my-oauth-access-token",
 	}
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	s.Require().NoError(err)
 
 	s.Equal(gosnowflake.AuthTypeOAuth, c.Authenticator)
 	s.Equal("my-oauth-access-token", c.Token)
@@ -132,9 +139,45 @@ func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_DefaultAuthType_WithPrivate
 		PrivateKey: keyBytes,
 		AuthType:   "",
 	}
-	c := buildSnowflakeConfig(conf)
+	c, err := buildSnowflakeConfig(conf)
+	s.Require().NoError(err)
 
 	s.Equal(gosnowflake.AuthTypeJwt, c.Authenticator)
 	s.NotNil(c.PrivateKey)
 	s.Equal(gosnowflake.ConfigBoolTrue, c.DisableConsoleLogin)
+}
+
+// Regression test: an unencrypted PEM combined with a non-empty passphrase
+// (e.g. browser-autofilled into the form) used to silently fall through to
+// password auth and surface as "260002: password is empty" from the driver.
+// buildSnowflakeConfig must surface the parse error directly.
+func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_UnencryptedPrivateKeyWithPassphrase_ReturnsError() {
+	keyBytes, err := os.ReadFile("test_rsa_key_unencrypted.pem")
+	s.Require().NoError(err)
+
+	conf := &SnowflakeConf{
+		Account:              "myaccount",
+		User:                 "svc_user",
+		PrivateKey:           keyBytes,
+		PrivateKeyPassphrase: "browser-autofilled-password",
+	}
+	c, err := buildSnowflakeConfig(conf)
+
+	s.Require().Error(err)
+	s.Nil(c)
+	s.Contains(err.Error(), "passphrase provided but private key is not encrypted")
+}
+
+// Regression test: a malformed PEM must not silently fall through to password
+// auth either.
+func (s *SnowflakeAuthTypeTestSuite) TestBuildConfig_InvalidPrivateKey_ReturnsError() {
+	conf := &SnowflakeConf{
+		Account:    "myaccount",
+		User:       "svc_user",
+		PrivateKey: []byte("not a valid PEM"),
+	}
+	c, err := buildSnowflakeConfig(conf)
+
+	s.Require().Error(err)
+	s.Nil(c)
 }
