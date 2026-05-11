@@ -10,6 +10,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -132,20 +133,48 @@ func (it *rawRowsIterator) closeLocked() error {
 }
 
 // convertToRawValue mirrors convertToScrapperValue but preserves text
-// (string/[]byte → StringValue) and renders unknown driver types via
-// fmt.Sprint so RunRawQuery never drops a value.
+// (string/[]byte → StringValue), renders UUIDs as their canonical string form,
+// and falls back to Stringer / fmt.Sprint for unknown driver types so
+// RunRawQuery never drops a value.
 func convertToRawValue(v any) scrapper.Value {
 	switch val := v.(type) {
 	case string:
 		return scrapper.StringValue(sanitizeRawString(val))
+	case [16]byte:
+		// Native pgx (and google/uuid) surface UUIDs as a raw 16-byte array.
+		// Format as canonical xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
+		return scrapper.StringValue(uuid.UUID(val).String())
 	case []byte:
+		if id, ok := tryUUIDFromBytes(val); ok {
+			return scrapper.StringValue(id)
+		}
 		return scrapper.StringValue(sanitizeRawString(string(val)))
 	}
 	converted := convertToScrapperValue(v)
 	if _, ignored := converted.(scrapper.IgnoredValue); ignored {
+		if s, ok := v.(fmt.Stringer); ok {
+			return scrapper.StringValue(sanitizeRawString(s.String()))
+		}
 		return scrapper.StringValue(sanitizeRawString(fmt.Sprint(v)))
 	}
 	return converted
+}
+
+// tryUUIDFromBytes recognises the two byte shapes a database driver might
+// return for a UUID column: the 16-byte binary form, and the 36-byte canonical
+// text form. Anything else is left to the generic []byte path.
+func tryUUIDFromBytes(b []byte) (string, bool) {
+	switch len(b) {
+	case 16:
+		var arr [16]byte
+		copy(arr[:], b)
+		return uuid.UUID(arr).String(), true
+	case 36:
+		if id, err := uuid.ParseBytes(b); err == nil {
+			return id.String(), true
+		}
+	}
+	return "", false
 }
 
 func sanitizeRawString(s string) string {
