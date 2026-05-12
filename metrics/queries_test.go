@@ -294,6 +294,58 @@ func (s *MetricsSuite) TestSegmentWithTimeRangeWithFilter() {
 	}
 }
 
+func (s *MetricsSuite) TestPartitionWithTimeRangeExpr() {
+
+	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
+
+	for _, dialect := range dwhsql.DialectsToTest() {
+
+		expressions := NumericMetricsCols("run_type", dialect.Dialect)
+
+		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
+		queryBuilder = queryBuilder.WithTimeSegment(dwhsql.TimeCol("ingested_at"), 24*time.Hour)
+		queryBuilder = queryBuilder.WithTimeRangeExpr(
+			dwhsql.Sql("CURRENT_DATE - INTERVAL '3 days'"),
+			dwhsql.Sql("CURRENT_DATE - INTERVAL '1 day'"),
+		)
+		sql, err := queryBuilder.ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.Require().NotEmpty(sql)
+		s.T().Log(sql)
+
+		snaps.WithConfig(snaps.Dir("PartitionWithTimeRangeExpr"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
+func (s *MetricsSuite) TestTimeRangeExprPrecedence() {
+	// WithTimeRangeExpr should override any prior WithFieldTimeRange / WithTimeRange call.
+	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
+	dialect := dwhsql.NewPostgresDialect()
+
+	now := time.Now().UTC().Truncate(time.Minute)
+	from := now.AddDate(0, 0, -3)
+	to := now.AddDate(0, 0, -1)
+	fromLit, err := dialect.ResolveTime(from)
+	s.Require().NoError(err)
+	toLit, err := dialect.ResolveTime(to)
+	s.Require().NoError(err)
+
+	expressions := NumericMetricsCols("run_type", dialect)
+	queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
+	queryBuilder = queryBuilder.WithFieldTimeRange(dwhsql.TimeCol("ingested_at"), from, to)
+	queryBuilder = queryBuilder.WithTimeRangeExpr(
+		dwhsql.Sql("CURRENT_DATE - INTERVAL '3 days'"),
+		dwhsql.Sql("CURRENT_DATE - INTERVAL '1 day'"),
+	)
+
+	sql, err := queryBuilder.ToSql(dialect)
+	s.Require().NoError(err)
+	s.Contains(sql, "ingested_at >= CURRENT_DATE - INTERVAL '3 days'")
+	s.Contains(sql, "ingested_at < CURRENT_DATE - INTERVAL '1 day'")
+	s.NotContains(sql, fromLit)
+	s.NotContains(sql, toLit)
+}
+
 func (s *MetricsSuite) TestFilters() {
 	for _, dialect := range dwhsql.DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
