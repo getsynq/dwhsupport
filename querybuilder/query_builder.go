@@ -20,9 +20,11 @@ func NewQueryBuilder(table TableExpr, cols []Expr) *QueryBuilder {
 }
 
 type QueryBuilder struct {
-	timeCol  *TimeColExpr
-	timeFrom time.Time
-	timeTo   time.Time
+	timeCol      *TimeColExpr
+	timeFrom     time.Time
+	timeTo       time.Time
+	timeFromExpr Expr
+	timeToExpr   Expr
 
 	timeSegment      *time.Duration
 	timeSegmentShift *time.Duration
@@ -76,6 +78,19 @@ func (b *QueryBuilder) WithFieldTimeRange(col *TimeColExpr, from, to time.Time) 
 	b.timeCol = col
 	b.timeFrom = from.Round(time.Minute)
 	b.timeTo = to.Round(time.Minute)
+
+	return b
+}
+
+// WithTimeRangeExpr sets arbitrary expressions for the lower (inclusive) and upper
+// (exclusive) bounds of the time-range WHERE clause. Useful for emitting SQL with
+// placeholder bounds (e.g. {from}, {to}) instead of materialized timestamp literals.
+// Requires the time column to be set via WithTimeSegment / WithShiftedTimeSegment /
+// WithFieldTimeRange; otherwise the WHERE clause is omitted (same gate as the
+// time.Time-based path).
+func (b *QueryBuilder) WithTimeRangeExpr(from, to Expr) *QueryBuilder {
+	b.timeFromExpr = from
+	b.timeToExpr = to
 
 	return b
 }
@@ -196,11 +211,14 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	}
 
 	// Apply time constraint and segment if given. Not using BETWEEN as its inclusive for both limits and we risk double counting.
-	if b.timeCol != nil && b.timeFrom != (time.Time{}) && b.timeTo != (time.Time{}) {
-		q = q.Where(
-			Gte(b.timeCol, Time(b.timeFrom)),
-			Lt(b.timeCol, Time(b.timeTo)),
-		)
+	if b.timeCol != nil {
+		fromExpr, toExpr := b.resolveTimeBoundExprs()
+		if fromExpr != nil && toExpr != nil {
+			q = q.Where(
+				Gte(b.timeCol, fromExpr),
+				Lt(b.timeCol, toExpr),
+			)
+		}
 	}
 
 	if len(b.groupBy) > 0 {
@@ -234,6 +252,24 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	}
 
 	return q.ToSql(dialect)
+}
+
+// resolveTimeBoundExprs returns the (from, to) WHERE-clause bound expressions.
+// Expression-typed bounds (WithTimeRangeExpr) take precedence over time.Time bounds.
+// Returns (nil, nil) if neither pair is fully set.
+func (b *QueryBuilder) resolveTimeBoundExprs() (Expr, Expr) {
+	fromExpr := b.timeFromExpr
+	toExpr := b.timeToExpr
+	if fromExpr == nil && b.timeFrom != (time.Time{}) {
+		fromExpr = Time(b.timeFrom)
+	}
+	if toExpr == nil && b.timeTo != (time.Time{}) {
+		toExpr = Time(b.timeTo)
+	}
+	if fromExpr == nil || toExpr == nil {
+		return nil, nil
+	}
+	return fromExpr, toExpr
 }
 
 func (b *QueryBuilder) segmentColumnName(i int) string {
