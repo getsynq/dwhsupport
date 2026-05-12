@@ -304,7 +304,10 @@ func (s *MetricsSuite) TestPartitionWithTimeRangeExpr() {
 
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
 		queryBuilder = queryBuilder.WithTimeSegment(dwhsql.TimeCol("ingested_at"), 24*time.Hour)
-		queryBuilder = queryBuilder.WithTimeRangeExpr(dwhsql.Sql("{from}"), dwhsql.Sql("{to}"))
+		queryBuilder = queryBuilder.WithTimeRangeExpr(
+			dwhsql.Sql("CURRENT_DATE - INTERVAL '3 days'"),
+			dwhsql.Sql("CURRENT_DATE - INTERVAL '1 day'"),
+		)
 		sql, err := queryBuilder.ToSql(dialect.Dialect)
 		s.Require().NoError(err)
 		s.Require().NotEmpty(sql)
@@ -330,12 +333,15 @@ func (s *MetricsSuite) TestTimeRangeExprPrecedence() {
 	expressions := NumericMetricsCols("run_type", dialect)
 	queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
 	queryBuilder = queryBuilder.WithFieldTimeRange(dwhsql.TimeCol("ingested_at"), from, to)
-	queryBuilder = queryBuilder.WithTimeRangeExpr(dwhsql.Sql("{from}"), dwhsql.Sql("{to}"))
+	queryBuilder = queryBuilder.WithTimeRangeExpr(
+		dwhsql.Sql("CURRENT_DATE - INTERVAL '3 days'"),
+		dwhsql.Sql("CURRENT_DATE - INTERVAL '1 day'"),
+	)
 
 	sql, err := queryBuilder.ToSql(dialect)
 	s.Require().NoError(err)
-	s.Contains(sql, "ingested_at >= {from}")
-	s.Contains(sql, "ingested_at < {to}")
+	s.Contains(sql, "ingested_at >= CURRENT_DATE - INTERVAL '3 days'")
+	s.Contains(sql, "ingested_at < CURRENT_DATE - INTERVAL '1 day'")
 	s.NotContains(sql, fromLit)
 	s.NotContains(sql, toLit)
 }

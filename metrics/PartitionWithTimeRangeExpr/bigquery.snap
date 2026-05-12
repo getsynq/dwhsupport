@@ -14,8 +14,8 @@ select
   CAST(stddev_samp(run_type) AS FLOAT64) as stddev
 from `db.default.runs` 
 where
-  timestamp(ingested_at) >= {from} and 
-  timestamp(ingested_at) < {to}
+  timestamp(ingested_at) >= CURRENT_DATE - INTERVAL '3 days' and 
+  timestamp(ingested_at) < CURRENT_DATE - INTERVAL '1 day'
 group by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), DAY), INTERVAL 1 DAY)
 order by TIMESTAMP_ADD(timestamp_trunc(timestamp(ingested_at), DAY), INTERVAL 1 DAY) 
 ---

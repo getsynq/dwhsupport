@@ -14,8 +14,8 @@ select
   CAST(STDEV(run_type) AS FLOAT) as [stddev]
 from [default].[runs] 
 where
-  [ingested_at] >= {from} and 
-  [ingested_at] < {to}
+  [ingested_at] >= CURRENT_DATE - INTERVAL '3 days' and 
+  [ingested_at] < CURRENT_DATE - INTERVAL '1 day'
 group by DATEADD(DAY, 1, DATEADD(DAY, DATEDIFF(DAY, 0, [ingested_at]), 0))
 order by DATEADD(DAY, 1, DATEADD(DAY, DATEDIFF(DAY, 0, [ingested_at]), 0)) 
 ---

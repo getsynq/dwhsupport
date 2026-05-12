@@ -14,8 +14,8 @@ select
   CAST(STDDEV(run_type) AS BINARY_DOUBLE) as "stddev"
 from "default"."runs" 
 where
-  "ingested_at" >= {from} and 
-  "ingested_at" < {to}
+  "ingested_at" >= CURRENT_DATE - INTERVAL '3 days' and 
+  "ingested_at" < CURRENT_DATE - INTERVAL '1 day'
 group by (TRUNC("ingested_at", 'DD') + INTERVAL '1' DAY)
 order by (TRUNC("ingested_at", 'DD') + INTERVAL '1' DAY) 
 ---
