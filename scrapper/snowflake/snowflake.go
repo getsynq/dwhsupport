@@ -108,7 +108,26 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 }
 
 func (e *SnowflakeScrapper) IsPermissionError(err error) bool {
-	return false
+	return IsPermissionError(err)
+}
+
+// IsPermissionError reports whether err is a Snowflake permission/authorization failure.
+// Recognises:
+//   - SQL compilation error 002003 with the canonical "does not exist or not authorized"
+//     message (most common shape — Snowflake intentionally conflates "no privilege" and
+//     "no such object" to prevent object-existence probing).
+//   - Error 003001 "Insufficient privileges to operate on ...".
+func IsPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var sfErr *gosnowflake.SnowflakeError
+	if errors.As(err, &sfErr) {
+		if sfErr.Number == 3001 {
+			return true
+		}
+	}
+	return strings.Contains(err.Error(), "does not exist or not authorized")
 }
 
 func (e *SnowflakeScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
