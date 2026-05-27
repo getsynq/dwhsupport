@@ -91,7 +91,7 @@ func (s *MetricsExecutionSuite) TestMetricsExecution_VolumeQuery() {
 			Field:    s.Config.PartitioningField,
 			Interval: 24 * time.Hour,
 		}
-		qb = metrics.ApplyMonitorDefArgs(qb, &metrics.MonitorArgs{}, partitioning, 150, s.Scrapper.SqlDialect())
+		qb = metrics.ApplyMonitorDefArgs(qb, &metrics.MonitorArgs{}, partitioning, 150)
 	}
 
 	s.generateAndExecute(qb)
@@ -117,7 +117,7 @@ func (s *MetricsExecutionSuite) TestMetricsExecution_VolumeWithSegment() {
 			Interval: 24 * time.Hour,
 		}
 	}
-	qb = metrics.ApplyMonitorDefArgs(qb, args, partitioning, 150, s.Scrapper.SqlDialect())
+	qb = metrics.ApplyMonitorDefArgs(qb, args, partitioning, 150)
 
 	s.generateAndExecute(qb)
 }
@@ -182,7 +182,7 @@ func (s *MetricsExecutionSuite) TestMetricsExecution_TimeFieldStats() {
 		s.T().Skip("TimeField not configured")
 	}
 
-	cols := metrics.TimeMetricsCols(s.Config.TimeField, s.Scrapper.SqlDialect())
+	cols := metrics.TimeMetricsCols(s.Config.TimeField)
 	qb := querybuilder.NewQueryBuilder(s.Config.TableFqn, cols)
 
 	s.generateAndExecute(qb)

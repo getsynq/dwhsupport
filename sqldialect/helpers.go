@@ -71,6 +71,20 @@ func QuoteWithDoubleQuotes(identifier string) string {
 	return fmt.Sprintf(`"%s"`, escaped)
 }
 
+// QuoteIfMixedCaseOrSpecial quotes an identifier when it is mixed-case or
+// contains characters requiring quoting. Pure-lower / pure-upper identifiers
+// fold predictably and pass through unquoted — safe for both fold-to-lower
+// (Postgres, Redshift) and fold-to-upper (Snowflake, Oracle) dialects when
+// names originate from catalog metadata (canonical storage case).
+// quoteChar must be a single character (e.g. `"`).
+func QuoteIfMixedCaseOrSpecial(identifier string, quoteChar string) string {
+	if needsQuoting(identifier) || (!IsUpper(identifier) && !IsLower(identifier)) {
+		escaped := strings.ReplaceAll(identifier, quoteChar, quoteChar+quoteChar)
+		return quoteChar + escaped + quoteChar
+	}
+	return identifier
+}
+
 // QuoteWithBackticks quotes an identifier with backticks.
 // Used by BigQuery, ClickHouse, MySQL.
 func QuoteWithBackticks(identifier string) string {

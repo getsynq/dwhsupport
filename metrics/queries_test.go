@@ -121,7 +121,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 
 				s.Run(fmt.Sprintf("%s_%s_%s", dialect.Name, cond.name, seg.name), func() {
 
-					expressions := TimeMetricsCols("ingested_at", dialect.Dialect)
+					expressions := TimeMetricsCols("ingested_at")
 
 					s.Run("partitioning", func() {
 
@@ -131,7 +131,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 						}
 
 						queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, partitioning, 100, dialect.Dialect)
+						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, partitioning, 100)
 						sql, err := queryBuilder.ToSql(dialect.Dialect)
 						s.Require().NoError(err)
 						s.Require().NotEmpty(sql)
@@ -143,7 +143,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 					s.Run("no_partitioning", func() {
 
 						queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100, dialect.Dialect)
+						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100)
 						sql, err := queryBuilder.ToSql(dialect.Dialect)
 						s.Require().NoError(err)
 						s.Require().NotEmpty(sql)
@@ -201,10 +201,10 @@ func (s *MetricsSuite) TestSegmentationRules() {
 
 			s.Run(fmt.Sprintf("%s_%s", dialect.Name, seg.name), func() {
 
-				expressions := TimeMetricsValuesCols("ingested_at", dialect.Dialect)
+				expressions := TimeMetricsValuesCols("ingested_at")
 
 				queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-				queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100, dialect.Dialect)
+				queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100)
 				sql, err := queryBuilder.ToSql(dialect.Dialect)
 				s.Require().NoError(err)
 				s.Require().NotEmpty(sql)
@@ -222,7 +222,7 @@ func (s *MetricsSuite) TestPartition() {
 
 	for _, dialect := range dwhsql.DialectsToTest() {
 
-		expressions := TimeMetricsCols("ingested_at", dialect.Dialect)
+		expressions := TimeMetricsCols("ingested_at")
 
 		partition := &Partition{
 			Field: "ingested_at",

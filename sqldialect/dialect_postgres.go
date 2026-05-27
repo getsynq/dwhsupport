@@ -84,7 +84,7 @@ func (d *PostgresDialect) CurrentTimestamp() Expr {
 }
 
 func (d *PostgresDialect) Identifier(identifier string) string {
-	return QuoteWithDoubleQuotes(identifier)
+	return QuoteIfMixedCaseOrSpecial(identifier, `"`)
 }
 
 func (d *PostgresDialect) StringLiteral(s string) string {

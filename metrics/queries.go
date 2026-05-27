@@ -66,7 +66,6 @@ func ApplyMonitorDefArgs(
 	args *MonitorArgs,
 	partitioning *MonitorPartitioning,
 	segmentLengthLimit int64,
-	dialect Dialect,
 ) *querybuilder.QueryBuilder {
 
 	if args != nil {
@@ -114,7 +113,6 @@ func ApplyMonitorDefArgs(
 		}
 	}
 
-	_ = dialect // kept for signature symmetry; TimeCol quotes via dialect.ResolveTimeColumn
 	if partitioning != nil && partitioning.Field != "" {
 		partExpr := TimeCol(partitioning.Field)
 		if partitioning.ScheduleTimeShift == 0 {
@@ -321,8 +319,7 @@ var TimeMetrics = []MetricId{
 	METRIC_MAX,
 }
 
-func TimeMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
-	_ = dialect // kept for signature symmetry; TimeCol quotes via dialect.ResolveTimeColumn
+func TimeMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 	timeFieldCol := TimeCol(field)
 
 	var cols []Expr
@@ -337,10 +334,10 @@ func TimeMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOpti
 	return cols
 }
 
-func TimeMetricsCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
+func TimeMetricsCols(field string, opts ...MetricConfOption) []Expr {
 	cols := []Expr{As(String(field), Identifier("field"))}
 	cols = append(cols, CountStar(METRIC_NUM_ROWS))
-	cols = append(cols, TimeMetricsValuesCols(field, dialect, opts...)...)
+	cols = append(cols, TimeMetricsValuesCols(field, opts...)...)
 
 	return cols
 }

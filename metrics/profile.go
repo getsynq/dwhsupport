@@ -59,7 +59,7 @@ func ProfileColumns(
 		case ColumnProfileNumeric:
 			expressions = append(expressions, NumericMetricsValuesCols(toProfile.Column, dialect, WithPrefixForColumn(toProfile.Column))...)
 		case ColumnProfileTime:
-			expressions = append(expressions, TimeMetricsValuesCols(toProfile.Column, dialect, WithPrefixForColumn(toProfile.Column))...)
+			expressions = append(expressions, TimeMetricsValuesCols(toProfile.Column, WithPrefixForColumn(toProfile.Column))...)
 		}
 	}
 
