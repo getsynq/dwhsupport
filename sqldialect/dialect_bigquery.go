@@ -54,7 +54,7 @@ func (d *BigQueryDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *BigQueryDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return fmt.Sprintf("timestamp(%s)", expr.name), nil
+	return fmt.Sprintf("timestamp(%s)", d.Identifier(expr.name)), nil
 }
 
 func (d *BigQueryDialect) RoundTime(expr Expr, duration time.Duration) Expr {

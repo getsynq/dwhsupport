@@ -54,7 +54,7 @@ func (d *DuckDBDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *DuckDBDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.Identifier(expr.name), nil
 }
 
 func (d *DuckDBDialect) RoundTime(expr Expr, interval time.Duration) Expr {

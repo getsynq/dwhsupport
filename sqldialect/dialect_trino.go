@@ -54,7 +54,7 @@ func (d *TrinoDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *TrinoDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.Identifier(expr.name), nil
 }
 
 func (d *TrinoDialect) RoundTime(expr Expr, interval time.Duration) Expr {

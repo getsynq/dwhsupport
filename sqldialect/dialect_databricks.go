@@ -54,7 +54,7 @@ func (d *DatabricksDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *DatabricksDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.Identifier(expr.name), nil
 }
 
 func (d *DatabricksDialect) RoundTime(expr Expr, duration time.Duration) Expr {

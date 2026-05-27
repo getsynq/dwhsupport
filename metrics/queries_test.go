@@ -22,7 +22,7 @@ func TestMetricsSuite(t *testing.T) {
 func (s *MetricsSuite) TestSimpleQueryBuilder() {
 	for _, dialect := range dwhsql.DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
-		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, TextMetricsCols("workspace"))
+		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, TextMetricsCols("workspace", dialect.Dialect))
 		sql, err := queryBuilder.ToSql(dialect.Dialect)
 		s.Require().NoError(err)
 		s.Require().NotEmpty(sql)
@@ -36,7 +36,7 @@ func (s *MetricsSuite) TestMultiMetricValues() {
 	for _, dialect := range dwhsql.DialectsToTest() {
 		tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
 		queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, append(
-			TextMetricsValuesCols("workspace", WithPrefixForColumn("workspace")),
+			TextMetricsValuesCols("workspace", dialect.Dialect, WithPrefixForColumn("workspace")),
 			NumericMetricsValuesCols("run_type", dialect.Dialect, WithPrefixForColumn("run_type"))...,
 		))
 		queryBuilder = queryBuilder.WithSegment(dwhsql.Identifier("workspace"))
@@ -121,7 +121,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 
 				s.Run(fmt.Sprintf("%s_%s_%s", dialect.Name, cond.name, seg.name), func() {
 
-					expressions := TimeMetricsCols("ingested_at")
+					expressions := TimeMetricsCols("ingested_at", dialect.Dialect)
 
 					s.Run("partitioning", func() {
 
@@ -131,7 +131,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 						}
 
 						queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, partitioning, 100)
+						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, partitioning, 100, dialect.Dialect)
 						sql, err := queryBuilder.ToSql(dialect.Dialect)
 						s.Require().NoError(err)
 						s.Require().NotEmpty(sql)
@@ -143,7 +143,7 @@ func (s *MetricsSuite) TestApplyMonitorDefArgs() {
 					s.Run("no_partitioning", func() {
 
 						queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100)
+						queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100, dialect.Dialect)
 						sql, err := queryBuilder.ToSql(dialect.Dialect)
 						s.Require().NoError(err)
 						s.Require().NotEmpty(sql)
@@ -201,10 +201,10 @@ func (s *MetricsSuite) TestSegmentationRules() {
 
 			s.Run(fmt.Sprintf("%s_%s", dialect.Name, seg.name), func() {
 
-				expressions := TimeMetricsValuesCols("ingested_at")
+				expressions := TimeMetricsValuesCols("ingested_at", dialect.Dialect)
 
 				queryBuilder := querybuilder.NewQueryBuilder(tableFqnExpr, expressions)
-				queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100)
+				queryBuilder = ApplyMonitorDefArgs(queryBuilder, monitorArgs, nil, 100, dialect.Dialect)
 				sql, err := queryBuilder.ToSql(dialect.Dialect)
 				s.Require().NoError(err)
 				s.Require().NotEmpty(sql)
@@ -222,7 +222,7 @@ func (s *MetricsSuite) TestPartition() {
 
 	for _, dialect := range dwhsql.DialectsToTest() {
 
-		expressions := TimeMetricsCols("ingested_at")
+		expressions := TimeMetricsCols("ingested_at", dialect.Dialect)
 
 		partition := &Partition{
 			Field: "ingested_at",

@@ -54,7 +54,7 @@ func (d *ClickHouseDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *ClickHouseDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.Identifier(expr.name), nil
 }
 
 func (d *ClickHouseDialect) RoundTime(expr Expr, duration time.Duration) Expr {

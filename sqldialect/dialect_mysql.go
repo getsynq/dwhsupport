@@ -56,7 +56,7 @@ func (d *MySQLDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *MySQLDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.Identifier(expr.name), nil
 }
 
 func (d *MySQLDialect) RoundTime(expr Expr, interval time.Duration) Expr {

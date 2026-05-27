@@ -66,6 +66,7 @@ func ApplyMonitorDefArgs(
 	args *MonitorArgs,
 	partitioning *MonitorPartitioning,
 	segmentLengthLimit int64,
+	dialect Dialect,
 ) *querybuilder.QueryBuilder {
 
 	if args != nil {
@@ -113,11 +114,13 @@ func ApplyMonitorDefArgs(
 		}
 	}
 
+	_ = dialect // kept for signature symmetry; TimeCol quotes via dialect.ResolveTimeColumn
 	if partitioning != nil && partitioning.Field != "" {
+		partExpr := TimeCol(partitioning.Field)
 		if partitioning.ScheduleTimeShift == 0 {
-			qb = qb.WithTimeSegment(TimeCol(partitioning.Field), partitioning.Interval)
+			qb = qb.WithTimeSegment(partExpr, partitioning.Interval)
 		} else {
-			qb = qb.WithShiftedTimeSegment(TimeCol(partitioning.Field), partitioning.Interval, partitioning.ScheduleTimeShift)
+			qb = qb.WithShiftedTimeSegment(partExpr, partitioning.Interval, partitioning.ScheduleTimeShift)
 		}
 	}
 
@@ -224,7 +227,7 @@ var NumericMetrics = []MetricId{
 }
 
 func NumericMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
-	metricFieldCol := NumericCol(field)
+	metricFieldCol := NumericCol(dialect.Identifier(field))
 
 	var cols []Expr
 	metrics := NumericMetrics
@@ -318,7 +321,8 @@ var TimeMetrics = []MetricId{
 	METRIC_MAX,
 }
 
-func TimeMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
+func TimeMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
+	_ = dialect // kept for signature symmetry; TimeCol quotes via dialect.ResolveTimeColumn
 	timeFieldCol := TimeCol(field)
 
 	var cols []Expr
@@ -333,10 +337,10 @@ func TimeMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 	return cols
 }
 
-func TimeMetricsCols(field string, opts ...MetricConfOption) []Expr {
+func TimeMetricsCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
 	cols := []Expr{As(String(field), Identifier("field"))}
 	cols = append(cols, CountStar(METRIC_NUM_ROWS))
-	cols = append(cols, TimeMetricsValuesCols(field, opts...)...)
+	cols = append(cols, TimeMetricsValuesCols(field, dialect, opts...)...)
 
 	return cols
 }
@@ -401,8 +405,8 @@ var TextLengthMetrics = []MetricId{
 	METRIC_MEAN_LENGTH,
 }
 
-func TextMetricsLengthCols(field string, opts ...MetricConfOption) []Expr {
-	textFieldCol := TextCol(field)
+func TextMetricsLengthCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
+	textFieldCol := TextCol(dialect.Identifier(field))
 
 	var cols []Expr
 	for _, metricId := range TextLengthMetrics {
@@ -417,8 +421,8 @@ func TextMetricsLengthCols(field string, opts ...MetricConfOption) []Expr {
 	return cols
 }
 
-func TextMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
-	textFieldCol := TextCol(field)
+func TextMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
+	textFieldCol := TextCol(dialect.Identifier(field))
 
 	var cols []Expr
 	for _, metricId := range TextMetrics {
@@ -433,10 +437,10 @@ func TextMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 	return cols
 }
 
-func TextMetricsCols(field string, opts ...MetricConfOption) []Expr {
+func TextMetricsCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
 	cols := []Expr{As(String(field), Identifier("field"))}
 	cols = append(cols, CountStar(METRIC_NUM_ROWS))
-	cols = append(cols, TextMetricsValuesCols(field, opts...)...)
+	cols = append(cols, TextMetricsValuesCols(field, dialect, opts...)...)
 
 	return cols
 }

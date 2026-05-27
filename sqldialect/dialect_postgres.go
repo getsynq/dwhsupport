@@ -54,7 +54,7 @@ func (d *PostgresDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *PostgresDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return PqQuoteIdentifierIfUpper(expr.name), nil
+	return d.Identifier(expr.name), nil
 }
 
 func (d *PostgresDialect) RoundTime(expr Expr, interval time.Duration) Expr {

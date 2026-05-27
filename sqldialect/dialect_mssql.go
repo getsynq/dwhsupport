@@ -53,7 +53,7 @@ func (d *MSSQLDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *MSSQLDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return MSSQLQuoteIdentifier(expr.name), nil
+	return d.Identifier(expr.name), nil
 }
 
 func (d *MSSQLDialect) RoundTime(expr Expr, interval time.Duration) Expr {
