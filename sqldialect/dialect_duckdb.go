@@ -54,7 +54,7 @@ func (d *DuckDBDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *DuckDBDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *DuckDBDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -88,9 +88,13 @@ func (d *DuckDBDialect) Identifier(identifier string) string {
 }
 
 // ResolveFieldRef returns the SQL reference for a user-supplied field name.
-// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
+// Expressions (containing function calls, casts, JSON operators, etc.) are
+// returned as-is; plain identifiers are double-quoted only when needed.
 func (d *DuckDBDialect) ResolveFieldRef(name string) string {
-	return d.Identifier(name)
+	if isLikelyExpression(name) {
+		return name
+	}
+	return QuoteWithDoubleQuotes(name)
 }
 
 func (d *DuckDBDialect) StringLiteral(s string) string {

@@ -116,3 +116,24 @@ func TestResolveFieldRef_QuoteIfNeededBackticks(t *testing.T) {
 		}
 	}
 }
+
+func TestResolveFieldRef_DuckDB(t *testing.T) {
+	d := NewDuckDBDialect()
+	cases := []struct {
+		in, want string
+	}{
+		{"ingested_at", "ingested_at"},
+		{"INGESTED_AT", "INGESTED_AT"},
+		{"Created At", `"Created At"`},
+		{"_meta/mtime", `"_meta/mtime"`},
+		{"payload->>'amount'", "payload->>'amount'"},
+		{"CAST(x AS INT)", "CAST(x AS INT)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.in, func(t *testing.T) {
+			if got := d.ResolveFieldRef(tc.in); got != tc.want {
+				t.Errorf("DuckDB.ResolveFieldRef(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
