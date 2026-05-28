@@ -6,9 +6,9 @@ select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment_3", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where
   "segment" not in ('synq-demo') and 
@@ -29,12 +29,12 @@ select
   COALESCE(SUBSTRING(to_varchar(workspace), 1, 100), '') as "segment", 
   COALESCE(SUBSTRING(to_varchar(run_status), 1, 100), '') as "segment_2", 
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment_3", 
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where
   "segment" not in ('synq-demo') and 
@@ -56,9 +56,9 @@ order by
 select
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
  
@@ -66,12 +66,12 @@ where (run_status > 0) and (run_type > 0)
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/snowflake_multi_condition_no_segmentation/partitioning - 1]
 select
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
 group by "time_segment"
@@ -83,9 +83,9 @@ select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
 group by "segment"
@@ -95,12 +95,12 @@ order by "segment"
 [TestMetricsSuite/TestApplyMonitorDefArgs/snowflake_multi_condition_single_segmentation_all/partitioning - 1]
 select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment", 
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
 group by
@@ -118,9 +118,9 @@ select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment_3", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where
   "segment" not in ('synq-demo') and 
@@ -140,12 +140,12 @@ select
   COALESCE(SUBSTRING(to_varchar(workspace), 1, 100), '') as "segment", 
   COALESCE(SUBSTRING(to_varchar(run_status), 1, 100), '') as "segment_2", 
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment_3", 
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where
   "segment" not in ('synq-demo') and 
@@ -166,21 +166,21 @@ order by
 select
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
  
 ---
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/snowflake_no_conditions_no_segmentation/partitioning - 1]
 select
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 group by "time_segment"
 order by "time_segment" 
@@ -191,9 +191,9 @@ select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 group by "segment"
 order by "segment" 
@@ -202,12 +202,12 @@ order by "segment"
 [TestMetricsSuite/TestApplyMonitorDefArgs/snowflake_no_conditions_single_segmentation_all/partitioning - 1]
 select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment", 
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 group by
   "time_segment", 
@@ -224,9 +224,9 @@ select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment_3", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where
   "segment" not in ('synq-demo') and 
@@ -247,12 +247,12 @@ select
   COALESCE(SUBSTRING(to_varchar(workspace), 1, 100), '') as "segment", 
   COALESCE(SUBSTRING(to_varchar(run_status), 1, 100), '') as "segment_2", 
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment_3", 
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where
   "segment" not in ('synq-demo') and 
@@ -274,9 +274,9 @@ order by
 select
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (1=1)
  
@@ -284,12 +284,12 @@ where (1=1)
 
 [TestMetricsSuite/TestApplyMonitorDefArgs/snowflake_single_condition_no_segmentation/partitioning - 1]
 select
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (1=1)
 group by "time_segment"
@@ -301,9 +301,9 @@ select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (1=1)
 group by "segment"
@@ -313,12 +313,12 @@ order by "segment"
 [TestMetricsSuite/TestApplyMonitorDefArgs/snowflake_single_condition_single_segmentation_all/partitioning - 1]
 select
   COALESCE(SUBSTRING(to_varchar(run_type), 1, 100), '') as "segment", 
-  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz("ingested_at"), 1, 'HOUR')) as "time_segment", 
+  TIMESTAMPADD(HOUR, 1, time_slice(to_timestamp_ntz(ingested_at), 1, 'HOUR')) as "time_segment", 
   'ingested_at' as "field", 
   count(*) as "num_rows", 
-  count("ingested_at") as "num_not_null", 
-  min("ingested_at") as "min", 
-  max("ingested_at") as "max"
+  count(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
 from db.default.runs 
 where (1=1)
 group by

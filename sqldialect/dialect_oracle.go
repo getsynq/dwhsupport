@@ -50,7 +50,7 @@ func (d *OracleDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *OracleDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return d.Identifier(expr.name), nil
+	return QuoteForFoldUpper(expr.name, `"`), nil
 }
 
 func (d *OracleDialect) RoundTime(expr Expr, interval time.Duration) Expr {

@@ -71,18 +71,36 @@ func QuoteWithDoubleQuotes(identifier string) string {
 	return fmt.Sprintf(`"%s"`, escaped)
 }
 
-// QuoteIfMixedCaseOrSpecial quotes an identifier when it is mixed-case or
-// contains characters requiring quoting. Pure-lower / pure-upper identifiers
-// fold predictably and pass through unquoted — safe for both fold-to-lower
-// (Postgres, Redshift) and fold-to-upper (Snowflake, Oracle) dialects when
-// names originate from catalog metadata (canonical storage case).
+// QuoteForFoldUpper quotes an identifier for fold-to-upper dialects
+// (Snowflake, Oracle). Leaves pure-upper AND pure-lower identifiers
+// unquoted (pure-upper matches catalog canonical case directly; pure-lower
+// folds up to match). Quotes mixed-case and identifiers containing
+// characters requiring quoting.
+// MUST NOT be used for fold-to-lower dialects (Postgres, Redshift) —
+// pure-upper input would slip through unquoted and fold to lower,
+// missing the catalog entry. Use QuoteForFoldLower there.
 // quoteChar must be a single character (e.g. `"`).
-func QuoteIfMixedCaseOrSpecial(identifier string, quoteChar string) string {
+func QuoteForFoldUpper(identifier string, quoteChar string) string {
 	if needsQuoting(identifier) || (!IsUpper(identifier) && !IsLower(identifier)) {
 		escaped := strings.ReplaceAll(identifier, quoteChar, quoteChar+quoteChar)
 		return quoteChar + escaped + quoteChar
 	}
 	return identifier
+}
+
+// QuoteForFoldLower quotes an identifier for fold-to-lower dialects
+// (Postgres, Redshift). Leaves only pure-lower identifiers with no
+// characters requiring quoting unquoted. Any uppercase letter or special
+// char would otherwise fold or parse incorrectly.
+// MUST NOT be used for fold-to-upper dialects (Snowflake, Oracle) —
+// pure-upper input would be needlessly quoted. Use QuoteForFoldUpper there.
+// quoteChar must be a single character (e.g. `"`).
+func QuoteForFoldLower(identifier string, quoteChar string) string {
+	if !needsQuoting(identifier) && IsLower(identifier) {
+		return identifier
+	}
+	escaped := strings.ReplaceAll(identifier, quoteChar, quoteChar+quoteChar)
+	return quoteChar + escaped + quoteChar
 }
 
 // QuoteWithBackticks quotes an identifier with backticks.

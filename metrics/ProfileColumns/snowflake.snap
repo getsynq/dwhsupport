@@ -25,9 +25,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
 group by
@@ -60,9 +60,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
 order by "num_rows" desc limit 1000
@@ -92,9 +92,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 where (run_status > 0) and (run_type > 0)
 group by "segment"
@@ -127,9 +127,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 group by
   "segment", 
@@ -161,9 +161,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 order by "num_rows" desc limit 1000
 ---
@@ -192,9 +192,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 group by "segment"
 order by "num_rows" desc limit 1000
@@ -226,9 +226,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 where (1=1)
 group by
@@ -261,9 +261,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 where (1=1)
 order by "num_rows" desc limit 1000
@@ -293,9 +293,9 @@ select
   CAST(max("run_status") AS FLOAT) as "run_status__max", 
   CAST(median("run_status") AS FLOAT) as "run_status__median", 
   CAST(stddev("run_status") AS FLOAT) as "run_status__stddev", 
-  count("created_at") as "created_at__num_not_null", 
-  min("created_at") as "created_at__min", 
-  max("created_at") as "created_at__max"
+  count(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max"
 from db.default.runs 
 where (1=1)
 group by "segment"

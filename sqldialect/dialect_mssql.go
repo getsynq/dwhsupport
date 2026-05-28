@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -125,7 +126,8 @@ func (d *MSSQLDialect) FormatLimit(rowsSql string) string {
 }
 
 func MSSQLQuoteIdentifier(identifier string) string {
-	return fmt.Sprintf("[%s]", identifier)
+	escaped := strings.ReplaceAll(identifier, "]", "]]")
+	return fmt.Sprintf("[%s]", escaped)
 }
 
 func (d *MSSQLDialect) SupportsCrossDatabaseQueries() bool { return false }

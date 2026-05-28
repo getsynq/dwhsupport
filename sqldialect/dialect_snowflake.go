@@ -54,7 +54,7 @@ func (d *SnowflakeDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *SnowflakeDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return d.Identifier(expr.name), nil
+	return QuoteForFoldUpper(expr.name, `"`), nil
 }
 
 func (d *SnowflakeDialect) RoundTime(expr Expr, duration time.Duration) Expr {
