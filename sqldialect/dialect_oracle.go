@@ -50,7 +50,7 @@ func (d *OracleDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *OracleDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return OracleQuoteIdentifier(expr.name), nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *OracleDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -80,10 +80,11 @@ func (d *OracleDialect) Identifier(identifier string) string {
 	return OracleQuoteIdentifier(identifier)
 }
 
-// ResolveFieldRef returns the SQL reference for a user-supplied field name.
-// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
 func (d *OracleDialect) ResolveFieldRef(name string) string {
-	return d.Identifier(name)
+	if isLikelyExpression(name) {
+		return name
+	}
+	return QuoteForFoldUpper(name, `"`)
 }
 
 func (d *OracleDialect) StringLiteral(s string) string {

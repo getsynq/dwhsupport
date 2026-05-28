@@ -1,7 +1,7 @@
 
 [TestMetricsSuite/TestPartitionWithTimeRangeExpr - 1]
 select
-  (TRUNC("ingested_at", 'DD') + INTERVAL '1' DAY) as "time_segment", 
+  (TRUNC(ingested_at, 'DD') + INTERVAL '1' DAY) as "time_segment", 
   'run_type' as "field", 
   COUNT(*) as "num_rows", 
   COUNT(run_type) as "num_not_null", 
@@ -14,8 +14,8 @@ select
   CAST(STDDEV(run_type) AS BINARY_DOUBLE) as "stddev"
 from "default"."runs" 
 where
-  "ingested_at" >= CURRENT_DATE - INTERVAL '3 days' and 
-  "ingested_at" < CURRENT_DATE - INTERVAL '1 day'
-group by (TRUNC("ingested_at", 'DD') + INTERVAL '1' DAY)
-order by (TRUNC("ingested_at", 'DD') + INTERVAL '1' DAY) 
+  ingested_at >= CURRENT_DATE - INTERVAL '3 days' and 
+  ingested_at < CURRENT_DATE - INTERVAL '1 day'
+group by (TRUNC(ingested_at, 'DD') + INTERVAL '1' DAY)
+order by (TRUNC(ingested_at, 'DD') + INTERVAL '1' DAY) 
 ---
