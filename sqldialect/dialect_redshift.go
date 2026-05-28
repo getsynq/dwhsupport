@@ -84,14 +84,14 @@ func (d *RedshiftDialect) CurrentTimestamp() Expr {
 }
 
 func (d *RedshiftDialect) Identifier(identifier string) string {
-	return QuoteWithDoubleQuotes(identifier)
+	return QuoteWithDoubleQuotesIfNeeded(identifier)
 }
 
 func (d *RedshiftDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
 		return name
 	}
-	return QuoteForFoldLower(name, `"`)
+	return QuoteForFoldLower(name)
 }
 
 func (d *RedshiftDialect) StringLiteral(s string) string {

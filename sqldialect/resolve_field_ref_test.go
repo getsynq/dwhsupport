@@ -17,6 +17,11 @@ func TestResolveFieldRef_Snowflake(t *testing.T) {
 		{"CAST(x AS INT)", "CAST(x AS INT)"},
 		{"lower(name)", "lower(name)"},
 		{"coalesce(a, b)", "coalesce(a, b)"},
+		{"metadata.created_at", "metadata.created_at"},
+		{"things as service", `"things as service"`},
+		{`"Created At"`, `"Created At"`},
+		{"`col`", "\"`col`\""},
+		{"[col]", `"[col]"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -40,6 +45,8 @@ func TestResolveFieldRef_Oracle(t *testing.T) {
 		{"payload->>'amount'", "payload->>'amount'"},
 		{"value::numeric", "value::numeric"},
 		{"CAST(x AS INT)", "CAST(x AS INT)"},
+		{"metadata.created_at", "metadata.created_at"},
+		{`"Created At"`, `"Created At"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -70,6 +77,8 @@ func TestResolveFieldRef_FoldLower(t *testing.T) {
 		{"payload->>'amount'", "payload->>'amount'"},
 		{"value::numeric", "value::numeric"},
 		{"CAST(x AS INT)", "CAST(x AS INT)"},
+		{"metadata.created_at", "metadata.created_at"},
+		{`"Created At"`, `"Created At"`},
 	}
 	for _, dl := range dialects {
 		for _, tc := range cases {
@@ -105,6 +114,10 @@ func TestResolveFieldRef_QuoteIfNeededBackticks(t *testing.T) {
 		{"value::numeric", "value::numeric"},
 		{"CAST(x AS INT)", "CAST(x AS INT)"},
 		{"lower(name)", "lower(name)"},
+		{"events.payload", "events.payload"},
+		{"things as service", "`things as service`"},
+		{"`col`", "`col`"},
+		{`"col"`, "`\"col\"`"},
 	}
 	for _, dl := range dialects {
 		for _, tc := range cases {
@@ -128,6 +141,8 @@ func TestResolveFieldRef_DuckDB(t *testing.T) {
 		{"_meta/mtime", `"_meta/mtime"`},
 		{"payload->>'amount'", "payload->>'amount'"},
 		{"CAST(x AS INT)", "CAST(x AS INT)"},
+		{"metadata.created_at", "metadata.created_at"},
+		{`"Created At"`, `"Created At"`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -150,6 +165,8 @@ func TestResolveFieldRef_MSSQL(t *testing.T) {
 		{"_meta/mtime", "[_meta/mtime]"},
 		{"payload->>'amount'", "payload->>'amount'"},
 		{"CAST(x AS INT)", "CAST(x AS INT)"},
+		{"schema.table.col", "schema.table.col"},
+		{"[Created At]", "[Created At]"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {

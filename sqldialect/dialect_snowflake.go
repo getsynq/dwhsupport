@@ -88,10 +88,10 @@ func (d *SnowflakeDialect) Identifier(identifier string) string {
 }
 
 func (d *SnowflakeDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
 		return name
 	}
-	return QuoteForFoldUpper(name, `"`)
+	return QuoteForFoldUpper(name)
 }
 
 func (d *SnowflakeDialect) StringLiteral(s string) string {

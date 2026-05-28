@@ -81,10 +81,10 @@ func (d *OracleDialect) Identifier(identifier string) string {
 }
 
 func (d *OracleDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
 		return name
 	}
-	return QuoteForFoldUpper(name, `"`)
+	return QuoteForFoldUpper(name)
 }
 
 func (d *OracleDialect) StringLiteral(s string) string {

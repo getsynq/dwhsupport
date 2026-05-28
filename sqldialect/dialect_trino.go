@@ -84,14 +84,14 @@ func (d *TrinoDialect) CurrentTimestamp() Expr {
 }
 
 func (d *TrinoDialect) Identifier(identifier string) string {
-	return QuoteWithDoubleQuotes(identifier)
+	return QuoteWithDoubleQuotesIfNeeded(identifier)
 }
 
 func (d *TrinoDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
 		return name
 	}
-	return QuoteForFoldLower(name, `"`)
+	return QuoteForFoldLower(name)
 }
 
 func (d *TrinoDialect) StringLiteral(s string) string {

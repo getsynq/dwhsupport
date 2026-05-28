@@ -84,14 +84,14 @@ func (d *PostgresDialect) CurrentTimestamp() Expr {
 }
 
 func (d *PostgresDialect) Identifier(identifier string) string {
-	return QuoteWithDoubleQuotes(identifier)
+	return QuoteWithDoubleQuotesIfNeeded(identifier)
 }
 
 func (d *PostgresDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
 		return name
 	}
-	return QuoteForFoldLower(name, `"`)
+	return QuoteForFoldLower(name)
 }
 
 func (d *PostgresDialect) StringLiteral(s string) string {

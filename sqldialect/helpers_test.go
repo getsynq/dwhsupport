@@ -37,7 +37,7 @@ func TestQuoteForFoldUpper(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
-			if got := QuoteForFoldUpper(tc.in, `"`); got != tc.want {
+			if got := QuoteForFoldUpper(tc.in); got != tc.want {
 				t.Errorf("QuoteForFoldUpper(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
@@ -56,7 +56,7 @@ func TestQuoteForFoldLower(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
-			if got := QuoteForFoldLower(tc.in, `"`); got != tc.want {
+			if got := QuoteForFoldLower(tc.in); got != tc.want {
 				t.Errorf("QuoteForFoldLower(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
@@ -96,7 +96,10 @@ func TestIsLikelyExpression(t *testing.T) {
 		{"data->'nested'", true},
 		{"a #>> '{b,c}'", true},
 		{"CAST(x AS INT)", true},
-		{"foo as bar", true},
+		{"metadata.created_at", true},
+		{"events.payload.amount", true},
+		{"things as service", false},
+		{"sold AS new", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {

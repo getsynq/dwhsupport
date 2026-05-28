@@ -84,17 +84,17 @@ func (d *ClickHouseDialect) CurrentTimestamp() Expr {
 }
 
 func (d *ClickHouseDialect) Identifier(identifier string) string {
-	return QuoteWithBackticks(identifier)
+	return QuoteWithBackticksIfNeeded(identifier)
 }
 
 // ResolveFieldRef returns the SQL reference for a user-supplied field name.
 // Expressions (containing function calls, casts, JSON operators, etc.) are
 // returned as-is; plain identifiers are backtick-quoted only when needed.
 func (d *ClickHouseDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '`', '`') {
 		return name
 	}
-	return QuoteWithBackticks(name)
+	return QuoteWithBackticksIfNeeded(name)
 }
 
 func (d *ClickHouseDialect) StringLiteral(s string) string {

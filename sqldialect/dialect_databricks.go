@@ -91,10 +91,10 @@ func (d *DatabricksDialect) Identifier(identifier string) string {
 // Expressions (containing function calls, casts, JSON operators, etc.) are
 // returned as-is; plain identifiers are backtick-quoted only when needed.
 func (d *DatabricksDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '`', '`') {
 		return name
 	}
-	return QuoteWithBackticks(name)
+	return QuoteWithBackticksIfNeeded(name)
 }
 
 func (d *DatabricksDialect) StringLiteral(s string) string {

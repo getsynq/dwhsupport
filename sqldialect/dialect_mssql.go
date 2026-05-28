@@ -89,7 +89,7 @@ func (d *MSSQLDialect) Identifier(identifier string) string {
 // ResolveFieldRef returns the SQL reference for a user-supplied field name.
 // Passes through likely SQL expressions unchanged; otherwise quotes with brackets only when needed.
 func (d *MSSQLDialect) ResolveFieldRef(name string) string {
-	if isLikelyExpression(name) {
+	if isLikelyExpression(name) || isQuotedWith(name, '[', ']') {
 		return name
 	}
 	return QuoteWithBracketsIfNeeded(name)
