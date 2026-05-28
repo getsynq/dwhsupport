@@ -54,7 +54,7 @@ func (d *BigQueryDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *BigQueryDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return fmt.Sprintf("timestamp(%s)", expr.name), nil
+	return fmt.Sprintf("timestamp(%s)", d.ResolveFieldRef(expr.name)), nil
 }
 
 func (d *BigQueryDialect) RoundTime(expr Expr, duration time.Duration) Expr {
@@ -88,9 +88,13 @@ func (d *BigQueryDialect) Identifier(identifier string) string {
 }
 
 // ResolveFieldRef returns the SQL reference for a user-supplied field name.
-// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
+// Expressions (containing function calls, casts, JSON operators, etc.) are
+// returned as-is; plain identifiers are backtick-quoted only when needed.
 func (d *BigQueryDialect) ResolveFieldRef(name string) string {
-	return d.Identifier(name)
+	if isLikelyExpression(name) {
+		return name
+	}
+	return QuoteWithBackticks(name)
 }
 
 func (d *BigQueryDialect) StringLiteral(s string) string {
