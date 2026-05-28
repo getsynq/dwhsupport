@@ -2,12 +2,41 @@ package metrics
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/getsynq/dwhsupport/querybuilder"
 	. "github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/samber/lo"
 )
+
+// sqlExpressionMarkers are substrings whose presence in a field string
+// indicates a SQL expression rather than a bare column name. Used by
+// resolveFieldRef to skip dialect-aware quoting for expressions while
+// still quoting catalog column names that contain special chars
+// (e.g. Fivetran-style "_meta/mtime").
+var sqlExpressionMarkers = []string{
+	"(", ")",
+	"->>", "->",
+	"#>>", "#>",
+	"::",
+	",",
+	" AS ", " as ",
+}
+
+// resolveFieldRef returns the SQL reference for a user-supplied field.
+// If field looks like a SQL expression (contains markers above), it is
+// returned raw — caller built the expression themselves. Otherwise
+// field is treated as a bare column name and quoted via the dialect's
+// fold-aware Identifier.
+func resolveFieldRef(field string, dialect Dialect) string {
+	for _, m := range sqlExpressionMarkers {
+		if strings.Contains(field, m) {
+			return field
+		}
+	}
+	return dialect.Identifier(field)
+}
 
 type MonitorPartitioning struct {
 	Field             string
@@ -225,7 +254,7 @@ var NumericMetrics = []MetricId{
 }
 
 func NumericMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
-	metricFieldCol := NumericCol(dialect.Identifier(field))
+	metricFieldCol := NumericCol(resolveFieldRef(field, dialect))
 
 	var cols []Expr
 	metrics := NumericMetrics
@@ -403,7 +432,7 @@ var TextLengthMetrics = []MetricId{
 }
 
 func TextMetricsLengthCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
-	textFieldCol := TextCol(dialect.Identifier(field))
+	textFieldCol := TextCol(resolveFieldRef(field, dialect))
 
 	var cols []Expr
 	for _, metricId := range TextLengthMetrics {
@@ -419,7 +448,7 @@ func TextMetricsLengthCols(field string, dialect Dialect, opts ...MetricConfOpti
 }
 
 func TextMetricsValuesCols(field string, dialect Dialect, opts ...MetricConfOption) []Expr {
-	textFieldCol := TextCol(dialect.Identifier(field))
+	textFieldCol := TextCol(resolveFieldRef(field, dialect))
 
 	var cols []Expr
 	for _, metricId := range TextMetrics {
