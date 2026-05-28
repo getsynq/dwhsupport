@@ -54,7 +54,7 @@ func (d *SnowflakeDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *SnowflakeDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *SnowflakeDialect) RoundTime(expr Expr, duration time.Duration) Expr {
@@ -87,10 +87,11 @@ func (d *SnowflakeDialect) Identifier(identifier string) string {
 	return fmt.Sprintf("%q", identifier)
 }
 
-// ResolveFieldRef returns the SQL reference for a user-supplied field name.
-// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
 func (d *SnowflakeDialect) ResolveFieldRef(name string) string {
-	return d.Identifier(name)
+	if isLikelyExpression(name) {
+		return name
+	}
+	return QuoteForFoldUpper(name, `"`)
 }
 
 func (d *SnowflakeDialect) StringLiteral(s string) string {
