@@ -14,8 +14,8 @@ select
   CAST(STDEV(run_type) AS FLOAT) as [stddev]
 from [default].[runs] 
 where
-  [ingested_at] >= CAST('2025-01-01 00:00:00' AS DATETIME2) and 
-  [ingested_at] < CAST('2025-02-01 00:00:00' AS DATETIME2) and 
+  ingested_at >= CAST('2025-01-01 00:00:00' AS DATETIME2) and 
+  ingested_at < CAST('2025-02-01 00:00:00' AS DATETIME2) and 
   (workspace = 'synq-demo' OR 1=1)
 group by COALESCE(CAST([workspace] AS NVARCHAR(MAX)), '')
 order by COALESCE(CAST([workspace] AS NVARCHAR(MAX)), '') 

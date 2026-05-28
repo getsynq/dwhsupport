@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -53,7 +54,7 @@ func (d *MSSQLDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *MSSQLDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return MSSQLQuoteIdentifier(expr.name), nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *MSSQLDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -86,9 +87,12 @@ func (d *MSSQLDialect) Identifier(identifier string) string {
 }
 
 // ResolveFieldRef returns the SQL reference for a user-supplied field name.
-// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
+// Passes through likely SQL expressions unchanged; otherwise quotes with brackets only when needed.
 func (d *MSSQLDialect) ResolveFieldRef(name string) string {
-	return d.Identifier(name)
+	if isLikelyExpression(name) {
+		return name
+	}
+	return QuoteWithBracketsIfNeeded(name)
 }
 
 func (d *MSSQLDialect) StringLiteral(s string) string {
@@ -131,7 +135,8 @@ func (d *MSSQLDialect) FormatLimit(rowsSql string) string {
 }
 
 func MSSQLQuoteIdentifier(identifier string) string {
-	return fmt.Sprintf("[%s]", identifier)
+	escaped := strings.ReplaceAll(identifier, "]", "]]")
+	return fmt.Sprintf("[%s]", escaped)
 }
 
 func (d *MSSQLDialect) SupportsCrossDatabaseQueries() bool { return false }
