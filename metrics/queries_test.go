@@ -365,3 +365,14 @@ func (s *MetricsSuite) TestFilters() {
 		snaps.WithConfig(snaps.Dir("Filters"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
 	}
 }
+
+func (s *MetricsSuite) TestNumericMetricsValuesCols_CaseSensitiveColumn() {
+	dialect := dwhsql.NewSnowflakeDialect()
+	cols := NumericMetricsValuesCols("Price After", dialect, WithPrefixForColumn("Price After"))
+	qb := querybuilder.NewQueryBuilder(dwhsql.TableFqn("db", "sch", "tbl"), cols)
+	sql, err := qb.ToSql(dialect)
+	s.Require().NoError(err)
+	s.T().Logf("SQL: %s", sql)
+	s.Require().Contains(sql, `count("Price After")`)
+	s.Require().NotContains(sql, `count(Price After)`)
+}
