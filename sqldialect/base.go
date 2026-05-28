@@ -439,6 +439,10 @@ func TextCol(name string) *TextColExpr {
 
 func (s *TextColExpr) IsTextExpr() {}
 
+func (s *TextColExpr) ToSql(dialect Dialect) (string, error) {
+	return dialect.ResolveFieldRef(s.sql), nil
+}
+
 type TimeColExpr struct {
 	name string
 }
@@ -468,6 +472,10 @@ func NumericCol(name string) *NumericColExpr {
 }
 
 func (s *NumericColExpr) IsNumericExpr() {}
+
+func (s *NumericColExpr) ToSql(dialect Dialect) (string, error) {
+	return dialect.ResolveFieldRef(s.sql), nil
+}
 
 //
 // TableFqn
