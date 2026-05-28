@@ -87,6 +87,12 @@ func (d *ClickHouseDialect) Identifier(identifier string) string {
 	return QuoteWithBackticks(identifier)
 }
 
+// ResolveFieldRef returns the SQL reference for a user-supplied field name.
+// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
+func (d *ClickHouseDialect) ResolveFieldRef(name string) string {
+	return d.Identifier(name)
+}
+
 func (d *ClickHouseDialect) StringLiteral(s string) string {
 	return StandardSQLStringLiteral(s)
 }

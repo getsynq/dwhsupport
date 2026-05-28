@@ -87,6 +87,12 @@ func (d *SnowflakeDialect) Identifier(identifier string) string {
 	return fmt.Sprintf("%q", identifier)
 }
 
+// ResolveFieldRef returns the SQL reference for a user-supplied field name.
+// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
+func (d *SnowflakeDialect) ResolveFieldRef(name string) string {
+	return d.Identifier(name)
+}
+
 func (d *SnowflakeDialect) StringLiteral(s string) string {
 	return StandardSQLStringLiteral(s)
 }

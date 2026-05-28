@@ -87,6 +87,12 @@ func (d *TrinoDialect) Identifier(identifier string) string {
 	return QuoteWithDoubleQuotes(identifier)
 }
 
+// ResolveFieldRef returns the SQL reference for a user-supplied field name.
+// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
+func (d *TrinoDialect) ResolveFieldRef(name string) string {
+	return d.Identifier(name)
+}
+
 func (d *TrinoDialect) StringLiteral(s string) string {
 	return StandardSQLStringLiteral(s)
 }
