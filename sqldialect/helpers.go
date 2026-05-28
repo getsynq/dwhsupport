@@ -80,3 +80,72 @@ func QuoteWithBackticks(identifier string) string {
 	escaped := strings.ReplaceAll(identifier, "`", "``")
 	return fmt.Sprintf("`%s`", escaped)
 }
+
+// QuoteForFoldUpper quotes an identifier for fold-to-upper dialects
+// (Snowflake, Oracle). Leaves pure-upper AND pure-lower identifiers
+// unquoted (pure-upper matches catalog canonical case directly; pure-lower
+// folds up to match). Quotes mixed-case and identifiers containing
+// characters requiring quoting.
+// MUST NOT be used for fold-to-lower dialects (Postgres, Redshift, Trino) —
+// pure-upper input would slip through unquoted and fold to lower,
+// missing the catalog entry. Use QuoteForFoldLower there.
+// quoteChar must be a single character (e.g. `"`).
+func QuoteForFoldUpper(identifier string, quoteChar string) string {
+	if needsQuoting(identifier) || (!IsUpper(identifier) && !IsLower(identifier)) {
+		escaped := strings.ReplaceAll(identifier, quoteChar, quoteChar+quoteChar)
+		return quoteChar + escaped + quoteChar
+	}
+	return identifier
+}
+
+// QuoteForFoldLower quotes an identifier for fold-to-lower dialects
+// (Postgres, Redshift, Trino). Leaves only pure-lower identifiers with no
+// characters requiring quoting unquoted. Any uppercase letter or special
+// char would otherwise fold or parse incorrectly.
+// MUST NOT be used for fold-to-upper dialects (Snowflake, Oracle) —
+// pure-upper input would be needlessly quoted. Use QuoteForFoldUpper there.
+// quoteChar must be a single character (e.g. `"`).
+func QuoteForFoldLower(identifier string, quoteChar string) string {
+	if !needsQuoting(identifier) && IsLower(identifier) {
+		return identifier
+	}
+	escaped := strings.ReplaceAll(identifier, quoteChar, quoteChar+quoteChar)
+	return quoteChar + escaped + quoteChar
+}
+
+// QuoteWithBracketsIfNeeded quotes an identifier with [brackets] (MSSQL syntax)
+// only when needed. Returns the identifier raw when it contains only safe chars.
+// Internal `]` characters are escaped by doubling.
+func QuoteWithBracketsIfNeeded(identifier string) string {
+	if !needsQuoting(identifier) {
+		return identifier
+	}
+	escaped := strings.ReplaceAll(identifier, "]", "]]")
+	return fmt.Sprintf("[%s]", escaped)
+}
+
+// sqlExpressionMarkers are substrings whose presence in a field string
+// indicates a SQL expression rather than a bare column name. Used by
+// each dialect's ResolveFieldRef to skip identifier quoting for
+// expressions while still quoting catalog column names that contain
+// special chars (e.g. Fivetran-style "_meta/mtime").
+var sqlExpressionMarkers = []string{
+	"(", ")",
+	"->>", "->",
+	"#>>", "#>",
+	"::",
+	",",
+	" AS ", " as ",
+}
+
+// isLikelyExpression returns true when the string contains a substring
+// that strongly suggests a SQL expression (function call, json path, cast,
+// multi-arg list, AS clause). Heuristic — see sqlExpressionMarkers.
+func isLikelyExpression(s string) bool {
+	for _, m := range sqlExpressionMarkers {
+		if strings.Contains(s, m) {
+			return true
+		}
+	}
+	return false
+}
