@@ -22,6 +22,7 @@ type Dialect interface {
 	CurrentTimestamp() Expr
 
 	Identifier(string) string
+	ResolveFieldRef(string) string
 	StringLiteral(string) string
 	ToString(Expr) Expr
 	Coalesce(exprs ...Expr) Expr
