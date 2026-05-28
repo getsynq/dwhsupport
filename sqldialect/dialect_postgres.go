@@ -54,7 +54,7 @@ func (d *PostgresDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *PostgresDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return PqQuoteIdentifierIfUpper(expr.name), nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *PostgresDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -87,10 +87,11 @@ func (d *PostgresDialect) Identifier(identifier string) string {
 	return QuoteWithDoubleQuotes(identifier)
 }
 
-// ResolveFieldRef returns the SQL reference for a user-supplied field name.
-// Stub — delegates to Identifier. Replaced with the dialect's strategy in a follow-up task.
 func (d *PostgresDialect) ResolveFieldRef(name string) string {
-	return d.Identifier(name)
+	if isLikelyExpression(name) {
+		return name
+	}
+	return QuoteForFoldLower(name, `"`)
 }
 
 func (d *PostgresDialect) StringLiteral(s string) string {
