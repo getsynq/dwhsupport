@@ -177,6 +177,44 @@ func TestResolveFieldRef_MSSQL(t *testing.T) {
 	}
 }
 
+// TestResolveFieldRef_CommaColumnQuoted locks the behavior after dropping `,`
+// from sqlExpressionMarkers: a column literally named `a, b` must be quoted,
+// not passed through raw (which would emit `count(a, b)` — a silent two-arg
+// call). A comma inside a real function call still passes through because `(`
+// triggers the expression heuristic.
+func TestResolveFieldRef_CommaColumnQuoted(t *testing.T) {
+	cases := []struct {
+		name           string
+		d              Dialect
+		commaCol       string
+		commaColInExpr string
+	}{
+		{"snowflake", NewSnowflakeDialect(), `"a, b"`, "coalesce(a, b)"},
+		{"oracle", NewOracleDialect(), `"a, b"`, "coalesce(a, b)"},
+		{"postgres", NewPostgresDialect(), `"a, b"`, "coalesce(a, b)"},
+		{"redshift", NewRedshiftDialect(), `"a, b"`, "coalesce(a, b)"},
+		{"trino", NewTrinoDialect(), `"a, b"`, "coalesce(a, b)"},
+		{"duckdb", NewDuckDBDialect(), `"a, b"`, "coalesce(a, b)"},
+		{"bigquery", NewBigQueryDialect(), "`a, b`", "coalesce(a, b)"},
+		{"databricks", NewDatabricksDialect(), "`a, b`", "coalesce(a, b)"},
+		{"clickhouse", NewClickHouseDialect(), "`a, b`", "coalesce(a, b)"},
+		{"mysql", NewMySQLDialect(), "`a, b`", "coalesce(a, b)"},
+		{"mssql", NewMSSQLDialect(), "[a, b]", "coalesce(a, b)"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name+"/column", func(t *testing.T) {
+			if got := tc.d.ResolveFieldRef("a, b"); got != tc.commaCol {
+				t.Errorf("%s.ResolveFieldRef(%q) = %q, want %q", tc.name, "a, b", got, tc.commaCol)
+			}
+		})
+		t.Run(tc.name+"/expr", func(t *testing.T) {
+			if got := tc.d.ResolveFieldRef("coalesce(a, b)"); got != tc.commaColInExpr {
+				t.Errorf("%s.ResolveFieldRef(%q) = %q, want %q", tc.name, "coalesce(a, b)", got, tc.commaColInExpr)
+			}
+		})
+	}
+}
+
 func TestMSSQLQuoteIdentifier_EscapesBracket(t *testing.T) {
 	cases := []struct {
 		in, want string
