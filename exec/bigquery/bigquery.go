@@ -61,6 +61,11 @@ func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExec
 
 	var options []option.ClientOption
 	options = append(options, option.WithUserAgent("synq-bq-client-v1.0.0"))
+	// bigquery.NewClient normally injects this scope before building its
+	// transport, but option.WithHTTPClient (below) overrides the transport — so
+	// we must apply the scope ourselves or credential-based auth fails with
+	// "invalid_scope" when fetching a token.
+	options = append(options, option.WithScopes(bigquery.Scope))
 	if conf.AccessToken != "" {
 		tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: conf.AccessToken})
 		options = append(options, option.WithTokenSource(tokenSource))
