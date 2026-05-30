@@ -25,6 +25,11 @@ type RateLimitConfig struct {
 	// blackholed call blocks until the caller's context (e.g. a 2h job timeout)
 	// fires, wedging the whole concurrent fan-out behind it. Zero disables the
 	// per-call bound.
+	//
+	// The default is generous on purpose: in practice these calls run ~100ms
+	// (p99.9 ~0.6s; the slowest observed across ~10M calls/day was ~29s), so 60s
+	// is ~2x the real-world worst case — it never trips a healthy call but still
+	// catches a hang within a minute instead of hours.
 	CallTimeout time.Duration
 }
 
@@ -33,7 +38,7 @@ var DefaultRateLimitConfig = RateLimitConfig{
 	BaseDelay:           1 * time.Second,
 	MaxDelay:            30 * time.Second,
 	MetadataConcurrency: 20,
-	CallTimeout:         2 * time.Minute,
+	CallTimeout:         60 * time.Second,
 }
 
 // withRateLimitRetry runs fn, retrying when it returns a rate-limit error (HTTP
