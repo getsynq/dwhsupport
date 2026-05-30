@@ -139,11 +139,41 @@ func (e *BigQueryScrapper) listDatasets(ctx context.Context) ([]*bigquery.Datase
 			if errIsNotFound(err) || errIsAccessDenied(err) {
 				continue
 			}
-			return nil, err
+			return nil, e.scrapeError(ctx, "datasets.list", "", "", err)
 		}
 		result = append(result, ds)
 	}
 	return result, nil
+}
+
+// listTableIDs lists every table ID in a dataset under a context bounded by
+// CallTimeout, so a stalled listing page can't hang the scrape. Tables the
+// caller can't see (not-found / access-denied) are skipped, consistent with the
+// rest of the scrapper.
+func (e *BigQueryScrapper) listTableIDs(ctx context.Context, datasetID string) ([]string, error) {
+	listCtx := ctx
+	if e.rateLimitCfg.CallTimeout > 0 {
+		var cancel context.CancelFunc
+		listCtx, cancel = context.WithTimeout(ctx, e.rateLimitCfg.CallTimeout)
+		defer cancel()
+	}
+
+	it := e.executor.GetBigQueryClient().Dataset(datasetID).Tables(listCtx)
+	var tableIDs []string
+	for {
+		table, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			if errIsNotFound(err) || errIsAccessDenied(err) {
+				continue
+			}
+			return nil, e.scrapeError(ctx, "tables.list", datasetID, "", err)
+		}
+		tableIDs = append(tableIDs, table.TableID)
+	}
+	return tableIDs, nil
 }
 
 func (e *BigQueryScrapper) queryRows(ctx context.Context, q string, args ...interface{}) (*bigquery.RowIterator, error) {

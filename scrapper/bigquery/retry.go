@@ -18,6 +18,14 @@ type RateLimitConfig struct {
 	MaxDelay time.Duration
 	// MetadataConcurrency limits the number of concurrent table.Metadata() calls.
 	MetadataConcurrency int
+	// CallTimeout bounds each individual BigQuery API call — including the
+	// client's own internal retries. It is the real guard against a stalled
+	// metadata call hanging a scrape: the BigQuery client retries a fast-failing
+	// request forever, so only a context deadline stops it. Without this a single
+	// blackholed call blocks until the caller's context (e.g. a 2h job timeout)
+	// fires, wedging the whole concurrent fan-out behind it. Zero disables the
+	// per-call bound.
+	CallTimeout time.Duration
 }
 
 var DefaultRateLimitConfig = RateLimitConfig{
@@ -25,17 +33,20 @@ var DefaultRateLimitConfig = RateLimitConfig{
 	BaseDelay:           1 * time.Second,
 	MaxDelay:            30 * time.Second,
 	MetadataConcurrency: 20,
+	CallTimeout:         2 * time.Minute,
 }
 
-// withRateLimitRetry retries fn when it returns a rate-limit error (HTTP 429 /
-// gRPC ResourceExhausted), using exponential backoff with jitter. Non-rate-limit
-// errors are returned immediately.
-func withRateLimitRetry[T any](ctx context.Context, cfg RateLimitConfig, fn func() (T, error)) (T, error) {
+// withRateLimitRetry runs fn, retrying when it returns a rate-limit error (HTTP
+// 429 / gRPC ResourceExhausted) using exponential backoff with jitter.
+// Non-rate-limit errors are returned immediately. Each attempt is given its own
+// context bounded by cfg.CallTimeout so a stalled call (which the BigQuery client
+// would otherwise retry internally forever) fails promptly instead of hanging.
+func withRateLimitRetry[T any](ctx context.Context, cfg RateLimitConfig, fn func(context.Context) (T, error)) (T, error) {
 	var zero T
 	delay := cfg.BaseDelay
 
 	for attempt := range cfg.MaxRetries {
-		result, err := fn()
+		result, err := callWithTimeout(ctx, cfg.CallTimeout, fn)
 		if err == nil {
 			return result, nil
 		}
@@ -64,4 +75,16 @@ func withRateLimitRetry[T any](ctx context.Context, cfg RateLimitConfig, fn func
 	}
 
 	return zero, nil
+}
+
+// callWithTimeout invokes fn with a child context bounded by timeout (when > 0),
+// so the BigQuery client's internal retry loop is cut off rather than running
+// until the parent context's far-off deadline.
+func callWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func(context.Context) (T, error)) (T, error) {
+	if timeout <= 0 {
+		return fn(ctx)
+	}
+	callCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	return fn(callCtx)
 }

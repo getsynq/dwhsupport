@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
@@ -15,7 +16,16 @@ import (
 	_ "github.com/lib/pq"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
+	htransport "google.golang.org/api/transport/http"
 )
+
+// defaultHTTPTimeout caps each BigQuery REST round-trip. Without it the Go
+// BigQuery client's HTTP transport has no timeout, so a single stalled metadata
+// call hangs until the caller's context deadline (e.g. a 2h job timeout),
+// wedging the whole concurrent scrape. It is per round-trip, not per logical
+// operation, so it is safe for paginated query-result reads while still
+// interrupting a blackholed connection.
+const defaultHTTPTimeout = 2 * time.Minute
 
 // BigQueryConf configures the BigQuery executor connection.
 // Authentication precedence: AccessToken > CredentialsJson > CredentialsFile.
@@ -31,6 +41,11 @@ type BigQueryConf struct {
 	// AccessToken is an OAuth access token for user-level authentication.
 	// When set, it takes precedence over CredentialsJson and CredentialsFile.
 	AccessToken string
+	// HTTPTimeout caps each BigQuery REST round-trip (table/dataset metadata,
+	// table listing, query-result pages). Guards against a stalled connection
+	// hanging a scrape until the caller's job deadline. Zero uses
+	// defaultHTTPTimeout.
+	HTTPTimeout time.Duration
 }
 
 type Executor interface {
@@ -55,10 +70,24 @@ func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExec
 		options = append(options, option.WithCredentialsFile(conf.CredentialsFile))
 	}
 
+	// Build the HTTP client ourselves so we can enforce a per-request timeout.
+	// htransport.NewClient applies the auth options above AND keeps the
+	// google-api OTel HTTP instrumentation; passing a bare &http.Client via
+	// option.WithHTTPClient would drop both credentials and tracing.
+	httpTimeout := conf.HTTPTimeout
+	if httpTimeout <= 0 {
+		httpTimeout = defaultHTTPTimeout
+	}
+	httpClient, _, err := htransport.NewClient(ctx, options...)
+	if err != nil {
+		return nil, err
+	}
+	httpClient.Timeout = httpTimeout
+
 	client, err := bigquery.NewClient(
 		ctx,
 		conf.ProjectId,
-		options...,
+		option.WithHTTPClient(httpClient),
 	)
 	if err != nil {
 		return nil, err

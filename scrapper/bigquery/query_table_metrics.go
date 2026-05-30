@@ -2,7 +2,6 @@ package bigquery
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/api/iterator"
 )
 
 // QueryTableMetrics collects table metrics (row counts, sizes, freshness) via the
@@ -40,18 +38,13 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 			continue
 		}
 
-		tables := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Tables(groupCtx)
-		for {
-			table, err := tables.Next()
-			if errors.Is(err, iterator.Done) {
-				break
-			}
-			if err != nil {
-				if errIsNotFound(err) || errIsAccessDenied(err) {
-					break
-				}
-				return nil, err
-			}
+		tableIds, err := e.listTableIDs(groupCtx, dataset.DatasetID)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, tableId := range tableIds {
+			tableId := tableId
 
 			select {
 			case <-groupCtx.Done():
@@ -60,14 +53,14 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 			}
 
 			g.Go(func() error {
-				tableMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.TableMetadata, error) {
-					return table.Metadata(groupCtx)
+				tableMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func(ctx context.Context) (*bigquery.TableMetadata, error) {
+					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
 				})
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
 						return nil
 					}
-					return err
+					return e.scrapeError(groupCtx, "table.metadata", dataset.DatasetID, tableId, err)
 				}
 
 				numRows := int64(tableMeta.NumRows)
@@ -83,7 +76,7 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 				results = append(results, &scrapper.TableMetricsRow{
 					Database:  e.conf.ProjectId,
 					Schema:    dataset.DatasetID,
-					Table:     table.TableID,
+					Table:     tableId,
 					RowCount:  &numRows,
 					SizeBytes: &numBytes,
 					UpdatedAt: updatedAt,
