@@ -126,54 +126,75 @@ func (e *BigQueryScrapper) listDatasets(ctx context.Context) ([]*bigquery.Datase
 	}
 
 	client := e.executor.GetBigQueryClient()
-	it := client.Datasets(ctx)
-	it.ListHidden = true
 
-	var result []*bigquery.Dataset
-	for {
-		ds, err := it.Next()
-		if errors.Is(err, iterator.Done) {
-			break
-		}
-		if err != nil {
-			if errIsNotFound(err) || errIsAccessDenied(err) {
-				continue
+	// A non-Done error is terminal — the iterator does not advance past it, so
+	// `continue` would busy-loop forever. Retry handles genuine rate limits.
+	result, err := withRateLimitRetry(ctx, e.rateLimitCfg, func(ctx context.Context) ([]*bigquery.Dataset, error) {
+		it := client.Datasets(ctx)
+		it.ListHidden = true
+
+		var result []*bigquery.Dataset
+		for {
+			ds, err := it.Next()
+			if errors.Is(err, iterator.Done) {
+				break
 			}
-			return nil, e.scrapeError(ctx, "datasets.list", "", "", err)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, ds)
 		}
-		result = append(result, ds)
+		return result, nil
+	})
+	if err != nil {
+		return nil, e.scrapeError(ctx, "datasets.list", "", "", err)
 	}
 	return result, nil
 }
 
-// listTableIDs lists every table ID in a dataset under a context bounded by
-// CallTimeout, so a stalled listing page can't hang the scrape. Tables the
-// caller can't see (not-found / access-denied) are skipped, consistent with the
-// rest of the scrapper.
+// listTableIDs lists every table ID in a dataset. The listing runs through
+// withRateLimitRetry so a genuine rate-limit backs off, and each attempt is
+// bounded by CallTimeout so a stalled page can't hang the scrape.
+//
+// A non-Done error from the iterator is TERMINAL: the BigQuery iterator does not
+// advance past it, so `continue` would call Next() again, get the same error, and
+// busy-loop forever — the root cause of the multi-hour catalog hangs. So we
+// always return on error and let the caller fail the scrape (failing is safe:
+// a failed fetch publishes nothing, so no assets are wrongly marked deleted).
 func (e *BigQueryScrapper) listTableIDs(ctx context.Context, datasetID string) ([]string, error) {
-	listCtx := ctx
-	if e.rateLimitCfg.CallTimeout > 0 {
-		var cancel context.CancelFunc
-		listCtx, cancel = context.WithTimeout(ctx, e.rateLimitCfg.CallTimeout)
-		defer cancel()
-	}
-
-	it := e.executor.GetBigQueryClient().Dataset(datasetID).Tables(listCtx)
-	var tableIDs []string
-	for {
-		table, err := it.Next()
-		if errors.Is(err, iterator.Done) {
-			break
-		}
-		if err != nil {
-			if errIsNotFound(err) || errIsAccessDenied(err) {
-				continue
+	ids, err := withRateLimitRetry(ctx, e.rateLimitCfg, func(ctx context.Context) ([]string, error) {
+		it := e.executor.GetBigQueryClient().Dataset(datasetID).Tables(ctx)
+		var ids []string
+		for {
+			table, err := it.Next()
+			if errors.Is(err, iterator.Done) {
+				break
 			}
-			return nil, e.scrapeError(ctx, "tables.list", datasetID, "", err)
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, table.TableID)
 		}
-		tableIDs = append(tableIDs, table.TableID)
+		return ids, nil
+	})
+	if err != nil {
+		// 404 means the dataset itself is gone — typically a linked/shared
+		// dataset whose source was deleted (its Metadata() still resolves but
+		// listing its tables 404s). It genuinely no longer exists, so skip it and
+		// let the rest of the scrape proceed. Access-denied and other errors
+		// still fail the scrape: we must not silently drop — and thereby delete —
+		// tables we simply can't see right now.
+		if errIsNotFound(err) {
+			logging.GetLogger(ctx).
+				WithField("executor", "bigquery").
+				WithField("bq_dataset", datasetID).
+				WithError(err).
+				Warn("skipping dataset that no longer exists (tables.list returned not-found)")
+			return nil, nil
+		}
+		return nil, e.scrapeError(ctx, "tables.list", datasetID, "", err)
 	}
-	return tableIDs, nil
+	return ids, nil
 }
 
 func (e *BigQueryScrapper) queryRows(ctx context.Context, q string, args ...interface{}) (*bigquery.RowIterator, error) {
