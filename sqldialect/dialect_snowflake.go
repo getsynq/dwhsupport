@@ -54,7 +54,7 @@ func (d *SnowflakeDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *SnowflakeDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *SnowflakeDialect) RoundTime(expr Expr, duration time.Duration) Expr {
@@ -85,6 +85,13 @@ func (d *SnowflakeDialect) CurrentTimestamp() Expr {
 
 func (d *SnowflakeDialect) Identifier(identifier string) string {
 	return fmt.Sprintf("%q", identifier)
+}
+
+func (d *SnowflakeDialect) ResolveFieldRef(name string) string {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
+		return name
+	}
+	return QuoteForFoldUpper(name)
 }
 
 func (d *SnowflakeDialect) StringLiteral(s string) string {

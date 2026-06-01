@@ -54,7 +54,7 @@ func (d *PostgresDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *PostgresDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return PqQuoteIdentifierIfUpper(expr.name), nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *PostgresDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -84,7 +84,14 @@ func (d *PostgresDialect) CurrentTimestamp() Expr {
 }
 
 func (d *PostgresDialect) Identifier(identifier string) string {
-	return QuoteWithDoubleQuotes(identifier)
+	return QuoteWithDoubleQuotesIfNeeded(identifier)
+}
+
+func (d *PostgresDialect) ResolveFieldRef(name string) string {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
+		return name
+	}
+	return QuoteForFoldLower(name)
 }
 
 func (d *PostgresDialect) StringLiteral(s string) string {

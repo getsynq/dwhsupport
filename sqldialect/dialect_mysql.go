@@ -56,7 +56,7 @@ func (d *MySQLDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *MySQLDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *MySQLDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -97,7 +97,17 @@ func (d *MySQLDialect) CurrentTimestamp() Expr {
 }
 
 func (d *MySQLDialect) Identifier(identifier string) string {
-	return QuoteWithBackticks(identifier)
+	return QuoteWithBackticksIfNeeded(identifier)
+}
+
+// ResolveFieldRef returns the SQL reference for a user-supplied field name.
+// Expressions (containing function calls, casts, JSON operators, etc.) are
+// returned as-is; plain identifiers are backtick-quoted only when needed.
+func (d *MySQLDialect) ResolveFieldRef(name string) string {
+	if isLikelyExpression(name) || isQuotedWith(name, '`', '`') {
+		return name
+	}
+	return QuoteWithBackticksIfNeeded(name)
 }
 
 func (d *MySQLDialect) StringLiteral(s string) string {

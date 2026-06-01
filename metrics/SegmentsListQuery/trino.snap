@@ -7,8 +7,8 @@ select
   count(*) as num_rows
 from db.default.runs 
 where
-  createdAt >= from_iso8601_timestamp('1985-07-16T00:00:00Z') and 
-  createdAt < from_iso8601_timestamp('2025-03-16T00:00:00Z') and 
+  "createdAt" >= from_iso8601_timestamp('1985-07-16T00:00:00Z') and 
+  "createdAt" < from_iso8601_timestamp('2025-03-16T00:00:00Z') and 
   (1=1)
 group by
   SUBSTRING(CAST(workspace AS VARCHAR), 1, 100), 

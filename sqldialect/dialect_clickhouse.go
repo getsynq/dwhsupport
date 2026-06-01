@@ -54,7 +54,7 @@ func (d *ClickHouseDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *ClickHouseDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *ClickHouseDialect) RoundTime(expr Expr, duration time.Duration) Expr {
@@ -84,7 +84,17 @@ func (d *ClickHouseDialect) CurrentTimestamp() Expr {
 }
 
 func (d *ClickHouseDialect) Identifier(identifier string) string {
-	return QuoteWithBackticks(identifier)
+	return QuoteWithBackticksIfNeeded(identifier)
+}
+
+// ResolveFieldRef returns the SQL reference for a user-supplied field name.
+// Expressions (containing function calls, casts, JSON operators, etc.) are
+// returned as-is; plain identifiers are backtick-quoted only when needed.
+func (d *ClickHouseDialect) ResolveFieldRef(name string) string {
+	if isLikelyExpression(name) || isQuotedWith(name, '`', '`') {
+		return name
+	}
+	return QuoteWithBackticksIfNeeded(name)
 }
 
 func (d *ClickHouseDialect) StringLiteral(s string) string {

@@ -54,7 +54,7 @@ func (d *RedshiftDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *RedshiftDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return PqQuoteIdentifierIfUpper(expr.name), nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *RedshiftDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -84,7 +84,14 @@ func (d *RedshiftDialect) CurrentTimestamp() Expr {
 }
 
 func (d *RedshiftDialect) Identifier(identifier string) string {
-	return QuoteWithDoubleQuotes(identifier)
+	return QuoteWithDoubleQuotesIfNeeded(identifier)
+}
+
+func (d *RedshiftDialect) ResolveFieldRef(name string) string {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
+		return name
+	}
+	return QuoteForFoldLower(name)
 }
 
 func (d *RedshiftDialect) StringLiteral(s string) string {

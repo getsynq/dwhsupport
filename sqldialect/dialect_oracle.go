@@ -50,7 +50,7 @@ func (d *OracleDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *OracleDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return OracleQuoteIdentifier(expr.name), nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *OracleDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -78,6 +78,13 @@ func (d *OracleDialect) CurrentTimestamp() Expr {
 
 func (d *OracleDialect) Identifier(identifier string) string {
 	return OracleQuoteIdentifier(identifier)
+}
+
+func (d *OracleDialect) ResolveFieldRef(name string) string {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
+		return name
+	}
+	return QuoteForFoldUpper(name)
 }
 
 func (d *OracleDialect) StringLiteral(s string) string {

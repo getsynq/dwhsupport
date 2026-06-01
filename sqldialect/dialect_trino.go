@@ -54,7 +54,7 @@ func (d *TrinoDialect) ResolveTime(t time.Time) (string, error) {
 }
 
 func (d *TrinoDialect) ResolveTimeColumn(expr *TimeColExpr) (string, error) {
-	return expr.name, nil
+	return d.ResolveFieldRef(expr.name), nil
 }
 
 func (d *TrinoDialect) RoundTime(expr Expr, interval time.Duration) Expr {
@@ -84,7 +84,14 @@ func (d *TrinoDialect) CurrentTimestamp() Expr {
 }
 
 func (d *TrinoDialect) Identifier(identifier string) string {
-	return QuoteWithDoubleQuotes(identifier)
+	return QuoteWithDoubleQuotesIfNeeded(identifier)
+}
+
+func (d *TrinoDialect) ResolveFieldRef(name string) string {
+	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
+		return name
+	}
+	return QuoteForFoldLower(name)
 }
 
 func (d *TrinoDialect) StringLiteral(s string) string {
