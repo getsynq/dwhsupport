@@ -8,10 +8,8 @@ import (
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/api/iterator"
 )
 
 func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
@@ -47,32 +45,19 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 
 		log = log.WithField("dataset", dataset.DatasetID)
 
-		datasetMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.DatasetMetadata, error) {
-			return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(groupCtx)
+		datasetMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func(ctx context.Context) (*bigquery.DatasetMetadata, error) {
+			return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(ctx)
 		})
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to get dataset metadata")
+			return nil, e.scrapeError(groupCtx, "dataset.metadata", dataset.DatasetID, "", err)
 		}
 		datasetTags := labelsToTags(datasetMeta.Labels)
 
 		numTables := 0
-		tables := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Tables(groupCtx)
 
-		// Collect table IDs
-		tableIds := make([]string, 0)
-		for {
-			table, err := tables.Next()
-			if errors.Is(err, iterator.Done) {
-				break
-			}
-			if err != nil {
-				if errIsNotFound(err) || errIsAccessDenied(err) {
-					continue
-				}
-				return nil, err
-			}
-
-			tableIds = append(tableIds, table.TableID)
+		tableIds, err := e.listTableIDs(groupCtx, dataset.DatasetID)
+		if err != nil {
+			return nil, err
 		}
 
 		// Collect sharded tables
@@ -105,14 +90,14 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 
 			includeConstraints := cfg.IncludeConstraints
 			g.Go(func() error {
-				tableMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.TableMetadata, error) {
-					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
+				tableMeta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func(ctx context.Context) (*bigquery.TableMetadata, error) {
+					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
 				})
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
 						return nil
 					}
-					return err
+					return e.scrapeError(groupCtx, "table.metadata", dataset.DatasetID, tableId, err)
 				}
 
 				var tableTags []*scrapper.Tag = datasetTags

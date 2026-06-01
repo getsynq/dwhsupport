@@ -67,24 +67,11 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 
 		log = log.WithField("dataset", dataset.DatasetID)
 
-		tables := e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Tables(groupCtx)
 		numTables := 0
 
-		// Collect table IDs
-		tableIds := make([]string, 0)
-		for {
-			table, err := tables.Next()
-			if errors.Is(err, iterator.Done) {
-				break
-			}
-			if err != nil {
-				if errIsNotFound(err) || errIsAccessDenied(err) {
-					continue
-				}
-				return nil, err
-			}
-
-			tableIds = append(tableIds, table.TableID)
+		tableIds, err := e.listTableIDs(groupCtx, dataset.DatasetID)
+		if err != nil {
+			return nil, err
 		}
 
 		// Collect sharded tables
@@ -116,14 +103,14 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 			}
 
 			g.Go(func() error {
-				meta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func() (*bigquery.TableMetadata, error) {
-					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(groupCtx)
+				meta, err := withRateLimitRetry(groupCtx, e.rateLimitCfg, func(ctx context.Context) (*bigquery.TableMetadata, error) {
+					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
 				})
 				if err != nil {
 					if errIsNotFound(err) || errIsAccessDenied(err) {
 						return nil
 					}
-					return err
+					return e.scrapeError(groupCtx, "table.metadata", dataset.DatasetID, tableId, err)
 				}
 
 				mutex.Lock()
