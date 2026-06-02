@@ -1,0 +1,12 @@
+
+[TestCrossJoinSuite/TestSelectCrossJoinSubqueries - 1]
+select
+  _recon_src.cnt as "source_cnt", 
+  _recon_tgt.cnt as "target_cnt"
+from (
+SELECT COUNT(*) AS cnt FROM users
+) AS _recon_src cross join (
+SELECT COUNT(*) AS cnt FROM orders
+) AS _recon_tgt
+ 
+---
