@@ -204,3 +204,32 @@ func (e *OrExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (e *OrExpr) IsCondExpr() {}
+
+// AndExpr joins conditions with AND.
+//
+// Unlike AndGroups (which parenthesizes each operand individually), And renders
+// a flat "a and b and c". No outer parentheses are added: AND binds tighter than
+// OR, so the result composes correctly when nested inside Or(...). Nested Or
+// operands parenthesize themselves, so mixed expressions stay well-formed.
+type AndExpr struct {
+	conds []CondExpr
+}
+
+func And(conds ...CondExpr) *AndExpr {
+	return &AndExpr{conds: conds}
+}
+
+func (e *AndExpr) ToSql(dialect Dialect) (string, error) {
+	if len(e.conds) == 0 {
+		return "", nil
+	}
+
+	condsSql, err := exprsToSql(e.conds, dialect)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.Join(condsSql, " and "), nil
+}
+
+func (e *AndExpr) IsCondExpr() {}
