@@ -32,3 +32,20 @@ func FilterDatabaseRows(rows []*scrapper.DatabaseRow, filter *ScopeFilter) []*sc
 	}
 	return result
 }
+
+// FilterSchemaRows filters SchemaRow entries using the given ScopeFilter.
+// Schemas are matched with IsSchemaAccepted (conservative partial evaluation at
+// the schema level), not IsObjectAccepted, because a SchemaRow has no table.
+// Returns all rows unchanged if filter is nil.
+func FilterSchemaRows(rows []*scrapper.SchemaRow, filter *ScopeFilter) []*scrapper.SchemaRow {
+	if filter == nil {
+		return rows
+	}
+	result := make([]*scrapper.SchemaRow, 0, len(rows))
+	for _, row := range rows {
+		if filter.IsSchemaAccepted(row.Database, row.Schema) {
+			result = append(result, row)
+		}
+	}
+	return result
+}

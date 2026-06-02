@@ -18,6 +18,7 @@ type mockScrapper struct {
 	metricsRows    []*scrapper.TableMetricsRow
 	sqlDefRows     []*scrapper.SqlDefinitionRow
 	databaseRows   []*scrapper.DatabaseRow
+	schemaRows     []*scrapper.SchemaRow
 	constraintRows []*scrapper.TableConstraintRow
 }
 
@@ -49,6 +50,10 @@ func (m *mockScrapper) QueryTables(_ context.Context, _ ...scrapper.QueryTablesO
 
 func (m *mockScrapper) QueryDatabases(context.Context) ([]*scrapper.DatabaseRow, error) {
 	return m.databaseRows, nil
+}
+
+func (m *mockScrapper) QuerySchemas(context.Context) ([]*scrapper.SchemaRow, error) {
+	return m.schemaRows, nil
 }
 
 func (m *mockScrapper) QuerySegments(context.Context, string, ...any) ([]*scrapper.SegmentRow, error) {

@@ -56,6 +56,7 @@ func (e *AthenaScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper
 	catalogID := e.executor.AccountID()
 	instance := e.executor.Instance()
 	athenaCatalog := e.executor.Catalog()
+	effScope := e.effectiveScope(ctx)
 
 	var (
 		out             []*scrapper.TableConstraintRow
@@ -63,7 +64,7 @@ func (e *AthenaScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper
 		icebergTableSet = map[string]bool{}
 	)
 	for _, dbName := range databases {
-		if e.conf.Scope != nil && !e.conf.Scope.IsSchemaAccepted(athenaCatalog, dbName) {
+		if !effScope.IsSchemaAccepted(athenaCatalog, dbName) {
 			continue
 		}
 		var nextToken *string
@@ -78,7 +79,7 @@ func (e *AthenaScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper
 			}
 			for _, t := range resp.TableList {
 				name := aws.ToString(t.Name)
-				if e.conf.Scope != nil && !e.conf.Scope.IsObjectAccepted(athenaCatalog, dbName, name) {
+				if !effScope.IsObjectAccepted(athenaCatalog, dbName, name) {
 					continue
 				}
 				if isGlueView(t) {

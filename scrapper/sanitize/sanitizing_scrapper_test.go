@@ -17,6 +17,7 @@ type stubScrapper struct {
 	metrics     []*scrapper.TableMetricsRow
 	sqlDefs     []*scrapper.SqlDefinitionRow
 	databases   []*scrapper.DatabaseRow
+	schemas     []*scrapper.SchemaRow
 	constraints []*scrapper.TableConstraintRow
 	segments    []*scrapper.SegmentRow
 	customMet   []*scrapper.CustomMetricsRow
@@ -52,6 +53,10 @@ func (s *stubScrapper) QueryTables(context.Context, ...scrapper.QueryTablesOptio
 
 func (s *stubScrapper) QueryDatabases(context.Context) ([]*scrapper.DatabaseRow, error) {
 	return s.databases, nil
+}
+
+func (s *stubScrapper) QuerySchemas(context.Context) ([]*scrapper.SchemaRow, error) {
+	return s.schemas, nil
 }
 
 func (s *stubScrapper) QuerySegments(context.Context, string, ...any) ([]*scrapper.SegmentRow, error) {

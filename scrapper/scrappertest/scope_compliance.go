@@ -254,4 +254,85 @@ func (s *ScopeComplianceSuite) TestScopeCompliance_AllFilteredMethodsRespectScop
 		s.Truef(dbMatch && strings.EqualFold(row.Schema, targetSchema),
 			"QueryTableConstraints row[%d]: expected %s.%s, got %s.%s", i, targetDB, targetSchema, row.Database, row.Schema)
 	}
+
+	// Check QuerySchemas — an include scope at (targetDB, targetSchema) must
+	// leave only the target schema in the listing.
+	filteredSchemas, err := s.Scrapper.QuerySchemas(scopedCtx)
+	if !isAcceptableError(err) {
+		s.Require().NoError(err)
+	}
+	for i, row := range filteredSchemas {
+		dbMatch := row.Database == "" || strings.EqualFold(row.Database, targetDB)
+		s.Truef(dbMatch && strings.EqualFold(row.Schema, targetSchema),
+			"QuerySchemas row[%d]: expected %s.%s, got %s.%s", i, targetDB, targetSchema, row.Database, row.Schema)
+	}
+}
+
+// TestScopeCompliance_HierarchyNarrowing walks the listing hierarchy the way a
+// caller drills down — list schemas (general), pick one, scope to it, then list
+// that schema's tables (specific) — and verifies each narrowing step only
+// returns rows inside the forced scope. It complements
+// TestCompliance_HierarchyConsistency (which checks nesting without scope) by
+// checking that scoping by a discovered (database, schema) actually constrains
+// the level below it. A small sample of schemas is used to stay fast on large
+// warehouses.
+func (s *ScopeComplianceSuite) TestScopeCompliance_HierarchyNarrowing() {
+	if s.Scrapper == nil {
+		s.T().Skip("Scrapper not set")
+	}
+
+	ctx := s.ctx()
+
+	schemas, err := s.Scrapper.QuerySchemas(ctx)
+	if errors.Is(err, scrapper.ErrUnsupported) || len(schemas) == 0 {
+		s.T().Skip("QuerySchemas unsupported or returned no rows")
+	}
+	s.Require().NoError(err)
+
+	const maxSchemas = 3
+	seen := map[string]bool{}
+	sampled := 0
+	for _, sc := range schemas {
+		if sampled >= maxSchemas {
+			break
+		}
+		key := sc.Database + "\x00" + sc.Schema
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		sampled++
+
+		targetDB := sc.Database
+		targetSchema := sc.Schema
+
+		filter := &scope.ScopeFilter{
+			Include: []scope.ScopeRule{{Database: targetDB, Schema: targetSchema}},
+		}
+		scopedCtx := scope.WithScope(ctx, filter)
+
+		// Narrowing QuerySchemas to (targetDB, targetSchema) leaves only it.
+		narrowedSchemas, err := s.Scrapper.QuerySchemas(scopedCtx)
+		if !isAcceptableError(err) {
+			s.Require().NoError(err)
+		}
+		for i, row := range narrowedSchemas {
+			dbMatch := row.Database == "" || strings.EqualFold(row.Database, targetDB)
+			s.Truef(dbMatch && strings.EqualFold(row.Schema, targetSchema),
+				"narrowed QuerySchemas row[%d]: expected %s.%s, got %s.%s",
+				i, targetDB, targetSchema, row.Database, row.Schema)
+		}
+
+		// QueryTables under the same scope only returns tables in that schema.
+		narrowedTables, err := s.Scrapper.QueryTables(scopedCtx)
+		if !isAcceptableError(err) {
+			s.Require().NoError(err)
+		}
+		for i, row := range narrowedTables {
+			dbMatch := row.Database == "" || strings.EqualFold(row.Database, targetDB)
+			s.Truef(dbMatch && strings.EqualFold(row.Schema, targetSchema),
+				"narrowed QueryTables row[%d]: expected %s.%s, got %s.%s.%s",
+				i, targetDB, targetSchema, row.Database, row.Schema, row.Table)
+		}
+	}
 }

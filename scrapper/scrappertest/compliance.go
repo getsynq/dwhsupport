@@ -16,6 +16,7 @@ package scrappertest
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec/querycontext"
@@ -56,6 +57,84 @@ func isAcceptableError(err error) bool {
 	return err == nil || errors.Is(err, scrapper.ErrUnsupported)
 }
 
+// dbSchemaKey builds a case-insensitive (database, schema) set key. NUL is a
+// safe separator: it cannot appear in a valid identifier (reject drops such rows).
+func dbSchemaKey(database, schema string) string {
+	return strings.ToLower(database) + "\x00" + strings.ToLower(schema)
+}
+
+// TestCompliance_HierarchyConsistency verifies the (database, schema, table)
+// listings nest correctly — going from the specific up to the general:
+//
+//   - every (database, schema) returned by QueryTables must be listed by QuerySchemas
+//   - every database returned by QueryTables must be listed by QueryDatabases
+//     (best-effort: skipped when QueryDatabases is unsupported, or exposes data at
+//     a different granularity than QueryTables.Database, e.g. Athena where
+//     DatabaseRow.Database is the Glue database rather than the catalog)
+//
+// This guards against the three list methods drifting apart through divergent
+// system-object exclusions, casing, or field mapping.
+func (s *ComplianceSuite) TestCompliance_HierarchyConsistency() {
+	if s.Scrapper == nil {
+		s.T().Skip("Scrapper not set")
+	}
+
+	ctx := s.ctx()
+
+	tables, err := s.Scrapper.QueryTables(ctx)
+	if errors.Is(err, scrapper.ErrUnsupported) || len(tables) == 0 {
+		s.T().Skip("QueryTables unsupported or returned no rows")
+	}
+	s.Require().NoError(err)
+
+	// --- Tables ⊆ Schemas, compared on (database, schema) ---
+	schemas, err := s.Scrapper.QuerySchemas(ctx)
+	if !isAcceptableError(err) {
+		s.Require().NoError(err)
+	}
+	if err == nil && len(schemas) > 0 {
+		schemaSet := make(map[string]bool, len(schemas))
+		for _, sc := range schemas {
+			schemaSet[dbSchemaKey(sc.Database, sc.Schema)] = true
+		}
+		for i, t := range tables {
+			s.Truef(schemaSet[dbSchemaKey(t.Database, t.Schema)],
+				"QueryTables row[%d] %s.%s has no matching QuerySchemas entry", i, t.Database, t.Schema)
+		}
+	}
+
+	// --- Tables ⊆ Databases, compared on database (best-effort) ---
+	databases, err := s.Scrapper.QueryDatabases(ctx)
+	if !isAcceptableError(err) {
+		s.Require().NoError(err)
+	}
+	if err == nil && len(databases) > 0 {
+		dbSet := make(map[string]bool, len(databases))
+		for _, d := range databases {
+			dbSet[strings.ToLower(d.Database)] = true
+		}
+		// Only enforce when QueryDatabases is database-granular — i.e. its set
+		// overlaps the table databases. Warehouses that expose QueryDatabases at
+		// schema granularity (Athena) produce zero overlap; skip rather than
+		// raise a false failure.
+		overlap := false
+		for _, t := range tables {
+			if dbSet[strings.ToLower(t.Database)] {
+				overlap = true
+				break
+			}
+		}
+		if overlap {
+			for i, t := range tables {
+				s.Truef(dbSet[strings.ToLower(t.Database)],
+					"QueryTables row[%d] database %s has no matching QueryDatabases entry", i, t.Database)
+			}
+		} else {
+			s.T().Log("skipping Tables⊆Databases check: QueryDatabases granularity does not match QueryTables.Database")
+		}
+	}
+}
+
 // TestCompliance_ValidateConfiguration checks that ValidateConfiguration does not error.
 func (s *ComplianceSuite) TestCompliance_ValidateConfiguration() {
 	if s.Scrapper == nil {
@@ -83,6 +162,19 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 	}
 	for _, row := range databases {
 		s.NotEmpty(row.Database)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
+	}
+
+	// --- QuerySchemas ---
+	schemas, err := s.Scrapper.QuerySchemas(ctx)
+	if !s.True(isAcceptableError(err), "QuerySchemas error: %v", err) {
+		s.T().FailNow()
+	}
+	for i, row := range schemas {
+		s.NotEmptyf(row.Database, "QuerySchemas row[%d].Database", i)
+		s.NotEmptyf(row.Schema, "QuerySchemas row[%d].Schema", i)
 		if row.Instance != "" {
 			allInstances = append(allInstances, row.Instance)
 		}

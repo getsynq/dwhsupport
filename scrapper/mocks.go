@@ -316,6 +316,45 @@ func (c *MockScrapperQueryDatabasesCall) DoAndReturn(f func(context.Context) ([]
 	return c
 }
 
+// QuerySchemas mocks base method.
+func (m *MockScrapper) QuerySchemas(ctx context.Context) ([]*SchemaRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QuerySchemas", ctx)
+	ret0, _ := ret[0].([]*SchemaRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QuerySchemas indicates an expected call of QuerySchemas.
+func (mr *MockScrapperMockRecorder) QuerySchemas(ctx any) *MockScrapperQuerySchemasCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QuerySchemas", reflect.TypeOf((*MockScrapper)(nil).QuerySchemas), ctx)
+	return &MockScrapperQuerySchemasCall{Call: call}
+}
+
+// MockScrapperQuerySchemasCall wrap *gomock.Call
+type MockScrapperQuerySchemasCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockScrapperQuerySchemasCall) Return(arg0 []*SchemaRow, arg1 error) *MockScrapperQuerySchemasCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockScrapperQuerySchemasCall) Do(f func(context.Context) ([]*SchemaRow, error)) *MockScrapperQuerySchemasCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockScrapperQuerySchemasCall) DoAndReturn(f func(context.Context) ([]*SchemaRow, error)) *MockScrapperQuerySchemasCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // QuerySegments mocks base method.
 func (m *MockScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*SegmentRow, error) {
 	m.ctrl.T.Helper()
