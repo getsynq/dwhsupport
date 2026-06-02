@@ -93,6 +93,15 @@ All data models are in `scrapper/models.go`:
 4. Register the new dialect in `sqldialect/dialects.go` `DialectsToTest()` and regenerate snapshots:
    - `UPDATE_SNAPS=true go test ./sqldialect/... ./metrics/... -count=1`
 
+### Adding a Method to the Scrapper Interface
+
+A new `Scrapper` method must be added in all of these or the build breaks:
+- `scrapper/interface.go` (the interface) + each warehouse's `query_*.go` (12 impls; `ErrUnsupported` is fine)
+- Decorators: `scrapper/scope/scoped_scrapper.go`, `scrapper/reject/rejecting_scrapper.go`, `scrapper/sanitize/sanitizing_scrapper.go`, `pool/scrapper.go`
+- `./mockgen.sh` to regenerate `scrapper/mocks.go`
+- Test stubs that implement Scrapper: `scrapper/unwrap_test.go` and the mock scrappers in `scrapper/{reject,sanitize,scope}/*_test.go` and `pool/scrapper_test.go`
+- For list methods: add a row model (e.g. `SchemaRow`) with `TableFqn`/`SetInstance`/`HasValidIdentity` (`identity.go`) + `Sanitize` (`sanitize.go`), and a scope post-filter helper in `scrapper/scope/filter.go`
+
 ## Supported Warehouses
 
 - BigQuery
@@ -148,7 +157,7 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - **Query Building**: `querybuilder/` provides utilities for dynamic query construction
 - **Blocklists**: `blocklist/` provides filtering for databases/schemas
 - **Metrics Extraction**: `metrics/` contains logic for extracting and processing metrics from different warehouses
-- **Scope Filtering**: `scrapper/scope/` provides include/exclude scope filtering. SQL files use `/* SYNQ_SCOPE_FILTER */` placeholder at the injection point; `AppendScopeConditions` replaces it with `AND <conditions>` or empty string. Never use heuristic WHERE-append.
+- **Scope Filtering**: `scrapper/scope/` provides include/exclude scope filtering. SQL files use `/* SYNQ_SCOPE_FILTER */` placeholder at the injection point; `AppendScopeConditions` replaces it with `AND <conditions>` or empty string. Never use heuristic WHERE-append. Scope is **context-driven** (`scope.WithScope`), never a method parameter. Use `AppendSchemaScopeConditions(ctx, sql, dbCol, schemaCol)` for schema-level listings (no table column). `ScopedScrapper` post-filters results via `FilterRows`/`FilterDatabaseRows`/`FilterSchemaRows`, so SQL push-down is an optimization, not the enforcement boundary.
 - **Scope Compliance Testing**: `scrapper/scrappertest/ScopeComplianceSuite` is an embeddable test suite for validating scope filtering — embed alongside `ComplianceSuite` in warehouse integration tests
 - **Query Helpers**: `scrapper/stdsql/` helpers (`QueryShape`, `QueryCustomMetrics`) accept `RowQuerier` interface — pass the executor directly, not `GetDb()`. Use `stdsql.RawDB{DB: db}` wrapper only in tests with raw `*sqlx.DB`.
 
@@ -189,6 +198,13 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - **Driver: `influxdata/athenadriver/v2`** (not the unmaintained `uber/athenadriver`) — uses `aws-sdk-go-v2`, matching the rest of our deps. Registers as `awsathena`.
 - **Workgroup result location is mandatory.** `NewAthenaExecutor` calls `athena:GetWorkGroup` at startup and refuses if `ResultConfiguration.OutputLocation` is empty. This forces customers to set `EnforceWorkGroupConfiguration=true` so per-query overrides cannot escape the workgroup's data-scan cap.
 - **Credentials are materialized once.** The driver doesn't accept a credentials provider, so AssumeRole / profile / chain paths get snapshot at executor construction. Long-lived processes using STS-backed creds must recreate the executor before token expiry (default 1h, max 12h for AssumeRole).
+- **Glue-API methods must merge both scopes.** Methods that can't push scope into SQL (`QueryTableMetrics`, `QueryTableConstraints` — Glue API, not Athena SQL) must filter with `scope.Merge(e.conf.Scope, scope.GetScope(ctx))` via `e.effectiveScope(ctx)`. Using only `conf.Scope` ignores per-call `WithScope`. SQL-based methods get this for free via `AppendScopeConditions(ctx, ...)`.
+- **`QueryDatabases` is schema-granular**: `DatabaseRow.Database` = Glue database, while `QuerySchemas` sets `Database`=catalog, `Schema`=Glue db. Cross-method db-subset checks must account for this mismatch.
+
+## ClickHouse Gotchas
+
+- **Exclude both `information_schema` AND `INFORMATION_SCHEMA`** (ClickHouse exposes both as aliases) in every catalog query (`query_tables`, `query_catalog`, `query_sql_definitions`, `query_table_metrics`, `query_table_constraints`). Excluding only the lowercase form leaks ~20 uppercase system views.
+- **A ClickHouse database maps to our Schema** — there is no catalog level above it. `SchemaRow.Database`/`TableRow.Database` is the configured host/database label, not a real container.
 
 ## Two flavors of the same proto can't link in one binary
 
