@@ -82,10 +82,13 @@ func (s *ComplianceSuite) TestCompliance_HierarchyConsistency() {
 	ctx := s.ctx()
 
 	tables, err := s.Scrapper.QueryTables(ctx)
-	if errors.Is(err, scrapper.ErrUnsupported) || len(tables) == 0 {
-		s.T().Skip("QueryTables unsupported or returned no rows")
+	if errors.Is(err, scrapper.ErrUnsupported) {
+		s.T().Skip("QueryTables unsupported")
 	}
 	s.Require().NoError(err)
+	if len(tables) == 0 {
+		s.T().Skip("QueryTables returned no rows")
+	}
 
 	// --- Tables ⊆ Schemas, compared on (database, schema) ---
 	schemas, err := s.Scrapper.QuerySchemas(ctx)
