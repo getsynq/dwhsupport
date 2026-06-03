@@ -184,6 +184,33 @@ func (r *DatabaseRow) SetInstance(instance string) {
 	r.Instance = instance
 }
 
+// SchemaRow describes a single schema (or the warehouse concept we map to a
+// schema — e.g. a ClickHouse database, a BigQuery dataset, an Oracle user).
+// It mirrors DatabaseRow one level deeper in the (database, schema) hierarchy.
+type SchemaRow struct {
+	Instance    string  `db:"instance"     json:"instance"     ch:"instance"     bigquery:"instance"`
+	Database    string  `db:"database"     json:"database"     ch:"_database"    bigquery:"database"`
+	Schema      string  `db:"schema"       json:"schema"       ch:"schema"       bigquery:"schema"`
+	Description *string `db:"description"   json:"description"   ch:"description"   bigquery:"description"`
+	SchemaType  *string `db:"schema_type"  json:"schema_type"  ch:"schema_type"  bigquery:"schema_type"`
+	SchemaOwner *string `db:"schema_owner" json:"schema_owner" ch:"schema_owner" bigquery:"schema_owner"`
+}
+
+func (r *SchemaRow) SetInstance(instance string) {
+	r.Instance = instance
+}
+
+// TableFqn returns the schema's fully-qualified name with an empty object name.
+// This lets SchemaRow satisfy HasTableFqn for generic helpers, though scope
+// filtering of schemas should use FilterSchemaRows (schema-level partial eval).
+func (r SchemaRow) TableFqn() DwhFqn {
+	return DwhFqn{
+		InstanceName: r.Instance,
+		DatabaseName: r.Database,
+		SchemaName:   r.Schema,
+	}
+}
+
 type WithSetInstance interface {
 	SetInstance(instance string)
 }

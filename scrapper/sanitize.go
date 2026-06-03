@@ -145,6 +145,18 @@ func (r *DatabaseRow) Sanitize() {
 	SanitizeStringPtr(r.DatabaseOwner)
 }
 
+func (r *SchemaRow) Sanitize() {
+	if r == nil {
+		return
+	}
+	r.Instance = SanitizeString(r.Instance)
+	r.Database = SanitizeString(r.Database)
+	r.Schema = SanitizeString(r.Schema)
+	SanitizeStringPtr(r.Description)
+	SanitizeStringPtr(r.SchemaType)
+	SanitizeStringPtr(r.SchemaOwner)
+}
+
 func (r *TableConstraintRow) Sanitize() {
 	if r == nil {
 		return

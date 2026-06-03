@@ -121,6 +121,15 @@ func (s *ScopedScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.Databa
 	return FilterDatabaseRows(rows, GetScope(ctx)), nil
 }
 
+func (s *ScopedScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
+	ctx = s.effectiveCtx(ctx)
+	rows, err := s.inner.QuerySchemas(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return FilterSchemaRows(rows, GetScope(ctx)), nil
+}
+
 func (s *ScopedScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	ctx = s.effectiveCtx(ctx)
 	rows, err := s.inner.QueryTableConstraints(ctx)

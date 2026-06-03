@@ -48,6 +48,7 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime ti
 	catalogID := e.executor.AccountID()
 	instance := e.executor.Instance()
 	athenaCatalog := e.executor.Catalog()
+	effScope := e.effectiveScope(ctx)
 
 	var (
 		out            []*scrapper.TableMetricsRow
@@ -57,7 +58,7 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime ti
 	for _, dbName := range databases {
 		// Filter at the schema level before paging tables — saves the Glue
 		// call entirely for excluded databases.
-		if e.conf.Scope != nil && !e.conf.Scope.IsSchemaAccepted(athenaCatalog, dbName) {
+		if !effScope.IsSchemaAccepted(athenaCatalog, dbName) {
 			continue
 		}
 
@@ -73,7 +74,7 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime ti
 			}
 			for _, t := range resp.TableList {
 				name := aws.ToString(t.Name)
-				if e.conf.Scope != nil && !e.conf.Scope.IsObjectAccepted(athenaCatalog, dbName, name) {
+				if !effScope.IsObjectAccepted(athenaCatalog, dbName, name) {
 					continue
 				}
 				if isGlueView(t) {

@@ -97,6 +97,11 @@ type Scrapper interface {
 	QuerySqlDefinitions(ctx context.Context) ([]*SqlDefinitionRow, error)
 	QueryTables(ctx context.Context, opts ...QueryTablesOption) ([]*TableRow, error)
 	QueryDatabases(ctx context.Context) ([]*DatabaseRow, error)
+	// QuerySchemas lists the schemas (or the warehouse concept mapped to a
+	// schema, e.g. ClickHouse databases, BigQuery datasets, Oracle users)
+	// visible to the connection. Scope filtering is driven by the context
+	// (scope.WithScope) exactly like QueryTables, not by a parameter.
+	QuerySchemas(ctx context.Context) ([]*SchemaRow, error)
 	QuerySegments(ctx context.Context, sql string, args ...any) ([]*SegmentRow, error)
 	QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*CustomMetricsRow, error)
 	QueryShape(ctx context.Context, sql string) ([]*QueryShapeColumn, error)

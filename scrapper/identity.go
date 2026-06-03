@@ -45,6 +45,13 @@ func (r *DatabaseRow) HasValidIdentity() bool {
 	return IsValidString(r.Instance) && IsValidString(r.Database)
 }
 
+func (r *SchemaRow) HasValidIdentity() bool {
+	if r == nil {
+		return false
+	}
+	return IsValidString(r.Instance) && IsValidString(r.Database) && IsValidString(r.Schema)
+}
+
 func (r *TableConstraintRow) HasValidIdentity() bool {
 	if r == nil {
 		return false

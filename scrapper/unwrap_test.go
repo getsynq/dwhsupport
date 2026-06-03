@@ -37,6 +37,9 @@ func (stubLeaf) QueryTables(context.Context, ...scrapper.QueryTablesOption) ([]*
 func (stubLeaf) QueryDatabases(context.Context) ([]*scrapper.DatabaseRow, error) {
 	return nil, nil
 }
+func (stubLeaf) QuerySchemas(context.Context) ([]*scrapper.SchemaRow, error) {
+	return nil, nil
+}
 func (stubLeaf) QuerySegments(context.Context, string, ...any) ([]*scrapper.SegmentRow, error) {
 	return nil, nil
 }
