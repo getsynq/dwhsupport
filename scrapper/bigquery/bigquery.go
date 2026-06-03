@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
@@ -12,6 +13,8 @@ import (
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/api/cloudresourcemanager/v1"
 
 	"google.golang.org/api/googleapi"
@@ -152,30 +155,26 @@ func (e *BigQueryScrapper) listDatasets(ctx context.Context) ([]*bigquery.Datase
 	return result, nil
 }
 
+// tablesListProgressInterval throttles progress events so an enormous dataset
+// can't attach thousands of events to the span; a final summary is always
+// emitted regardless. It is a var so tests can tighten it.
+var tablesListProgressInterval = 5 * time.Second
+
 // listTableIDs lists every table ID in a dataset. The listing runs through
 // withRateLimitRetry so a genuine rate-limit backs off, and each attempt is
 // bounded by CallTimeout so a stalled page can't hang the scrape.
 //
 // A non-Done error from the iterator is TERMINAL: the BigQuery iterator does not
-// advance past it, so `continue` would call Next() again, get the same error, and
-// busy-loop forever — the root cause of the multi-hour catalog hangs. So we
-// always return on error and let the caller fail the scrape (failing is safe:
-// a failed fetch publishes nothing, so no assets are wrongly marked deleted).
+// advance past it, so retrying the same iterator would get the same error and
+// busy-loop forever — the root cause of the multi-hour catalog hangs. The
+// listing (in collectTableIDs) always returns on error, letting the caller fail
+// the scrape (failing is safe: a failed fetch publishes nothing, so no assets
+// are wrongly marked deleted), and emits progress/done span events so a slow or
+// stalled listing is observable.
 func (e *BigQueryScrapper) listTableIDs(ctx context.Context, datasetID string) ([]string, error) {
 	ids, err := withRateLimitRetry(ctx, e.rateLimitCfg, func(ctx context.Context) ([]string, error) {
 		it := e.executor.GetBigQueryClient().Dataset(datasetID).Tables(ctx)
-		var ids []string
-		for {
-			table, err := it.Next()
-			if errors.Is(err, iterator.Done) {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			ids = append(ids, table.TableID)
-		}
-		return ids, nil
+		return collectTableIDs(ctx, datasetID, it)
 	})
 	if err != nil {
 		// 404 means the dataset itself is gone — typically a linked/shared
@@ -194,6 +193,49 @@ func (e *BigQueryScrapper) listTableIDs(ctx context.Context, datasetID string) (
 		}
 		return nil, e.scrapeError(ctx, "tables.list", datasetID, "", err)
 	}
+	return ids, nil
+}
+
+// collectTableIDs iterates a dataset's table listing, returning every table ID.
+// It emits a throttled progress event as the count grows plus a final done event
+// on the active span, so we can see how far a slow listing got before its
+// deadline: a hung dataset produces no progress (and no done — the deadline
+// fires first), while a merely huge one shows the count climbing right up to the
+// CallTimeout. The BigQuery client's own per-request spans are dropped at the
+// export filter, so these events are how we observe listing progress.
+//
+// A non-Done error is returned immediately: the BigQuery iterator never advances
+// past it, so re-reading would busy-loop — the root cause of the multi-hour
+// catalog hangs.
+func collectTableIDs(ctx context.Context, datasetID string, it *bigquery.TableIterator) ([]string, error) {
+	span := trace.SpanFromContext(ctx)
+
+	var ids []string
+	start := time.Now()
+	lastEvent := start
+	for {
+		table, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, table.TableID)
+		if time.Since(lastEvent) >= tablesListProgressInterval {
+			span.AddEvent("bigquery.tables.list.progress", trace.WithAttributes(
+				attribute.String("bq.dataset", datasetID),
+				attribute.Int("bq.tables_list.tables", len(ids)),
+				attribute.Int64("bq.tables_list.elapsed_ms", time.Since(start).Milliseconds()),
+			))
+			lastEvent = time.Now()
+		}
+	}
+	span.AddEvent("bigquery.tables.list.done", trace.WithAttributes(
+		attribute.String("bq.dataset", datasetID),
+		attribute.Int("bq.tables_list.tables", len(ids)),
+		attribute.Int64("bq.tables_list.elapsed_ms", time.Since(start).Milliseconds()),
+	))
 	return ids, nil
 }
 
