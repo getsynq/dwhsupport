@@ -1,0 +1,6 @@
+
+[TestCrossJoinSuite/TestCrossJoinExpr - 1]
+cross join (
+SELECT COUNT(*) AS cnt FROM t
+) AS _recon_tgt
+---

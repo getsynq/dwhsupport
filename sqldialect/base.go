@@ -51,13 +51,20 @@ type CteExpr interface {
 	IsCteExpr()
 }
 
+// LimitClauseExpr is a LIMIT clause expression.
+type LimitClauseExpr interface {
+	Expr
+	IsLimitExpr()
+}
+
 type LimitExpr struct {
 	rows *IntLitExpr
 }
 
 var _ Expr = (*LimitExpr)(nil)
+var _ LimitClauseExpr = (*LimitExpr)(nil)
 
-func Limit(rows *IntLitExpr) *LimitExpr {
+func Limit(rows *IntLitExpr) LimitClauseExpr {
 	return &LimitExpr{rows}
 }
 
@@ -69,6 +76,8 @@ func (e *LimitExpr) ToSql(dialect Dialect) (string, error) {
 
 	return dialect.FormatLimit(rowsSql), nil
 }
+
+func (e *LimitExpr) IsLimitExpr() {}
 
 type NotImplementedExpr struct {
 	msg string
@@ -110,20 +119,29 @@ func (s *IdentifierExpr) IsTextExpr() {}
 // OrderExpr
 //
 
+// OrderByExpr is an ORDER BY term (an expression with an optional direction).
+type OrderByExpr interface {
+	Expr
+	IsOrderByExpr()
+}
+
 type OrderExpr struct {
 	expr Expr
 	desc bool
 }
 
 var _ Expr = (*OrderExpr)(nil)
+var _ OrderByExpr = (*OrderExpr)(nil)
 
-func Asc(expr Expr) *OrderExpr {
+func Asc(expr Expr) OrderByExpr {
 	return &OrderExpr{expr: expr, desc: false}
 }
 
-func Desc(expr Expr) *OrderExpr {
+func Desc(expr Expr) OrderByExpr {
 	return &OrderExpr{expr: expr, desc: true}
 }
+
+func (e *OrderExpr) IsOrderByExpr() {}
 
 func (e *OrderExpr) ToSql(dialect Dialect) (string, error) {
 	exprSql, err := e.expr.ToSql(dialect)
@@ -146,12 +164,12 @@ type Select struct {
 	ctes    []*Cte
 	cols    []Expr
 	table   TableExpr
-	joins   []*JoinExpr
+	joins   []JoinTableExpr
 	where   []CondExpr
 	groupBy []Expr
-	orderBy []*OrderExpr
+	orderBy []OrderByExpr
 	having  []CondExpr
-	limit   *LimitExpr
+	limit   LimitClauseExpr
 }
 
 func NewSelect() *Select {
@@ -204,17 +222,22 @@ func (s *Select) Join(other TableExpr, how JoinDefExpr) *Select {
 	return s
 }
 
+func (s *Select) CrossJoin(other TableExpr) *Select {
+	s.joins = append(s.joins, CrossJoin(other))
+	return s
+}
+
 func (s *Select) GroupBy(groupBy ...Expr) *Select {
 	s.groupBy = append(s.groupBy, groupBy...)
 	return s
 }
 
-func (s *Select) OrderBy(orderBy ...*OrderExpr) *Select {
+func (s *Select) OrderBy(orderBy ...OrderByExpr) *Select {
 	s.orderBy = append(s.orderBy, orderBy...)
 	return s
 }
 
-func (s *Select) WithLimit(limit *LimitExpr) *Select {
+func (s *Select) WithLimit(limit LimitClauseExpr) *Select {
 	s.limit = limit
 	return s
 }
@@ -556,6 +579,14 @@ func (t *CteAliasExpr) IsTableExpr() {}
 // JoinExpr
 //
 
+// JoinTableExpr is a table expression that contributes a join clause to a
+// Select — either a conditional JOIN (*JoinExpr) or a CROSS JOIN
+// (*CrossJoinExpr).
+type JoinTableExpr interface {
+	TableExpr
+	IsJoinExpr()
+}
+
 type JoinExpr struct {
 	other TableExpr
 	how   JoinDefExpr
@@ -587,6 +618,37 @@ func (t *JoinExpr) ToSql(dialect Dialect) (string, error) {
 
 func (t *JoinExpr) IsJoinExpr()  {}
 func (t *JoinExpr) IsTableExpr() {}
+
+//
+// CrossJoinExpr
+//
+
+// CrossJoinExpr renders a CROSS JOIN against another table expression. Unlike a
+// regular Join it carries no join condition, producing the Cartesian product of
+// the two inputs (commonly used to combine two single-row subqueries).
+type CrossJoinExpr struct {
+	other TableExpr
+}
+
+var _ Expr = (*CrossJoinExpr)(nil)
+var _ TableExpr = (*CrossJoinExpr)(nil)
+
+// CrossJoin builds a CROSS JOIN expression against the given table.
+func CrossJoin(other TableExpr) JoinTableExpr {
+	return &CrossJoinExpr{other: other}
+}
+
+func (t *CrossJoinExpr) ToSql(dialect Dialect) (string, error) {
+	tableSql, err := t.other.ToSql(dialect)
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("cross join %s", tableSql), nil
+}
+
+func (t *CrossJoinExpr) IsJoinExpr()  {}
+func (t *CrossJoinExpr) IsTableExpr() {}
 
 type JoinDefExpr interface {
 	Expr

@@ -39,8 +39,8 @@ type QueryBuilder struct {
 
 	table   TableExpr
 	cols    []Expr
-	limit   *LimitExpr
-	orderBy []*OrderExpr
+	limit   LimitClauseExpr
+	orderBy []OrderByExpr
 
 	cteNames   []string
 	cteQueries []CteExpr
@@ -124,7 +124,7 @@ func (b *QueryBuilder) WithLimit(limit int64) *QueryBuilder {
 	return b
 }
 
-func (b *QueryBuilder) OrderBy(orderBy ...*OrderExpr) *QueryBuilder {
+func (b *QueryBuilder) OrderBy(orderBy ...OrderByExpr) *QueryBuilder {
 
 	b.orderBy = append(b.orderBy, orderBy...)
 
@@ -228,7 +228,7 @@ func (b *QueryBuilder) ToSql(dialect Dialect) (string, error) {
 	if len(b.orderBy) > 0 {
 		q = q.OrderBy(b.orderBy...)
 	} else {
-		var orderBy []*OrderExpr
+		var orderBy []OrderByExpr
 		if timeExpr != nil {
 			orderBy = append(orderBy, Asc(AggregationColumnReference(timeExpr, "time_segment")))
 		}
