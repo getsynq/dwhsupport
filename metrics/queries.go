@@ -153,8 +153,10 @@ func (c *MetricConf) PrefixedAliasForMetric(metricId MetricId) TextExpr {
 // struct field arrives as a dotted path (e.g. "sku.description") — valid as a
 // SQL field reference but rejected as an output column name by BigQuery and
 // others. Replace every char outside [A-Za-z0-9_] with '_' so the alias is
-// always a legal identifier; callers reading results must sanitize the same
-// way to match.
+// always a legal identifier. ProfileColumns resolves collisions and reports the
+// final prefix per column via ProfiledColumn, so callers map results from that
+// mapping rather than re-deriving it; this stays as a defensive guarantee for
+// any direct WithPrefixForColumn user.
 func sanitizeAliasPrefix(prefix string) string {
 	return strings.Map(func(r rune) rune {
 		switch {

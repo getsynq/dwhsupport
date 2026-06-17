@@ -225,7 +225,7 @@ func (s *MetricsExecutionSuite) TestMetricsExecution_ProfileColumns() {
 		}},
 	}
 
-	qb, err := metrics.ProfileColumns(dialect, s.Config.TableFqn, columnsToProfile, args, nil, 100, 150)
+	qb, _, err := metrics.ProfileColumns(dialect, s.Config.TableFqn, columnsToProfile, args, nil, 100, 150)
 	s.Require().NoError(err)
 
 	sql, err := qb.ToSql(dialect)

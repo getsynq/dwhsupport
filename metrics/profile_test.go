@@ -115,7 +115,7 @@ func (s *ProfileSuite) TestProfileColumns() {
 						},
 					}
 
-					queryBuilder, err := ProfileColumns(dialect.Dialect, tableFqnExpr, columnsToProfile, monitorArgs, nil, 1000, 100)
+					queryBuilder, _, err := ProfileColumns(dialect.Dialect, tableFqnExpr, columnsToProfile, monitorArgs, nil, 1000, 100)
 					s.Require().NoError(err)
 					s.Require().NotNil(queryBuilder)
 					sql, err := queryBuilder.ToSql(dialect.Dialect)
@@ -129,5 +129,41 @@ func (s *ProfileSuite) TestProfileColumns() {
 			}
 		}
 
+	}
+}
+
+// TestProfileColumnsAliasMapping asserts ProfileColumns reports a unique, valid
+// alias prefix per requested column and disambiguates columns that sanitize to
+// the same identifier with an increasing numeric suffix — so callers can map
+// "<prefix>__<metric>" result columns back to the original column.
+func (s *ProfileSuite) TestProfileColumnsAliasMapping() {
+	dialect := dwhsql.NewBigQueryDialect()
+	tableFqnExpr := dwhsql.TableFqn("db", "default", "runs")
+
+	columnsToProfile := []*ColumnToProfile{
+		{Column: "amount", ColumnProfile: ColumnProfileNumeric},
+		// Nested struct field arrives as a dotted path...
+		{Column: "sku.id", ColumnProfile: ColumnProfileString},
+		// ...and collides after sanitization with a literal "sku_id" column.
+		{Column: "sku_id", ColumnProfile: ColumnProfileString},
+		// A third collision exercises the "_3" suffix.
+		{Column: "sku-id", ColumnProfile: ColumnProfileString},
+	}
+
+	_, profiled, err := ProfileColumns(dialect, tableFqnExpr, columnsToProfile, &MonitorArgs{}, nil, 1000, 100)
+	s.Require().NoError(err)
+	s.Require().Len(profiled, len(columnsToProfile))
+
+	s.Equal("amount", profiled[0].AliasPrefix)
+	s.Equal("sku_id", profiled[1].AliasPrefix)
+	s.Equal("sku_id_2", profiled[2].AliasPrefix)
+	s.Equal("sku_id_3", profiled[3].AliasPrefix)
+
+	seen := map[string]struct{}{}
+	for i, pc := range profiled {
+		s.Equal(columnsToProfile[i].Column, pc.Column, "original column preserved in mapping")
+		_, dup := seen[pc.AliasPrefix]
+		s.Falsef(dup, "alias prefix %q repeated", pc.AliasPrefix)
+		seen[pc.AliasPrefix] = struct{}{}
 	}
 }
