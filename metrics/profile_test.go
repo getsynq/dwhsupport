@@ -105,6 +105,14 @@ func (s *ProfileSuite) TestProfileColumns() {
 							Column:        "created_at",
 							ColumnProfile: ColumnProfileTime,
 						},
+						{
+							// STRUCT/RECORD and other unmapped types: the minimal
+							// profile must stay valid SQL (non-null count only) —
+							// no `= 0` or COUNT(DISTINCT) that warehouses reject on
+							// non-comparable types.
+							Column:        "sku",
+							ColumnProfile: ColumnProfileUnknown,
+						},
 					}
 
 					queryBuilder, err := ProfileColumns(dialect.Dialect, tableFqnExpr, columnsToProfile, monitorArgs, nil, 1000, 100)

@@ -189,18 +189,22 @@ func (m *TableMetricExpr) OutColumnAlias() TextExpr {
 // Numeric Metric
 //
 
+// UnknownMetrics is the minimal profile emitted for columns whose type maps to
+// no string/numeric/time shape — STRUCT, ARRAY, JSON, BOOL, etc. Only a
+// non-null count is safe across all of them: numeric metrics like
+// COUNT(DISTINCT) and the `= 0` empty-check emit SQL the warehouse rejects on
+// non-comparable types (e.g. BigQuery refuses `STRUCT = INT64` and
+// `COUNT(DISTINCT struct)`).
 var UnknownMetrics = []MetricId{
 	METRIC_NUM_NOT_NULL,
-	METRIC_NUM_UNIQUE,
-	METRIC_NUM_EMPTY,
 }
 
 func UnknownMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
-	metricFieldCol := NumericCol(field)
+	col := TextCol(field)
 
 	var cols []Expr
 	for _, metricId := range UnknownMetrics {
-		metricExpr := NumericMetric(metricFieldCol, metricId)
+		metricExpr := &UnknownMetricExpr{MetricId: metricId, Column: col}
 		for _, opt := range opts {
 			opt(&metricExpr.MetricConf)
 		}
@@ -208,6 +212,28 @@ func UnknownMetricsValuesCols(field string, opts ...MetricConfOption) []Expr {
 	}
 
 	return cols
+}
+
+// UnknownMetricExpr renders the minimal, type-agnostic metrics for an
+// unmapped column type. Unlike NumericMetricExpr it never compares the column
+// to a literal or applies DISTINCT, so it stays valid for STRUCT/ARRAY/JSON.
+type UnknownMetricExpr struct {
+	MetricConf
+	MetricId MetricId
+	Column   Expr
+}
+
+func (m *UnknownMetricExpr) ToSql(dialect Dialect) (string, error) {
+	switch m.MetricId {
+	case METRIC_NUM_NOT_NULL:
+		return As(dialect.CountIf(IsNotNull(m.Column)), m.OutColumnAlias()).ToSql(dialect)
+	default:
+		return "", fmt.Errorf("unsupported UNKNOWN metric type: %s", m.MetricId)
+	}
+}
+
+func (m *UnknownMetricExpr) OutColumnAlias() TextExpr {
+	return m.PrefixedAliasForMetric(m.MetricId)
 }
 
 // Groupings
