@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/getsynq/dwhsupport/querybuilder"
@@ -144,7 +145,28 @@ func (c *MetricConf) PrefixedAliasForMetric(metricId MetricId) TextExpr {
 	if c.AliasPrefix == "" {
 		return Identifier(string(metricId))
 	}
-	return Identifier(fmt.Sprintf("%s__%s", c.AliasPrefix, string(metricId)))
+	return Identifier(fmt.Sprintf("%s__%s", sanitizeAliasPrefix(c.AliasPrefix), string(metricId)))
+}
+
+// sanitizeAliasPrefix maps a column reference to a valid output-column
+// identifier. The prefix doubles as the column being profiled, so a nested
+// struct field arrives as a dotted path (e.g. "sku.description") — valid as a
+// SQL field reference but rejected as an output column name by BigQuery and
+// others. Replace every char outside [A-Za-z0-9_] with '_' so the alias is
+// always a legal identifier; callers reading results must sanitize the same
+// way to match.
+func sanitizeAliasPrefix(prefix string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r == '_',
+			r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9':
+			return r
+		default:
+			return '_'
+		}
+	}, prefix)
 }
 
 type MetricConfOption func(*MetricConf)
