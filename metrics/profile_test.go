@@ -150,7 +150,7 @@ func (s *ProfileSuite) TestProfileColumnsAliasMapping() {
 		{Column: "sku-id", ColumnProfile: ColumnProfileString},
 	}
 
-	_, profiled, err := ProfileColumns(dialect, tableFqnExpr, columnsToProfile, &MonitorArgs{}, nil, 1000, 100)
+	qb, profiled, err := ProfileColumns(dialect, tableFqnExpr, columnsToProfile, &MonitorArgs{}, nil, 1000, 100)
 	s.Require().NoError(err)
 	s.Require().Len(profiled, len(columnsToProfile))
 
@@ -166,4 +166,14 @@ func (s *ProfileSuite) TestProfileColumnsAliasMapping() {
 		s.Falsef(dup, "alias prefix %q repeated", pc.AliasPrefix)
 		seen[pc.AliasPrefix] = struct{}{}
 	}
+
+	// Proof the reported mapping matches the SQL actually generated: every
+	// metric output column is named "<AliasPrefix>__<metric>", so each prefix
+	// must appear in the query, and the lossy dotted/literal collision must not.
+	sql, err := qb.ToSql(dialect)
+	s.Require().NoError(err)
+	for _, pc := range profiled {
+		s.Containsf(sql, pc.AliasPrefix+"__", "alias prefix %q for column %q missing from SQL", pc.AliasPrefix, pc.Column)
+	}
+	s.NotContains(sql, "sku.id__", "dotted path must not leak into an output column alias")
 }
