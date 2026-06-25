@@ -3,6 +3,8 @@ package sqldialect
 import (
 	"fmt"
 	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // RowCompare builds a lexicographic comparison of a column tuple against a
@@ -50,9 +52,15 @@ type rowValueComparer interface {
 }
 
 func (e *RowCompareExpr) ToSql(dialect Dialect) (string, error) {
-	n := min(len(e.cols), len(e.vals))
+	if len(e.cols) != len(e.vals) {
+		// A dropped component would silently emit a different, over-broad
+		// predicate (wrong rows, no failure) — so reject the mismatch rather
+		// than truncate to the shorter tuple.
+		return "", errors.Errorf("RowCompare: mismatched tuple lengths (%d columns, %d values)", len(e.cols), len(e.vals))
+	}
+	n := len(e.cols)
 	if n == 0 {
-		return "", fmt.Errorf("RowCompare: empty column or value tuple")
+		return "", errors.New("RowCompare: empty column or value tuple")
 	}
 	// A single component is a plain scalar comparison in every dialect — no
 	// tuple machinery, no divergent planning, so emit it directly.

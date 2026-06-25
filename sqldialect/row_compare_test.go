@@ -71,6 +71,21 @@ func (s *RowCompareSuite) TestSingleColumnIsScalar() {
 	}
 }
 
+// A mismatched column/value arity is a correctness trap (a dropped component
+// silently broadens the predicate), so it must error rather than truncate.
+func (s *RowCompareSuite) TestMismatchedTupleLengthsError() {
+	expr := RowCompare(
+		[]Expr{Sql("a"), Sql("b"), Sql("c")},
+		COMPARE_GTE,
+		[]Expr{Int64(1), Int64(2)},
+	)
+	for _, dialect := range DialectsToTest() {
+		_, err := expr.ToSql(dialect.Dialect)
+		s.Require().Error(err, dialect.Name)
+		s.Require().Contains(err.Error(), "mismatched tuple lengths")
+	}
+}
+
 // Postgres opts into the native row-value form; ClickHouse keeps the expansion
 // (it prunes its primary key from the OR form, not from a native tuple).
 func (s *RowCompareSuite) TestNativeVsExpansionSelection() {

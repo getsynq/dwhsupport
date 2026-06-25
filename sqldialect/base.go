@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 var emptyLinesRegex = regexp.MustCompile(`(?m)^\s*\n`)
@@ -94,7 +96,7 @@ func NotImplemented() *NotImplementedExpr {
 }
 
 func (e *NotImplementedExpr) ToSql(dialect Dialect) (string, error) {
-	return "", fmt.Errorf("not implemented %s", e.msg)
+	return "", errors.Errorf("not implemented %s", e.msg)
 }
 
 // IdentifierExpr
