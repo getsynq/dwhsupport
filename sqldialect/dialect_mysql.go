@@ -150,3 +150,7 @@ func (d *MySQLDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *MySQLDialect) SupportsCrossDatabaseQueries() bool { return false }
+
+// prefersRowValueComparison: MySQL supports row constructor comparison and uses
+// a composite index range scan for `(a, b) >= (x, y)`. See RowCompare.
+func (d *MySQLDialect) prefersRowValueComparison() bool { return true }

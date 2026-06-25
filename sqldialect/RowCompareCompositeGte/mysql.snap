@@ -1,0 +1,4 @@
+
+[TestRowCompareSuite/TestCompositeGte - 1]
+(workspace, path) >= ('ws', 'p')
+---
