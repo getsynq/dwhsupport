@@ -29,6 +29,20 @@ func TestIsPermissionError(t *testing.T) {
 		assert.True(t, IsPermissionError(err))
 	})
 
+	t.Run("warehouse cannot be resumed — resource monitor quota (typed 90073)", func(t *testing.T) {
+		err := &gosnowflake.SnowflakeError{
+			Number:  90073,
+			Message: "Warehouse 'WH_DATA_GOVERNANCE' cannot be resumed because resource monitor 'GOVERNANCE_RM' has exceeded its quota.",
+		}
+		assert.True(t, IsPermissionError(err))
+	})
+
+	t.Run("warehouse cannot be resumed — resource monitor quota (string, wrapped)", func(t *testing.T) {
+		inner := errors.New("090073 (22000): Warehouse 'WH_DATA_GOVERNANCE' cannot be resumed because resource monitor 'GOVERNANCE_RM' has exceeded its quota.")
+		err := errors.Wrap(inner, "failed to fetch query logs")
+		assert.True(t, IsPermissionError(err))
+	})
+
 	t.Run("unrelated SnowflakeError", func(t *testing.T) {
 		err := &gosnowflake.SnowflakeError{Number: 1234, Message: "syntax error"}
 		assert.False(t, IsPermissionError(err))
