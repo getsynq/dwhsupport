@@ -7,9 +7,7 @@ import (
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
-	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"github.com/pkg/errors"
 )
 
 type MySQLScrapperConf struct {
@@ -46,12 +44,7 @@ func (e *MySQLScrapper) Executor() *dwhexecmysql.MySQLExecutor {
 }
 
 func (e *MySQLScrapper) IsPermissionError(err error) bool {
-	mySqlError := &mysql.MySQLError{}
-	if errors.As(err, &mySqlError) {
-		return mySqlError.Number == 1044
-	}
-
-	return false
+	return dwhexecmysql.IsPermissionError(err)
 }
 
 func (e *MySQLScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }

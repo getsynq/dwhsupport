@@ -2,7 +2,6 @@ package oracle
 
 import (
 	"context"
-	"strings"
 
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -47,16 +46,7 @@ func (e *OracleScrapper) Executor() *dwhexecoracle.OracleExecutor {
 }
 
 func (e *OracleScrapper) IsPermissionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	// ORA-00942: table or view does not exist
-	// ORA-01031: insufficient privileges
-	// ORA-00604: error occurred at recursive SQL level (often permission-related)
-	return strings.Contains(errStr, "ORA-00942") ||
-		strings.Contains(errStr, "ORA-01031") ||
-		strings.Contains(errStr, "ORA-00604")
+	return dwhexecoracle.IsPermissionError(err)
 }
 
 func (e *OracleScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }

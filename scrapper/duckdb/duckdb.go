@@ -4,11 +4,9 @@ import (
 	"context"
 
 	_ "github.com/duckdb/duckdb-go/v2"
-	duckdb "github.com/duckdb/duckdb-go/v2"
 	dwhexecduckdb "github.com/getsynq/dwhsupport/exec/duckdb"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
-	"github.com/pkg/errors"
 )
 
 type DuckDBScapperConf struct {
@@ -53,11 +51,7 @@ func (e *DuckDBScrapper) Executor() *dwhexecduckdb.DuckDBExecutor {
 }
 
 func (e *DuckDBScrapper) IsPermissionError(err error) bool {
-	duckdbError := &duckdb.Error{}
-	if errors.As(err, &duckdbError) {
-		return duckdbError.Type == duckdb.ErrorTypePermission
-	}
-	return false
+	return dwhexecduckdb.IsPermissionError(err)
 }
 
 func (e *DuckDBScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
