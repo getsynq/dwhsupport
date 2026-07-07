@@ -76,8 +76,7 @@ func NewTrinoScrapper(ctx context.Context, conf *TrinoScrapperConf) (*TrinoScrap
 }
 
 func (e *TrinoScrapper) IsPermissionError(err error) bool {
-	// TODO: Implement Trino-specific error check
-	return false
+	return dwhexectrino.IsPermissionError(err)
 }
 
 func (e *TrinoScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }

@@ -2,7 +2,6 @@ package mssql
 
 import (
 	"context"
-	"strings"
 
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -37,15 +36,7 @@ func (e *MSSQLScrapper) Executor() *dwhexecmssql.MSSQLExecutor {
 }
 
 func (e *MSSQLScrapper) IsPermissionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errStr := err.Error()
-	// Msg 229: The SELECT permission was denied
-	// Msg 230: The SELECT permission was denied on column
-	// Msg 262: CREATE DATABASE permission denied
-	return strings.Contains(errStr, "permission was denied") ||
-		strings.Contains(errStr, "permission denied")
+	return dwhexecmssql.IsPermissionError(err)
 }
 
 func (e *MSSQLScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }

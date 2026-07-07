@@ -12,7 +12,6 @@ package athena
 
 import (
 	"context"
-	"strings"
 
 	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -86,13 +85,7 @@ func (e *AthenaScrapper) SqlDialect() sqldialect.Dialect {
 }
 
 func (e *AthenaScrapper) IsPermissionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	return strings.Contains(msg, "AccessDenied") ||
-		strings.Contains(msg, "not authorized") ||
-		strings.Contains(msg, "UnauthorizedOperation")
+	return dwhexecathena.IsPermissionError(err)
 }
 
 func (e *AthenaScrapper) Capabilities() scrapper.Capabilities {

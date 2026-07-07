@@ -7,9 +7,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/jmoiron/sqlx"
-	"github.com/lib/pq"
 	_ "github.com/lib/pq"
-	"github.com/pkg/errors"
 )
 
 type RedshiftScrapperConf struct {
@@ -41,12 +39,7 @@ func NewRedshiftScrapper(ctx context.Context, conf *RedshiftScrapperConf) (*Reds
 }
 
 func (e *RedshiftScrapper) IsPermissionError(err error) bool {
-	pqError := &pq.Error{}
-	if errors.As(err, &pqError) {
-		return pqError.Code == "42501"
-	}
-
-	return false
+	return dwhexecredshift.IsPermissionError(err)
 }
 
 func (e *RedshiftScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }

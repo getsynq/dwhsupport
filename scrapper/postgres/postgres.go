@@ -6,9 +6,7 @@ import (
 	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
-	"github.com/lib/pq"
 	_ "github.com/lib/pq"
-	"github.com/pkg/errors"
 )
 
 type PostgresScapperConf struct {
@@ -39,12 +37,7 @@ func (e *PostgresScrapper) Executor() *dwhexecpostgres.PostgresExecutor {
 }
 
 func (e *PostgresScrapper) IsPermissionError(err error) bool {
-	pqError := &pq.Error{}
-	if errors.As(err, &pqError) {
-		return pqError.Code == "42501"
-	}
-
-	return false
+	return dwhexecpostgres.IsPermissionError(err)
 }
 
 func (e *PostgresScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }

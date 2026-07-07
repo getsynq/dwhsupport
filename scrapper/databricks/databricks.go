@@ -117,13 +117,7 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 }
 
 func (e *DatabricksScrapper) IsPermissionError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := err.Error()
-	return strings.Contains(errMsg, "PERMISSION_DENIED") ||
-		strings.Contains(errMsg, "ACCESS_DENIED") ||
-		strings.Contains(errMsg, "does not have permission")
+	return dwhexecdatabricks.IsPermissionError(err)
 }
 
 func (e *DatabricksScrapper) GetApiClient() *databricks.WorkspaceClient {

@@ -55,7 +55,7 @@ type BigQueryScrapper struct {
 }
 
 func (e *BigQueryScrapper) IsPermissionError(err error) bool {
-	return errIsAccessDenied(err)
+	return dwhexecbigquery.IsPermissionError(err)
 }
 
 func (e *BigQueryScrapper) Capabilities() scrapper.Capabilities {
