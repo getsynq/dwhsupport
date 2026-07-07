@@ -147,6 +147,7 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - RC release changelogs must include all changes since the last **stable** release, not just since the previous RC
 - Use `gh release create v0.X.0-rcN --prerelease --generate-notes --notes-start-tag <last-stable-tag>`
 - Example: `v0.9.0-rc6` uses `--notes-start-tag v0.8.3` (last stable), not `v0.9.0-rc5`
+- **Stable release**: `gh release create vX.Y.Z --generate-notes --latest` — a pushed git tag alone is NOT a release; always cut the GitHub release too. Then re-pin cloud consumers (`lib/dwh` + kernels using `dwhconnect`/`dwhaudit`) in their `go.mod`.
 
 ## Special Patterns
 
@@ -157,6 +158,7 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - **Query Building**: `querybuilder/` provides utilities for dynamic query construction
 - **Blocklists**: `blocklist/` provides filtering for databases/schemas
 - **Metrics Extraction**: `metrics/` contains logic for extracting and processing metrics from different warehouses
+- **Permission errors**: `exec/<dialect>.IsPermissionError(err)` is the single source of truth; scrappers delegate to it. Non-scrapper query paths (which hold an `exec` querier) reuse it too — don't re-match driver-specific errors elsewhere.
 - **Scope Filtering**: `scrapper/scope/` provides include/exclude scope filtering. SQL files use `/* SYNQ_SCOPE_FILTER */` placeholder at the injection point; `AppendScopeConditions` replaces it with `AND <conditions>` or empty string. Never use heuristic WHERE-append. Scope is **context-driven** (`scope.WithScope`), never a method parameter. Use `AppendSchemaScopeConditions(ctx, sql, dbCol, schemaCol)` for schema-level listings (no table column). `ScopedScrapper` post-filters results via `FilterRows`/`FilterDatabaseRows`/`FilterSchemaRows`, so SQL push-down is an optimization, not the enforcement boundary.
 - **Scope Compliance Testing**: `scrapper/scrappertest/ScopeComplianceSuite` is an embeddable test suite for validating scope filtering — embed alongside `ComplianceSuite` in warehouse integration tests
 - **Query Helpers**: `scrapper/stdsql/` helpers (`QueryShape`, `QueryCustomMetrics`) accept `RowQuerier` interface — pass the executor directly, not `GetDb()`. Use `stdsql.RawDB{DB: db}` wrapper only in tests with raw `*sqlx.DB`.
