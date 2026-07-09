@@ -61,6 +61,11 @@ func (e *BigQueryScrapper) IsPermissionError(err error) bool {
 func (e *BigQueryScrapper) Capabilities() scrapper.Capabilities {
 	return scrapper.Capabilities{
 		ConstraintsViaQueryTables: true,
+		EstimateQuery: scrapper.EstimateQueryCapability{
+			Supported: true,
+			Bytes:     true,
+			Exact:     true,
+		},
 	}
 }
 

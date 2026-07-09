@@ -261,6 +261,30 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		}
 	}
 
+	// --- EstimateQuery ---
+	// SELECT 1 is valid and plannable on every dialect; the estimate may be
+	// zero bytes/rows but must never execute a real scan.
+	estimate, err := s.Scrapper.EstimateQuery(ctx, "SELECT 1")
+	if !s.True(isAcceptableError(err), "EstimateQuery error: %v", err) {
+		s.T().FailNow()
+	}
+	caps := s.Scrapper.Capabilities().EstimateQuery
+	if err == nil {
+		s.NotNil(estimate, "EstimateQuery returned nil estimate without an error")
+		if estimate != nil {
+			// Advertised granularity must line up with what came back.
+			if !caps.Bytes {
+				s.Nil(estimate.BytesScanned, "EstimateQuery returned bytes but Capabilities.EstimateQuery.Bytes is false")
+			}
+			if !caps.Rows {
+				s.Nil(estimate.Rows, "EstimateQuery returned rows but Capabilities.EstimateQuery.Rows is false")
+			}
+			s.Equal(caps.Exact, estimate.Exact, "QueryEstimate.Exact must match Capabilities.EstimateQuery.Exact")
+		}
+	} else if errors.Is(err, scrapper.ErrUnsupported) {
+		s.False(caps.Supported, "Capabilities advertises EstimateQuery support but it returned ErrUnsupported")
+	}
+
 	// --- Cross-method consistency: all non-empty Instance values must be equal ---
 	if len(allInstances) > 1 {
 		first := allInstances[0]

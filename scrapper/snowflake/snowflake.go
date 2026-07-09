@@ -118,7 +118,11 @@ func IsPermissionError(err error) bool {
 	return dwhexecsnowflake.IsPermissionError(err)
 }
 
-func (e *SnowflakeScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *SnowflakeScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, Bytes: true},
+	}
+}
 
 func (e *SnowflakeScrapper) DialectType() string {
 	return "snowflake"

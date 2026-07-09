@@ -56,6 +56,42 @@ type Capabilities struct {
 	// ConstraintsViaQueryTables indicates that QueryTables with WithConstraints()
 	// populates TableRow.Constraints, making a separate QueryTableConstraints call unnecessary.
 	ConstraintsViaQueryTables bool
+	// EstimateQuery describes EstimateQuery support for this dialect. Its zero
+	// value means EstimateQuery returns ErrUnsupported. Callers should consult
+	// this before calling EstimateQuery so they can pick an appropriate UI
+	// ("this will scan ~X bytes" vs "~Y rows") or skip the call entirely.
+	EstimateQuery EstimateQueryCapability
+}
+
+// EstimateQueryCapability advertises the granularity and reliability of a
+// dialect's EstimateQuery implementation. Granularity differs by engine: some
+// return bytes scanned (BigQuery, Snowflake), others only a planner row
+// estimate (ClickHouse, Postgres), and many cannot estimate reliably at all.
+type EstimateQueryCapability struct {
+	// Supported is true when EstimateQuery may return a *QueryEstimate rather
+	// than ErrUnsupported.
+	Supported bool
+	// Bytes is true when the estimate can populate QueryEstimate.BytesScanned.
+	Bytes bool
+	// Rows is true when the estimate can populate QueryEstimate.Rows.
+	Rows bool
+	// Exact is true only when the estimate is authoritative rather than a
+	// planner guess (BigQuery dry-run). Planner-based estimates depend on fresh
+	// table statistics and can be off by orders of magnitude.
+	Exact bool
+}
+
+// QueryEstimate is a pre-execution estimate of what a SELECT will scan. It is
+// produced from engine metadata (dry-run / EXPLAIN) — the query itself is never
+// executed. Nil fields mean the engine could not estimate that dimension.
+type QueryEstimate struct {
+	// BytesScanned is the estimated number of bytes the query would read/process.
+	BytesScanned *int64
+	// Rows is the estimated number of rows scanned/produced.
+	Rows *int64
+	// Exact is true only when authoritative rather than a planner estimate
+	// (BigQuery dry-run: TotalBytesProcessed, with TotalBytesProcessedAccuracy).
+	Exact bool
 }
 
 // Unwrapper is implemented by Scrapper decorators (sanitize, reject, scope, ...)
@@ -114,6 +150,12 @@ type Scrapper interface {
 	// The caller must Close() the iterator. Callers that want a row cap
 	// should stop iteration after N calls to Next().
 	RunRawQuery(ctx context.Context, sql string) (RawQueryRowIterator, error)
+	// EstimateQuery returns a pre-execution scan estimate for an arbitrary
+	// SELECT, or ErrUnsupported when the dialect cannot estimate reliably.
+	// It must obtain the estimate from engine metadata (dry-run / EXPLAIN) and
+	// MUST NOT execute the query. Consult Capabilities().EstimateQuery to learn
+	// which dimensions (bytes vs rows) a given dialect can populate.
+	EstimateQuery(ctx context.Context, sql string) (*QueryEstimate, error)
 	QueryTableConstraints(ctx context.Context) ([]*TableConstraintRow, error)
 	// This will close underlying execer, such scrapper can't be used anymore
 	Close() error

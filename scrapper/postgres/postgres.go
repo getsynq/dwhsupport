@@ -40,7 +40,11 @@ func (e *PostgresScrapper) IsPermissionError(err error) bool {
 	return dwhexecpostgres.IsPermissionError(err)
 }
 
-func (e *PostgresScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *PostgresScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, Rows: true},
+	}
+}
 
 func (e *PostgresScrapper) DialectType() string {
 	return "postgres"

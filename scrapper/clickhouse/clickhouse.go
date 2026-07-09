@@ -34,7 +34,11 @@ func (e *ClickhouseScrapper) IsPermissionError(err error) bool {
 	return dwhexecclickhouse.IsPermissionError(err)
 }
 
-func (e *ClickhouseScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *ClickhouseScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, Rows: true},
+	}
+}
 
 func (e *ClickhouseScrapper) DialectType() string {
 	return "clickhouse"
