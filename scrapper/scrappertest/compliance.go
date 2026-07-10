@@ -261,6 +261,37 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		}
 	}
 
+	// --- EstimateQuery ---
+	// SELECT 1 is valid and plannable on every dialect; the estimate may be
+	// zero bytes/rows but must never execute a real scan.
+	estimate, err := s.Scrapper.EstimateQuery(ctx, "SELECT 1")
+	if !s.True(isAcceptableError(err), "EstimateQuery error: %v", err) {
+		s.T().FailNow()
+	}
+	caps := s.Scrapper.Capabilities().EstimateQuery
+	if err == nil {
+		s.NotNil(estimate, "EstimateQuery returned nil estimate without an error")
+		if estimate != nil {
+			// Advertised granularity must line up with what came back.
+			if !caps.ReportsBytes {
+				s.Nil(estimate.BytesScanned, "EstimateQuery returned bytes but Capabilities.EstimateQuery.ReportsBytes is false")
+			}
+			if !caps.ReportsRows {
+				s.Nil(estimate.Rows, "EstimateQuery returned rows but Capabilities.EstimateQuery.ReportsRows is false")
+			}
+			// CanBeExact statically advertises that a dialect *can* be
+			// authoritative; estimate.Exact is the per-query result and may be
+			// downgraded (e.g. BigQuery non-PRECISE accuracy). Only the negative
+			// direction is an invariant: a dialect that can never be exact must
+			// never return an exact estimate.
+			if !caps.CanBeExact {
+				s.False(estimate.Exact, "dialect advertises no exact estimates but EstimateQuery returned Exact=true")
+			}
+		}
+	} else if errors.Is(err, scrapper.ErrUnsupported) {
+		s.False(caps.Supported, "Capabilities advertises EstimateQuery support but it returned ErrUnsupported")
+	}
+
 	// --- Cross-method consistency: all non-empty Instance values must be equal ---
 	if len(allInstances) > 1 {
 		first := allInstances[0]

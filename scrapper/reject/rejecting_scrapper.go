@@ -161,6 +161,12 @@ func (s *RejectingScrapper) RunRawQuery(ctx context.Context, sql string) (scrapp
 	return s.inner.RunRawQuery(ctx, sql)
 }
 
+// EstimateQuery returns a numeric estimate with no identity fields, so there is
+// nothing to reject — pass through.
+func (s *RejectingScrapper) EstimateQuery(ctx context.Context, sql string) (*scrapper.QueryEstimate, error) {
+	return s.inner.EstimateQuery(ctx, sql)
+}
+
 func (s *RejectingScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	rows, err := s.inner.QueryTableConstraints(ctx)
 	if err != nil {

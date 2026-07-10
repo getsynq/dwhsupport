@@ -56,6 +56,50 @@ type Capabilities struct {
 	// ConstraintsViaQueryTables indicates that QueryTables with WithConstraints()
 	// populates TableRow.Constraints, making a separate QueryTableConstraints call unnecessary.
 	ConstraintsViaQueryTables bool
+	// EstimateQuery describes EstimateQuery support for this dialect. Its zero
+	// value means EstimateQuery returns ErrUnsupported. Callers should consult
+	// this before calling EstimateQuery so they can pick an appropriate UI
+	// ("this will scan ~X bytes" vs "~Y rows") or skip the call entirely.
+	EstimateQuery EstimateQueryCapability
+}
+
+// EstimateQueryCapability advertises what a dialect's EstimateQuery
+// implementation can do. It is a static description of the dialect, distinct
+// from the per-query QueryEstimate result: e.g. CanBeExact says a dialect is
+// capable of authoritative estimates, while QueryEstimate.Exact reports whether
+// a specific estimate actually was. Granularity differs by engine: some return
+// bytes scanned (BigQuery, Snowflake), others only a planner row estimate
+// (ClickHouse, Postgres), and many cannot estimate reliably at all.
+type EstimateQueryCapability struct {
+	// Supported is true when EstimateQuery may return a *QueryEstimate rather
+	// than ErrUnsupported.
+	Supported bool
+	// ReportsBytes is true when the estimate can populate QueryEstimate.BytesScanned.
+	ReportsBytes bool
+	// ReportsRows is true when the estimate can populate QueryEstimate.Rows.
+	ReportsRows bool
+	// CanBeExact is true when the dialect is capable of authoritative estimates
+	// rather than planner guesses (BigQuery dry-run). Individual estimates may
+	// still come back with QueryEstimate.Exact=false (e.g. BigQuery non-PRECISE
+	// accuracy); planner-based dialects are never exact. Planner estimates
+	// depend on fresh table statistics and can be off by orders of magnitude.
+	CanBeExact bool
+}
+
+// QueryEstimate is a pre-execution estimate of what a SELECT will scan. It is
+// produced from engine metadata (dry-run / EXPLAIN) — the query itself is never
+// executed. Nil fields mean the engine could not estimate that dimension.
+type QueryEstimate struct {
+	// BytesScanned is the estimated number of bytes the query would read/process.
+	BytesScanned *int64
+	// Rows is a planner estimate of rows processed, intended as a scan-size
+	// proxy. Where the engine exposes a plan tree (Postgres) this is the
+	// largest per-node estimate — i.e. the heaviest scan — rather than the
+	// final result cardinality, which collapses to 1 for aggregates.
+	Rows *int64
+	// Exact is true only when authoritative rather than a planner estimate
+	// (BigQuery dry-run: TotalBytesProcessed, with TotalBytesProcessedAccuracy).
+	Exact bool
 }
 
 // Unwrapper is implemented by Scrapper decorators (sanitize, reject, scope, ...)
@@ -114,6 +158,12 @@ type Scrapper interface {
 	// The caller must Close() the iterator. Callers that want a row cap
 	// should stop iteration after N calls to Next().
 	RunRawQuery(ctx context.Context, sql string) (RawQueryRowIterator, error)
+	// EstimateQuery returns a pre-execution scan estimate for an arbitrary
+	// SELECT, or ErrUnsupported when the dialect cannot estimate reliably.
+	// It must obtain the estimate from engine metadata (dry-run / EXPLAIN) and
+	// MUST NOT execute the query. Consult Capabilities().EstimateQuery to learn
+	// which dimensions (bytes vs rows) a given dialect can populate.
+	EstimateQuery(ctx context.Context, sql string) (*QueryEstimate, error)
 	QueryTableConstraints(ctx context.Context) ([]*TableConstraintRow, error)
 	// This will close underlying execer, such scrapper can't be used anymore
 	Close() error

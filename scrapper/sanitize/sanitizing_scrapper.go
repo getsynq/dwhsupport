@@ -152,6 +152,12 @@ func (s *SanitizingScrapper) RunRawQuery(ctx context.Context, sql string) (scrap
 	return &sanitizingRawQueryRows{inner: iter}, nil
 }
 
+// EstimateQuery returns a numeric estimate with no string fields, so there is
+// nothing to sanitize — pass through.
+func (s *SanitizingScrapper) EstimateQuery(ctx context.Context, sql string) (*scrapper.QueryEstimate, error) {
+	return s.inner.EstimateQuery(ctx, sql)
+}
+
 type sanitizingRawQueryRows struct {
 	inner scrapper.RawQueryRowIterator
 }

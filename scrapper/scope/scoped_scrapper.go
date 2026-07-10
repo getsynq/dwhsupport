@@ -71,6 +71,10 @@ func (s *ScopedScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.
 	return s.inner.RunRawQuery(ctx, sql)
 }
 
+func (s *ScopedScrapper) EstimateQuery(ctx context.Context, sql string) (*scrapper.QueryEstimate, error) {
+	return s.inner.EstimateQuery(ctx, sql)
+}
+
 // Scrapper interface — filtered methods.
 // These inject the base scope into the context (enabling SQL push-down in the inner scrapper)
 // and post-filter returned rows to guarantee scope compliance even when the inner scrapper

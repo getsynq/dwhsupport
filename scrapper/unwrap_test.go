@@ -52,6 +52,9 @@ func (stubLeaf) QueryShape(context.Context, string) ([]*scrapper.QueryShapeColum
 func (stubLeaf) RunRawQuery(context.Context, string) (scrapper.RawQueryRowIterator, error) {
 	return nil, nil
 }
+func (stubLeaf) EstimateQuery(context.Context, string) (*scrapper.QueryEstimate, error) {
+	return nil, nil
+}
 func (stubLeaf) QueryTableConstraints(context.Context) ([]*scrapper.TableConstraintRow, error) {
 	return nil, nil
 }

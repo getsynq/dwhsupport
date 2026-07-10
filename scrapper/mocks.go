@@ -156,6 +156,45 @@ func (c *MockScrapperDialectTypeCall) DoAndReturn(f func() string) *MockScrapper
 	return c
 }
 
+// EstimateQuery mocks base method.
+func (m *MockScrapper) EstimateQuery(ctx context.Context, sql string) (*QueryEstimate, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EstimateQuery", ctx, sql)
+	ret0, _ := ret[0].(*QueryEstimate)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EstimateQuery indicates an expected call of EstimateQuery.
+func (mr *MockScrapperMockRecorder) EstimateQuery(ctx, sql any) *MockScrapperEstimateQueryCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EstimateQuery", reflect.TypeOf((*MockScrapper)(nil).EstimateQuery), ctx, sql)
+	return &MockScrapperEstimateQueryCall{Call: call}
+}
+
+// MockScrapperEstimateQueryCall wrap *gomock.Call
+type MockScrapperEstimateQueryCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockScrapperEstimateQueryCall) Return(arg0 *QueryEstimate, arg1 error) *MockScrapperEstimateQueryCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockScrapperEstimateQueryCall) Do(f func(context.Context, string) (*QueryEstimate, error)) *MockScrapperEstimateQueryCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockScrapperEstimateQueryCall) DoAndReturn(f func(context.Context, string) (*QueryEstimate, error)) *MockScrapperEstimateQueryCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // IsPermissionError mocks base method.
 func (m *MockScrapper) IsPermissionError(err error) bool {
 	m.ctrl.T.Helper()
