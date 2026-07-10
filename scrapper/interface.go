@@ -63,22 +63,27 @@ type Capabilities struct {
 	EstimateQuery EstimateQueryCapability
 }
 
-// EstimateQueryCapability advertises the granularity and reliability of a
-// dialect's EstimateQuery implementation. Granularity differs by engine: some
-// return bytes scanned (BigQuery, Snowflake), others only a planner row
-// estimate (ClickHouse, Postgres), and many cannot estimate reliably at all.
+// EstimateQueryCapability advertises what a dialect's EstimateQuery
+// implementation can do. It is a static description of the dialect, distinct
+// from the per-query QueryEstimate result: e.g. CanBeExact says a dialect is
+// capable of authoritative estimates, while QueryEstimate.Exact reports whether
+// a specific estimate actually was. Granularity differs by engine: some return
+// bytes scanned (BigQuery, Snowflake), others only a planner row estimate
+// (ClickHouse, Postgres), and many cannot estimate reliably at all.
 type EstimateQueryCapability struct {
 	// Supported is true when EstimateQuery may return a *QueryEstimate rather
 	// than ErrUnsupported.
 	Supported bool
-	// Bytes is true when the estimate can populate QueryEstimate.BytesScanned.
-	Bytes bool
-	// Rows is true when the estimate can populate QueryEstimate.Rows.
-	Rows bool
-	// Exact is true only when the estimate is authoritative rather than a
-	// planner guess (BigQuery dry-run). Planner-based estimates depend on fresh
-	// table statistics and can be off by orders of magnitude.
-	Exact bool
+	// ReportsBytes is true when the estimate can populate QueryEstimate.BytesScanned.
+	ReportsBytes bool
+	// ReportsRows is true when the estimate can populate QueryEstimate.Rows.
+	ReportsRows bool
+	// CanBeExact is true when the dialect is capable of authoritative estimates
+	// rather than planner guesses (BigQuery dry-run). Individual estimates may
+	// still come back with QueryEstimate.Exact=false (e.g. BigQuery non-PRECISE
+	// accuracy); planner-based dialects are never exact. Planner estimates
+	// depend on fresh table statistics and can be off by orders of magnitude.
+	CanBeExact bool
 }
 
 // QueryEstimate is a pre-execution estimate of what a SELECT will scan. It is
@@ -87,7 +92,10 @@ type EstimateQueryCapability struct {
 type QueryEstimate struct {
 	// BytesScanned is the estimated number of bytes the query would read/process.
 	BytesScanned *int64
-	// Rows is the estimated number of rows scanned/produced.
+	// Rows is a planner estimate of rows processed, intended as a scan-size
+	// proxy. Where the engine exposes a plan tree (Postgres) this is the
+	// largest per-node estimate — i.e. the heaviest scan — rather than the
+	// final result cardinality, which collapses to 1 for aggregates.
 	Rows *int64
 	// Exact is true only when authoritative rather than a planner estimate
 	// (BigQuery dry-run: TotalBytesProcessed, with TotalBytesProcessedAccuracy).

@@ -42,7 +42,7 @@ func (e *PostgresScrapper) IsPermissionError(err error) bool {
 
 func (e *PostgresScrapper) Capabilities() scrapper.Capabilities {
 	return scrapper.Capabilities{
-		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, Rows: true},
+		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, ReportsRows: true},
 	}
 }
 

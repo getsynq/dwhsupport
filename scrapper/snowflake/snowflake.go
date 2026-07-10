@@ -120,7 +120,7 @@ func IsPermissionError(err error) bool {
 
 func (e *SnowflakeScrapper) Capabilities() scrapper.Capabilities {
 	return scrapper.Capabilities{
-		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, Bytes: true},
+		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, ReportsBytes: true},
 	}
 }
 
