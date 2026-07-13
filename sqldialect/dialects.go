@@ -18,5 +18,6 @@ func DialectsToTest() []*TestedDialect {
 		{"trino", NewTrinoDialect()},
 		{"oracle", NewOracleDialect()},
 		{"mssql", NewMSSQLDialect()},
+		{"fabric", NewFabricDialect()},
 	}
 }

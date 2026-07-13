@@ -191,7 +191,7 @@ type SchemaRow struct {
 	Instance    string  `db:"instance"     json:"instance"     ch:"instance"     bigquery:"instance"`
 	Database    string  `db:"database"     json:"database"     ch:"_database"    bigquery:"database"`
 	Schema      string  `db:"schema"       json:"schema"       ch:"schema"       bigquery:"schema"`
-	Description *string `db:"description"   json:"description"   ch:"description"   bigquery:"description"`
+	Description *string `db:"description"  json:"description"  ch:"description"  bigquery:"description"`
 	SchemaType  *string `db:"schema_type"  json:"schema_type"  ch:"schema_type"  bigquery:"schema_type"`
 	SchemaOwner *string `db:"schema_owner" json:"schema_owner" ch:"schema_owner" bigquery:"schema_owner"`
 }
@@ -318,6 +318,7 @@ func (r TableConstraintRow) TableFqn() DwhFqn {
 const (
 	ConstraintTypePrimaryKey      = "PRIMARY KEY"
 	ConstraintTypeUniqueIndex     = "UNIQUE INDEX"
+	ConstraintTypeForeignKey      = "FOREIGN KEY"
 	ConstraintTypeIndex           = "INDEX"
 	ConstraintTypeSortingKey      = "SORTING KEY"
 	ConstraintTypePartitionBy     = "PARTITION BY"

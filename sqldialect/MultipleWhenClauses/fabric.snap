@@ -1,0 +1,4 @@
+
+[TestCaseExprSuite/TestMultipleWhenClauses - 1]
+CASE WHEN col < 10 THEN 'small' WHEN col < 100 THEN 'medium' ELSE 'large' END
+---
