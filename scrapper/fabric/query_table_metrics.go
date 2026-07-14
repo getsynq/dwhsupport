@@ -52,6 +52,7 @@ type fabricTableRef struct {
 // Workspace-centric: the in-scope databases are iterated concurrently, and each
 // table is counted with a three-part [db].[schema].[table] name.
 func (e *FabricScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
+	ctx = e.withEffectiveScope(ctx)
 	databases, err := e.GetDatabasesToQuery(ctx)
 	if err != nil {
 		return nil, err

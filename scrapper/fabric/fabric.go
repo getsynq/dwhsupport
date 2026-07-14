@@ -21,17 +21,18 @@ import (
 
 // FabricScrapperConf configures a Fabric scrapper. It embeds the executor conf
 // (the connection surface) and adds scrapper-level options — keeping the scrape
-// scope out of the connection config, as TrinoScrapperConf/BigQueryScrapperConf
-// do with their catalog/dataset lists.
+// scope out of the connection config.
 type FabricScrapperConf struct {
 	dwhexecfabric.FabricConf
 
-	// Databases optionally restricts which workspace databases are scrapped. When
-	// empty, every database the connection can see (via sys.databases — the
-	// workspace's warehouses, lakehouses, SQL databases and mirrored databases)
-	// is scrapped. This is scope narrowing layered under the context scope
-	// filter, not a connection setting.
-	Databases []string
+	// Scope is the configured include/exclude filter over the workspace's
+	// databases/schemas/tables (ScopeRule.database = Fabric database/warehouse,
+	// .schema = schema, .table = table). It is the canonical scope encoding
+	// (synq.common.v1.ScopeFilter, as Athena uses) rather than a legacy database
+	// list. nil means the whole workspace. Per-call scope (scope.WithScope) can
+	// only narrow within this configured scope, never escape it — see
+	// effectiveScope.
+	Scope *scope.ScopeFilter
 }
 
 var _ scrapper.Scrapper = &FabricScrapper{}
@@ -84,32 +85,40 @@ func (e *FabricScrapper) GetExistingDbs(ctx context.Context) ([]string, error) {
 	return e.existingDbs.Get()
 }
 
-// GetDatabasesToQuery returns the databases each scrapper method should iterate:
-// the workspace databases, narrowed to conf.Databases when set, then to those
-// accepted by the context scope filter. This is the workspace-centric analogue
-// of the Snowflake scrapper's method of the same name.
+// effectiveScope merges the configured scope with any per-call scope injected
+// into the context (scope.WithScope). Merge is AND semantics, so the per-call
+// scope can only narrow within the configured scope and can never widen beyond
+// it — the configured scope is an inescapable boundary. Mirrors the Athena
+// scrapper's effectiveScope.
+func (e *FabricScrapper) effectiveScope(ctx context.Context) *scope.ScopeFilter {
+	return scope.Merge(e.conf.Scope, scope.GetScope(ctx))
+}
+
+// withEffectiveScope injects the merged scope into the context so both database
+// enumeration (GetDatabasesToQuery) and SQL push-down (AppendScopeConditions)
+// honor the configured scope, not just the ScopedScrapper post-filter — so
+// excluded databases/tables are never enumerated or scanned in the first place.
+func (e *FabricScrapper) withEffectiveScope(ctx context.Context) context.Context {
+	return scope.WithScope(ctx, e.effectiveScope(ctx))
+}
+
+// GetDatabasesToQuery returns the workspace databases each scrapper method should
+// iterate — every database the connection can see (via sys.databases), narrowed
+// by the effective (configured AND per-call) scope. This is the workspace-centric
+// analogue of the Snowflake scrapper's method of the same name.
 func (e *FabricScrapper) GetDatabasesToQuery(ctx context.Context) ([]string, error) {
 	all, err := e.GetExistingDbs(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	requested := make(map[string]bool, len(e.conf.Databases))
-	for _, db := range e.conf.Databases {
-		requested[db] = true
-	}
-
-	scopeFilter := scope.GetScope(ctx)
+	scopeFilter := e.effectiveScope(ctx)
 
 	var result []string
 	for _, db := range all {
-		if len(requested) > 0 && !requested[db] {
-			continue
+		if scopeFilter.IsDatabaseAccepted(db) {
+			result = append(result, db)
 		}
-		if !scopeFilter.IsDatabaseAccepted(db) {
-			continue
-		}
-		result = append(result, db)
 	}
 	return result, nil
 }

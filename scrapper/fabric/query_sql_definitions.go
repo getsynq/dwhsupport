@@ -12,6 +12,7 @@ import (
 var querySqlDefinitionsSql string
 
 func (e *FabricScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
+	ctx = e.withEffectiveScope(ctx)
 	return queryEachDatabase(ctx, e,
 		func(db string) string {
 			return expandDatabase(scope.AppendScopeConditions(ctx, querySqlDefinitionsSql, "", "s.name", "v.name"), db)

@@ -12,6 +12,7 @@ import (
 var queryCatalogSql string
 
 func (e *FabricScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
+	ctx = e.withEffectiveScope(ctx)
 	return queryEachDatabase(ctx, e,
 		func(db string) string {
 			return expandDatabase(scope.AppendScopeConditions(ctx, queryCatalogSql, "", "s.name", "t.name"), db)

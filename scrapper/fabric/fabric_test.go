@@ -11,6 +11,7 @@ import (
 	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/getsynq/dwhsupport/testenv"
@@ -23,20 +24,24 @@ import (
 // service principal (see dwhtesting/lib/fabric/TODO_SCRAPER_AUTH.md); without
 // credentials the suites skip.
 func newFabricScrapperFromEnv(ctx context.Context) (*FabricScrapper, error) {
-	return newFabricScrapper(ctx, defaultTestDatabases())
+	return newFabricScrapper(ctx, defaultTestScope())
 }
 
-// defaultTestDatabases scopes the suites to the seeded fixture warehouse so they
+// defaultTestScope scopes the suites to the seeded fixture warehouse so they
 // don't scrape (or assert against) other items in the shared workspace.
-func defaultTestDatabases() []string {
+func defaultTestScope() *scope.ScopeFilter {
 	raw := testenv.EnvOrDefault("FABRIC_DATABASES", "COALESCE_QUALITY_DWHTESTING")
 	if raw == "" {
 		return nil
 	}
-	return strings.Split(raw, ",")
+	var include []scope.ScopeRule
+	for _, db := range strings.Split(raw, ",") {
+		include = append(include, scope.ScopeRule{Database: db})
+	}
+	return &scope.ScopeFilter{Include: include}
 }
 
-func newFabricScrapper(ctx context.Context, databases []string) (*FabricScrapper, error) {
+func newFabricScrapper(ctx context.Context, sc *scope.ScopeFilter) (*FabricScrapper, error) {
 	conf := &FabricScrapperConf{
 		FabricConf: dwhexecfabric.FabricConf{
 			Host:         testenv.EnvOrDefault("FABRIC_HOST", ""),
@@ -47,7 +52,7 @@ func newFabricScrapper(ctx context.Context, databases []string) (*FabricScrapper
 			TenantID:     testenv.EnvOrDefault("FABRIC_TENANT_ID", ""),
 			AccessToken:  testenv.EnvOrDefault("FABRIC_ACCESS_TOKEN", ""),
 		},
-		Databases: databases,
+		Scope: sc,
 	}
 	return NewFabricScrapper(ctx, conf)
 }
