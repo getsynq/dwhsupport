@@ -25,7 +25,7 @@ func TestConnectionsSchema(t *testing.T) {
 	// Should contain all warehouse types
 	for _, wh := range []string{
 		"postgres", "snowflake", "bigquery", "redshift", "mysql",
-		"clickhouse", "trino", "databricks", "mssql", "oracle", "duckdb", "athena",
+		"clickhouse", "trino", "databricks", "mssql", "oracle", "duckdb", "athena", "fabric",
 	} {
 		assert.Contains(t, schemaStr, wh, "schema should contain %s", wh)
 	}

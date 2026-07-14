@@ -1,4 +1,3 @@
-
 package yamlconfig
 
 import (
@@ -18,7 +17,7 @@ func TestParseConnections_FullExample(t *testing.T) {
 	// Parse without env expansion — env vars remain as literal "${VAR}"
 	conns, err := ParseConnections(data, ParseOptions{})
 	require.NoError(t, err)
-	assert.Len(t, conns, 13)
+	assert.Len(t, conns, 14)
 
 	// Postgres
 	pg := conns["pg-local"]
@@ -123,6 +122,21 @@ func TestParseConnections_FullExample(t *testing.T) {
 	assert.Equal(t, "clickhouse", ch.DialectType())
 	require.NotNil(t, ch.Clickhouse)
 	assert.Equal(t, 9440, ch.Clickhouse.Port)
+
+	// Fabric
+	fabric := conns["fabric-prod"]
+	require.NotNil(t, fabric)
+	assert.Equal(t, "Fabric Warehouse", fabric.Name)
+	assert.Equal(t, "fabric", fabric.DialectType())
+	require.NotNil(t, fabric.Fabric)
+	assert.Equal(t, "my-workspace.datawarehouse.fabric.microsoft.com", fabric.Fabric.Host)
+	assert.Equal(t, "analytics", fabric.Fabric.Database)
+	require.NotNil(t, fabric.Fabric.Scope)
+	require.Len(t, fabric.Fabric.Scope.Include, 1)
+	assert.Equal(t, "analytics", fabric.Fabric.Scope.Include[0].Database)
+	require.Len(t, fabric.Fabric.Scope.Exclude, 1)
+	assert.Equal(t, "staging", fabric.Fabric.Scope.Exclude[0].Schema)
+	assert.Equal(t, "tmp_*", fabric.Fabric.Scope.Exclude[0].Table)
 }
 
 func TestParseConnections_EnvExpansion(t *testing.T) {

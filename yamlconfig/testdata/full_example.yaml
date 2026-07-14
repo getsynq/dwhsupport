@@ -116,6 +116,21 @@ connections:
       password: ${REDSHIFT_PASSWORD}
       freshness_from_query_logs: true
 
+  "fabric-prod":
+    name: "Fabric Warehouse"
+    fabric:
+      host: my-workspace.datawarehouse.fabric.microsoft.com
+      database: analytics
+      client_id: ${FABRIC_CLIENT_ID}
+      client_secret: ${FABRIC_CLIENT_SECRET}
+      tenant_id: ${FABRIC_TENANT_ID}
+      scope:
+        include:
+          - database: analytics
+        exclude:
+          - schema: staging
+            table: tmp_*
+
   "athena-prod":
     athena:
       region: eu-central-1

@@ -3,7 +3,7 @@ module github.com/getsynq/dwhsupport
 go 1.25.5
 
 require (
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260506084438-595c0ebf0bd4.1
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.11-20260714162129-d61afe5c46b6.1
 	cloud.google.com/go v0.121.6
 	cloud.google.com/go/bigquery v1.69.0
 	github.com/ClickHouse/ch-go v0.68.0
@@ -37,6 +37,7 @@ require (
 	github.com/trinodb/trino-go-client v0.323.0
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78
 	go.opentelemetry.io/otel v1.39.0
+	go.opentelemetry.io/otel/sdk v1.39.0
 	go.opentelemetry.io/otel/trace v1.39.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.48.0
@@ -181,8 +182,6 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.61.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.63.0 // indirect
 	go.opentelemetry.io/otel/metric v1.39.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.39.0 // indirect
-	go.opentelemetry.io/otel/sdk/metric v1.39.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect

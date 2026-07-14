@@ -51,6 +51,8 @@ func FromProtoConnection(proto *agentdwhv1.Connection) *Connection {
 		conn.DuckDB = duckdbConfFromProto(t.Duckdb)
 	case *agentdwhv1.Connection_Athena:
 		conn.Athena = athenaConfFromProto(t.Athena)
+	case *agentdwhv1.Connection_Fabric:
+		conn.Fabric = fabricConfFromProto(t.Fabric)
 	}
 
 	return conn
@@ -254,6 +256,22 @@ func athenaConfFromProto(c *agentdwhv1.AthenaConf) *AthenaConf {
 		UseShowCreateTable:    c.GetUseShowCreateTable(),
 		UseShowCreateView:     c.GetUseShowCreateView(),
 		UseIcebergMetricsScan: c.GetUseIcebergMetricsScan(),
+	}
+}
+
+func fabricConfFromProto(c *agentdwhv1.FabricConf) *FabricConf {
+	if c == nil {
+		return nil
+	}
+	return &FabricConf{
+		Host:         c.GetHost(),
+		Database:     c.GetDatabase(),
+		AuthType:     c.GetAuthType(),
+		ClientId:     c.GetClientId(),
+		ClientSecret: c.GetClientSecret(),
+		TenantId:     c.GetTenantId(),
+		AccessToken:  c.GetAccessToken(),
+		Scope:        scopeConfFromProto(c.GetScope()),
 	}
 }
 
