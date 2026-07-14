@@ -34,15 +34,18 @@ type FabricConf struct {
 	// Host is the workspace SQL analytics endpoint, e.g.
 	// "<workspace-id>.datawarehouse.fabric.microsoft.com".
 	Host string
-	// Database is the Fabric item (Warehouse or Lakehouse) used to establish the
-	// connection (TDS requires one). The integration is workspace-centric: this
-	// is only the entry point — scrapping spans the databases selected by
-	// Databases, using cross-database queries.
+	// Database is the default execution database — the context in which
+	// *unqualified* ad-hoc/monitor SQL resolves (e.g. `FROM sales.products`).
+	// Optional: defaults to "master" (the always-present workspace entry point),
+	// which is sufficient because metadata scrapping and generated metrics SQL
+	// are fully database-qualified via cross-database three-part names. Set it
+	// only when unqualified queries should resolve against a specific database.
+	//
+	// Which databases to *scrape* is a separate, scrapper-level concern — see
+	// FabricScrapperConf.Databases — so it is deliberately not on this
+	// connection config (mirroring TrinoScrapperConf.Catalogs /
+	// BigQueryScrapperConf.Datasets).
 	Database string
-	// Databases optionally restricts which workspace databases are scrapped. When
-	// empty, every database the connection can see (via sys.databases) is
-	// scrapped. The connection Database need not be listed here.
-	Databases []string
 
 	// AuthType selects the authentication method — one of the AuthType*
 	// constants below, matched case-insensitively. Empty defaults to a service
@@ -96,10 +99,17 @@ const (
 // encryption on and the standard TDS port. The authentication method is derived
 // from AuthType (with a pre-acquired AccessToken always taking precedence).
 func (c *FabricConf) ToMSSQLConf() *dwhexecmssql.MSSQLConf {
+	// The workspace SQL endpoint is shared across all its databases; master is
+	// always present and connectable, so it is the default entry point when no
+	// explicit execution database is configured.
+	database := c.Database
+	if database == "" {
+		database = "master"
+	}
 	conf := &dwhexecmssql.MSSQLConf{
 		Host:     c.Host,
 		Port:     1433,
-		Database: c.Database,
+		Database: database,
 		// Fabric endpoints require encryption and present a valid public CA
 		// certificate, so never disable verification.
 		Encrypt: "true",

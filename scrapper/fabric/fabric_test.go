@@ -41,13 +41,13 @@ func newFabricScrapper(ctx context.Context, databases []string) (*FabricScrapper
 		FabricConf: dwhexecfabric.FabricConf{
 			Host:         testenv.EnvOrDefault("FABRIC_HOST", ""),
 			Database:     testenv.EnvOrDefault("FABRIC_DATABASE", "COALESCE_QUALITY_DWHTESTING"),
-			Databases:    databases,
 			AuthType:     testenv.EnvOrDefault("FABRIC_AUTH_TYPE", ""),
 			ClientID:     testenv.EnvOrDefault("FABRIC_CLIENT_ID", ""),
 			ClientSecret: testenv.EnvOrDefault("FABRIC_CLIENT_SECRET", ""),
 			TenantID:     testenv.EnvOrDefault("FABRIC_TENANT_ID", ""),
 			AccessToken:  testenv.EnvOrDefault("FABRIC_ACCESS_TOKEN", ""),
 		},
+		Databases: databases,
 	}
 	return NewFabricScrapper(ctx, conf)
 }

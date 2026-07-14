@@ -22,6 +22,19 @@ func TestParseHostIdentity(t *testing.T) {
 	}
 }
 
+func TestToMSSQLConfDefaultDatabase(t *testing.T) {
+	// Empty Database defaults to master (the workspace entry point).
+	got := (&FabricConf{Host: "h", AccessToken: "t"}).ToMSSQLConf()
+	if got.Database != "master" {
+		t.Errorf("default database = %q, want master", got.Database)
+	}
+	// An explicit execution database is preserved.
+	got = (&FabricConf{Host: "h", Database: "WH", AccessToken: "t"}).ToMSSQLConf()
+	if got.Database != "WH" {
+		t.Errorf("database = %q, want WH", got.Database)
+	}
+}
+
 func TestToMSSQLConf(t *testing.T) {
 	const host = "ws.datawarehouse.fabric.microsoft.com"
 	const db = "WH"

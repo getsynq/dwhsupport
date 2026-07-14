@@ -20,9 +20,18 @@ import (
 )
 
 // FabricScrapperConf configures a Fabric scrapper. It embeds the executor conf
-// (the simplified Fabric connection surface) per the repo convention.
+// (the connection surface) and adds scrapper-level options — keeping the scrape
+// scope out of the connection config, as TrinoScrapperConf/BigQueryScrapperConf
+// do with their catalog/dataset lists.
 type FabricScrapperConf struct {
 	dwhexecfabric.FabricConf
+
+	// Databases optionally restricts which workspace databases are scrapped. When
+	// empty, every database the connection can see (via sys.databases — the
+	// workspace's warehouses, lakehouses, SQL databases and mirrored databases)
+	// is scrapped. This is scope narrowing layered under the context scope
+	// filter, not a connection setting.
+	Databases []string
 }
 
 var _ scrapper.Scrapper = &FabricScrapper{}
