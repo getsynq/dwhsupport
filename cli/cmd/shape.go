@@ -24,10 +24,7 @@ The SQL can be a positional argument, --sql, or stdin ('-').`,
 		}
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			cols, err := s.QueryShape(ctx, sql)
-			if err != nil {
-				return err
-			}
-			return emitList("columns", cols, shapeColumns)
+			return emitListErr("query shape", shapeColumns, cols, err)
 		})
 	},
 }

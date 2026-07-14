@@ -27,10 +27,7 @@ var tablesCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			rows, err := s.QueryTables(ctx)
-			if err != nil {
-				return err
-			}
-			return emitList("tables", rows, tableColumns)
+			return emitListErr("tables", tableColumns, rows, err)
 		})
 	},
 }
@@ -44,10 +41,7 @@ var columnsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			rows, err := s.QueryCatalog(ctx)
-			if err != nil {
-				return err
-			}
-			return emitList("columns", rows, catalogColumnColumns)
+			return emitListErr("columns", catalogColumnColumns, rows, err)
 		})
 	},
 }
@@ -59,10 +53,7 @@ var schemasCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			rows, err := s.QuerySchemas(ctx)
-			if err != nil {
-				return err
-			}
-			return emitList("schemas", rows, schemaColumns)
+			return emitListErr("schemas", schemaColumns, rows, err)
 		})
 	},
 }
@@ -74,10 +65,7 @@ var databasesCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			rows, err := s.QueryDatabases(ctx)
-			if err != nil {
-				return err
-			}
-			return emitList("databases", rows, databaseColumns)
+			return emitListErr("databases", databaseColumns, rows, err)
 		})
 	},
 }
@@ -90,10 +78,7 @@ var sqlDefinitionsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			rows, err := s.QuerySqlDefinitions(ctx)
-			if err != nil {
-				return err
-			}
-			return emitList("sql definitions", rows, sqlDefinitionColumns)
+			return emitListErr("sql definitions", sqlDefinitionColumns, rows, err)
 		})
 	},
 }
@@ -105,10 +90,7 @@ var constraintsCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			rows, err := s.QueryTableConstraints(ctx)
-			if err != nil {
-				return err
-			}
-			return emitList("constraints", rows, constraintColumns)
+			return emitListErr("constraints", constraintColumns, rows, err)
 		})
 	},
 }

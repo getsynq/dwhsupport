@@ -6,6 +6,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/cli/internal/output"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
@@ -33,4 +34,19 @@ func emitList[T any](what string, items []T, cols output.Columns) error {
 		fmt.Fprintf(output.ErrOut, "0 %s\n", what)
 	}
 	return output.PrintList(items, cols)
+}
+
+// emitListErr renders a listing result, treating scrapper.ErrUnsupported as an
+// explicit "not supported by this dialect" empty state (exit 0, empty structured
+// output) rather than a failure — consistent with the catalog command and the
+// tool's "no data vs. silent failure" contract. Any other error is returned.
+func emitListErr[T any](what string, cols output.Columns, items []T, err error) error {
+	if err != nil {
+		if errors.Is(err, scrapper.ErrUnsupported) {
+			fmt.Fprintf(output.ErrOut, "%s: not supported by this dialect\n", what)
+			return output.PrintList([]T{}, cols)
+		}
+		return err
+	}
+	return emitList(what, items, cols)
 }

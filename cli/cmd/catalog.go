@@ -14,7 +14,7 @@ var catalogCmd = &cobra.Command{
 	Use:   "catalog",
 	Short: "Fetch the full catalog: tables, columns, SQL definitions and constraints",
 	Long: `Fetch a complete catalog snapshot for the connection in one command,
-mirroring what the SYNQ agent collects: the table/view list, column metadata,
+mirroring what the Coalesce Quality agent collects: the table/view list, column metadata,
 view SQL definitions, and table constraints. The four passes run concurrently.
 
 In structured formats (json/yaml/toon/jq) the result is a single object with
@@ -47,14 +47,20 @@ avoiding a redundant pass.`,
 				return err
 			})
 			g.Go(func() error {
-				var err error
-				columns, err = s.QueryCatalog(gctx)
-				return err
+				cols, err := s.QueryCatalog(gctx)
+				if err != nil {
+					return tolerateUnsupported(err)
+				}
+				columns = cols
+				return nil
 			})
 			g.Go(func() error {
-				var err error
-				sqlDefs, err = s.QuerySqlDefinitions(gctx)
-				return err
+				sd, err := s.QuerySqlDefinitions(gctx)
+				if err != nil {
+					return tolerateUnsupported(err)
+				}
+				sqlDefs = sd
+				return nil
 			})
 			// Only issue a dedicated constraints pass when it isn't already
 			// folded into QueryTables. ErrUnsupported is tolerated.
@@ -62,10 +68,7 @@ avoiding a redundant pass.`,
 				g.Go(func() error {
 					tc, err := s.QueryTableConstraints(gctx)
 					if err != nil {
-						if errors.Is(err, scrapper.ErrUnsupported) {
-							return nil
-						}
-						return err
+						return tolerateUnsupported(err)
 					}
 					constraints = tc
 					return nil
@@ -83,6 +86,16 @@ avoiding a redundant pass.`,
 			return printCatalogSections(tables, columns, sqlDefs, constraints)
 		})
 	},
+}
+
+// tolerateUnsupported maps scrapper.ErrUnsupported to nil so a dialect that
+// doesn't implement one catalog pass leaves that section empty instead of
+// failing the whole snapshot. Any other error is propagated.
+func tolerateUnsupported(err error) error {
+	if errors.Is(err, scrapper.ErrUnsupported) {
+		return nil
+	}
+	return err
 }
 
 func printCatalogSections(

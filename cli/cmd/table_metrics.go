@@ -31,10 +31,7 @@ or a relative duration (24h, 7d).`,
 		}
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			rows, err := s.QueryTableMetrics(ctx, since)
-			if err != nil {
-				return err
-			}
-			return emitList("table metrics", rows, tableMetricsColumns)
+			return emitListErr("table metrics", tableMetricsColumns, rows, err)
 		})
 	},
 }
