@@ -4,7 +4,9 @@ SELECT
     v.name                          AS [table],
     1                               AS is_view,
     0                               AS is_materialized_view,
-    m.definition                    AS [sql]
+    -- definition is NULL for encrypted modules (and some Fabric views);
+    -- COALESCE to '' so the row scans into the non-nullable Sql field.
+    COALESCE(m.definition, '')      AS [sql]
 FROM
     sys.views v
     INNER JOIN sys.schemas s
