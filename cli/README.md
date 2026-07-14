@@ -1,6 +1,6 @@
 # dwhctl
 
-`dwhctl` is a universal command-line interface over the SYNQ
+`dwhctl` is a universal command-line interface over the Coalesce Quality
 [`dwhsupport`](../) **Scrapper** interface. It bundles every supported
 warehouse driver into a single binary and exposes catalog extraction, metadata
 metrics, and lightweight query tooling as scriptable commands — so any team, in
@@ -130,20 +130,20 @@ following work identically, whether inline, in a file, or on stdin:
 # conn.yaml
 snowflake:
   account: ab12345.eu-west-1
-  username: SVC_SYNQ
+  username: SVC_READONLY
   password: ${SF_PASSWORD}
   warehouse: COMPUTE_WH
-  role: SYNQ_RO
+  role: READONLY
 ```
 
 ```json
 {
   "snowflake": {
     "account": "ab12345.eu-west-1",
-    "username": "SVC_SYNQ",
+    "username": "SVC_READONLY",
     "password": "${SF_PASSWORD}",
     "warehouse": "COMPUTE_WH",
-    "role": "SYNQ_RO"
+    "role": "READONLY"
   }
 }
 ```
@@ -178,10 +178,10 @@ relative paths resolved against the config file's directory:
 ```yaml
 snowflake:
   account: ab12345.eu-west-1
-  username: SVC_SYNQ
+  username: SVC_READONLY
   private_key_file: ./keys/rsa_key.p8   # read relative to conn.yaml
   warehouse: COMPUTE_WH
-  role: SYNQ_RO
+  role: READONLY
 ```
 
 ---
@@ -212,8 +212,8 @@ postgres:
 snowflake:
   account: ab12345.eu-west-1   # ✱
   warehouse: COMPUTE_WH        # ✱
-  role: SYNQ_RO                # ✱
-  username: SVC_SYNQ           # ✱
+  role: READONLY                # ✱
+  username: SVC_READONLY           # ✱
   # authentication — one of:
   password: ${SF_PASSWORD}
   private_key_file: ./rsa_key.p8      # or private_key: <PEM>

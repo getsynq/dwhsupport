@@ -1,4 +1,4 @@
-// Command dwhctl is a universal command-line interface over the SYNQ dwhsupport
+// Command dwhctl is a universal command-line interface over the Coalesce Quality dwhsupport
 // Scrapper interface. It lets any team — regardless of language — reuse the same
 // warehouse catalog and metadata-metric extraction machinery through a single
 // binary, with structured, automation-friendly output.

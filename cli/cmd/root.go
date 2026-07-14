@@ -25,8 +25,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "dwhctl",
-	Short: "Query data-warehouse catalog & metadata through the SYNQ scrapper interface",
-	Long: `dwhctl is a universal command-line interface over the SYNQ dwhsupport
+	Short: "Query data-warehouse catalog & metadata through the Coalesce Quality dwhsupport Scrapper interface",
+	Long: `dwhctl is a universal command-line interface over the Coalesce Quality dwhsupport
 Scrapper interface. It connects to any supported warehouse (Snowflake, BigQuery,
 Databricks, Postgres, Redshift, ClickHouse, DuckDB, MySQL, Trino, Oracle, MSSQL,
 Athena, Fabric) and extracts catalog and metadata metrics with a single binary —

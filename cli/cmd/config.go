@@ -25,7 +25,7 @@ import (
 //
 //	snowflake:
 //	  account: ab12345.eu-west-1
-//	  username: SVC_SYNQ
+//	  username: SVC_READONLY
 //	  password: ${SF_PASSWORD}
 //	  warehouse: COMPUTE_WH
 //	scope:
