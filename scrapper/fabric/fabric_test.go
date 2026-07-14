@@ -2,11 +2,14 @@ package fabric
 
 import (
 	"context"
+	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
+	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/sqldialect"
@@ -20,10 +23,25 @@ import (
 // service principal (see dwhtesting/lib/fabric/TODO_SCRAPER_AUTH.md); without
 // credentials the suites skip.
 func newFabricScrapperFromEnv(ctx context.Context) (*FabricScrapper, error) {
+	return newFabricScrapper(ctx, defaultTestDatabases())
+}
+
+// defaultTestDatabases scopes the suites to the seeded fixture warehouse so they
+// don't scrape (or assert against) other items in the shared workspace.
+func defaultTestDatabases() []string {
+	raw := testenv.EnvOrDefault("FABRIC_DATABASES", "COALESCE_QUALITY_DWHTESTING")
+	if raw == "" {
+		return nil
+	}
+	return strings.Split(raw, ",")
+}
+
+func newFabricScrapper(ctx context.Context, databases []string) (*FabricScrapper, error) {
 	conf := &FabricScrapperConf{
 		FabricConf: dwhexecfabric.FabricConf{
 			Host:         testenv.EnvOrDefault("FABRIC_HOST", ""),
 			Database:     testenv.EnvOrDefault("FABRIC_DATABASE", "COALESCE_QUALITY_DWHTESTING"),
+			Databases:    databases,
 			AuthType:     testenv.EnvOrDefault("FABRIC_AUTH_TYPE", ""),
 			ClientID:     testenv.EnvOrDefault("FABRIC_CLIENT_ID", ""),
 			ClientSecret: testenv.EnvOrDefault("FABRIC_CLIENT_SECRET", ""),
@@ -248,6 +266,61 @@ func (s *FabricScrapperSuite) TestQueryTableConstraints() {
 	s.True(foundProductsSkuUnique, "Should find UNIQUE for products.sku")
 	s.True(foundOrdersFK, "Should find FOREIGN KEY for orders.customer_id")
 	s.True(foundOrderItemsPK, "Should find PRIMARY KEY for order_items.order_item_id")
+}
+
+// TestQueryDatabasesWorkspaceListing verifies the integration is
+// workspace-centric: with no Databases filter, QueryDatabases lists more than
+// just the connected database (every warehouse/lakehouse the endpoint exposes).
+func (s *FabricScrapperSuite) TestQueryDatabasesWorkspaceListing() {
+	sc, err := newFabricScrapper(s.ctx, nil) // nil => all workspace databases
+	s.Require().NoError(err)
+	defer sc.Close()
+
+	databases, err := sc.QueryDatabases(s.ctx)
+	s.Require().NoError(err)
+	s.Greater(len(databases), 1, "workspace endpoint should expose multiple databases")
+
+	var found bool
+	for _, db := range databases {
+		if db.Database == s.databaseName {
+			found = true
+		}
+	}
+	s.True(found, "should list the fixture database %s among the workspace databases", s.databaseName)
+}
+
+// TestFetchQueryLogs verifies query-log fetching from queryinsights works and is
+// well-formed. Capture/retention is best-effort, so it tolerates zero rows.
+func (s *FabricScrapperSuite) TestFetchQueryLogs() {
+	// Run a recognisable query so queryinsights has something recent to return.
+	_, _ = s.scrapper.QueryDatabases(s.ctx)
+
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	s.Require().NoError(err)
+
+	iter, err := s.scrapper.FetchQueryLogs(s.ctx, time.Now().Add(-30*24*time.Hour), time.Now().Add(time.Hour), obfuscator)
+	s.Require().NoError(err)
+	defer iter.Close()
+
+	var logs []*querylogs.QueryLog
+	for {
+		log, iterErr := iter.Next(s.ctx)
+		if iterErr != nil {
+			s.Require().ErrorIs(iterErr, io.EOF, "iterator should end with EOF")
+			break
+		}
+		logs = append(logs, log)
+	}
+
+	for _, log := range logs {
+		s.Equal("fabric", log.SqlDialect)
+		s.NotEmpty(log.QueryID)
+		s.NotNil(log.DwhContext)
+		s.NotEmpty(log.DwhContext.Database)
+		s.Contains([]string{"SUCCESS", "FAILED", "ABORTED", "RUNNING", "UNKNOWN"}, log.Status)
+		s.False(log.CreatedAt.IsZero())
+	}
+	s.T().Logf("fetched %d query logs from queryinsights", len(logs))
 }
 
 // FabricComplianceSuite runs the standard compliance test suite.

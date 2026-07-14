@@ -4,8 +4,6 @@ import (
 	"context"
 	_ "embed"
 
-	dwhexec "github.com/getsynq/dwhsupport/exec"
-	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
@@ -14,11 +12,13 @@ import (
 var queryCatalogSql string
 
 func (e *FabricScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-	sql := scope.AppendScopeConditions(ctx, queryCatalogSql, "", "s.name", "t.name")
-	return dwhexecfabric.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
-		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
+	return queryEachDatabase(ctx, e,
+		func(db string) string {
+			return expandDatabase(scope.AppendScopeConditions(ctx, queryCatalogSql, "", "s.name", "t.name"), db)
+		},
+		func(row *scrapper.CatalogColumnRow, db string) {
 			row.Instance = e.conf.Host
-			return row, nil
-		}),
+			row.Database = db
+		},
 	)
 }

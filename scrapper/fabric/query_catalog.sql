@@ -1,16 +1,18 @@
 -- Column-level catalog for Fabric Warehouse.
 --
--- Fabric Warehouse has no extended properties (sp_addextendedproperty is
--- rejected), so column/table comments are always NULL — there is no metadata
--- source for them on the SQL endpoint. National-character types (NVARCHAR/NCHAR)
--- do not exist, so they are absent from the type-formatting CASE. All CAST
--- targets carry an explicit length: Fabric rejects bare-length character casts.
+-- Comments come from sys.extended_properties (MS_Description), exactly as on SQL
+-- Server. Fabric currently rejects sp_addextendedproperty, so the view is empty
+-- today and comments come back NULL — but the view IS queryable (verified live),
+-- so joining it costs nothing and forward-supports Fabric adding write support
+-- (and any warehouse that does carry descriptions). National-character types
+-- (NVARCHAR/NCHAR) do not exist on Fabric, so they are absent from the
+-- type-formatting CASE. All CAST targets carry an explicit length: Fabric
+-- rejects bare-length character casts.
 SELECT
-    DB_NAME()                       AS [database],
     s.name                          AS [schema],
     t.name                          AS [table],
     CASE WHEN t.type = 'V' THEN 1 ELSE 0 END AS is_view,
-    CAST(NULL AS VARCHAR(MAX))      AS table_comment,
+    tp.value                        AS table_comment,
     c.name                          AS [column],
     c.column_id                     AS [position],
     TYPE_NAME(c.user_type_id) +
@@ -23,13 +25,17 @@ SELECT
                 THEN '(' + CAST(c.scale AS VARCHAR(20)) + ')'
             ELSE ''
         END                         AS [type],
-    CAST(NULL AS VARCHAR(MAX))      AS comment
+    cp.value                        AS comment
 FROM
-    sys.columns c
-    INNER JOIN sys.objects t
+    {{DB}}.sys.columns c
+    INNER JOIN {{DB}}.sys.objects t
         ON c.object_id = t.object_id
-    INNER JOIN sys.schemas s
+    INNER JOIN {{DB}}.sys.schemas s
         ON t.schema_id = s.schema_id
+    LEFT JOIN {{DB}}.sys.extended_properties tp
+        ON tp.major_id = t.object_id AND tp.minor_id = 0 AND tp.name = 'MS_Description'
+    LEFT JOIN {{DB}}.sys.extended_properties cp
+        ON cp.major_id = c.object_id AND cp.minor_id = c.column_id AND cp.name = 'MS_Description'
 WHERE
     t.type IN ('U', 'V')
     AND t.is_ms_shipped = 0

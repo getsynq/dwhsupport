@@ -3,7 +3,7 @@
 select
   *, 
   'it''s a test' as [test_col]
-from [default].[users] 
+from [proj].[default].[users] 
 where name = 'O''Brien'
  
 ---

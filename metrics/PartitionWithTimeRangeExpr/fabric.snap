@@ -12,7 +12,7 @@ select
   CAST(max(run_type) AS FLOAT) as [max], 
   CAST(NULL AS FLOAT) as [median], 
   CAST(STDEV(run_type) AS FLOAT) as [stddev]
-from [default].[runs] 
+from [db].[default].[runs] 
 where
   ingested_at >= CURRENT_DATE - INTERVAL '3 days' and 
   ingested_at < CURRENT_DATE - INTERVAL '1 day'

@@ -7,8 +7,8 @@ SELECT
     s.name                          AS [schema],
     t.name                          AS [table]
 FROM
-    sys.tables t
-    INNER JOIN sys.schemas s
+    {{DB}}.sys.tables t
+    INNER JOIN {{DB}}.sys.schemas s
         ON t.schema_id = s.schema_id
 WHERE
     t.is_ms_shipped = 0

@@ -2,21 +2,23 @@ package fabric
 
 import (
 	"context"
-	_ "embed"
 
-	dwhexec "github.com/getsynq/dwhsupport/exec"
-	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
-//go:embed query_databases.sql
-var queryDatabasesSql string
-
+// QueryDatabases lists the workspace databases in scope. The Fabric SQL endpoint
+// is workspace-shared, so this returns every warehouse/lakehouse the connection
+// can see (via sys.databases), narrowed by conf.Databases and the context scope
+// filter — the same set the other scrapper methods iterate.
 func (e *FabricScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {
-	return dwhexecfabric.NewQuerier[scrapper.DatabaseRow](e.executor).QueryMany(ctx, queryDatabasesSql,
-		dwhexec.WithPostProcessors(func(row *scrapper.DatabaseRow) (*scrapper.DatabaseRow, error) {
-			row.Instance = e.conf.Host
-			return row, nil
-		}),
-	)
+	databases, err := e.GetDatabasesToQuery(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*scrapper.DatabaseRow, 0, len(databases))
+	for _, db := range databases {
+		out = append(out, &scrapper.DatabaseRow{Instance: e.conf.Host, Database: db})
+	}
+	return out, nil
 }

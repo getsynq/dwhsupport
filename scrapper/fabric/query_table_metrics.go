@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"strings"
+	"sync"
 	"time"
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
@@ -11,6 +12,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
+	"golang.org/x/sync/errgroup"
 )
 
 //go:embed query_table_metrics_tables.sql
@@ -46,8 +48,42 @@ type fabricTableRef struct {
 //
 // lastMetricsFetchTime is ignored: Fabric provides no per-table modification
 // timestamp to drive an incremental fetch, so every call recomputes counts.
+//
+// Workspace-centric: the in-scope databases are iterated concurrently, and each
+// table is counted with a three-part [db].[schema].[table] name.
 func (e *FabricScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	listSql := scope.AppendScopeConditions(ctx, queryTableMetricsTablesSql, "", "s.name", "t.name")
+	databases, err := e.GetDatabasesToQuery(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		mu  sync.Mutex
+		out []*scrapper.TableMetricsRow
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxDatabaseConcurrency)
+	for _, database := range databases {
+		database := database
+		g.Go(func() error {
+			rows, err := e.tableMetricsForDatabase(gctx, database)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			out = append(out, rows...)
+			mu.Unlock()
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (e *FabricScrapper) tableMetricsForDatabase(ctx context.Context, database string) ([]*scrapper.TableMetricsRow, error) {
+	listSql := expandDatabase(scope.AppendScopeConditions(ctx, queryTableMetricsTablesSql, "", "s.name", "t.name"), database)
 	refs, err := dwhexecfabric.NewQuerier[fabricTableRef](e.executor).QueryMany(ctx, listSql)
 	if err != nil {
 		return nil, err
@@ -63,9 +99,10 @@ func (e *FabricScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetch
 			end = len(refs)
 		}
 
-		rows, err := dwhexecfabric.NewQuerier[scrapper.TableMetricsRow](e.executor).QueryMany(ctx, buildRowCountUnion(refs[start:end]),
+		rows, err := dwhexecfabric.NewQuerier[scrapper.TableMetricsRow](e.executor).QueryMany(ctx, buildRowCountUnion(database, refs[start:end]),
 			dwhexec.WithPostProcessors(func(row *scrapper.TableMetricsRow) (*scrapper.TableMetricsRow, error) {
 				row.Instance = e.conf.Host
+				row.Database = database
 				return row, nil
 			}),
 		)
@@ -74,22 +111,23 @@ func (e *FabricScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetch
 		}
 		out = append(out, rows...)
 	}
-
 	return out, nil
 }
 
 // buildRowCountUnion assembles a single UNION ALL statement of per-table
-// COUNT_BIG(*) selects. Schema/table names are quoted with brackets for the FROM
-// clause and emitted as escaped string literals for the projected columns so the
-// result carries the identity of each table without a correlated metadata join.
-func buildRowCountUnion(refs []*fabricTableRef) string {
+// COUNT_BIG(*) selects for one database. The FROM clause uses a three-part
+// [db].[schema].[table] name so counts are read cross-database, and schema/table
+// are emitted as escaped literals so each row carries its identity without a
+// correlated metadata join (Database/Instance are stamped in Go).
+func buildRowCountUnion(database string, refs []*fabricTableRef) string {
+	dbPrefix := sqldialect.MSSQLQuoteIdentifier(database)
 	var b strings.Builder
 	for i, r := range refs {
 		if i > 0 {
 			b.WriteString("\nUNION ALL\n")
 		}
-		fqn := sqldialect.MSSQLQuoteIdentifier(r.Schema) + "." + sqldialect.MSSQLQuoteIdentifier(r.Table)
-		b.WriteString("SELECT DB_NAME() AS [database], ")
+		fqn := dbPrefix + "." + sqldialect.MSSQLQuoteIdentifier(r.Schema) + "." + sqldialect.MSSQLQuoteIdentifier(r.Table)
+		b.WriteString("SELECT ")
 		b.WriteString(sqlStringLiteral(r.Schema))
 		b.WriteString(" AS [schema], ")
 		b.WriteString(sqlStringLiteral(r.Table))

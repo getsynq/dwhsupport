@@ -13,7 +13,9 @@ import (
 	"context"
 
 	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
+	"github.com/getsynq/dwhsupport/lazy"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
@@ -26,9 +28,18 @@ type FabricScrapperConf struct {
 var _ scrapper.Scrapper = &FabricScrapper{}
 
 type FabricScrapper struct {
-	conf     *FabricScrapperConf
-	executor *dwhexecfabric.FabricExecutor
+	conf        *FabricScrapperConf
+	executor    *dwhexecfabric.FabricExecutor
+	existingDbs lazy.Lazy[[]string]
 }
+
+// listDatabasesSql lists the workspace databases visible to the connection. The
+// SQL endpoint is workspace-shared, so this returns every warehouse/lakehouse
+// the principal can see. database_id > 4 skips master/tempdb/model/msdb.
+const listDatabasesSql = `
+SELECT name FROM sys.databases
+WHERE database_id > 4 AND name NOT IN ('master', 'tempdb', 'model', 'msdb')
+ORDER BY name`
 
 func NewFabricScrapper(ctx context.Context, conf *FabricScrapperConf) (*FabricScrapper, error) {
 	executor, err := dwhexecfabric.NewFabricExecutor(ctx, &conf.FabricConf)
@@ -36,10 +47,62 @@ func NewFabricScrapper(ctx context.Context, conf *FabricScrapperConf) (*FabricSc
 		return nil, err
 	}
 
-	return &FabricScrapper{
+	e := &FabricScrapper{
 		conf:     conf,
 		executor: executor,
-	}, nil
+	}
+	e.existingDbs = lazy.New(func() ([]string, error) {
+		rows, err := dwhexecfabric.NewQuerier[dbNameRow](executor).QueryMany(ctx, listDatabasesSql)
+		if err != nil {
+			return nil, err
+		}
+		names := make([]string, 0, len(rows))
+		for _, r := range rows {
+			names = append(names, r.Name)
+		}
+		return names, nil
+	})
+	return e, nil
+}
+
+type dbNameRow struct {
+	Name string `db:"name"`
+}
+
+// GetExistingDbs returns the workspace databases visible to the connection,
+// cached after the first call.
+func (e *FabricScrapper) GetExistingDbs(ctx context.Context) ([]string, error) {
+	return e.existingDbs.Get()
+}
+
+// GetDatabasesToQuery returns the databases each scrapper method should iterate:
+// the workspace databases, narrowed to conf.Databases when set, then to those
+// accepted by the context scope filter. This is the workspace-centric analogue
+// of the Snowflake scrapper's method of the same name.
+func (e *FabricScrapper) GetDatabasesToQuery(ctx context.Context) ([]string, error) {
+	all, err := e.GetExistingDbs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	requested := make(map[string]bool, len(e.conf.Databases))
+	for _, db := range e.conf.Databases {
+		requested[db] = true
+	}
+
+	scopeFilter := scope.GetScope(ctx)
+
+	var result []string
+	for _, db := range all {
+		if len(requested) > 0 && !requested[db] {
+			continue
+		}
+		if !scopeFilter.IsDatabaseAccepted(db) {
+			continue
+		}
+		result = append(result, db)
+	}
+	return result, nil
 }
 
 func (e *FabricScrapper) Executor() *dwhexecfabric.FabricExecutor {

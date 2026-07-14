@@ -34,8 +34,15 @@ type FabricConf struct {
 	// Host is the workspace SQL analytics endpoint, e.g.
 	// "<workspace-id>.datawarehouse.fabric.microsoft.com".
 	Host string
-	// Database is the Fabric item (Warehouse or Lakehouse) name to connect to.
+	// Database is the Fabric item (Warehouse or Lakehouse) used to establish the
+	// connection (TDS requires one). The integration is workspace-centric: this
+	// is only the entry point — scrapping spans the databases selected by
+	// Databases, using cross-database queries.
 	Database string
+	// Databases optionally restricts which workspace databases are scrapped. When
+	// empty, every database the connection can see (via sys.databases) is
+	// scrapped. The connection Database need not be listed here.
+	Databases []string
 
 	// AuthType selects the authentication method — one of the AuthType*
 	// constants below, matched case-insensitively. Empty defaults to a service

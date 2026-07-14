@@ -6,6 +6,6 @@ select
   COUNT(workspace) as [num_not_null], 
   COUNT(distinct workspace) as [num_unique], 
   SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as [num_empty]
-from [default].[runs] 
+from [db].[default].[runs] 
  
 ---

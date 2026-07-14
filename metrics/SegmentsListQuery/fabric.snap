@@ -5,7 +5,7 @@ select
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100) as [segment2], 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment3], 
   COUNT(*) as [num_rows]
-from [default].[runs] 
+from [db].[default].[runs] 
 where
   createdAt >= CAST('1985-07-16 00:00:00' AS DATETIME2) and 
   createdAt < CAST('2025-03-16 00:00:00' AS DATETIME2) and 

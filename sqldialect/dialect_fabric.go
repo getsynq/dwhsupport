@@ -1,5 +1,11 @@
 package sqldialect
 
+import (
+	"fmt"
+
+	"github.com/pkg/errors"
+)
+
 // FabricDialect targets Microsoft Fabric Warehouse (the T-SQL surface exposed by
 // the workspace SQL analytics endpoint). Fabric Warehouse runs a Synapse-derived
 // engine ("Azure SQL Data Warehouse 12.0.2000.8") whose T-SQL is a subset of SQL
@@ -28,4 +34,23 @@ func NewFabricDialect() *FabricDialect {
 // MSSQL dialect's CAST(... AS NVARCHAR(MAX)) would be rejected at parse time.
 func (d *FabricDialect) ToString(expr Expr) Expr {
 	return WrapSql("CAST(%s AS VARCHAR(MAX))", expr)
+}
+
+// SupportsCrossDatabaseQueries is true for Fabric: the workspace SQL endpoint
+// exposes every warehouse/lakehouse in the workspace as a database and supports
+// three-part-name queries across them (verified live). This is what makes the
+// integration workspace-centric rather than bound to a single database.
+func (d *FabricDialect) SupportsCrossDatabaseQueries() bool { return true }
+
+// ResolveFqn emits a three-part [database].[schema].[table] name when a database
+// (projectId) is present, so monitors/metrics can target tables in any workspace
+// database from a single connection. Falls back to [schema].[table] otherwise.
+func (d *FabricDialect) ResolveFqn(fqn *TableFqnExpr) (string, error) {
+	if fqn == nil {
+		return "", errors.New("fqn is nil")
+	}
+	if fqn.projectId != "" {
+		return fmt.Sprintf("[%s].[%s].[%s]", fqn.projectId, fqn.datasetId, fqn.tableId), nil
+	}
+	return fmt.Sprintf("[%s].[%s]", fqn.datasetId, fqn.tableId), nil
 }

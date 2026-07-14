@@ -12,7 +12,7 @@ select
   CAST(max(run_type) AS FLOAT) as [max], 
   CAST(NULL AS FLOAT) as [median], 
   CAST(STDEV(run_type) AS FLOAT) as [stddev]
-from [default].[runs] 
+from [db].[default].[runs] 
 where
   ingested_at >= CAST('2025-01-01 00:00:00' AS DATETIME2) and 
   ingested_at < CAST('2025-02-01 00:00:00' AS DATETIME2) and 

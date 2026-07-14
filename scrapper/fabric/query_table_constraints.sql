@@ -9,7 +9,6 @@
 -- INFORMATION_SCHEMA is the portable, Fabric-supported source for these. Every
 -- constraint is reported with is_enforced = 0 because Fabric never enforces them.
 SELECT
-    DB_NAME()                       AS [database],
     tc.TABLE_SCHEMA                 AS [schema],
     tc.TABLE_NAME                   AS [table],
     tc.CONSTRAINT_NAME              AS [constraint_name],
@@ -24,8 +23,8 @@ SELECT
     CAST('' AS VARCHAR(MAX))        AS [constraint_expression],
     CAST(0 AS BIT)                  AS [is_enforced]
 FROM
-    INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
-    INNER JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+    {{DB}}.INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+    INNER JOIN {{DB}}.INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
         ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
         AND tc.CONSTRAINT_SCHEMA = kcu.CONSTRAINT_SCHEMA
         AND tc.TABLE_NAME = kcu.TABLE_NAME

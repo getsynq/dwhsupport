@@ -14,7 +14,7 @@ select
   CAST(max(run_type) AS FLOAT) as [run_type__max], 
   CAST(NULL AS FLOAT) as [run_type__median], 
   CAST(STDEV(run_type) AS FLOAT) as [run_type__stddev]
-from [default].[runs] 
+from [db].[default].[runs] 
 group by
   COALESCE([workspace], ''), 
   COALESCE([run_type], '')

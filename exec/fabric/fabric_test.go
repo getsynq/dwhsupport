@@ -2,6 +2,26 @@ package fabric
 
 import "testing"
 
+func TestParseHostIdentity(t *testing.T) {
+	const host = "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com"
+	got, err := ParseHostIdentity(host)
+	if err != nil {
+		t.Fatalf("ParseHostIdentity: %v", err)
+	}
+	// Verified live: @@SERVERNAME == workspace GUID, and the Fabric REST API
+	// resolves it to the "Coalesce Development" workspace under this tenant.
+	if want := "8863585d-cb0b-4ecf-9ce3-318e3295156a"; got.TenantID != want {
+		t.Errorf("TenantID = %q, want %q", got.TenantID, want)
+	}
+	if want := "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa"; got.WorkspaceID != want {
+		t.Errorf("WorkspaceID = %q, want %q", got.WorkspaceID, want)
+	}
+
+	if _, err := ParseHostIdentity("not-a-fabric-host"); err == nil {
+		t.Error("expected error for non-Fabric host")
+	}
+}
+
 func TestToMSSQLConf(t *testing.T) {
 	const host = "ws.datawarehouse.fabric.microsoft.com"
 	const db = "WH"
