@@ -102,6 +102,34 @@ A new `Scrapper` method must be added in all of these or the build breaks:
 - Test stubs that implement Scrapper: `scrapper/unwrap_test.go` and the mock scrappers in `scrapper/{reject,sanitize,scope}/*_test.go` and `pool/scrapper_test.go`
 - For list methods: add a row model (e.g. `SchemaRow`) with `TableFqn`/`SetInstance`/`HasValidIdentity` (`identity.go`) + `Sanitize` (`sanitize.go`), and a scope post-filter helper in `scrapper/scope/filter.go`
 
+## `cli/` — dwhctl command-line interface
+
+`cli/` is a **separate Go module** (`github.com/getsynq/dwhsupport/cli`, binary
+`dwhctl`) that exposes the Scrapper interface as a warehouse-agnostic CLI for
+non-Go teams, shell pipelines, and AI agents. It is a nested module with its own
+`go.mod` + `replace github.com/getsynq/dwhsupport => ../`, so its CLI-only deps
+(cobra, gojq, tablewriter, TOON) are **NOT** pulled into the library module —
+library consumers stay lean. It is not part of the root module's `go build ./...`;
+CI builds/tests it as a separate `cli` job (`.github/workflows/go.yml`).
+
+- Structure: `cli/main.go`, `cli/cmd/*` (one file per command group),
+  `cli/internal/output/` (backported from `cloud/lib/cli/output` — table/json/
+  yaml/toon/tsv/jq renderer; keep in sync there if fixing bugs).
+- Config: reused `yamlconfig` (env `${VAR}` expansion + `*_file` resolution) →
+  `ToProtoConnection` → `connect.Connect`. A single connection keyed by dialect,
+  optionally with a top-level `scope:`; portable with a `synq-dwh` `connections:`
+  entry. Sources: `--config-inline`, `--config` (`-`=stdin), `$DWHCTL_CONFIG`.
+- Scope: config `scope:` AND CLI `--include`/`--exclude` (`db[.schema[.table]]`)
+  → `scope.ScopeFilter` → `scope.NewScopedScrapper`. Every command accepts it.
+- axi.md conventions: logs→stderr, results→stdout (or `--output-file`/`-O`);
+  `-o` defaults to table for humans and TOON when an agent env is detected
+  (`output.IsAgentContext`); empty results print `0 <things>` to stderr; errors
+  exit non-zero.
+- Adding a command: add a `cli/cmd/<name>.go` with a `*cobra.Command`, wire it in
+  an `init()` via `rootCmd.AddCommand`, use `withScrapper` + `emitList`/`output.Print`.
+  When adding a Scrapper interface method, no CLI change is required unless you
+  want to surface it.
+
 ## Supported Warehouses
 
 - BigQuery
@@ -148,6 +176,7 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - Use `gh release create v0.X.0-rcN --prerelease --generate-notes --notes-start-tag <last-stable-tag>`
 - Example: `v0.9.0-rc6` uses `--notes-start-tag v0.8.3` (last stable), not `v0.9.0-rc5`
 - **Stable release**: `gh release create vX.Y.Z --generate-notes --latest` — a pushed git tag alone is NOT a release; always cut the GitHub release too. Then re-pin cloud consumers (`lib/dwh` + kernels using `dwhconnect`/`dwhaudit`) in their `go.mod`.
+- **dwhctl binaries**: pushing a `vX.Y.Z` tag also triggers `.github/workflows/dwhctl-release-binaries.yaml`, which cross-compiles `dwhctl` (linux/darwin × amd64/arm64, `CGO_ENABLED=0`, version stamped via `-X .../cli/cmd.version`) and attaches the binaries to that release. The binary version tracks the library tag — no separate CLI tag.
 
 ## Special Patterns
 
