@@ -87,6 +87,10 @@ func ToProtoConnection(id string, conn *Connection) (*agentdwhv1.Connection, err
 		proto.Config = &agentdwhv1.Connection_Athena{
 			Athena: athenaConfToProto(conn.Athena),
 		}
+	case conn.Fabric != nil:
+		proto.Config = &agentdwhv1.Connection_Fabric{
+			Fabric: fabricConfToProto(conn.Fabric),
+		}
 	default:
 		return nil, fmt.Errorf("no database type configured")
 	}
@@ -262,6 +266,19 @@ func athenaConfToProto(c *AthenaConf) *agentdwhv1.AthenaConf {
 		UseShowCreateTable:    c.UseShowCreateTable,
 		UseShowCreateView:     c.UseShowCreateView,
 		UseIcebergMetricsScan: c.UseIcebergMetricsScan,
+	}
+}
+
+func fabricConfToProto(c *FabricConf) *agentdwhv1.FabricConf {
+	return &agentdwhv1.FabricConf{
+		Host:         c.Host,
+		Database:     c.Database,
+		AuthType:     c.AuthType,
+		ClientId:     c.ClientId,
+		ClientSecret: c.ClientSecret,
+		TenantId:     c.TenantId,
+		AccessToken:  c.AccessToken,
+		Scope:        scopeConfToProto(c.Scope),
 	}
 }
 

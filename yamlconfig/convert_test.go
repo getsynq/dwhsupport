@@ -1,4 +1,3 @@
-
 package yamlconfig
 
 import (
@@ -6,6 +5,7 @@ import (
 	"testing"
 
 	agentdwhv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/agent/dwh/v1"
+	commonv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/common/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +19,7 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 
 	protos, err := ToProtoConnections(conns)
 	require.NoError(t, err)
-	assert.Len(t, protos, 13)
+	assert.Len(t, protos, 14)
 
 	// Verify Postgres
 	pg := protos["pg-local"]
@@ -112,6 +112,22 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	require.NotNil(t, rsConf)
 	assert.Equal(t, int32(5439), rsConf.GetPort())
 	assert.True(t, rsConf.GetFreshnessFromQueryLogs())
+
+	// Verify Fabric
+	fabric := protos["fabric-prod"]
+	require.NotNil(t, fabric)
+	assert.Equal(t, "Fabric Warehouse", fabric.GetName())
+	fabricConf := fabric.GetFabric()
+	require.NotNil(t, fabricConf)
+	assert.Equal(t, "my-workspace.datawarehouse.fabric.microsoft.com", fabricConf.GetHost())
+	assert.Equal(t, "analytics", fabricConf.GetDatabase())
+	fabricScope := fabricConf.GetScope()
+	require.NotNil(t, fabricScope)
+	require.Len(t, fabricScope.GetInclude(), 1)
+	assert.Equal(t, "analytics", fabricScope.GetInclude()[0].GetDatabase())
+	require.Len(t, fabricScope.GetExclude(), 1)
+	assert.Equal(t, "staging", fabricScope.GetExclude()[0].GetSchema())
+	assert.Equal(t, "tmp_*", fabricScope.GetExclude()[0].GetTable())
 }
 
 func TestToProtoConnection_DefaultName(t *testing.T) {
@@ -225,6 +241,100 @@ func TestToProtoConnection_SnowflakeOptionalFields(t *testing.T) {
 	assert.Equal(t, "CUSTOM_DB", sfConf.GetAccountUsageDb())
 	assert.True(t, sfConf.HasAuthType())
 	assert.Equal(t, "externalbrowser", sfConf.GetAuthType())
+}
+
+func TestToProtoConnection_FabricServicePrincipal(t *testing.T) {
+	conn := &Connection{
+		Fabric: &FabricConf{
+			Host:         "ws.datawarehouse.fabric.microsoft.com",
+			Database:     "WH",
+			ClientId:     "app-id",
+			ClientSecret: "sekret",
+			TenantId:     "tenant-id",
+		},
+	}
+
+	proto, err := ToProtoConnection("fabric", conn)
+	require.NoError(t, err)
+	fabricConf := proto.GetFabric()
+	require.NotNil(t, fabricConf)
+	assert.Equal(t, "ws.datawarehouse.fabric.microsoft.com", fabricConf.GetHost())
+	assert.Equal(t, "WH", fabricConf.GetDatabase())
+	assert.Equal(t, "app-id", fabricConf.GetClientId())
+	assert.Equal(t, "sekret", fabricConf.GetClientSecret())
+	assert.Equal(t, "tenant-id", fabricConf.GetTenantId())
+	assert.Empty(t, fabricConf.GetAuthType())
+	assert.Nil(t, fabricConf.GetScope(), "no scope configured")
+}
+
+func TestToProtoConnection_FabricAmbientAuth(t *testing.T) {
+	conn := &Connection{
+		Fabric: &FabricConf{
+			Host:     "ws.datawarehouse.fabric.microsoft.com",
+			AuthType: "azure_cli",
+		},
+	}
+
+	proto, err := ToProtoConnection("fabric", conn)
+	require.NoError(t, err)
+	fabricConf := proto.GetFabric()
+	require.NotNil(t, fabricConf)
+	assert.Equal(t, "azure_cli", fabricConf.GetAuthType())
+	assert.Empty(t, fabricConf.GetClientSecret())
+}
+
+func TestToProtoConnection_FabricAccessToken(t *testing.T) {
+	conn := &Connection{
+		Fabric: &FabricConf{
+			Host:        "ws.datawarehouse.fabric.microsoft.com",
+			AccessToken: "pre-acquired-token",
+		},
+	}
+
+	proto, err := ToProtoConnection("fabric", conn)
+	require.NoError(t, err)
+	fabricConf := proto.GetFabric()
+	require.NotNil(t, fabricConf)
+	assert.Equal(t, "pre-acquired-token", fabricConf.GetAccessToken())
+}
+
+func TestFromProtoConnection_Fabric(t *testing.T) {
+	proto := &agentdwhv1.Connection{
+		Name: "fab",
+		Config: &agentdwhv1.Connection_Fabric{
+			Fabric: &agentdwhv1.FabricConf{
+				Host:         "ws.datawarehouse.fabric.microsoft.com",
+				Database:     "WH",
+				AuthType:     "managed_identity",
+				ClientId:     "uami-id",
+				ClientSecret: "sekret",
+				TenantId:     "tenant-id",
+				AccessToken:  "tok",
+				Scope: &commonv1.ScopeFilter{
+					Include: []*commonv1.ScopeRule{{Database: "analytics"}},
+					Exclude: []*commonv1.ScopeRule{{Schema: "staging", Table: "tmp_*"}},
+				},
+			},
+		},
+	}
+
+	conn := FromProtoConnection(proto)
+	require.NotNil(t, conn)
+	assert.Equal(t, "fabric", conn.DialectType())
+	require.NotNil(t, conn.Fabric)
+	assert.Equal(t, "ws.datawarehouse.fabric.microsoft.com", conn.Fabric.Host)
+	assert.Equal(t, "WH", conn.Fabric.Database)
+	assert.Equal(t, "managed_identity", conn.Fabric.AuthType)
+	assert.Equal(t, "uami-id", conn.Fabric.ClientId)
+	assert.Equal(t, "sekret", conn.Fabric.ClientSecret)
+	assert.Equal(t, "tenant-id", conn.Fabric.TenantId)
+	assert.Equal(t, "tok", conn.Fabric.AccessToken)
+	require.NotNil(t, conn.Fabric.Scope)
+	require.Len(t, conn.Fabric.Scope.Include, 1)
+	assert.Equal(t, "analytics", conn.Fabric.Scope.Include[0].Database)
+	require.Len(t, conn.Fabric.Scope.Exclude, 1)
+	assert.Equal(t, "staging", conn.Fabric.Scope.Exclude[0].Schema)
+	assert.Equal(t, "tmp_*", conn.Fabric.Scope.Exclude[0].Table)
 }
 
 func TestRoundTrip_AllTypes(t *testing.T) {

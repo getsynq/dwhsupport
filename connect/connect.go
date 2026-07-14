@@ -9,6 +9,7 @@ import (
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
+	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
@@ -21,14 +22,15 @@ import (
 	scrapperbigquery "github.com/getsynq/dwhsupport/scrapper/bigquery"
 	scrapperclickhouse "github.com/getsynq/dwhsupport/scrapper/clickhouse"
 	scrapperdatabricks "github.com/getsynq/dwhsupport/scrapper/databricks"
+	scrapperfabric "github.com/getsynq/dwhsupport/scrapper/fabric"
 	scrappermssql "github.com/getsynq/dwhsupport/scrapper/mssql"
 	scrappermysql "github.com/getsynq/dwhsupport/scrapper/mysql"
 	scrapperoracle "github.com/getsynq/dwhsupport/scrapper/oracle"
 	scrapperpostgres "github.com/getsynq/dwhsupport/scrapper/postgres"
 	scrapperredshift "github.com/getsynq/dwhsupport/scrapper/redshift"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	scrappersnowflake "github.com/getsynq/dwhsupport/scrapper/snowflake"
 	scrappertrino "github.com/getsynq/dwhsupport/scrapper/trino"
-	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
@@ -173,6 +175,27 @@ func MSSQL(ctx context.Context, t *agentdwhv1.MSSQLConf) (*scrappermssql.MSSQLSc
 	})
 }
 
+// Fabric builds a FabricScrapper for a Microsoft Fabric Warehouse / Lakehouse
+// SQL analytics endpoint. Authentication, TLS and port are derived from the
+// simplified FabricConf surface (see exec/fabric); the ambient AuthType modes
+// (azure_cli / default / managed_identity) authenticate as the host's own Azure
+// identity and are intended for on-prem agents — a hosted caller leaving
+// AuthType empty with no credentials fails closed.
+func Fabric(ctx context.Context, t *agentdwhv1.FabricConf) (*scrapperfabric.FabricScrapper, error) {
+	return scrapperfabric.NewFabricScrapper(ctx, &scrapperfabric.FabricScrapperConf{
+		FabricConf: dwhexecfabric.FabricConf{
+			Host:         t.GetHost(),
+			Database:     t.GetDatabase(),
+			AuthType:     t.GetAuthType(),
+			ClientID:     t.GetClientId(),
+			ClientSecret: t.GetClientSecret(),
+			TenantID:     t.GetTenantId(),
+			AccessToken:  t.GetAccessToken(),
+		},
+		Scope: scopeFromProto(t.GetScope()),
+	})
+}
+
 func Oracle(ctx context.Context, t *agentdwhv1.OracleConf) (*scrapperoracle.OracleScrapper, error) {
 	return scrapperoracle.NewOracleScrapper(ctx, &scrapperoracle.OracleScrapperConf{
 		OracleConf: dwhexecoracle.OracleConf{
@@ -226,6 +249,8 @@ func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrappe
 		return DuckDB(ctx, t.Duckdb)
 	case *agentdwhv1.Connection_Athena:
 		return Athena(ctx, t.Athena)
+	case *agentdwhv1.Connection_Fabric:
+		return Fabric(ctx, t.Fabric)
 	default:
 		return nil, errors.New("unsupported database type")
 	}
@@ -254,20 +279,21 @@ func Athena(ctx context.Context, t *agentdwhv1.AthenaConf) (*scrapperathena.Athe
 		UseShowCreateView:     t.GetUseShowCreateView(),
 		UseShowCreateTable:    t.GetUseShowCreateTable(),
 		UseIcebergMetricsScan: t.GetUseIcebergMetricsScan(),
-		Scope:                 athenaScopeFromProto(t.GetScope()),
+		Scope:                 scopeFromProto(t.GetScope()),
 	})
 }
 
-// athenaScopeFromProto inlines the buf-generated ScopeFilter → runtime
-// scope.ScopeFilter conversion. Kept here (not in scrapper/scope) on purpose:
-// the same proto file is also generated under github.com/getsynq/api/common/v1
-// in the cloud workspace, and any binary that links BOTH Go packages panics on
-// init because protobuf's global registry rejects duplicate registrations of
-// the same .proto file path. By only importing the buf flavor in this package
-// (which is exclusive to agent callers anyway), the runtime scope.ScopeFilter
-// type stays free of any proto generated package and is safe to import from
-// cloud handlers that already use the workspace flavor.
-func athenaScopeFromProto(p *commonv1.ScopeFilter) *scope.ScopeFilter {
+// scopeFromProto inlines the buf-generated ScopeFilter → runtime
+// scope.ScopeFilter conversion (shared by the Athena and Fabric scrappers).
+// Kept here (not in scrapper/scope) on purpose: the same proto file is also
+// generated under github.com/getsynq/api/common/v1 in the cloud workspace, and
+// any binary that links BOTH Go packages panics on init because protobuf's
+// global registry rejects duplicate registrations of the same .proto file path.
+// By only importing the buf flavor in this package (which is exclusive to agent
+// callers anyway), the runtime scope.ScopeFilter type stays free of any proto
+// generated package and is safe to import from cloud handlers that already use
+// the workspace flavor.
+func scopeFromProto(p *commonv1.ScopeFilter) *scope.ScopeFilter {
 	if p == nil {
 		return nil
 	}

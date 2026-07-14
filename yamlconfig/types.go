@@ -31,6 +31,7 @@ type Connection struct {
 	Oracle     *OracleConf     `yaml:"oracle,omitempty"`
 	DuckDB     *DuckDBConf     `yaml:"duckdb,omitempty"`
 	Athena     *AthenaConf     `yaml:"athena,omitempty"`
+	Fabric     *FabricConf     `yaml:"fabric,omitempty"`
 }
 
 // DialectType returns the warehouse type string for this connection, or empty if none is set.
@@ -60,6 +61,8 @@ func (c *Connection) DialectType() string {
 		return "duckdb"
 	case c.Athena != nil:
 		return "athena"
+	case c.Fabric != nil:
+		return "fabric"
 	default:
 		return ""
 	}
@@ -222,6 +225,57 @@ type MSSQLConf struct {
 	AccessToken string `yaml:"access_token,omitempty"`
 	// Azure AD application client ID for service principal auth.
 	ApplicationClientId string `yaml:"application_client_id,omitempty"`
+}
+
+// FabricConf contains the connection settings for a Microsoft Fabric Warehouse
+// or Lakehouse SQL analytics endpoint. A single connection covers the whole
+// Fabric workspace: every warehouse and lakehouse in it is exposed as a
+// database. Encryption, the network port and the Microsoft Entra ID sign-in
+// flow are handled automatically, so only the fields below need to be set.
+//
+// Authentication defaults to an Entra ID service principal — set client_id,
+// client_secret and (optionally) tenant_id. Alternatively supply a pre-acquired
+// access_token, or, for the on-prem agent only, set auth_type to sign in as the
+// machine's own Azure identity.
+type FabricConf struct {
+	// Hostname of the workspace's SQL analytics endpoint. Copy it from the
+	// Fabric portal: open your Warehouse or Lakehouse, then Settings → SQL
+	// connection string.
+	Host string `yaml:"host" jsonschema:"required,example=my-workspace.datawarehouse.fabric.microsoft.com"`
+	// Default database for queries that don't name one explicitly. Optional —
+	// defaults to "master". Because metadata and metric queries are always
+	// fully qualified, this only affects ad-hoc SQL that omits the database.
+	Database string `yaml:"database,omitempty" jsonschema:"example=my_warehouse"`
+	// How to authenticate to Fabric. Optional — defaults to a service principal
+	// (client_id + client_secret). Values are matched case-insensitively, and
+	// the equivalent dbt-fabric and Microsoft ODBC spellings are also accepted:
+	//   - "service_principal" (default): Entra ID service principal. Set
+	//     client_id, client_secret and, if needed, tenant_id.
+	//   - "azure_cli": reuse the machine's `az login` session. On-prem agent only.
+	//   - "default": try Azure's default credential chain (environment, managed
+	//     identity, CLI, ...). On-prem agent only.
+	//   - "managed_identity": use an Azure managed identity; set client_id to
+	//     select a user-assigned identity. On-prem agent only.
+	AuthType string `yaml:"auth_type,omitempty" jsonschema:"example=service_principal,example=azure_cli,example=default,example=managed_identity"`
+	// Application (client) ID of the Entra ID service principal. When auth_type
+	// is "managed_identity", this instead selects a user-assigned identity.
+	ClientId string `yaml:"client_id,omitempty" jsonschema:"example=00000000-0000-0000-0000-000000000000"`
+	// Client secret for the service principal. Supply it through an environment
+	// variable (e.g. ${FABRIC_CLIENT_SECRET}) rather than committing it in plain
+	// text.
+	ClientSecret string `yaml:"client_secret,omitempty" jsonschema:"example=${FABRIC_CLIENT_SECRET}"`
+	// Entra ID tenant (directory) ID. Optional — inferred from the endpoint
+	// hostname when omitted. Set it only when the service principal lives in a
+	// different tenant than the workspace.
+	TenantId string `yaml:"tenant_id,omitempty" jsonschema:"example=00000000-0000-0000-0000-000000000000"`
+	// A pre-acquired Entra ID OAuth access token for the SQL scope
+	// (https://database.windows.net/.default). Optional — when set it overrides
+	// every other authentication method. Mainly for hosted deployments that mint
+	// their own token.
+	AccessToken string `yaml:"access_token,omitempty" jsonschema:"example=${FABRIC_ACCESS_TOKEN}"`
+	// Optional include/exclude filter that limits which databases, schemas and
+	// tables are scanned. When omitted, the whole workspace is scanned.
+	Scope *ScopeConf `yaml:"scope,omitempty"`
 }
 
 // OracleConf contains Oracle Database connection parameters.
