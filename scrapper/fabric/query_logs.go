@@ -3,6 +3,7 @@ package fabric
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -33,11 +34,13 @@ var _ querylogs.QueryLogsProvider = &FabricScrapper{}
 // FetchQueryLogs streams query history from queryinsights.exec_requests_history.
 //
 // Fabric has no Query Store; queryinsights is the query-history source (retained
-// ~30 days). The view is per-database, so — consistent with the workspace-centric
-// scrapper — this reads it across every in-scope database via three-part names in
-// a single UNION ALL, feeding one iterator. The [from, to] window is inlined as
-// DATETIME2 literals rather than bound parameters so the same window applies to
-// every UNION branch.
+// ~30 days). The schema exists only in Warehouses — a workspace SQL endpoint also
+// exposes Lakehouse SQL endpoints, SQL databases and mirrored databases, none of
+// which have queryinsights. So rather than one UNION ALL (which fails entirely
+// the moment a single non-Warehouse database is in scope), this reads each
+// in-scope database independently and skips any that raise the "Invalid object
+// name" error for the queryinsights view. The [from, to] window is inlined as
+// DATETIME2 literals rather than bound parameters.
 func (e *FabricScrapper) FetchQueryLogs(
 	ctx context.Context,
 	from, to time.Time,
@@ -52,21 +55,20 @@ func (e *FabricScrapper) FetchQueryLogs(
 		return nil, err
 	}
 
-	rows, err := e.executor.QueryRows(ctx, buildQueryLogsUnion(databases, from, to))
-	if err != nil {
-		return nil, err
-	}
-
-	host := e.conf.Host
-	return querylogs.NewSqlxRowsIterator[FabricQueryLogSchema](
-		rows,
-		obfuscator,
-		e.DialectType(),
-		func(row *FabricQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
-			return convertFabricRowToQueryLog(row, obfuscator, sqlDialect, host)
-		},
-	), nil
+	return &fabricQueryLogsIterator{
+		e:          e,
+		databases:  databases,
+		from:       from,
+		to:         to,
+		obfuscator: obfuscator,
+		host:       e.conf.Host,
+	}, nil
 }
+
+// queryInsightsView is the queryinsights object read for query history. It is
+// present only in Fabric Warehouses; the "Invalid object name" error naming it
+// is how a non-Warehouse database in scope is recognised and skipped.
+const queryInsightsView = "queryinsights.exec_requests_history"
 
 // queryLogsSelect is the per-database projection over queryinsights. %[1]s is the
 // bracket-quoted database prefix and %[2]s/%[3]s are the DATETIME2 window bounds.
@@ -75,24 +77,107 @@ const queryLogsSelect = `SELECT
     CAST(distributed_statement_id AS VARCHAR(64)) AS query_id,
     login_name, submit_time, start_time, end_time,
     total_elapsed_time_ms, row_count, status, statement_type, command
-FROM %[1]s.queryinsights.exec_requests_history
+FROM %[1]s.` + queryInsightsView + `
 WHERE submit_time >= %[2]s AND submit_time < %[3]s`
 
-func buildQueryLogsUnion(databases []string, from, to time.Time) string {
-	fromLit := fabricDatetimeLiteral(from)
-	toLit := fabricDatetimeLiteral(to)
+func buildQueryLogsSelect(database string, from, to time.Time) string {
+	return fmt.Sprintf(queryLogsSelect, sqldialect.MSSQLQuoteIdentifier(database), fabricDatetimeLiteral(from), fabricDatetimeLiteral(to))
+}
 
-	// With no in-scope databases, run the connection's own queryinsights but
-	// select nothing, so the caller still gets a valid (empty) iterator.
-	if len(databases) == 0 {
-		return fmt.Sprintf(queryLogsSelect, "", fromLit, toLit) + " AND 1 = 0"
+// isQueryInsightsMissing reports whether err is the "Invalid object name" error
+// Fabric raises when a database has no queryinsights schema — i.e. it is a
+// Lakehouse SQL endpoint, SQL database or mirrored database rather than a
+// Warehouse. Only this exact error skips the database; every other error
+// (including permission denials) propagates so real misconfigurations surface.
+func isQueryInsightsMissing(err error) bool {
+	if err == nil {
+		return false
 	}
+	msg := err.Error()
+	return strings.Contains(msg, "Invalid object name") && strings.Contains(msg, queryInsightsView)
+}
 
-	branches := make([]string, 0, len(databases))
-	for _, db := range databases {
-		branches = append(branches, fmt.Sprintf(queryLogsSelect, sqldialect.MSSQLQuoteIdentifier(db), fromLit, toLit))
+// fabricQueryLogsIterator reads queryinsights across the in-scope databases one
+// at a time, lazily opening the next only when the current is exhausted, and
+// skipping databases whose queryinsights view is absent (non-Warehouses).
+type fabricQueryLogsIterator struct {
+	e          *FabricScrapper
+	databases  []string
+	from, to   time.Time
+	obfuscator querylogs.QueryObfuscator
+	host       string
+
+	idx     int
+	current querylogs.QueryLogIterator
+	closed  bool
+}
+
+func (it *fabricQueryLogsIterator) Next(ctx context.Context) (*querylogs.QueryLog, error) {
+	for {
+		if it.closed {
+			return nil, io.EOF
+		}
+
+		if it.current == nil {
+			// Advance to the next database that actually exposes queryinsights.
+			for it.idx < len(it.databases) {
+				select {
+				case <-ctx.Done():
+					it.Close()
+					return nil, ctx.Err()
+				default:
+				}
+
+				database := it.databases[it.idx]
+				it.idx++
+
+				rows, err := it.e.executor.QueryRows(ctx, buildQueryLogsSelect(database, it.from, it.to))
+				if err != nil {
+					if isQueryInsightsMissing(err) {
+						continue // non-Warehouse database: no query history to read
+					}
+					return nil, err
+				}
+
+				host := it.host
+				it.current = querylogs.NewSqlxRowsIterator[FabricQueryLogSchema](
+					rows,
+					it.obfuscator,
+					it.e.DialectType(),
+					func(row *FabricQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+						return convertFabricRowToQueryLog(row, obfuscator, sqlDialect, host)
+					},
+				)
+				break
+			}
+
+			if it.current == nil {
+				it.Close()
+				return nil, io.EOF
+			}
+		}
+
+		log, err := it.current.Next(ctx)
+		if err == io.EOF {
+			it.current = nil // exhausted this database; move to the next
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		return log, nil
 	}
-	return strings.Join(branches, "\nUNION ALL\n")
+}
+
+func (it *fabricQueryLogsIterator) Close() error {
+	if it.closed {
+		return nil
+	}
+	it.closed = true
+	if it.current != nil {
+		return it.current.Close()
+	}
+	return nil
 }
 
 func fabricDatetimeLiteral(t time.Time) string {
