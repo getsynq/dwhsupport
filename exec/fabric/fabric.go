@@ -14,6 +14,7 @@ package fabric
 
 import (
 	"context"
+	"strings"
 
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/exec/querier"
@@ -26,7 +27,9 @@ import (
 // Authentication is via a Microsoft Entra ID service principal by default
 // (ClientID + ClientSecret). For hosted deployments that mint their own token
 // (managed identity / workload-identity federation), set AccessToken instead and
-// leave the client credentials empty.
+// leave the client credentials empty. On-prem agents running on a user's own
+// machine can instead set AuthType to an ambient mode (see below) to reuse the
+// host's Azure identity (az login / managed identity) with no stored secret.
 type FabricConf struct {
 	// Host is the workspace SQL analytics endpoint, e.g.
 	// "<workspace-id>.datawarehouse.fabric.microsoft.com".
@@ -34,7 +37,20 @@ type FabricConf struct {
 	// Database is the Fabric item (Warehouse or Lakehouse) name to connect to.
 	Database string
 
-	// ClientID is the Entra application (client) ID of the service principal.
+	// AuthType selects the authentication method — one of the AuthType*
+	// constants below, matched case-insensitively. Empty defaults to a service
+	// principal (ClientID + ClientSecret), unless AccessToken is set (a
+	// non-empty AccessToken always wins). The ambient modes
+	// (AuthTypeAzureCLI/Default/ManagedIdentity) authenticate as the host's own
+	// Azure identity with no stored credential and are intended for on-prem
+	// agents. They are opt-in — engaged only when AuthType names one — so a
+	// hosted caller that leaves AuthType empty with no credentials fails closed
+	// rather than silently inheriting the host process identity.
+	AuthType string
+
+	// ClientID is the Entra application (client) ID of the service principal
+	// (default auth), or the user-assigned identity client ID for
+	// AuthTypeManagedIdentity.
 	ClientID string
 	// ClientSecret is the service principal's client secret.
 	ClientSecret string
@@ -45,15 +61,33 @@ type FabricConf struct {
 
 	// AccessToken is a pre-acquired Entra OAuth access token for the SQL scope
 	// (https://database.windows.net/.default). When set it takes precedence over
-	// the service-principal fields — used by hosts that acquire the token out of
-	// band (managed identity, workload identity federation, certificate flow).
+	// all other authentication methods — used by hosts that acquire the token
+	// out of band (managed identity, workload identity federation, certificate).
 	AccessToken string
 }
 
+// AuthType values for FabricConf.AuthType. Named after the Azure credential
+// types Fabric users configure elsewhere, so the choice reads the same here as
+// in Azure tooling.
+const (
+	// AuthTypeServicePrincipal authenticates with an Entra service principal
+	// (ClientID + ClientSecret). This is the default when AuthType is empty.
+	AuthTypeServicePrincipal = "service_principal"
+	// AuthTypeAzureCLI reuses the host's interactive `az login` session — the
+	// local-execution / developer-machine case.
+	AuthTypeAzureCLI = "azure_cli"
+	// AuthTypeDefault uses Azure's DefaultAzureCredential chain (managed
+	// identity → environment → workload identity → az CLI).
+	AuthTypeDefault = "default"
+	// AuthTypeManagedIdentity authenticates with an Azure managed identity; set
+	// ClientID for a user-assigned identity, leave empty for system-assigned.
+	AuthTypeManagedIdentity = "managed_identity"
+)
+
 // ToMSSQLConf translates the simplified Fabric configuration into the MSSQL
 // executor configuration, fixing the settings Fabric always requires: TLS
-// encryption on, standard TDS port, and Entra service-principal federated auth
-// (unless a pre-acquired access token was supplied).
+// encryption on and the standard TDS port. The authentication method is derived
+// from AuthType (with a pre-acquired AccessToken always taking precedence).
 func (c *FabricConf) ToMSSQLConf() *dwhexecmssql.MSSQLConf {
 	conf := &dwhexecmssql.MSSQLConf{
 		Host:     c.Host,
@@ -64,19 +98,32 @@ func (c *FabricConf) ToMSSQLConf() *dwhexecmssql.MSSQLConf {
 		Encrypt: "true",
 	}
 
+	// A pre-acquired token wins regardless of AuthType.
 	if c.AccessToken != "" {
 		conf.AccessToken = c.AccessToken
 		return conf
 	}
 
-	conf.FedAuth = "ActiveDirectoryServicePrincipal"
-	// The azuread driver reads the client id from "user id" and splits an
-	// optional "@tenant" suffix; the client secret goes in the password.
-	conf.User = c.ClientID
-	if c.TenantID != "" {
-		conf.User = c.ClientID + "@" + c.TenantID
+	switch strings.ToLower(c.AuthType) {
+	case AuthTypeAzureCLI:
+		conf.FedAuth = "ActiveDirectoryAzCli"
+	case AuthTypeDefault:
+		conf.FedAuth = "ActiveDirectoryDefault"
+	case AuthTypeManagedIdentity:
+		conf.FedAuth = "ActiveDirectoryManagedIdentity"
+		// A non-empty ClientID selects a user-assigned identity; the azuread
+		// driver reads it from the "user id" parameter.
+		conf.User = c.ClientID
+	default: // "" or AuthTypeServicePrincipal
+		conf.FedAuth = "ActiveDirectoryServicePrincipal"
+		// The azuread driver reads the client id from "user id" and splits an
+		// optional "@tenant" suffix; the client secret goes in the password.
+		conf.User = c.ClientID
+		if c.TenantID != "" {
+			conf.User = c.ClientID + "@" + c.TenantID
+		}
+		conf.Password = c.ClientSecret
 	}
-	conf.Password = c.ClientSecret
 	return conf
 }
 

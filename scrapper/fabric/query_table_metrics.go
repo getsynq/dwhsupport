@@ -28,12 +28,21 @@ type fabricTableRef struct {
 
 // QueryTableMetrics returns row counts for Fabric Warehouse tables.
 //
-// Unlike SQL Server, Fabric Warehouse stores data in columnar parquet/Delta and
-// exposes no reliable page-based metadata (no sys.allocation_units, no
-// STATS_DATE), so there is no cheap catalog source for row counts, byte sizes,
-// or last-modified times. Row counts are therefore computed with a batched
-// COUNT_BIG(*) over the in-scope base tables; UpdatedAt and SizeBytes are left
-// nil because Fabric surfaces no dependable value for them.
+// This is intentionally NOT a metadata-level query: Fabric Warehouse exposes no
+// working row-count metadata source. Verified live against the engine
+// ("Azure SQL Data Warehouse 12.0.2000.8"):
+//   - sys.dm_db_partition_stats — "DMV is not supported"
+//   - sys.dm_pdw_nodes_db_partition_stats — invalid object name
+//   - sys.partitions.rows — NULL for user (columnar) tables
+//   - no sys.allocation_units / STATS_DATE (columnar parquet/Delta storage)
+//
+// The official microsoft/dbt-fabric adapter's catalog macro likewise reads no
+// row-count/size metadata (schema only) — there is no metadata source to read.
+//
+// Row counts are therefore computed with a batched COUNT_BIG(*) over the
+// in-scope base tables. COUNT is comparatively cheap on Fabric's columnar
+// engine, but callers should still schedule this at a sane cadence. UpdatedAt
+// and SizeBytes are left nil because Fabric surfaces no dependable value.
 //
 // lastMetricsFetchTime is ignored: Fabric provides no per-table modification
 // timestamp to drive an incremental fetch, so every call recomputes counts.

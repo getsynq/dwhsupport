@@ -24,6 +24,7 @@ func newFabricScrapperFromEnv(ctx context.Context) (*FabricScrapper, error) {
 		FabricConf: dwhexecfabric.FabricConf{
 			Host:         testenv.EnvOrDefault("FABRIC_HOST", ""),
 			Database:     testenv.EnvOrDefault("FABRIC_DATABASE", "COALESCE_QUALITY_DWHTESTING"),
+			AuthType:     testenv.EnvOrDefault("FABRIC_AUTH_TYPE", ""),
 			ClientID:     testenv.EnvOrDefault("FABRIC_CLIENT_ID", ""),
 			ClientSecret: testenv.EnvOrDefault("FABRIC_CLIENT_SECRET", ""),
 			TenantID:     testenv.EnvOrDefault("FABRIC_TENANT_ID", ""),
