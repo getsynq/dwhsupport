@@ -1,0 +1,8 @@
+
+[TestSubquerySuite/TestNestedSubqueries - 1]
+(
+SELECT id FROM (
+SELECT * FROM raw_data
+) AS filtered WHERE id > 100
+) AS final
+---

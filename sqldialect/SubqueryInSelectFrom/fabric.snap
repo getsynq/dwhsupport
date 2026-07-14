@@ -1,0 +1,10 @@
+
+[TestSubquerySuite/TestSubqueryInSelectFrom - 1]
+select
+  COUNT(*) as cnt, 
+  SUM(amount) as total
+from (
+SELECT id, amount FROM orders
+) AS order_data 
+ 
+---
