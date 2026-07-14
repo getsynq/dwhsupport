@@ -47,10 +47,13 @@ type FabricConf struct {
 	// BigQueryScrapperConf.Datasets).
 	Database string
 
-	// AuthType selects the authentication method — one of the AuthType*
-	// constants below, matched case-insensitively. Empty defaults to a service
-	// principal (ClientID + ClientSecret), unless AccessToken is set (a
-	// non-empty AccessToken always wins). The ambient modes
+	// AuthType selects the authentication method. It accepts any of the
+	// spellings in authTypeAliases — dbt-fabric ("ServicePrincipal", "CLI",
+	// "auto"), Microsoft's ODBC "Authentication=" keyword
+	// ("ActiveDirectoryServicePrincipal", ...), the Azure SDK names, or our own
+	// AuthType* constants — collapsed to a canonical value via CanonicalAuthType.
+	// Empty defaults to a service principal (ClientID + ClientSecret), unless
+	// AccessToken is set (a non-empty AccessToken always wins). The ambient modes
 	// (AuthTypeAzureCLI/Default/ManagedIdentity) authenticate as the host's own
 	// Azure identity with no stored credential and are intended for on-prem
 	// agents. They are opt-in — engaged only when AuthType names one — so a
@@ -76,23 +79,84 @@ type FabricConf struct {
 	AccessToken string
 }
 
-// AuthType values for FabricConf.AuthType. Named after the Azure credential
-// types Fabric users configure elsewhere, so the choice reads the same here as
-// in Azure tooling.
+// Canonical AuthType values for FabricConf.AuthType. Each method is recognized
+// under several industry spellings (dbt-fabric, Microsoft's ODBC
+// `Authentication=` keyword, the Azure SDK credential names, and our own
+// snake_case) — see authTypeAliases — but these constants are the single
+// canonical names to use when generating or suggesting config, so our output
+// stays consistent. Matching is done via CanonicalAuthType (case- and
+// separator-insensitive).
 const (
 	// AuthTypeServicePrincipal authenticates with an Entra service principal
 	// (ClientID + ClientSecret). This is the default when AuthType is empty.
+	// Aliases: "ServicePrincipal" (dbt-fabric),
+	// "ActiveDirectoryServicePrincipal" (Microsoft ODBC).
 	AuthTypeServicePrincipal = "service_principal"
 	// AuthTypeAzureCLI reuses the host's interactive `az login` session — the
-	// local-execution / developer-machine case.
+	// local-execution / developer-machine case. Aliases: "CLI" (dbt-fabric),
+	// "ActiveDirectoryAzCli" (Microsoft ODBC), "az_cli".
 	AuthTypeAzureCLI = "azure_cli"
 	// AuthTypeDefault uses Azure's DefaultAzureCredential chain (managed
-	// identity → environment → workload identity → az CLI).
+	// identity → environment → workload identity → az CLI). Aliases: "auto"
+	// (dbt-fabric), "ActiveDirectoryDefault" (Microsoft ODBC),
+	// "DefaultAzureCredential" (Azure SDK).
 	AuthTypeDefault = "default"
 	// AuthTypeManagedIdentity authenticates with an Azure managed identity; set
 	// ClientID for a user-assigned identity, leave empty for system-assigned.
+	// Aliases: "MSI", "ActiveDirectoryManagedIdentity" / "ActiveDirectoryMSI"
+	// (Microsoft ODBC).
 	AuthTypeManagedIdentity = "managed_identity"
 )
+
+// authTypeAliases maps every accepted spelling (normalized by normalizeAuthType)
+// to its canonical AuthType* value. It deliberately spans four vocabularies so a
+// config copied from dbt-fabric, Microsoft's docs, or Azure tooling works
+// as-is, while CanonicalAuthType still collapses them to one name for our own
+// generated config.
+var authTypeAliases = map[string]string{
+	// Service principal.
+	"serviceprincipal":                AuthTypeServicePrincipal,
+	"activedirectoryserviceprincipal": AuthTypeServicePrincipal,
+	// Azure CLI (`az login`).
+	"cli":                  AuthTypeAzureCLI,
+	"azurecli":             AuthTypeAzureCLI,
+	"azcli":                AuthTypeAzureCLI,
+	"activedirectoryazcli": AuthTypeAzureCLI,
+	// DefaultAzureCredential chain.
+	"auto":                   AuthTypeDefault,
+	"default":                AuthTypeDefault,
+	"activedirectorydefault": AuthTypeDefault,
+	"defaultazurecredential": AuthTypeDefault,
+	// Managed identity.
+	"managedidentity":                AuthTypeManagedIdentity,
+	"msi":                            AuthTypeManagedIdentity,
+	"activedirectorymanagedidentity": AuthTypeManagedIdentity,
+	"activedirectorymsi":             AuthTypeManagedIdentity,
+}
+
+// normalizeAuthType lower-cases s and strips the separators that distinguish the
+// various spellings (`_`, `-`, spaces), so "ActiveDirectoryServicePrincipal",
+// "service_principal" and "Service Principal" all collapse to a common key.
+func normalizeAuthType(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return strings.NewReplacer("_", "", "-", "", " ", "").Replace(s)
+}
+
+// CanonicalAuthType maps any accepted auth spelling (dbt-fabric, Microsoft ODBC,
+// Azure SDK, or our own snake_case) to the single canonical AuthType* value.
+// Empty input stays empty (interpreted as the service-principal default);
+// unrecognized non-empty input is returned unchanged so callers can surface it.
+// Use it whenever generating or suggesting config so the auth method reads the
+// same everywhere.
+func CanonicalAuthType(s string) string {
+	if s == "" {
+		return ""
+	}
+	if c, ok := authTypeAliases[normalizeAuthType(s)]; ok {
+		return c
+	}
+	return s
+}
 
 // ToMSSQLConf translates the simplified Fabric configuration into the MSSQL
 // executor configuration, fixing the settings Fabric always requires: TLS
@@ -121,7 +185,7 @@ func (c *FabricConf) ToMSSQLConf() *dwhexecmssql.MSSQLConf {
 		return conf
 	}
 
-	switch strings.ToLower(c.AuthType) {
+	switch CanonicalAuthType(c.AuthType) {
 	case AuthTypeAzureCLI:
 		conf.FedAuth = "ActiveDirectoryAzCli"
 	case AuthTypeDefault:
@@ -131,7 +195,7 @@ func (c *FabricConf) ToMSSQLConf() *dwhexecmssql.MSSQLConf {
 		// A non-empty ClientID selects a user-assigned identity; the azuread
 		// driver reads it from the "user id" parameter.
 		conf.User = c.ClientID
-	default: // "" or AuthTypeServicePrincipal
+	default: // "", AuthTypeServicePrincipal, or an unrecognized value
 		conf.FedAuth = "ActiveDirectoryServicePrincipal"
 		// The azuread driver reads the client id from "user id" and splits an
 		// optional "@tenant" suffix; the client secret goes in the password.

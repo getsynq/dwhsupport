@@ -2,6 +2,40 @@ package fabric
 
 import "testing"
 
+func TestCanonicalAuthType(t *testing.T) {
+	tests := map[string]string{
+		// Empty stays empty (service-principal default).
+		"": "",
+		// Canonical values pass through.
+		"service_principal": AuthTypeServicePrincipal,
+		"azure_cli":         AuthTypeAzureCLI,
+		"default":           AuthTypeDefault,
+		"managed_identity":  AuthTypeManagedIdentity,
+		// dbt-fabric spellings.
+		"ServicePrincipal": AuthTypeServicePrincipal,
+		"CLI":              AuthTypeAzureCLI,
+		"auto":             AuthTypeDefault,
+		// Microsoft ODBC "Authentication=" keyword spellings.
+		"ActiveDirectoryServicePrincipal": AuthTypeServicePrincipal,
+		"ActiveDirectoryAzCli":            AuthTypeAzureCLI,
+		"ActiveDirectoryDefault":          AuthTypeDefault,
+		"ActiveDirectoryManagedIdentity":  AuthTypeManagedIdentity,
+		"ActiveDirectoryMSI":              AuthTypeManagedIdentity,
+		// Azure SDK / shorthand spellings, mixed case and separators.
+		"DefaultAzureCredential": AuthTypeDefault,
+		"MSI":                    AuthTypeManagedIdentity,
+		"az-cli":                 AuthTypeAzureCLI,
+		"Managed Identity":       AuthTypeManagedIdentity,
+		// Unrecognized values are returned unchanged.
+		"nonsense": "nonsense",
+	}
+	for in, want := range tests {
+		if got := CanonicalAuthType(in); got != want {
+			t.Errorf("CanonicalAuthType(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestParseHostIdentity(t *testing.T) {
 	const host = "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com"
 	got, err := ParseHostIdentity(host)
@@ -69,6 +103,27 @@ func TestToMSSQLConf(t *testing.T) {
 			wantPass:    "secret",
 		},
 		{
+			name:        "dbt-fabric ServicePrincipal alias",
+			conf:        FabricConf{Host: host, Database: db, AuthType: "ServicePrincipal", ClientID: "cid", ClientSecret: "secret"},
+			wantFedAuth: "ActiveDirectoryServicePrincipal",
+			wantUser:    "cid",
+			wantPass:    "secret",
+		},
+		{
+			name:        "Microsoft ODBC ActiveDirectoryServicePrincipal alias",
+			conf:        FabricConf{Host: host, Database: db, AuthType: "ActiveDirectoryServicePrincipal", ClientID: "cid", ClientSecret: "secret"},
+			wantFedAuth: "ActiveDirectoryServicePrincipal",
+			wantUser:    "cid",
+			wantPass:    "secret",
+		},
+		{
+			name:        "unrecognized AuthType falls back to service principal",
+			conf:        FabricConf{Host: host, Database: db, AuthType: "nonsense", ClientID: "cid", ClientSecret: "secret"},
+			wantFedAuth: "ActiveDirectoryServicePrincipal",
+			wantUser:    "cid",
+			wantPass:    "secret",
+		},
+		{
 			name:        "access token wins over everything",
 			conf:        FabricConf{Host: host, Database: db, AuthType: "azure_cli", ClientID: "cid", ClientSecret: "secret", AccessToken: "tok"},
 			wantFedAuth: "",
@@ -80,13 +135,35 @@ func TestToMSSQLConf(t *testing.T) {
 			wantFedAuth: "ActiveDirectoryAzCli",
 		},
 		{
+			name:        "dbt-fabric CLI alias",
+			conf:        FabricConf{Host: host, Database: db, AuthType: "CLI"},
+			wantFedAuth: "ActiveDirectoryAzCli",
+		},
+		{
 			name:        "default credential chain",
 			conf:        FabricConf{Host: host, Database: db, AuthType: "default"},
 			wantFedAuth: "ActiveDirectoryDefault",
 		},
 		{
+			name:        "dbt-fabric auto alias",
+			conf:        FabricConf{Host: host, Database: db, AuthType: "auto"},
+			wantFedAuth: "ActiveDirectoryDefault",
+		},
+		{
 			name:        "user-assigned managed identity",
 			conf:        FabricConf{Host: host, Database: db, AuthType: "managed_identity", ClientID: "uami-cid"},
+			wantFedAuth: "ActiveDirectoryManagedIdentity",
+			wantUser:    "uami-cid",
+		},
+		{
+			name:        "MSI alias for managed identity",
+			conf:        FabricConf{Host: host, Database: db, AuthType: "MSI", ClientID: "uami-cid"},
+			wantFedAuth: "ActiveDirectoryManagedIdentity",
+			wantUser:    "uami-cid",
+		},
+		{
+			name:        "Microsoft ODBC ActiveDirectoryManagedIdentity alias",
+			conf:        FabricConf{Host: host, Database: db, AuthType: "ActiveDirectoryManagedIdentity", ClientID: "uami-cid"},
 			wantFedAuth: "ActiveDirectoryManagedIdentity",
 			wantUser:    "uami-cid",
 		},

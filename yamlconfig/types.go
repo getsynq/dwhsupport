@@ -243,11 +243,16 @@ type FabricConf struct {
 	// scrapping and generated metrics SQL are fully database-qualified, so this
 	// only affects unqualified queries — it is a different axis from scope.
 	Database string `yaml:"database,omitempty"`
-	// Authentication method, matched case-insensitively. Empty defaults to a
-	// service principal (client_id + client_secret). Ambient modes authenticate
-	// as the host's own Azure identity with no stored credential (on-prem agents
-	// only): "azure_cli" (reuse `az login`), "default" (DefaultAzureCredential
-	// chain), "managed_identity" (set client_id for a user-assigned identity).
+	// Authentication method. Accepts the dbt-fabric names ("ServicePrincipal",
+	// "CLI", "auto"), Microsoft's ODBC values ("ActiveDirectoryServicePrincipal",
+	// ...) or our canonical snake_case, matched case- and separator-insensitively.
+	// Empty defaults to a service principal (client_id + client_secret). Canonical
+	// values: "service_principal" (default), "azure_cli" (alias "CLI" — reuse
+	// `az login`), "default" (alias "auto" — DefaultAzureCredential chain),
+	// "managed_identity" (alias "MSI"; set client_id for a user-assigned
+	// identity). The ambient modes (azure_cli/default/managed_identity)
+	// authenticate as the host's own Azure identity and are intended for on-prem
+	// agents only.
 	AuthType string `yaml:"auth_type,omitempty"`
 	// Entra application (client) ID of the service principal, or the
 	// user-assigned identity client ID when auth_type is "managed_identity".
