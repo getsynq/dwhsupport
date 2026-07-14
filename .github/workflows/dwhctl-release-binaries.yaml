@@ -5,13 +5,14 @@ on:
     tags:
       - v*.*.*
 
-defaults:
-  run:
-    shell: bash
-    working-directory: cli
-
 jobs:
   build:
+    # Only the build job's run steps execute inside cli/. The release job does
+    # no checkout, so a global working-directory of cli/ would break its steps.
+    defaults:
+      run:
+        shell: bash
+        working-directory: cli
     strategy:
       matrix:
         include:
