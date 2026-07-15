@@ -106,6 +106,15 @@ func columnValueToAny(v *scrapper.ColumnValue) any {
 		// Decode the canonical JSON so structured renderers (json/yaml/toon)
 		// nest it, rather than emitting a JSON string. Fall back to the raw
 		// text if it somehow fails to parse.
+		//
+		// Note: json.Unmarshal into `any` decodes JSON numbers as float64, so a
+		// nested integer beyond 2^53 loses its low digits in the CLI's
+		// structured output. This is display-only — the JsonValue wire text is
+		// lossless — and a full fix is blocked downstream: the shared
+		// output.Normalize re-decodes without UseNumber (which would quote every
+		// number in YAML), and the TOON encoder collapses json.Number to float64
+		// regardless. Preserved here as a known limitation rather than trading it
+		// for a broader regression.
 		var decoded any
 		if err := json.Unmarshal([]byte(val), &decoded); err == nil {
 			return decoded
