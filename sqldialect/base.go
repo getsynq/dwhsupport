@@ -57,6 +57,21 @@ type CteExpr interface {
 type LimitClauseExpr interface {
 	Expr
 	IsLimitExpr()
+	// rowsSql renders just the row-count operand (e.g. "100"). The Select
+	// builder needs it separately from ToSql so it can place the cap in the
+	// SELECT clause on TOP-style dialects (see SelectTopDialect).
+	rowsSql(dialect Dialect) (string, error)
+}
+
+// SelectTopDialect is implemented by dialects that cap the number of returned
+// rows with a SELECT-clause prefix — T-SQL's `TOP (n)` — instead of a trailing
+// LIMIT/FETCH clause. When a dialect implements this and a limit is set, the
+// Select builder places the cap right after SELECT (and such dialects' FormatLimit
+// returns "" so no trailing clause is emitted). This matters because T-SQL only
+// allows OFFSET/FETCH paging when an ORDER BY is present, whereas TOP works with
+// or without one.
+type SelectTopDialect interface {
+	FormatSelectTop(rowsSql string) string
 }
 
 type LimitExpr struct {
@@ -77,6 +92,10 @@ func (e *LimitExpr) ToSql(dialect Dialect) (string, error) {
 	}
 
 	return dialect.FormatLimit(rowsSql), nil
+}
+
+func (e *LimitExpr) rowsSql(dialect Dialect) (string, error) {
+	return e.rows.ToSql(dialect)
 }
 
 func (e *LimitExpr) IsLimitExpr() {}
@@ -286,11 +305,27 @@ func (s *Select) ToSql(dialect Dialect) (string, error) {
 	}
 
 	limitSql := ""
+	selectTopSql := ""
 	if s.limit != nil {
-		limitSql, err = s.limit.ToSql(dialect)
-		if err != nil {
-			return "", err
+		if topDialect, ok := dialect.(SelectTopDialect); ok {
+			// TOP-style dialect: the cap goes in the SELECT clause, not a
+			// trailing clause. FormatLimit returns "" for these, so skip it.
+			rowsSql, err := s.limit.rowsSql(dialect)
+			if err != nil {
+				return "", err
+			}
+			selectTopSql = topDialect.FormatSelectTop(rowsSql)
+		} else {
+			limitSql, err = s.limit.ToSql(dialect)
+			if err != nil {
+				return "", err
+			}
 		}
+	}
+
+	selectSegmentId := "select"
+	if selectTopSql != "" {
+		selectSegmentId = "select " + selectTopSql
 	}
 
 	// build cte sql
@@ -312,7 +347,7 @@ from %s %s
 %s
 %s %s`,
 		buildListSegment("with", ",\n", cteSqls),
-		buildListSegment("select", ", ", colsSql),
+		buildListSegment(selectSegmentId, ", ", colsSql),
 		tableSql,
 		strings.Join(joinsSql, " "),
 		buildListSegment("where", " and ", whereSql),

@@ -1,8 +1,8 @@
 
 [TestBaseSuite/TestDialect/fabric - 1]
-select
+select top (10)
   *, 
   DATEADD(DAY, 1, GETUTCDATE()) as [tomorrow]
 from [proj].[default].[users] 
-order by created_at desc OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+order by created_at desc 
 ---

@@ -34,6 +34,28 @@ func (s *BaseSuite) TestCte() {
 	}
 }
 
+// TestLimitWithoutOrderBy covers the data-preview shape: an arbitrary query
+// wrapped in a CTE and capped, with NO ORDER BY. T-SQL (mssql/fabric) rejects
+// OFFSET/FETCH paging without an ORDER BY, so the cap must render as `TOP (n)`
+// in the SELECT clause — this asserts every dialect produces a valid capped
+// query in that case.
+func (s *BaseSuite) TestLimitWithoutOrderBy() {
+	for _, dialect := range DialectsToTest() {
+		s.Run(dialect.Name, func() {
+			cteFqn := CteFqn("_synq_preview_cte")
+			sel := NewSelect().
+				Cte(cteFqn, Sql("select * from some_table")).
+				Cols(Star()).
+				From(cteFqn).
+				WithLimit(Limit(Int64(100)))
+
+			sql, err := sel.ToSql(dialect.Dialect)
+			s.Require().NoError(err)
+			snaps.WithConfig(snaps.Dir("LimitWithoutOrderBy"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+		})
+	}
+}
+
 func (s *BaseSuite) TestTableFn() {
 	for _, dialect := range DialectsToTest() {
 		s.Run(dialect.Name, func() {

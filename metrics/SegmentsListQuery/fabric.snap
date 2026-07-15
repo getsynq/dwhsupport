@@ -1,6 +1,6 @@
 
 [TestSegmentsSuite/TestSegmentQueries/fabric - 1]
-select
+select top (10)
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100) as [segment], 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100) as [segment2], 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment3], 
@@ -14,5 +14,5 @@ group by
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100)
-order by COUNT(*) desc OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY
+order by COUNT(*) desc 
 ---
