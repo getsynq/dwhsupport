@@ -162,6 +162,12 @@ func convertToRawValue(v any, nativeType string) scrapper.Value {
 				return jv
 			}
 		}
+		// Postgres/Redshift array columns arrive as the PG array output literal
+		// (e.g. `{1,2,3}`) under a `_ELEM`-style type name, not as JSON or a Go
+		// slice.
+		if jv, ok := pgArrayToJson(nativeType, val); ok {
+			return jv
+		}
 		return scrapper.StringValue(sanitizeRawString(val))
 	case [16]byte:
 		// Native pgx (and google/uuid) surface UUIDs as a raw 16-byte array.
@@ -171,10 +177,19 @@ func convertToRawValue(v any, nativeType string) scrapper.Value {
 		if id, ok := tryUUIDFromBytes(val); ok {
 			return scrapper.StringValue(id)
 		}
+		// Postgres/Redshift array columns: lib/pq returns the PG array literal as
+		// []byte under a `_ELEM`-style type name (e.g. _INT4 → `{1,2,3}`).
+		if jv, ok := pgArrayToJson(nativeType, string(val)); ok {
+			return jv
+		}
 		// Redshift SUPER surfaces as a JSON []byte with an empty DatabaseTypeName;
 		// other engines expose JSON via a named type. Parse it as JSON only when
 		// the type signals JSON (or is unnamed) and the bytes actually parse, so
-		// genuine text/blob columns are left untouched.
+		// genuine text/blob columns are left untouched. This is a deliberate,
+		// narrow collision: a text/blob column that a driver surfaces with an
+		// empty DatabaseTypeName AND whose value is valid JSON would be promoted
+		// to JsonValue. No in-tree driver does this for text columns (lib/pq
+		// reports TEXT/VARCHAR); the empty-name case is Redshift SUPER.
 		if isJSONTextType(nativeType) || nativeType == "" {
 			if looksLikeJSON(val) {
 				if jv, ok := scrapper.NewJsonValueFromJSONText(string(val)); ok {
@@ -226,6 +241,23 @@ func isNativeNestedType(nativeType string) bool {
 			return false
 		}
 	}
+}
+
+// pgArrayToJson converts a Postgres/Redshift array cell to a JsonValue. lib/pq
+// (and the Redshift driver) return array columns as the PG array output literal
+// under a `_ELEM`-style type name (e.g. _INT4, _TEXT, _INT8) rather than as a Go
+// slice or JSON. Non-array types, or literals that fail to parse (e.g. composite
+// `RECORD` values like `(1,x)`), return ok=false so the caller keeps the raw
+// string.
+func pgArrayToJson(nativeType, raw string) (scrapper.JsonValue, bool) {
+	if !strings.HasPrefix(nativeType, "_") {
+		return "", false
+	}
+	tree, ok := parsePostgresArrayLiteral(raw, nativeType[1:])
+	if !ok {
+		return "", false
+	}
+	return scrapper.NewJsonValueFromGo(tree, false)
 }
 
 // isJSONTextType reports whether a column's DatabaseTypeName denotes a

@@ -30,10 +30,28 @@ func TestConvertToRawValueComplex(t *testing.T) {
 		{"sf_array", "[\n  1,\n  2\n]", "ARRAY", scrapper.JsonValue(`[1,2]`)},
 		{"sf_object", `{"a": 1}`, "OBJECT", scrapper.JsonValue(`{"a":1}`)},
 
-		// Redshift SUPER: JSON []byte with empty native type.
+		// Redshift SUPER: JSON []byte with empty native type -> promoted to JSON.
 		{"super_bytes", []byte(`[1,2,3]`), "", scrapper.JsonValue(`[1,2,3]`)},
 		// A plain text column that merely looks like JSON must stay a string.
 		{"varchar_looks_json", "[not,json]", "VARCHAR", scrapper.StringValue("[not,json]")},
+		// Empty native type but NOT valid JSON stays a string (no false promote).
+		{"empty_type_not_json", []byte(`hello`), "", scrapper.StringValue("hello")},
+		// Documented, accepted collision: an empty-native-type []byte whose content
+		// is valid JSON is promoted, even though it could in theory be plain text.
+		// No in-tree driver surfaces text columns with an empty type name.
+		{"empty_type_json_object", []byte(`{"a":1}`), "", scrapper.JsonValue(`{"a":1}`)},
+		// A NAMED text type is never promoted even if the content is JSON, so a
+		// user's verbatim JSON-in-text round-trips as a string.
+		{"named_text_json_stays_string", []byte(`{"a":1}`), "TEXT", scrapper.StringValue(`{"a":1}`)},
+
+		// Postgres/Redshift array literals (lib/pq: []byte under _ELEM type name).
+		{"pg_int_array", []byte(`{1,2,3}`), "_INT4", scrapper.JsonValue(`[1,2,3]`)},
+		{"pg_text_array", []byte(`{a,b}`), "_TEXT", scrapper.JsonValue(`["a","b"]`)},
+		{"pg_bigint_array", []byte(`{9223372036854775807}`), "_INT8", scrapper.JsonValue(`[9223372036854775807]`)},
+		{"pg_nested_array", []byte(`{{1,2},{3}}`), "_INT4", scrapper.JsonValue(`[[1,2],[3]]`)},
+		{"pg_array_as_string_type", `{1,2,3}`, "_INT4", scrapper.JsonValue(`[1,2,3]`)},
+		// Postgres composite RECORD is not an array literal -> stays a string.
+		{"pg_composite_record", []byte(`(1,x)`), "RECORD", scrapper.StringValue(`(1,x)`)},
 
 		// Generic driver container from a dialect we do not special-case.
 		{"generic_slice", []any{int64(1), int64(2)}, "SOMETHING", scrapper.JsonValue(`[1,2]`)},
