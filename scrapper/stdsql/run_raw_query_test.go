@@ -63,7 +63,7 @@ func TestConvertToRawValue(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := convertToRawValue(tc.in)
+			got := convertToRawValue(tc.in, "")
 			if tc.wantStr != "" {
 				sv, ok := got.(scrapper.StringValue)
 				assert.True(t, ok, "expected StringValue, got %T", got)
@@ -79,7 +79,7 @@ func TestConvertToRawValue_TimeStillTyped(t *testing.T) {
 	// time.Time is a Stringer but must keep going through convertToScrapperValue
 	// so it lands as TimeValue, not a string.
 	ts := time.Date(2026, 5, 11, 8, 0, 3, 0, time.UTC)
-	got := convertToRawValue(ts)
+	got := convertToRawValue(ts, "")
 	_, ok := got.(scrapper.TimeValue)
 	assert.True(t, ok, "expected TimeValue, got %T", got)
 }

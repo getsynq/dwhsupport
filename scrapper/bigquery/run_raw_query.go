@@ -145,6 +145,18 @@ func bqValueToScrapperValue(v bigquery.Value) scrapper.Value {
 		return scrapper.StringValue(sanitizeUTF8(val))
 	case []byte:
 		return scrapper.StringValue(sanitizeUTF8(string(val)))
+	case []bigquery.Value:
+		// Repeated (array) fields, including arrays of STRUCTs.
+		if jv, ok := scrapper.NewJsonValueFromGo(val, false); ok {
+			return jv
+		}
+		return scrapper.StringValue(sanitizeUTF8(fmt.Sprint(v)))
+	case map[string]bigquery.Value:
+		// STRUCT / RECORD fields, arbitrarily nested.
+		if jv, ok := scrapper.NewJsonValueFromGo(val, false); ok {
+			return jv
+		}
+		return scrapper.StringValue(sanitizeUTF8(fmt.Sprint(v)))
 	default:
 		return scrapper.StringValue(sanitizeUTF8(fmt.Sprint(v)))
 	}

@@ -252,6 +252,26 @@ type StringValue string
 
 func (StringValue) isValue() {}
 
+// JsonValue carries a complex / nested cell — an array/list/vector, a
+// struct/record/named-tuple, a map, or a semi-structured object/variant — as
+// canonical JSON text. Warehouses expose these either as native nested values
+// (ClickHouse Array/Map/Tuple/Nested, BigQuery repeated fields & STRUCT/RECORD,
+// DuckDB LIST/STRUCT/MAP, Postgres arrays, Trino array/map/row) or as
+// JSON/semi-structured strings (Snowflake ARRAY/OBJECT/VARIANT, Redshift SUPER,
+// Fabric/MSSQL nvarchar JSON). Rather than flatten them to fmt.Sprint garbage or
+// lossy scalars, RunRawQuery normalises them to JSON so a single frontend
+// renderer can show a structured tree uniformly across every warehouse.
+//
+// The text is always valid JSON. Precision-sensitive scalars are encoded so the
+// JSON round-trip is lossless at the text level: arbitrary-precision integers as
+// JSON number literals, decimals as JSON numbers, and timestamps as RFC3339
+// strings. JsonValue is only emitted on the RunRawQuery path — the metrics /
+// profile path (QueryCustomMetrics) still collapses non-scalar cells to
+// IgnoredValue, since a nested cell cannot be a metric or a segment.
+type JsonValue string
+
+func (JsonValue) isValue() {}
+
 // BigIntValue represents arbitrary precision integers (e.g., DuckDB hugeint, uint128)
 type BigIntValue big.Int
 
