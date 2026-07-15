@@ -130,8 +130,19 @@ func (d *MSSQLDialect) StringLength(expr Expr) Expr {
 	return Fn("LEN", expr)
 }
 
+// FormatLimit returns "" because MSSQL caps rows in the SELECT clause via
+// FormatSelectTop (TOP), not a trailing clause. T-SQL's OFFSET/FETCH paging is
+// only valid when the query has an ORDER BY, whereas TOP works with or without
+// one — so TOP is the safe form for an arbitrary capped query (e.g. a preview).
 func (d *MSSQLDialect) FormatLimit(rowsSql string) string {
-	return fmt.Sprintf("OFFSET 0 ROWS FETCH NEXT %s ROWS ONLY", rowsSql)
+	return ""
+}
+
+var _ SelectTopDialect = (*MSSQLDialect)(nil)
+
+// FormatSelectTop renders the T-SQL `TOP (n)` row cap placed after SELECT.
+func (d *MSSQLDialect) FormatSelectTop(rowsSql string) string {
+	return fmt.Sprintf("top (%s)", rowsSql)
 }
 
 func MSSQLQuoteIdentifier(identifier string) string {

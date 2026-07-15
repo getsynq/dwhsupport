@@ -18,7 +18,7 @@ import (
 //     seed). So string casts must target VARCHAR(MAX), not NVARCHAR(MAX).
 //
 // Everything else the MSSQL dialect emits (LEN, DATEADD/DATEDIFF truncation,
-// CONCAT_WS, GETUTCDATE(), CAST AS FLOAT, OFFSET/FETCH paging, PERCENTILE_CONT
+// CONCAT_WS, GETUTCDATE(), CAST AS FLOAT, TOP row-capping, PERCENTILE_CONT
 // being window-only so Median→NULL, bracket quoting) is valid Fabric T-SQL.
 type FabricDialect struct {
 	*MSSQLDialect

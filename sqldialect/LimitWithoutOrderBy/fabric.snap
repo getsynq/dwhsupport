@@ -1,0 +1,7 @@
+
+[TestBaseSuite/TestLimitWithoutOrderBy/fabric - 1]
+with _synq_preview_cte AS (select * from some_table)
+select top (100) *
+from _synq_preview_cte 
+ 
+---

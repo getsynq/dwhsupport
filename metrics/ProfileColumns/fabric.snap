@@ -1,6 +1,6 @@
 
 [TestProfileSuite/TestProfileColumns/fabric_multi_condition_multi_segmentation - 1]
-select
+select top (1000)
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100) as [segment], 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100) as [segment2], 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment3], 
@@ -35,11 +35,11 @@ group by
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_multi_condition_no_segmentation - 1]
-select
+select top (1000)
   COUNT(*) as [num_rows], 
   COUNT(workspace) as [workspace__num_not_null], 
   COUNT(distinct workspace) as [workspace__num_unique], 
@@ -67,11 +67,11 @@ select
   SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as [sku__num_not_null]
 from [db].[default].[runs] 
 where (run_status > 0) and (run_type > 0)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_multi_condition_single_segmentation_all - 1]
-select
+select top (1000)
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment], 
   COUNT(*) as [num_rows], 
   COUNT(workspace) as [workspace__num_not_null], 
@@ -101,11 +101,11 @@ select
 from [db].[default].[runs] 
 where (run_status > 0) and (run_type > 0)
 group by SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_no_conditions_multi_segmentation - 1]
-select
+select top (1000)
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100) as [segment], 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100) as [segment2], 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment3], 
@@ -139,11 +139,11 @@ group by
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_no_conditions_no_segmentation - 1]
-select
+select top (1000)
   COUNT(*) as [num_rows], 
   COUNT(workspace) as [workspace__num_not_null], 
   COUNT(distinct workspace) as [workspace__num_unique], 
@@ -170,11 +170,11 @@ select
   max(created_at) as [created_at__max], 
   SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as [sku__num_not_null]
 from [db].[default].[runs] 
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_no_conditions_single_segmentation_all - 1]
-select
+select top (1000)
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment], 
   COUNT(*) as [num_rows], 
   COUNT(workspace) as [workspace__num_not_null], 
@@ -203,11 +203,11 @@ select
   SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as [sku__num_not_null]
 from [db].[default].[runs] 
 group by SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_single_condition_multi_segmentation - 1]
-select
+select top (1000)
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100) as [segment], 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100) as [segment2], 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment3], 
@@ -242,11 +242,11 @@ group by
   SUBSTRING(CAST(workspace AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_status AS VARCHAR(MAX)), 1, 100), 
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_single_condition_no_segmentation - 1]
-select
+select top (1000)
   COUNT(*) as [num_rows], 
   COUNT(workspace) as [workspace__num_not_null], 
   COUNT(distinct workspace) as [workspace__num_unique], 
@@ -274,11 +274,11 @@ select
   SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as [sku__num_not_null]
 from [db].[default].[runs] 
 where (1=1)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---
 
 [TestProfileSuite/TestProfileColumns/fabric_single_condition_single_segmentation_all - 1]
-select
+select top (1000)
   SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100) as [segment], 
   COUNT(*) as [num_rows], 
   COUNT(workspace) as [workspace__num_not_null], 
@@ -308,5 +308,5 @@ select
 from [db].[default].[runs] 
 where (1=1)
 group by SUBSTRING(CAST(run_type AS VARCHAR(MAX)), 1, 100)
-order by [num_rows] desc OFFSET 0 ROWS FETCH NEXT 1000 ROWS ONLY
+order by [num_rows] desc 
 ---

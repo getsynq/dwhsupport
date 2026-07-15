@@ -1,0 +1,7 @@
+
+[TestBaseSuite/TestLimitWithoutOrderBy/snowflake - 1]
+with _synq_preview_cte AS (select * from some_table)
+select *
+from _synq_preview_cte 
+ limit 100
+---
