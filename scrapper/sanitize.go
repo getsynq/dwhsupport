@@ -199,8 +199,11 @@ func (v *ColumnValue) Sanitize() {
 		return
 	}
 	v.Name = SanitizeString(v.Name)
-	if s, ok := v.Value.(StringValue); ok {
+	switch s := v.Value.(type) {
+	case StringValue:
 		v.Value = StringValue(SanitizeString(string(s)))
+	case JsonValue:
+		v.Value = JsonValue(SanitizeString(string(s)))
 	}
 }
 

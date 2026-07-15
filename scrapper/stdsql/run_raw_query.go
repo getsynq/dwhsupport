@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -108,7 +109,7 @@ func (it *rawRowsIterator) Next(ctx context.Context) ([]*scrapper.ColumnValue, e
 		raw := *(scanners[i].(*any))
 		cv := &scrapper.ColumnValue{Name: name, IsNull: raw == nil}
 		if raw != nil {
-			cv.Value = convertToRawValue(raw)
+			cv.Value = convertToRawValue(raw, it.columns[i].NativeType)
 		}
 		values[i] = cv
 	}
@@ -134,11 +135,33 @@ func (it *rawRowsIterator) closeLocked() error {
 
 // convertToRawValue mirrors convertToScrapperValue but preserves text
 // (string/[]byte → StringValue), renders UUIDs as their canonical string form,
-// and falls back to Stringer / fmt.Sprint for unknown driver types so
-// RunRawQuery never drops a value.
-func convertToRawValue(v any) scrapper.Value {
+// normalises complex/nested cells (arrays, structs, maps, JSON/variant columns)
+// to a single JsonValue, and falls back to Stringer / fmt.Sprint for unknown
+// scalar driver types so RunRawQuery never drops a value.
+//
+// nativeType is the column's DatabaseTypeName(); it disambiguates the two cases
+// Go types alone cannot: a native nested type (ClickHouse Array/Map/Tuple, whose
+// driver values may include []uint8 integer arrays) versus a JSON-string type
+// (Snowflake ARRAY/OBJECT/VARIANT), versus a plain text/blob column.
+func convertToRawValue(v any, nativeType string) scrapper.Value {
+	// Native nested types (ClickHouse Array/Map/Tuple/Nested): the driver returns
+	// nested Go slices/maps, and Array(UInt8) arrives as []uint8 — render bytes as
+	// an integer array, not a string.
+	if isNativeNestedType(nativeType) {
+		if jv, ok := scrapper.NewJsonValueFromGo(v, true); ok {
+			return jv
+		}
+	}
+
 	switch val := v.(type) {
 	case string:
+		// Semi-structured string columns (Snowflake ARRAY/OBJECT/VARIANT) carry
+		// JSON text; preserve their structure as JsonValue.
+		if isJSONTextType(nativeType) {
+			if jv, ok := scrapper.NewJsonValueFromJSONText(val); ok {
+				return jv
+			}
+		}
 		return scrapper.StringValue(sanitizeRawString(val))
 	case [16]byte:
 		// Native pgx (and google/uuid) surface UUIDs as a raw 16-byte array.
@@ -148,8 +171,30 @@ func convertToRawValue(v any) scrapper.Value {
 		if id, ok := tryUUIDFromBytes(val); ok {
 			return scrapper.StringValue(id)
 		}
+		// Redshift SUPER surfaces as a JSON []byte with an empty DatabaseTypeName;
+		// other engines expose JSON via a named type. Parse it as JSON only when
+		// the type signals JSON (or is unnamed) and the bytes actually parse, so
+		// genuine text/blob columns are left untouched.
+		if isJSONTextType(nativeType) || nativeType == "" {
+			if looksLikeJSON(val) {
+				if jv, ok := scrapper.NewJsonValueFromJSONText(string(val)); ok {
+					return jv
+				}
+			}
+		}
 		return scrapper.StringValue(sanitizeRawString(string(val)))
 	}
+
+	// Generic containers from any dialect (pgx arrays, DuckDB LIST/STRUCT/MAP,
+	// Trino array/map/row, ...) — anything the driver hands back as a Go
+	// slice/array/map that is not a []byte blob is a complex cell.
+	switch reflect.ValueOf(v).Kind() {
+	case reflect.Slice, reflect.Array, reflect.Map:
+		if jv, ok := scrapper.NewJsonValueFromGo(v, false); ok {
+			return jv
+		}
+	}
+
 	converted := convertToScrapperValue(v)
 	if _, ignored := converted.(scrapper.IgnoredValue); ignored {
 		if s, ok := v.(fmt.Stringer); ok {
@@ -158,6 +203,56 @@ func convertToRawValue(v any) scrapper.Value {
 		return scrapper.StringValue(sanitizeRawString(fmt.Sprint(v)))
 	}
 	return converted
+}
+
+// isNativeNestedType reports whether a column's DatabaseTypeName denotes a type
+// whose driver value is a native nested Go structure (slice/map) rather than a
+// scalar or a JSON string. This is the ClickHouse family — Array(...), Map(...),
+// Tuple(...), Nested(...) — including LowCardinality/Nullable-wrapped forms.
+func isNativeNestedType(nativeType string) bool {
+	t := nativeType
+	for {
+		switch {
+		case strings.HasPrefix(t, "Array("),
+			strings.HasPrefix(t, "Map("),
+			strings.HasPrefix(t, "Tuple("),
+			strings.HasPrefix(t, "Nested("):
+			return true
+		case strings.HasPrefix(t, "LowCardinality("):
+			t = t[len("LowCardinality("):]
+		case strings.HasPrefix(t, "Nullable("):
+			t = t[len("Nullable("):]
+		default:
+			return false
+		}
+	}
+}
+
+// isJSONTextType reports whether a column's DatabaseTypeName denotes a
+// semi-structured type the driver surfaces as JSON text (Snowflake
+// ARRAY/OBJECT/VARIANT, Redshift SUPER, generic JSON/JSONB).
+func isJSONTextType(nativeType string) bool {
+	switch strings.ToUpper(nativeType) {
+	case "ARRAY", "OBJECT", "VARIANT", "SUPER", "JSON", "JSONB":
+		return true
+	}
+	return false
+}
+
+// looksLikeJSON reports whether b begins (ignoring leading whitespace) with a
+// JSON array or object delimiter, so we only attempt to parse plausible JSON.
+func looksLikeJSON(b []byte) bool {
+	for _, c := range b {
+		switch c {
+		case ' ', '\t', '\r', '\n':
+			continue
+		case '[', '{':
+			return true
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 // tryUUIDFromBytes recognises the two byte shapes a database driver might

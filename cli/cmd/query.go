@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/big"
@@ -100,6 +101,15 @@ func columnValueToAny(v *scrapper.ColumnValue) any {
 	}
 	switch val := v.Value.(type) {
 	case scrapper.StringValue:
+		return string(val)
+	case scrapper.JsonValue:
+		// Decode the canonical JSON so structured renderers (json/yaml/toon)
+		// nest it, rather than emitting a JSON string. Fall back to the raw
+		// text if it somehow fails to parse.
+		var decoded any
+		if err := json.Unmarshal([]byte(val), &decoded); err == nil {
+			return decoded
+		}
 		return string(val)
 	case scrapper.IntValue:
 		return int64(val)
