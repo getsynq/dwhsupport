@@ -213,9 +213,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 		c.Authenticator = gosnowflake.AuthTypeJwt
 	}
 
-	connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *c)
-	stdDb := sql.OpenDB(connector)
-	db := sqlx.NewDb(stdDb, "snowflake")
+	db := openSnowflakeDb(c)
 
 	if err := db.PingContext(ctx); err != nil {
 		// sql.OpenDB starts a connection-opener goroutine that outlives a failed ping,
@@ -223,10 +221,34 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 		// connect leaks one goroutine for the lifetime of the process — and a permanently
 		// misconfigured integration retries on a schedule, indefinitely.
 		_ = db.Close()
-		return nil, exec.NewAuthError(err)
+
+		// The session default database is the first configured database. When the role
+		// cannot resolve it the whole connection is refused, which also denies the
+		// caller the per-database validation that would report which entry is at fault.
+		// Reconnect without a default so the usable databases stay reachable.
+		if c.Database == "" || !isDatabaseNotFoundError(err) {
+			return nil, exec.NewAuthError(err)
+		}
+		logging.GetLogger(ctx).WithError(err).WithField("database", c.Database).
+			Warn("session default database is unresolvable, reconnecting without it")
+
+		c.Database = ""
+		db = openSnowflakeDb(c)
+		if retryErr := db.PingContext(ctx); retryErr != nil {
+			_ = db.Close()
+			// Keep the original cause: the retry can fail for an unrelated reason (a tight
+			// caller deadline, a transient fault) which would otherwise bury the only
+			// actionable one.
+			return nil, exec.NewAuthError(errors.Wrapf(retryErr, "reconnect without default database failed (original: %v)", err))
+		}
 	}
 
 	return &SnowflakeExecutor{conf: conf, db: db}, nil
+}
+
+func openSnowflakeDb(c *gosnowflake.Config) *sqlx.DB {
+	connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *c)
+	return sqlx.NewDb(sql.OpenDB(connector), "snowflake")
 }
 
 // enrichCtx adds Snowflake-specific context enrichment: query tag from QueryContext
