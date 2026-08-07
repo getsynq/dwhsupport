@@ -218,6 +218,11 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	db := sqlx.NewDb(stdDb, "snowflake")
 
 	if err := db.PingContext(ctx); err != nil {
+		// sql.OpenDB starts a connection-opener goroutine that outlives a failed ping,
+		// so an abandoned pool has to be closed explicitly. Without this, every failed
+		// connect leaks one goroutine for the lifetime of the process — and a permanently
+		// misconfigured integration retries on a schedule, indefinitely.
+		_ = db.Close()
 		return nil, exec.NewAuthError(err)
 	}
 
