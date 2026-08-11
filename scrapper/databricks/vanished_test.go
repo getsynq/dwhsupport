@@ -87,3 +87,46 @@ func TestQueriesTolerateVanishedObjects(t *testing.T) {
 		require.Len(t, rows, wantTables)
 	})
 }
+
+// TestQueriesFailOnUnreadableSchema holds the other side of the line drawn above: a
+// schema the caller may not read is not a schema that is gone. Reading no tables for
+// it would report it as empty, and a catalog that reports its tables as gone is
+// indistinguishable downstream from one whose tables were really dropped — so it has
+// to fail the scrape instead.
+func TestQueriesFailOnUnreadableSchema(t *testing.T) {
+	fake := newFakeWorkspace()
+	fake.addCatalog("catalog_0")
+	fake.addSchema("catalog_0", "schema_0")
+	fake.addTable("catalog_0", "schema_0", "table_0")
+	fake.addUnreadableSchema("catalog_0", "denied_schema")
+
+	scrapper := fake.start(t)
+	ctx := context.Background()
+
+	for name, query := range map[string]func() error{
+		"QueryTables": func() error {
+			_, err := scrapper.QueryTables(ctx)
+			return err
+		},
+		"QueryCatalog": func() error {
+			_, err := scrapper.QueryCatalog(ctx)
+			return err
+		},
+		"QuerySqlDefinitions": func() error {
+			_, err := scrapper.QuerySqlDefinitions(ctx)
+			return err
+		},
+		"QueryTableConstraints": func() error {
+			_, err := scrapper.QueryTableConstraints(ctx)
+			return err
+		},
+		"QueryTableMetrics": func() error {
+			_, err := scrapper.QueryTableMetrics(ctx, time.Now())
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.ErrorContains(t, query(), "USE SCHEMA")
+		})
+	}
+}

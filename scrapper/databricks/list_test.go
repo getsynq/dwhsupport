@@ -103,6 +103,9 @@ type fakeWorkspace struct {
 	// listing, keyed "catalog.schema".
 	vanishedCatalogs map[string]bool
 	vanishedSchemas  map[string]bool
+	// deniedSchemas holds schemas whose table listing answers as though the caller
+	// were not allowed to read them, keyed "catalog.schema".
+	deniedSchemas map[string]bool
 
 	mu sync.Mutex
 }
@@ -113,6 +116,7 @@ func newFakeWorkspace() *fakeWorkspace {
 		tables:           map[string][]servicecatalog.TableInfo{},
 		vanishedCatalogs: map[string]bool{},
 		vanishedSchemas:  map[string]bool{},
+		deniedSchemas:    map[string]bool{},
 	}
 }
 
@@ -154,6 +158,14 @@ func (f *fakeWorkspace) addVanishingSchema(catalog, schema string) {
 	f.vanishedSchemas[catalog+"."+schema] = true
 }
 
+// addUnreadableSchema adds a schema that lists like any other but whose tables the
+// caller is not allowed to read — unreadable rather than gone, which must not be
+// mistaken for empty.
+func (f *fakeWorkspace) addUnreadableSchema(catalog, schema string) {
+	f.addSchema(catalog, schema)
+	f.deniedSchemas[catalog+"."+schema] = true
+}
+
 func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 	t.Helper()
 
@@ -185,6 +197,11 @@ func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 		key := r.URL.Query().Get("catalog_name") + "." + r.URL.Query().Get("schema_name")
 		if f.vanishedSchemas[key] {
 			f.writeVanished(t, w, "SCHEMA_DOES_NOT_EXIST", fmt.Sprintf("Schema '%s' does not exist.", key))
+			return
+		}
+		if f.deniedSchemas[key] {
+			f.writeApiError(t, w, http.StatusForbidden, "PERMISSION_DENIED",
+				fmt.Sprintf("User does not have USE SCHEMA on Schema '%s'.", key))
 			return
 		}
 		tables := f.tables[r.URL.Query().Get("catalog_name")+"."+r.URL.Query().Get("schema_name")]
@@ -263,8 +280,13 @@ func (f *fakeWorkspace) rejectsUnpaginated(t *testing.T, w http.ResponseWriter, 
 // or schema which no longer exists.
 func (f *fakeWorkspace) writeVanished(t *testing.T, w http.ResponseWriter, errorCode, message string) {
 	t.Helper()
+	f.writeApiError(t, w, http.StatusNotFound, errorCode, message)
+}
+
+func (f *fakeWorkspace) writeApiError(t *testing.T, w http.ResponseWriter, status int, errorCode, message string) {
+	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotFound)
+	w.WriteHeader(status)
 	body := map[string]any{"error_code": errorCode, "message": message}
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		t.Errorf("failed to encode fake Databricks response: %v", err)
