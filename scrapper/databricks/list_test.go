@@ -98,14 +98,21 @@ type fakeWorkspace struct {
 	// pageSize, when positive, is how many rows one listing response carries, so a
 	// caller has to follow the page tokens to see the rest.
 	pageSize int
+	// vanishedCatalogs holds catalogs whose schema listing answers as though the
+	// catalog had been dropped; vanishedSchemas the same for a schema's table
+	// listing, keyed "catalog.schema".
+	vanishedCatalogs map[string]bool
+	vanishedSchemas  map[string]bool
 
 	mu sync.Mutex
 }
 
 func newFakeWorkspace() *fakeWorkspace {
 	return &fakeWorkspace{
-		schemas: map[string][]servicecatalog.SchemaInfo{},
-		tables:  map[string][]servicecatalog.TableInfo{},
+		schemas:          map[string][]servicecatalog.SchemaInfo{},
+		tables:           map[string][]servicecatalog.TableInfo{},
+		vanishedCatalogs: map[string]bool{},
+		vanishedSchemas:  map[string]bool{},
 	}
 }
 
@@ -132,6 +139,21 @@ func (f *fakeWorkspace) addTable(catalog, schema, table string) {
 	})
 }
 
+// addVanishingCatalog adds a catalog that lists like any other but has been dropped
+// by the time its schemas are read — the race a scrape runs against a workspace whose
+// catalogs come and go while the walk is in progress.
+func (f *fakeWorkspace) addVanishingCatalog(name string) {
+	f.addCatalog(name)
+	f.vanishedCatalogs[name] = true
+}
+
+// addVanishingSchema adds a schema that lists like any other but has been dropped by
+// the time its tables are read.
+func (f *fakeWorkspace) addVanishingSchema(catalog, schema string) {
+	f.addSchema(catalog, schema)
+	f.vanishedSchemas[catalog+"."+schema] = true
+}
+
 func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 	t.Helper()
 
@@ -147,12 +169,22 @@ func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 		if f.rejectsUnpaginated(t, w, r, "ListSchemas") {
 			return
 		}
-		schemas := f.schemas[r.URL.Query().Get("catalog_name")]
+		catalog := r.URL.Query().Get("catalog_name")
+		if f.vanishedCatalogs[catalog] {
+			f.writeVanished(t, w, "CATALOG_DOES_NOT_EXIST", fmt.Sprintf("Catalog '%s' does not exist.", catalog))
+			return
+		}
+		schemas := f.schemas[catalog]
 		page, next := f.page(t, r, len(schemas))
 		f.writeJson(t, w, http.StatusOK, "schemas", schemas[page.from:page.to], next)
 	})
 	mux.HandleFunc("/api/2.1/unity-catalog/tables", func(w http.ResponseWriter, r *http.Request) {
 		if f.rejectsUnpaginated(t, w, r, "ListTables") {
+			return
+		}
+		key := r.URL.Query().Get("catalog_name") + "." + r.URL.Query().Get("schema_name")
+		if f.vanishedSchemas[key] {
+			f.writeVanished(t, w, "SCHEMA_DOES_NOT_EXIST", fmt.Sprintf("Schema '%s' does not exist.", key))
 			return
 		}
 		tables := f.tables[r.URL.Query().Get("catalog_name")+"."+r.URL.Query().Get("schema_name")]
@@ -225,6 +257,18 @@ func (f *fakeWorkspace) rejectsUnpaginated(t *testing.T, w http.ResponseWriter, 
 		t.Errorf("failed to encode fake Databricks response: %v", err)
 	}
 	return true
+}
+
+// writeVanished answers the way Unity Catalog answers a listing that names a catalog
+// or schema which no longer exists.
+func (f *fakeWorkspace) writeVanished(t *testing.T, w http.ResponseWriter, errorCode, message string) {
+	t.Helper()
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusNotFound)
+	body := map[string]any{"error_code": errorCode, "message": message}
+	if err := json.NewEncoder(w).Encode(body); err != nil {
+		t.Errorf("failed to encode fake Databricks response: %v", err)
+	}
 }
 
 func (f *fakeWorkspace) writeJson(t *testing.T, w http.ResponseWriter, status int, key string, rows any, nextPageToken string) {
