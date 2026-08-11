@@ -15,6 +15,7 @@ import (
 func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	log := logging.GetLogger(ctx)
 	var sqlDefs []*scrapper.SqlDefinitionRow
+	scopeFilter := e.effectiveScope(ctx)
 
 	tablesFound := 0
 
@@ -26,7 +27,7 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 		if e.isIgnoredCatalog(catalogInfo) {
 			continue
 		}
-		if !e.scope.IsDatabaseAccepted(catalogInfo.Name) {
+		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
 			log.Infof("catalog %s excluded by scope filter", catalogInfo.Name)
 			continue
 		}
@@ -39,7 +40,7 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 			if schemaInfo.Name == "information_schema" {
 				continue
 			}
-			if !e.scope.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
+			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
 				log.Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
 				continue
 			}
@@ -56,7 +57,7 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), catalogInfo.Name, schemaInfo.Name, tablesFound)
 
 			for _, tableInfo := range tables {
-				if !e.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
+				if !scopeFilter.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
 					log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
 					continue
 				}

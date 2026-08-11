@@ -25,6 +25,7 @@ type Tags struct {
 func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	log := logging.GetLogger(ctx)
 	var res []*scrapper.CatalogColumnRow
+	scopeFilter := e.effectiveScope(ctx)
 
 	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
@@ -37,7 +38,7 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 		if e.isIgnoredCatalog(catalogInfo) {
 			continue
 		}
-		if !e.scope.IsDatabaseAccepted(catalogInfo.Name) {
+		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
 			log.Infof("catalog %s excluded by scope filter", catalogInfo.Name)
 			continue
 		}
@@ -51,7 +52,7 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 			if schemaInfo.Name == "information_schema" {
 				continue
 			}
-			if !e.scope.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
+			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
 				log.Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
 				continue
 			}
@@ -68,7 +69,7 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), catalogInfo.Name, schemaInfo.Name, tablesFound)
 
 			for _, tableInfo := range tables {
-				if !e.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
+				if !scopeFilter.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
 					log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
 					continue
 				}
@@ -99,7 +100,11 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 	return res, nil
 }
 
-func (e *DatabricksScrapper) queryTags(ctx context.Context, executor *dwhexecdatabricks.DatabricksExecutor, catalog, informationSchemaTable string) ([]*Tags, error) {
+func (e *DatabricksScrapper) queryTags(
+	ctx context.Context,
+	executor *dwhexecdatabricks.DatabricksExecutor,
+	catalog, informationSchemaTable string,
+) ([]*Tags, error) {
 	var tags []*Tags
 	err := executor.Select(ctx, &tags, fmt.Sprintf("SELECT * FROM `%s`.information_schema.%s", catalog, informationSchemaTable))
 	if err != nil {

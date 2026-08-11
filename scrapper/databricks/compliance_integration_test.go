@@ -1,6 +1,7 @@
 package databricks
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -23,10 +24,49 @@ func TestDatabricksComplianceSuite(t *testing.T) {
 }
 
 func (s *DatabricksComplianceSuite) SetupSuite() {
+	sc := newIntegrationScrapper(s.T(), s.Ctx())
+	s.Scrapper = sc
+}
+
+func (s *DatabricksComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+// DatabricksScopeComplianceSuite checks that scope filtering holds against a real
+// workspace — that a per-call scope.WithScope reaches every Unity Catalog walk, which
+// only became true once the walks stopped consulting the conf-derived scope directly.
+type DatabricksScopeComplianceSuite struct {
+	scrappertest.ScopeComplianceSuite
+}
+
+func TestDatabricksScopeComplianceSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping Databricks compliance tests in CI")
+	}
+	suite.Run(t, new(DatabricksScopeComplianceSuite))
+}
+
+func (s *DatabricksScopeComplianceSuite) SetupSuite() {
+	s.Scrapper = newIntegrationScrapper(s.T(), s.Ctx())
+}
+
+func (s *DatabricksScopeComplianceSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
+}
+
+// newIntegrationScrapper connects to the Databricks workspace the environment names,
+// skipping the calling suite when it is not configured or not reachable.
+func newIntegrationScrapper(t *testing.T, ctx context.Context) *DatabricksScrapper {
+	t.Helper()
+
 	workspaceUrl := os.Getenv("DATABRICKS_HOST")
 	warehouseId := os.Getenv("DATABRICKS_WAREHOUSE_ID")
 	if workspaceUrl == "" || warehouseId == "" {
-		s.T().Skip("DATABRICKS_HOST or DATABRICKS_WAREHOUSE_ID env var not set")
+		t.Skip("DATABRICKS_HOST or DATABRICKS_WAREHOUSE_ID env var not set")
 	}
 
 	var auth dwhexecdatabricks.Auth
@@ -35,26 +75,18 @@ func (s *DatabricksComplianceSuite) SetupSuite() {
 	} else if token := os.Getenv("DATABRICKS_TOKEN"); token != "" {
 		auth = dwhexecdatabricks.NewTokenAuth(token)
 	} else {
-		s.T().Skip("Neither DATABRICKS_OAUTH_CLIENT_ID nor DATABRICKS_TOKEN env var set")
+		t.Skip("Neither DATABRICKS_OAUTH_CLIENT_ID nor DATABRICKS_TOKEN env var set")
 	}
 
-	conf := &DatabricksScrapperConf{
+	sc, err := NewDatabricksScrapper(ctx, &DatabricksScrapperConf{
 		DatabricksConf: dwhexecdatabricks.DatabricksConf{
 			WorkspaceUrl: workspaceUrl,
 			Auth:         auth,
 			WarehouseId:  warehouseId,
 		},
-	}
-
-	sc, err := NewDatabricksScrapper(s.Ctx(), conf)
+	})
 	if err != nil {
-		s.T().Skipf("Could not connect to Databricks: %v", err)
+		t.Skipf("Could not connect to Databricks: %v", err)
 	}
-	s.Scrapper = sc
-}
-
-func (s *DatabricksComplianceSuite) TearDownSuite() {
-	if s.Scrapper != nil {
-		_ = s.Scrapper.Close()
-	}
+	return sc
 }

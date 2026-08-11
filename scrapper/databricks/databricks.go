@@ -21,6 +21,17 @@ import (
 
 type DatabricksScrapperConf struct {
 	dwhexecdatabricks.DatabricksConf
+	// Scope limits every walk of Unity Catalog to the catalogs, schemas and tables it
+	// accepts. It supersedes CatalogBlocklist, which can express nothing but
+	// catalog-level exclusions.
+	Scope *scope.ScopeFilter
+	// CatalogBlocklist is a comma-separated list of catalog name patterns to exclude.
+	//
+	// Deprecated: use Scope, which covers schemas and tables as well. Still honoured
+	// for callers that have not migrated, but only when Scope is unset — a Scope that
+	// is present, even one carrying no rules, is what takes effect. This matches how
+	// the cloud-side accounts.v1.Databricks.catalog_blocklist field it is fed from is
+	// superseded by dwh_fetch_config.catalog.scope_filter.
 	CatalogBlocklist           string
 	FetchQueryLogs             bool
 	RefreshTableMetrics        bool
