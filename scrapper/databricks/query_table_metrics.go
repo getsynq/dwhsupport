@@ -33,7 +33,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(16)
 
-	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})
+	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 			continue
 		}
 
-		schemas, err := e.client.Schemas.ListAll(ctx, servicecatalog.ListSchemasRequest{CatalogName: catalogInfo.Name})
+		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +59,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 				continue
 			}
 
-			tables, err := e.client.Tables.ListAll(
+			tables, err := e.listTables(
 				ctx,
 				servicecatalog.ListTablesRequest{
 					CatalogName: catalogInfo.Name,

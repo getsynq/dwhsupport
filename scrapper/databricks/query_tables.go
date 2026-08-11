@@ -14,7 +14,7 @@ import (
 func (e *DatabricksScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	var res []*scrapper.TableRow
 
-	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})
+	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +27,7 @@ func (e *DatabricksScrapper) QueryTables(ctx context.Context, opts ...scrapper.Q
 			continue
 		}
 
-		schemas, err := e.client.Schemas.ListAll(ctx, servicecatalog.ListSchemasRequest{CatalogName: catalogInfo.Name})
+		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +40,7 @@ func (e *DatabricksScrapper) QueryTables(ctx context.Context, opts ...scrapper.Q
 				continue
 			}
 
-			tables, err := e.client.Tables.ListAll(ctx, servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name})
+			tables, err := e.listTables(ctx, servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name})
 			if err != nil {
 				return nil, err
 			}

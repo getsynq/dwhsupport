@@ -11,7 +11,7 @@ import (
 func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
-	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})
+	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +24,7 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 			continue
 		}
 
-		schemas, err := e.client.Schemas.ListAll(ctx, servicecatalog.ListSchemasRequest{CatalogName: catalogInfo.Name})
+		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -37,7 +37,7 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 				continue
 			}
 
-			tables, err := e.client.Tables.ListAll(ctx, servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name})
+			tables, err := e.listTables(ctx, servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name})
 			if err != nil {
 				return nil, err
 			}

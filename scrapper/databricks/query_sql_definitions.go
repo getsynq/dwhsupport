@@ -18,7 +18,7 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 
 	tablesFound := 0
 
-	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})
+	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 			continue
 		}
 
-		schemas, err := e.client.Schemas.ListAll(ctx, servicecatalog.ListSchemasRequest{CatalogName: catalogInfo.Name})
+		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -44,7 +44,7 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 				continue
 			}
 
-			tables, err := e.client.Tables.ListAll(
+			tables, err := e.listTables(
 				ctx,
 				servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitColumns: true, OmitProperties: true},
 			)

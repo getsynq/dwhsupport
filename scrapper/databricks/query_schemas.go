@@ -3,7 +3,6 @@ package databricks
 import (
 	"context"
 
-	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/samber/lo"
@@ -12,7 +11,7 @@ import (
 func (e *DatabricksScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	var res []*scrapper.SchemaRow
 
-	catalogs, err := e.client.Catalogs.ListAll(ctx, servicecatalog.ListCatalogsRequest{})
+	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +24,7 @@ func (e *DatabricksScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.Sche
 			continue
 		}
 
-		schemas, err := e.client.Schemas.ListAll(ctx, servicecatalog.ListSchemasRequest{CatalogName: catalogInfo.Name})
+		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
 		if err != nil {
 			return nil, err
 		}
