@@ -295,10 +295,59 @@ func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string,
 				),
 			)
 		}
+	} else if info, ok := serviceDisabledFromErr(err); ok {
+		// A required Google API is disabled in the customer's project. This blocks
+		// only the IAM pre-flight probe — BigQuery scraping itself is unaffected —
+		// so it deliberately does NOT become a user-facing warning: callers turn any
+		// warning into a WARN run status, which would mark a healthy integration
+		// yellow on every fetch. Log the service and activation URL instead, so the
+		// cause is actionable from the logs rather than an opaque Google 403.
+		logging.GetLogger(ctx).
+			WithError(err).
+			WithField("service", info.service).
+			WithField("activation_url", info.activationURL).
+			WithField("project_id", e.conf.ProjectId).
+			Warn("skipping BigQuery permission check: required Google API disabled")
 	} else {
 		logging.GetLogger(ctx).WithError(err).Error("failed to test BigQuery permissions")
 	}
 	return warnings, nil
+}
+
+// serviceDisabledInfo carries the actionable bits of a Google "API disabled"
+// error: which service is disabled and where to enable it.
+type serviceDisabledInfo struct {
+	service       string
+	activationURL string
+}
+
+// serviceDisabledFromErr detects a Google "SERVICE_DISABLED" error and extracts
+// the disabled service and its activation URL. Google returns a 403 whose
+// Details carry a google.rpc.ErrorInfo with reason "SERVICE_DISABLED" and
+// metadata naming the service and activation URL — e.g. when the Cloud Resource
+// Manager API is not enabled in the customer's project (QUA-113). Returns
+// ok=false for nil, non-Google errors, and ordinary permission denials.
+func serviceDisabledFromErr(err error) (serviceDisabledInfo, bool) {
+	var gerr *googleapi.Error
+	if !errors.As(err, &gerr) {
+		return serviceDisabledInfo{}, false
+	}
+	for _, d := range gerr.Details {
+		m, ok := d.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		if reason, _ := m["reason"].(string); reason != "SERVICE_DISABLED" {
+			continue
+		}
+		info := serviceDisabledInfo{}
+		if md, ok := m["metadata"].(map[string]interface{}); ok {
+			info.service, _ = md["service"].(string)
+			info.activationURL, _ = md["activationUrl"].(string)
+		}
+		return info, true
+	}
+	return serviceDisabledInfo{}, false
 }
 
 func (e *BigQueryScrapper) Close() error {
