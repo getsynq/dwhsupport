@@ -59,7 +59,7 @@ func googleErrFromBody(t *testing.T, status int, body string) error {
 // TestServiceDisabledFromErr_DetectsDisabledApi reproduces QUA-113: a disabled
 // Cloud Resource Manager API surfaces as a raw 403 during ValidateConfiguration.
 // The detector must recognize it and expose the service + activation URL so the
-// caller can turn it into an actionable warning instead of a raw Google error.
+// caller can log an actionable line instead of an opaque Google error.
 func TestServiceDisabledFromErr_DetectsDisabledApi(t *testing.T) {
 	err := googleErrFromBody(t, http.StatusForbidden, serviceDisabledBody)
 

@@ -291,25 +291,18 @@ func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string,
 			)
 		}
 	} else if info, ok := serviceDisabledFromErr(err); ok {
-		// A required Google API is disabled in the customer's project. This is not
-		// fatal for scraping — the IAM pre-flight check simply can't run — so we
-		// surface an actionable warning rather than a raw 403 or a hard failure.
-		service := info.service
-		if service == "" {
-			service = "a required Google"
-		}
-		msg := fmt.Sprintf(
-			"Could not verify BigQuery permissions because the %s API is not enabled in project %s.",
-			service, e.conf.ProjectId,
-		)
-		if info.activationURL != "" {
-			msg += fmt.Sprintf(" Enable it at %s and retry.", info.activationURL)
-		}
+		// A required Google API is disabled in the customer's project. This blocks
+		// only the IAM pre-flight probe — BigQuery scraping itself is unaffected —
+		// so it deliberately does NOT become a user-facing warning: callers turn any
+		// warning into a WARN run status, which would mark a healthy integration
+		// yellow on every fetch. Log the service and activation URL instead, so the
+		// cause is actionable from the logs rather than an opaque Google 403.
 		logging.GetLogger(ctx).
 			WithError(err).
 			WithField("service", info.service).
+			WithField("activation_url", info.activationURL).
+			WithField("project_id", e.conf.ProjectId).
 			Warn("skipping BigQuery permission check: required Google API disabled")
-		warnings = append(warnings, msg)
 	} else {
 		logging.GetLogger(ctx).WithError(err).Error("failed to test BigQuery permissions")
 	}
