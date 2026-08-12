@@ -10,6 +10,7 @@ import (
 
 func (e *DatabricksScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	var res []*scrapper.SchemaRow
+	scopeFilter := e.effectiveScope(ctx)
 
 	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
@@ -19,7 +20,7 @@ func (e *DatabricksScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.Sche
 		if e.isIgnoredCatalog(catalogInfo) {
 			continue
 		}
-		if !e.scope.IsDatabaseAccepted(catalogInfo.Name) {
+		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
 			logging.GetLogger(ctx).Infof("catalog %s excluded by scope filter", catalogInfo.Name)
 			continue
 		}
@@ -32,7 +33,7 @@ func (e *DatabricksScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.Sche
 			if schemaInfo.Name == "information_schema" {
 				continue
 			}
-			if !e.scope.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
+			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
 				logging.GetLogger(ctx).Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
 				continue
 			}

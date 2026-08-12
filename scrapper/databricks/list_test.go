@@ -106,6 +106,11 @@ type fakeWorkspace struct {
 	// deniedSchemas holds schemas whose table listing answers as though the caller
 	// were not allowed to read them, keyed "catalog.schema".
 	deniedSchemas map[string]bool
+	// listedCatalogs records the catalog of every schema listing served, and
+	// listedSchemas the "catalog.schema" of every table listing, so a test can tell
+	// what a scrape asked the API for rather than only what it returned.
+	listedCatalogs []string
+	listedSchemas  []string
 
 	mu sync.Mutex
 }
@@ -182,6 +187,7 @@ func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 			return
 		}
 		catalog := r.URL.Query().Get("catalog_name")
+		f.record(&f.listedCatalogs, catalog)
 		if f.vanishedCatalogs[catalog] {
 			f.writeVanished(t, w, "CATALOG_DOES_NOT_EXIST", fmt.Sprintf("Catalog '%s' does not exist.", catalog))
 			return
@@ -195,6 +201,7 @@ func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 			return
 		}
 		key := r.URL.Query().Get("catalog_name") + "." + r.URL.Query().Get("schema_name")
+		f.record(&f.listedSchemas, key)
 		if f.vanishedSchemas[key] {
 			f.writeVanished(t, w, "SCHEMA_DOES_NOT_EXIST", fmt.Sprintf("Schema '%s' does not exist.", key))
 			return
@@ -223,6 +230,26 @@ func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 		DatabricksConf: dwhexecdatabricks.DatabricksConf{WorkspaceUrl: server.URL},
 	}
 	return &DatabricksScrapper{client: client, conf: conf, scope: ScopeFromConf(conf)}
+}
+
+// record appends to one of the request logs. Page tokens mean one listing can be
+// served over several requests, so an entry can repeat.
+func (f *fakeWorkspace) record(into *[]string, key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	*into = append(*into, key)
+}
+
+// requested reports whether any listing named key.
+func (f *fakeWorkspace) requested(log *[]string, key string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, seen := range *log {
+		if seen == key {
+			return true
+		}
+	}
+	return false
 }
 
 type pageRange struct{ from, to int }

@@ -10,6 +10,7 @@ import (
 
 func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
+	scopeFilter := e.effectiveScope(ctx)
 
 	catalogs, err := e.listCatalogs(ctx)
 	if err != nil {
@@ -19,7 +20,7 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 		if e.isIgnoredCatalog(catalogInfo) {
 			continue
 		}
-		if !e.scope.IsDatabaseAccepted(catalogInfo.Name) {
+		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
 			logging.GetLogger(ctx).Infof("catalog %s excluded by scope filter", catalogInfo.Name)
 			continue
 		}
@@ -32,7 +33,7 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 			if schemaInfo.Name == "information_schema" {
 				continue
 			}
-			if !e.scope.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
+			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
 				logging.GetLogger(ctx).Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
 				continue
 			}
@@ -42,7 +43,7 @@ func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 				return nil, err
 			}
 			for _, tableInfo := range tables {
-				if !e.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
+				if !scopeFilter.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
 					logging.GetLogger(ctx).Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
 					continue
 				}

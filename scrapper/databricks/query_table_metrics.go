@@ -21,6 +21,8 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 
 	log := logging.GetLogger(ctx)
 
+	scopeFilter := e.effectiveScope(ctx)
+
 	var res []*scrapper.TableMetricsRow
 	var errorMessages []string
 	var mutex sync.Mutex
@@ -41,7 +43,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 		if e.isIgnoredCatalog(catalogInfo) {
 			continue
 		}
-		if !e.scope.IsDatabaseAccepted(catalogInfo.Name) {
+		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
 			log.Infof("catalog %s excluded by scope filter", catalogInfo.Name)
 			continue
 		}
@@ -54,7 +56,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 			if schemaInfo.Name == "information_schema" {
 				continue
 			}
-			if !e.scope.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
+			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
 				log.Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
 				continue
 			}
@@ -72,7 +74,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 			}
 
 			for _, tableInfo := range tables {
-				if !e.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
+				if !scopeFilter.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
 					log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
 					continue
 				}
