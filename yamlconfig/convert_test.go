@@ -57,6 +57,20 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	assert.True(t, sfConf.GetUseGetDdl())
 	assert.Equal(t, "SNOWFLAKE", sfConf.GetAccountUsageDb())
 
+	// Verify Clickhouse
+	ch := protos["ch-staging"]
+	require.NotNil(t, ch)
+	chConf := ch.GetClickhouse()
+	require.NotNil(t, chConf)
+	assert.Equal(t, int32(9440), chConf.GetPort())
+	assert.Equal(t, map[string]string{"max_execution_time": "300"}, chConf.GetSettings())
+	assert.Equal(
+		t,
+		agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_ALL_REPLICAS,
+		chConf.GetCluster().GetMode(),
+	)
+	assert.Equal(t, "analytics_cluster", chConf.GetCluster().GetName())
+
 	// Verify Trino
 	trino := protos["trino-galaxy"]
 	require.NotNil(t, trino)
@@ -335,6 +349,131 @@ func TestFromProtoConnection_Fabric(t *testing.T) {
 	require.Len(t, conn.Fabric.Scope.Exclude, 1)
 	assert.Equal(t, "staging", conn.Fabric.Scope.Exclude[0].Schema)
 	assert.Equal(t, "tmp_*", conn.Fabric.Scope.Exclude[0].Table)
+}
+
+func TestToProtoConnection_ClickhouseSettingsAndCluster(t *testing.T) {
+	conn := &Connection{
+		Clickhouse: &ClickhouseConf{
+			Host:     "clickhouse.example",
+			Port:     9440,
+			Username: "scraper",
+			Password: "sekret",
+			Settings: map[string]string{"max_execution_time": "300"},
+			Cluster: &ClickhouseClusterConf{
+				Mode: ClickhouseClusterModeAllReplicas,
+				Name: "analytics_cluster",
+			},
+		},
+	}
+
+	proto, err := ToProtoConnection("ch", conn)
+	require.NoError(t, err)
+	chConf := proto.GetClickhouse()
+	require.NotNil(t, chConf)
+	assert.Equal(t, map[string]string{"max_execution_time": "300"}, chConf.GetSettings())
+	assert.Equal(
+		t,
+		agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_ALL_REPLICAS,
+		chConf.GetCluster().GetMode(),
+	)
+	assert.Equal(t, "analytics_cluster", chConf.GetCluster().GetName())
+}
+
+func TestToProtoConnection_ClickhouseNoClusterConfigured(t *testing.T) {
+	conn := &Connection{
+		Clickhouse: &ClickhouseConf{Host: "clickhouse.example", Username: "u", Password: "p"},
+	}
+
+	proto, err := ToProtoConnection("ch", conn)
+	require.NoError(t, err)
+	assert.Nil(t, proto.GetClickhouse().GetCluster())
+	assert.Empty(t, proto.GetClickhouse().GetSettings())
+}
+
+func TestToProtoConnection_ClickhouseClusterModeSpellings(t *testing.T) {
+	for _, tc := range []struct {
+		mode string
+		want agentdwhv1.ClickhouseClusterMode
+	}{
+		{"", agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_UNSPECIFIED},
+		{"single_node", agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_SINGLE_NODE},
+		{"single-node", agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_SINGLE_NODE},
+		{"Single_Node", agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_SINGLE_NODE},
+		{" all_replicas ", agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_ALL_REPLICAS},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			conn := &Connection{
+				Clickhouse: &ClickhouseConf{
+					Host:    "clickhouse.example",
+					Cluster: &ClickhouseClusterConf{Mode: tc.mode},
+				},
+			}
+
+			proto, err := ToProtoConnection("ch", conn)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, proto.GetClickhouse().GetCluster().GetMode())
+		})
+	}
+}
+
+// A misspelled mode is rejected. Falling back to the default would silently give
+// back the fan-out the setting exists to switch off.
+func TestToProtoConnection_ClickhouseUnknownClusterMode(t *testing.T) {
+	conn := &Connection{
+		Clickhouse: &ClickhouseConf{
+			Host:    "clickhouse.example",
+			Cluster: &ClickhouseClusterConf{Mode: "singlenode"},
+		},
+	}
+
+	_, err := ToProtoConnection("ch", conn)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unknown cluster mode "singlenode"`)
+}
+
+func TestFromProtoConnection_Clickhouse(t *testing.T) {
+	proto := &agentdwhv1.Connection{
+		Name: "ch",
+		Config: &agentdwhv1.Connection_Clickhouse{
+			Clickhouse: &agentdwhv1.ClickhouseConf{
+				Host:     "clickhouse.example",
+				Port:     9440,
+				Database: "analytics",
+				Username: "scraper",
+				Password: "sekret",
+				Settings: map[string]string{"max_execution_time": "300"},
+				Cluster: &agentdwhv1.ClickhouseClusterConf{
+					Mode: agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_SINGLE_NODE,
+				},
+			},
+		},
+	}
+
+	conn := FromProtoConnection(proto)
+	require.NotNil(t, conn)
+	require.NotNil(t, conn.Clickhouse)
+	assert.Equal(t, map[string]string{"max_execution_time": "300"}, conn.Clickhouse.Settings)
+	require.NotNil(t, conn.Clickhouse.Cluster)
+	assert.Equal(t, ClickhouseClusterModeSingleNode, conn.Clickhouse.Cluster.Mode)
+	assert.Empty(t, conn.Clickhouse.Cluster.Name)
+}
+
+// A conf written before the enum existed carries no mode. It comes back without
+// one rather than gaining a spelling the customer never wrote.
+func TestFromProtoConnection_ClickhouseClusterModeUnspecified(t *testing.T) {
+	proto := &agentdwhv1.Connection{
+		Config: &agentdwhv1.Connection_Clickhouse{
+			Clickhouse: &agentdwhv1.ClickhouseConf{
+				Host:    "clickhouse.example",
+				Cluster: &agentdwhv1.ClickhouseClusterConf{Name: "analytics_cluster"},
+			},
+		},
+	}
+
+	conn := FromProtoConnection(proto)
+	require.NotNil(t, conn.Clickhouse.Cluster)
+	assert.Empty(t, conn.Clickhouse.Cluster.Mode)
+	assert.Equal(t, "analytics_cluster", conn.Clickhouse.Cluster.Name)
 }
 
 func TestRoundTrip_AllTypes(t *testing.T) {

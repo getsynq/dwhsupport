@@ -48,7 +48,14 @@ func BigQuery(ctx context.Context, t *agentdwhv1.BigQueryConf) (*scrapperbigquer
 }
 
 func Clickhouse(ctx context.Context, t *agentdwhv1.ClickhouseConf) (*scrapperclickhouse.ClickhouseScrapper, error) {
-	return scrapperclickhouse.NewClickhouseScrapper(ctx, scrapperclickhouse.ClickhouseScrapperConf{
+	return scrapperclickhouse.NewClickhouseScrapper(ctx, clickhouseScrapperConf(t))
+}
+
+// clickhouseScrapperConf is split out from Clickhouse so the mapping can be
+// asserted without a reachable ClickHouse: the scrapper's constructor pings.
+func clickhouseScrapperConf(t *agentdwhv1.ClickhouseConf) scrapperclickhouse.ClickhouseScrapperConf {
+	return scrapperclickhouse.ClickhouseScrapperConf{
+		Cluster: clickhouseClusterConf(t.GetCluster()),
 		ClickhouseConf: dwhexecclickhouse.ClickhouseConf{
 			Hostname:        t.GetHost(),
 			Port:            int(t.GetPort()),
@@ -56,8 +63,24 @@ func Clickhouse(ctx context.Context, t *agentdwhv1.ClickhouseConf) (*scrappercli
 			Password:        t.GetPassword(),
 			DefaultDatabase: t.GetDatabase(),
 			NoSsl:           t.GetAllowInsecure(),
+			Settings:        t.GetSettings(),
 		},
-	})
+	}
+}
+
+// clickhouseClusterConf maps the connection's cluster setting onto the scrapper.
+// An absent conf, and a conf whose mode was written by a client that predates the
+// enum, both fan out across the default cluster — that is what every ClickHouse
+// connection did before the setting existed, and reading a single node instead
+// would quietly return the metadata of one replica.
+//
+// The name is dropped in single-node mode: it names an argument to a table
+// function the mode does not call, and ClusterConf rejects the two together.
+func clickhouseClusterConf(c *agentdwhv1.ClickhouseClusterConf) scrapperclickhouse.ClusterConf {
+	if c.GetMode() == agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_SINGLE_NODE {
+		return scrapperclickhouse.ClusterConf{SingleNode: true}
+	}
+	return scrapperclickhouse.ClusterConf{Name: c.GetName()}
 }
 
 func Databricks(ctx context.Context, t *agentdwhv1.DatabricksConf) (*scrapperdatabricks.DatabricksScrapper, error) {

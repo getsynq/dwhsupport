@@ -171,6 +171,43 @@ type ClickhouseConf struct {
 	Password string `yaml:"password"           jsonschema:"required"`
 	// Disable SSL certificate verification.
 	AllowInsecure bool `yaml:"allow_insecure,omitempty"`
+	// ClickHouse server settings applied to every connection, written as they
+	// would be in a DSN query string (e.g. max_execution_time: "300"). Values are
+	// typed the way ClickHouse types them in a connection string: "true" and
+	// "false" become 1 and 0, whole numbers become integers, anything else is
+	// passed through as text. A name given here replaces the value the scrape
+	// would otherwise use.
+	Settings map[string]string `yaml:"settings,omitempty"`
+	// How ClickHouse system tables are read. Omit to keep reading across a
+	// cluster named "default", which every ClickHouse Cloud service provides.
+	Cluster *ClickhouseClusterConf `yaml:"cluster,omitempty"`
+}
+
+// Accepted values for ClickhouseClusterConf.Mode. Matching is case-insensitive
+// and hyphens are accepted in place of underscores.
+const (
+	ClickhouseClusterModeAllReplicas = "all_replicas"
+	ClickhouseClusterModeSingleNode  = "single_node"
+)
+
+// ClickhouseClusterConf selects how metadata reads address ClickHouse system
+// tables.
+//
+// System tables are per-node, so on a service with more than one replica a plain
+// read reflects whichever replica answered rather than the whole warehouse.
+type ClickhouseClusterConf struct {
+	// How system tables are read. Optional — defaults to "all_replicas".
+	//   - "all_replicas": read through clusterAllReplicas(<name>, ...) so metadata
+	//     covers every replica. Requires GRANT REMOTE ON *.*.
+	//   - "single_node": read on the connected node only. The one setting that
+	//     works on an install whose remote_servers defines no cluster, and it
+	//     needs no REMOTE grant — but on an install that does have replicas it
+	//     reports the metadata of a single node, so choose it deliberately.
+	Mode string `yaml:"mode,omitempty" jsonschema:"example=all_replicas,example=single_node"`
+	// Cluster to read through, as named under remote_servers in the ClickHouse
+	// configuration. `SELECT DISTINCT cluster FROM system.clusters` lists what a
+	// server has. Empty means "default". Ignored when mode is "single_node".
+	Name string `yaml:"name,omitempty"`
 }
 
 // TrinoConf contains Trino / Starburst connection parameters.

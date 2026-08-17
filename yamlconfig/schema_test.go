@@ -31,6 +31,19 @@ func TestConnectionsSchema(t *testing.T) {
 	}
 }
 
+// The schema is what the editor completes a customer's agent config from, so a
+// key that works but is not described is a key nobody finds.
+func TestConnectionsSchema_ClickhouseSettingsAndCluster(t *testing.T) {
+	data, err := json.MarshalIndent(ConnectionsSchema(), "", "  ")
+	require.NoError(t, err)
+
+	schemaStr := string(data)
+	assert.Contains(t, schemaStr, "ClickhouseClusterConf")
+	for _, key := range []string{"settings", "cluster", "all_replicas", "single_node"} {
+		assert.Contains(t, schemaStr, key, "schema should contain %s", key)
+	}
+}
+
 func TestNewReflector(t *testing.T) {
 	r := NewReflector()
 	require.NotNil(t, r)
