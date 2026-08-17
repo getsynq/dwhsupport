@@ -58,7 +58,7 @@ func (s *LocalClickHouseClusterSuite) SetupSuite() {
 
 	scrapper, err := NewClickhouseScrapper(s.ctx, ClickhouseScrapperConf{
 		ClickhouseConf: s.conf,
-		DatabaseName:   s.databaseName,
+		InstanceName:   s.databaseName,
 		Cluster:        ClusterConf{SingleNode: true},
 	})
 	if err != nil {
@@ -85,7 +85,7 @@ func (s *LocalClickHouseClusterSuite) SetupSuite() {
 func (s *LocalClickHouseClusterSuite) scrapperFor(cluster ClusterConf) *ClickhouseScrapper {
 	scrapper, err := NewClickhouseScrapper(s.ctx, ClickhouseScrapperConf{
 		ClickhouseConf: s.conf,
-		DatabaseName:   s.databaseName,
+		InstanceName:   s.databaseName,
 		Cluster:        cluster,
 	})
 	s.Require().NoError(err)
@@ -185,7 +185,7 @@ func (s *LocalClickHouseClusterSuite) TestSingleNodeNeedsNoRemotePrivilege() {
 
 	fanOut, err := NewClickhouseScrapper(s.ctx, ClickhouseScrapperConf{
 		ClickhouseConf: conf,
-		DatabaseName:   s.databaseName,
+		InstanceName:   s.databaseName,
 		Cluster:        ClusterConf{},
 	})
 	if err != nil {
@@ -199,7 +199,7 @@ func (s *LocalClickHouseClusterSuite) TestSingleNodeNeedsNoRemotePrivilege() {
 
 	singleNode, err := NewClickhouseScrapper(s.ctx, ClickhouseScrapperConf{
 		ClickhouseConf: conf,
-		DatabaseName:   s.databaseName,
+		InstanceName:   s.databaseName,
 		Cluster:        ClusterConf{SingleNode: true},
 	})
 	s.Require().NoError(err)

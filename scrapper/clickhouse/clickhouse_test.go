@@ -47,7 +47,7 @@ func (s *LocalClickHouseScrapperSuite) SetupSuite() {
 			DefaultDatabase: s.databaseName,
 			NoSsl:           testenv.EnvOrDefaultBool("CLICKHOUSE_NO_SSL", true),
 		},
-		DatabaseName: s.databaseName,
+		InstanceName: s.databaseName,
 	}
 
 	scrapper, err := NewClickhouseScrapper(s.ctx, conf)

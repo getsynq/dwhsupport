@@ -19,10 +19,7 @@ func (e *ClickhouseScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 	sql := scope.AppendScopeConditions(ctx, e.systemTablesSql(querySqlDefinitionsSql), "", "tbls.database", "tbls.name")
 	sqlDefs, err := dwhexecclickhouse.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.SqlDefinitionRow](func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
-			row.Database = e.conf.Hostname
-			if len(e.conf.DatabaseName) > 0 {
-				row.Database = e.conf.DatabaseName
-			}
+			row.Instance, row.Database = e.rowIdentity()
 			return row, nil
 		}),
 	)

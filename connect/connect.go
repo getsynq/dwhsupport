@@ -55,7 +55,13 @@ func Clickhouse(ctx context.Context, t *agentdwhv1.ClickhouseConf) (*scrappercli
 // asserted without a reachable ClickHouse: the scrapper's constructor pings.
 func clickhouseScrapperConf(t *agentdwhv1.ClickhouseConf) scrapperclickhouse.ClickhouseScrapperConf {
 	return scrapperclickhouse.ClickhouseScrapperConf{
-		Cluster: clickhouseClusterConf(t.GetCluster()),
+		// The connection's two database-ish fields mean different things and go to
+		// different places: instance_name is what the scrape publishes under, and
+		// database is what the connection opens with. Crossing them publishes the
+		// same warehouse under one name here and another when Coalesce Quality
+		// connects to it directly.
+		InstanceName: t.GetInstanceName(),
+		Cluster:      clickhouseClusterConf(t.GetCluster()),
 		ClickhouseConf: dwhexecclickhouse.ClickhouseConf{
 			Hostname:        t.GetHost(),
 			Port:            int(t.GetPort()),

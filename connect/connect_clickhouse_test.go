@@ -13,9 +13,10 @@ func TestClickhouseScrapperConf(t *testing.T) {
 		Host:     "clickhouse.example",
 		Port:     9440,
 		Username: "scraper",
-		Password: "sekret",
-		Database: "analytics",
-		Settings: map[string]string{"max_execution_time": "300"},
+		Password:     "sekret",
+		InstanceName: "prod",
+		Database:     "analytics",
+		Settings:     map[string]string{"max_execution_time": "300"},
 		Cluster: &agentdwhv1.ClickhouseClusterConf{
 			Mode: agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_ALL_REPLICAS,
 			Name: "analytics_cluster",
@@ -26,6 +27,9 @@ func TestClickhouseScrapperConf(t *testing.T) {
 	assert.Equal(t, 9440, got.Port)
 	assert.Equal(t, "scraper", got.Username)
 	assert.Equal(t, "sekret", got.Password)
+	// The two settings the connection spells separately stay separate: the name the
+	// scrape publishes under, and the database the connection opens with.
+	assert.Equal(t, "prod", got.InstanceName)
 	assert.Equal(t, "analytics", got.DefaultDatabase)
 	assert.False(t, got.NoSsl)
 	assert.Equal(t, map[string]string{"max_execution_time": "300"}, got.Settings)
@@ -40,6 +44,10 @@ func TestClickhouseScrapperConf_Unconfigured(t *testing.T) {
 	assert.Nil(t, got.Settings)
 	assert.Equal(t, scrapperclickhouse.ClusterConf{}, got.Cluster)
 	assert.False(t, got.Cluster.SingleNode)
+	// No name configured leaves the scrape to publish under the connection host,
+	// the same identity a Coalesce Quality-hosted connection falls back to.
+	assert.Empty(t, got.InstanceName)
+	assert.Empty(t, got.DefaultDatabase)
 }
 
 func TestClickhouseClusterConf(t *testing.T) {

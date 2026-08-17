@@ -18,10 +18,7 @@ func (e *ClickhouseScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 	sql := scope.AppendScopeConditions(ctx, e.systemTablesSql(queryTableMetricsSql), "", "tbls.database", "tbls.name")
 	return dwhexecclickhouse.NewQuerier[scrapper.TableMetricsRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.TableMetricsRow](func(row *scrapper.TableMetricsRow) (*scrapper.TableMetricsRow, error) {
-			row.Database = e.conf.Hostname
-			if len(e.conf.DatabaseName) > 0 {
-				row.Database = e.conf.DatabaseName
-			}
+			row.Instance, row.Database = e.rowIdentity()
 			return row, nil
 		}),
 	)

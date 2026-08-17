@@ -149,6 +149,7 @@ func clickhouseConfFromProto(c *agentdwhv1.ClickhouseConf) *ClickhouseConf {
 	return &ClickhouseConf{
 		Host:          c.GetHost(),
 		Port:          int(c.GetPort()),
+		InstanceName:  c.GetInstanceName(),
 		Database:      c.GetDatabase(),
 		Username:      c.GetUsername(),
 		Password:      c.GetPassword(),

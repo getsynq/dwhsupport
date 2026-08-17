@@ -17,10 +17,7 @@ func (e *ClickhouseScrapper) QueryTableConstraints(ctx context.Context) ([]*scra
 	sql := scope.AppendScopeConditions(ctx, e.systemTablesSql(queryTableConstraintsSql), "", "schema", "table")
 	return dwhexecclickhouse.NewQuerier[scrapper.TableConstraintRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.TableConstraintRow](func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
-			row.Database = e.conf.Hostname
-			if len(e.conf.DatabaseName) > 0 {
-				row.Database = e.conf.DatabaseName
-			}
+			row.Instance, row.Database = e.rowIdentity()
 			return row, nil
 		}),
 	)

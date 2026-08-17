@@ -20,8 +20,12 @@ import (
 type ClickhouseConf struct {
 	Hostname        string
 	Port            int
-	Username        string
-	Password        string
+	Username string
+	Password string
+	// DefaultDatabase is the database the connection opens with, so an unqualified
+	// table name in a query resolves against it. Empty opens on "default". It is
+	// not a scrape filter: metadata is read from system tables and covers every
+	// database the user can see whatever this says.
 	DefaultDatabase string
 	NoSsl           bool
 	// Settings are ClickHouse server settings applied to every connection, written
@@ -55,6 +59,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 		DialTimeout: 30 * time.Second,
 		Addr:        []string{fmt.Sprintf("%s:%d", conf.Hostname, conf.Port)},
 		Auth: clickhouse.Auth{
+			Database: conf.DefaultDatabase,
 			Username: conf.Username,
 			Password: conf.Password,
 		},
