@@ -14,7 +14,7 @@ import (
 var queryTableConstraintsSql string
 
 func (e *ClickhouseScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
-	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "schema", "table")
+	sql := scope.AppendScopeConditions(ctx, e.systemTablesSql(queryTableConstraintsSql), "", "schema", "table")
 	return dwhexecclickhouse.NewQuerier[scrapper.TableConstraintRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.TableConstraintRow](func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Hostname

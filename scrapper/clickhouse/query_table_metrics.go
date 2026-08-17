@@ -15,7 +15,7 @@ import (
 var queryTableMetricsSql string
 
 func (e *ClickhouseScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	sql := scope.AppendScopeConditions(ctx, queryTableMetricsSql, "", "tbls.database", "tbls.name")
+	sql := scope.AppendScopeConditions(ctx, e.systemTablesSql(queryTableMetricsSql), "", "tbls.database", "tbls.name")
 	return dwhexecclickhouse.NewQuerier[scrapper.TableMetricsRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.TableMetricsRow](func(row *scrapper.TableMetricsRow) (*scrapper.TableMetricsRow, error) {
 			row.Database = e.conf.Hostname
