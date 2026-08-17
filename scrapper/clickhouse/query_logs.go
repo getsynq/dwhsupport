@@ -13,9 +13,6 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-//go:embed query_logs.sql
-var queryLogsSql string
-
 type ClickhouseQueryLogSchema struct {
 	QueryType                  string    `db:"type"`
 	EventTimeMicroseconds      time.Time `db:"event_time_microseconds"`
@@ -93,7 +90,7 @@ func (s *ClickhouseScrapper) FetchQueryLogs(
 	}
 
 	// Build SQL query with conditional normalization based on obfuscation mode
-	sql := s.buildQueryLogsSql(obfuscator.Mode())
+	sql := s.systemTablesSql(s.buildQueryLogsSql(obfuscator.Mode()))
 
 	// Use native QueryRows - returns sqlx.Rows iterator
 	rows, err := s.Executor().QueryRows(ctx, sql, from, to)

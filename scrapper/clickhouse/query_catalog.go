@@ -14,7 +14,7 @@ import (
 var queryCatalogSql string
 
 func (e *ClickhouseScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-	sql := scope.AppendScopeConditions(ctx, queryCatalogSql, "", "cols.schema", "cols.table")
+	sql := scope.AppendScopeConditions(ctx, e.systemTablesSql(queryCatalogSql), "", "cols.schema", "cols.table")
 	return dwhexecclickhouse.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.CatalogColumnRow](func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Database = e.conf.Hostname

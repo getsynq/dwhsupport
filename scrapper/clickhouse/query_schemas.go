@@ -18,7 +18,7 @@ var querySchemasSql string
 // mapped to a SchemaRow with the configured host/database as the container —
 // consistent with QueryTables.
 func (e *ClickhouseScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
-	sql := scope.AppendSchemaScopeConditions(ctx, querySchemasSql, "", "name")
+	sql := scope.AppendSchemaScopeConditions(ctx, e.systemTablesSql(querySchemasSql), "", "name")
 	return dwhexecclickhouse.NewQuerier[scrapper.SchemaRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.SchemaRow](func(row *scrapper.SchemaRow) (*scrapper.SchemaRow, error) {
 			row.Database = e.conf.Hostname
