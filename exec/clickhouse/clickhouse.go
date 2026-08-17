@@ -24,6 +24,10 @@ type ClickhouseConf struct {
 	Password        string
 	DefaultDatabase string
 	NoSsl           bool
+	// Settings are ClickHouse server settings applied to every connection, written
+	// as they would be in a DSN query string (e.g. "max_execution_time": "300").
+	// They take precedence over the settings this package applies by default.
+	Settings map[string]string
 }
 
 var _ stdsql.StdSqlExecutor = &ClickhouseExecutor{}
@@ -60,10 +64,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 		},
 
 		ConnOpenStrategy: clickhouse.ConnOpenRoundRobin,
-		Settings: clickhouse.Settings{
-			"max_execution_time": 60,
-			"max_query_size":     10000000,
-		},
+		Settings:         buildSettings(conf.Settings),
 		ClientInfo: clickhouse.ClientInfo{
 			Products: []struct {
 				Name    string
