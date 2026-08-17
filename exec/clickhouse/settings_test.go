@@ -5,9 +5,81 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
+
+type SettingsSuite struct {
+	suite.Suite
+}
+
+func TestSettingsSuite(t *testing.T) {
+	suite.Run(t, new(SettingsSuite))
+}
+
+func (s *SettingsSuite) TestCoerceSettingValue() {
+	testCases := []struct {
+		value    string
+		expected any
+	}{
+		{value: "true", expected: 1},
+		{value: "TRUE", expected: 1},
+		{value: "false", expected: 0},
+		{value: "False", expected: 0},
+		{value: "0", expected: 0},
+		{value: "1", expected: 1},
+		{value: "300", expected: 300},
+		{value: "-5", expected: -5},
+		{value: "1.5", expected: "1.5"},
+		{value: "", expected: ""},
+		{value: "best_effort", expected: "best_effort"},
+		// A DSN lowercases free-text values; we keep them as written.
+		{value: "Scrape_Catalog", expected: "Scrape_Catalog"},
+	}
+
+	for _, tc := range testCases {
+		s.Run(tc.value, func() {
+			s.Equal(tc.expected, coerceSettingValue(tc.value))
+		})
+	}
+}
+
+func (s *SettingsSuite) TestBuildSettingsKeepsDefaultsWhenNoneSupplied() {
+	s.Equal(defaultSettings(), buildSettings(nil))
+	s.Equal(defaultSettings(), buildSettings(map[string]string{}))
+}
+
+func (s *SettingsSuite) TestBuildSettingsOverridesDefaults() {
+	settings := buildSettings(map[string]string{"max_execution_time": "3600"})
+
+	s.Equal(3600, settings["max_execution_time"])
+	s.Equal(defaultSettings()["max_query_size"], settings["max_query_size"])
+}
+
+func (s *SettingsSuite) TestBuildSettingsAddsUnknownNames() {
+	settings := buildSettings(map[string]string{
+		"use_query_cache":                    "true",
+		"receive_timeout":                    "120",
+		"date_time_input_format":             "best_effort",
+		"max_bytes_before_external_group_by": "1000000",
+	})
+
+	s.Equal(clickhouse.Settings{
+		"max_execution_time":                 defaultSettings()["max_execution_time"],
+		"max_query_size":                     defaultSettings()["max_query_size"],
+		"use_query_cache":                    1,
+		"receive_timeout":                    120,
+		"date_time_input_format":             "best_effort",
+		"max_bytes_before_external_group_by": 1000000,
+	}, settings)
+}
+
+func (s *SettingsSuite) TestBuildSettingsDoesNotMutateDefaults() {
+	buildSettings(map[string]string{"max_execution_time": "3600"})
+
+	s.Equal(60, defaultSettings()["max_execution_time"])
+}
 
 // LocalClickHouseSettingsSuite checks that conf settings actually reach the
 // server, against a local ClickHouse (dev-infra/dwhtesting/lib/clickhouse).

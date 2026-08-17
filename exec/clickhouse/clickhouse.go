@@ -64,10 +64,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 		},
 
 		ConnOpenStrategy: clickhouse.ConnOpenRoundRobin,
-		Settings: clickhouse.Settings{
-			"max_execution_time": 60,
-			"max_query_size":     10000000,
-		},
+		Settings:         buildSettings(conf.Settings),
 		ClientInfo: clickhouse.ClientInfo{
 			Products: []struct {
 				Name    string
