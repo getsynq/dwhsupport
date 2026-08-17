@@ -1,5 +1,5 @@
-buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20250717185734-6c6e0d3c608e.1 h1:jmsddqA137GdygleDw+MOPQjCWaWSudK/t7cYqOICaE=
-buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20250717185734-6c6e0d3c608e.1/go.mod h1:TCt1lluMFnctISJXvkIQ4x3ABrPuUKCWKyjKdkJNBpw=
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260209202127-80ab13bee0bf.1 h1:dUbIV5hBj4hXx9gKSs1ZE3F+FPAeAifcG/z6EI8bMg0=
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260209202127-80ab13bee0bf.1/go.mod h1:TCt1lluMFnctISJXvkIQ4x3ABrPuUKCWKyjKdkJNBpw=
 buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260817124448-ff625c1e472d.1 h1:M27LYA45Vr/5EzktohLCg8dNWAEHE0lBR79jGanWwh4=
 buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260817124448-ff625c1e472d.1/go.mod h1:Q/N3xIn3AApQo6JRbgcJk0r75RaKpWdAewGxh9y9X64=
 cel.dev/expr v0.24.0 h1:56OvJKSH3hDGL0ml5uSxZmz3/3Pq4tJ+fb1unVLAFcY=
