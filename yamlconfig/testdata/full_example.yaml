@@ -43,6 +43,11 @@ connections:
       port: 9440
       username: default
       password: ${CH_PASSWORD}
+      settings:
+        max_execution_time: "300"
+      cluster:
+        mode: all_replicas
+        name: analytics_cluster
 
   "sf-main":
     snowflake:

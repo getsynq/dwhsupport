@@ -122,6 +122,10 @@ func TestParseConnections_FullExample(t *testing.T) {
 	assert.Equal(t, "clickhouse", ch.DialectType())
 	require.NotNil(t, ch.Clickhouse)
 	assert.Equal(t, 9440, ch.Clickhouse.Port)
+	assert.Equal(t, map[string]string{"max_execution_time": "300"}, ch.Clickhouse.Settings)
+	require.NotNil(t, ch.Clickhouse.Cluster)
+	assert.Equal(t, "all_replicas", ch.Clickhouse.Cluster.Mode)
+	assert.Equal(t, "analytics_cluster", ch.Clickhouse.Cluster.Name)
 
 	// Fabric
 	fabric := conns["fabric-prod"]

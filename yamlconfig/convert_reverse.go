@@ -153,6 +153,32 @@ func clickhouseConfFromProto(c *agentdwhv1.ClickhouseConf) *ClickhouseConf {
 		Username:      c.GetUsername(),
 		Password:      c.GetPassword(),
 		AllowInsecure: c.GetAllowInsecure(),
+		Settings:      c.GetSettings(),
+		Cluster:       clickhouseClusterConfFromProto(c.GetCluster()),
+	}
+}
+
+func clickhouseClusterConfFromProto(c *agentdwhv1.ClickhouseClusterConf) *ClickhouseClusterConf {
+	if c == nil {
+		return nil
+	}
+	return &ClickhouseClusterConf{
+		Mode: clickhouseClusterModeName(c.GetMode()),
+		Name: c.GetName(),
+	}
+}
+
+// clickhouseClusterModeName inverts clickhouseClusterMode. The unspecified mode
+// maps back to an empty string, so a conf that never named a mode does not gain
+// one on the way out.
+func clickhouseClusterModeName(mode agentdwhv1.ClickhouseClusterMode) string {
+	switch mode {
+	case agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_ALL_REPLICAS:
+		return ClickhouseClusterModeAllReplicas
+	case agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_SINGLE_NODE:
+		return ClickhouseClusterModeSingleNode
+	default:
+		return ""
 	}
 }
 

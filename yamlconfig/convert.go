@@ -2,6 +2,7 @@ package yamlconfig
 
 import (
 	"fmt"
+	"strings"
 
 	agentdwhv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/agent/dwh/v1"
 	commonv1 "buf.build/gen/go/getsynq/api/protocolbuffers/go/synq/common/v1"
@@ -60,8 +61,12 @@ func ToProtoConnection(id string, conn *Connection) (*agentdwhv1.Connection, err
 			Mysql: mysqlConfToProto(conn.MySQL),
 		}
 	case conn.Clickhouse != nil:
+		clickhouse, err := clickhouseConfToProto(conn.Clickhouse)
+		if err != nil {
+			return nil, err
+		}
 		proto.Config = &agentdwhv1.Connection_Clickhouse{
-			Clickhouse: clickhouseConfToProto(conn.Clickhouse),
+			Clickhouse: clickhouse,
 		}
 	case conn.Trino != nil:
 		proto.Config = &agentdwhv1.Connection_Trino{
@@ -166,7 +171,11 @@ func mysqlConfToProto(c *MySQLConf) *agentdwhv1.MySQLConf {
 	}
 }
 
-func clickhouseConfToProto(c *ClickhouseConf) *agentdwhv1.ClickhouseConf {
+func clickhouseConfToProto(c *ClickhouseConf) (*agentdwhv1.ClickhouseConf, error) {
+	cluster, err := clickhouseClusterConfToProto(c.Cluster)
+	if err != nil {
+		return nil, err
+	}
 	return &agentdwhv1.ClickhouseConf{
 		Host:          c.Host,
 		Port:          int32(c.Port),
@@ -174,6 +183,46 @@ func clickhouseConfToProto(c *ClickhouseConf) *agentdwhv1.ClickhouseConf {
 		Username:      c.Username,
 		Password:      c.Password,
 		AllowInsecure: c.AllowInsecure,
+		Settings:      c.Settings,
+		Cluster:       cluster,
+	}, nil
+}
+
+func clickhouseClusterConfToProto(c *ClickhouseClusterConf) (*agentdwhv1.ClickhouseClusterConf, error) {
+	if c == nil {
+		return nil, nil
+	}
+	mode, err := clickhouseClusterMode(c.Mode)
+	if err != nil {
+		return nil, err
+	}
+	return &agentdwhv1.ClickhouseClusterConf{
+		Mode: mode,
+		Name: c.Name,
+	}, nil
+}
+
+// clickhouseClusterMode maps the YAML spelling of a cluster mode onto the proto
+// enum. An unrecognised spelling is rejected rather than treated as unset: the
+// fan-out across "default" is already what an unset mode means, so accepting a
+// misspelled "single_node" would hand back the missing-REMOTE-grant failure the
+// setting exists to avoid, with nothing to point at.
+func clickhouseClusterMode(mode string) (agentdwhv1.ClickhouseClusterMode, error) {
+	switch strings.ReplaceAll(strings.ToLower(strings.TrimSpace(mode)), "-", "_") {
+	case "":
+		return agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_UNSPECIFIED, nil
+	case ClickhouseClusterModeAllReplicas:
+		return agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_ALL_REPLICAS, nil
+	case ClickhouseClusterModeSingleNode:
+		return agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_SINGLE_NODE, nil
+	default:
+		return agentdwhv1.ClickhouseClusterMode_CLICKHOUSE_CLUSTER_MODE_UNSPECIFIED,
+			fmt.Errorf(
+				"clickhouse: unknown cluster mode %q, expected %q or %q",
+				mode,
+				ClickhouseClusterModeAllReplicas,
+				ClickhouseClusterModeSingleNode,
+			)
 	}
 }
 
