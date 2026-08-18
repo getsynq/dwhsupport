@@ -18,8 +18,8 @@ import (
 )
 
 type ClickhouseConf struct {
-	Hostname        string
-	Port            int
+	Hostname string
+	Port     int
 	Username string
 	Password string
 	// DefaultDatabase is the database the connection opens with, so an unqualified

@@ -10,9 +10,9 @@ import (
 
 func TestClickhouseScrapperConf(t *testing.T) {
 	got := clickhouseScrapperConf(&agentdwhv1.ClickhouseConf{
-		Host:     "clickhouse.example",
-		Port:     9440,
-		Username: "scraper",
+		Host:         "clickhouse.example",
+		Port:         9440,
+		Username:     "scraper",
 		Password:     "sekret",
 		InstanceName: "prod",
 		Database:     "analytics",

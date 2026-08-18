@@ -3,7 +3,7 @@ module github.com/getsynq/dwhsupport
 go 1.25.5
 
 require (
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260817124448-ff625c1e472d.1
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260818104000-645e1e5e0c2c.1
 	cloud.google.com/go v0.121.6
 	cloud.google.com/go/bigquery v1.69.0
 	github.com/ClickHouse/ch-go v0.68.0
