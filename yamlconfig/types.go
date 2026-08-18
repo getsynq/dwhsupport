@@ -165,7 +165,22 @@ type MySQLConf struct {
 type ClickhouseConf struct {
 	Host string `yaml:"host"           jsonschema:"required"`
 	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
-	// Database to connect to. If empty, all databases are scraped.
+	// Name this ClickHouse is published under, and the top element of every path
+	// and breadcrumb its tables appear in — "prod", "staging", "eu-analytics".
+	//
+	// ClickHouse has no container above a database, so something has to name the
+	// service itself. Left empty, that is the host above, which is correct but
+	// unreadable for a ClickHouse Cloud endpoint; a name given here replaces it.
+	//
+	// Two connections to the same service must give the same name, and the name is
+	// the identity of everything scraped through it: changing it republishes those
+	// tables under new paths, and the old ones stop being produced. Pick one per
+	// service and keep it.
+	InstanceName string `yaml:"instance_name,omitempty" jsonschema:"example=prod,example=staging"`
+	// Database the connection opens with, so an unqualified table name in a query
+	// resolves against it. It does not restrict what is scraped: metadata comes
+	// from system tables and covers every database the user can see, whatever this
+	// says. Empty opens on "default".
 	Database string `yaml:"database,omitempty"`
 	Username string `yaml:"username"           jsonschema:"required"`
 	Password string `yaml:"password"           jsonschema:"required"`

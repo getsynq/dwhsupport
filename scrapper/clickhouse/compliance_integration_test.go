@@ -170,7 +170,7 @@ func newClickhouseScrapperFromEnv(ctx context.Context) (*ClickhouseScrapper, err
 			DefaultDatabase: testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "default"),
 			NoSsl:           testenv.EnvOrDefaultBool("CLICKHOUSE_NO_SSL", true),
 		},
-		DatabaseName: testenv.EnvOrDefault("CLICKHOUSE_DATABASE", "default"),
+		InstanceName: testenv.EnvOrDefault("CLICKHOUSE_INSTANCE", "default"),
 	}
 	return NewClickhouseScrapper(ctx, conf)
 }

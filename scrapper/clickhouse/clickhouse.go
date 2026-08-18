@@ -14,7 +14,11 @@ import (
 
 type ClickhouseScrapperConf struct {
 	dwhexecclickhouse.ClickhouseConf
-	DatabaseName string
+	// InstanceName is the name this ClickHouse is published under. ClickHouse has
+	// no container above a database, so something has to name the service itself;
+	// empty leaves that to the connection host. It is not a database and does not
+	// restrict what is scraped.
+	InstanceName string
 	// Cluster selects how system tables are read. See ClusterConf.
 	Cluster ClusterConf
 }
@@ -43,6 +47,19 @@ func NewClickhouseScrapper(ctx context.Context, conf ClickhouseScrapperConf) (*C
 // scrapper sends against a system table goes through it.
 func (e *ClickhouseScrapper) systemTablesSql(sql string) string {
 	return e.conf.Cluster.resolveSystemTables(sql)
+}
+
+// rowIdentity is what every scrapped row is keyed on: the endpoint the metadata
+// was read from, and the name the workspace publishes this ClickHouse under —
+// empty unless one was configured, and a ClickHouse database below it is a
+// schema, not a container.
+//
+// The two travel in separate fields because only one of them is an address. A
+// host has many spellings that name one service — a URL, a port, a
+// private-connectivity endpoint — and the reader reduces them to one; a
+// configured name has exactly one spelling and passes through as written.
+func (e *ClickhouseScrapper) rowIdentity() (instance, name string) {
+	return e.conf.Hostname, e.conf.InstanceName
 }
 
 func (e *ClickhouseScrapper) IsPermissionError(err error) bool {

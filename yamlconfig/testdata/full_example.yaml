@@ -41,6 +41,8 @@ connections:
     clickhouse:
       host: clickhouse.example.com
       port: 9440
+      instance_name: staging
+      database: analytics
       username: default
       password: ${CH_PASSWORD}
       settings:

@@ -15,16 +15,13 @@ var querySchemasSql string
 
 // QuerySchemas lists ClickHouse databases as schemas. ClickHouse has no
 // catalog/database level above its databases, so each ClickHouse database is
-// mapped to a SchemaRow with the configured host/database as the container —
-// consistent with QueryTables.
+// mapped to a SchemaRow under the connection's own identity — see rowIdentity,
+// which every scrapped row shares.
 func (e *ClickhouseScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	sql := scope.AppendSchemaScopeConditions(ctx, e.systemTablesSql(querySchemasSql), "", "name")
 	return dwhexecclickhouse.NewQuerier[scrapper.SchemaRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.SchemaRow](func(row *scrapper.SchemaRow) (*scrapper.SchemaRow, error) {
-			row.Database = e.conf.Hostname
-			if len(e.conf.DatabaseName) > 0 {
-				row.Database = e.conf.DatabaseName
-			}
+			row.Instance, row.Database = e.rowIdentity()
 			return row, nil
 		}),
 	)

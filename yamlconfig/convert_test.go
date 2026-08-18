@@ -63,6 +63,8 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	chConf := ch.GetClickhouse()
 	require.NotNil(t, chConf)
 	assert.Equal(t, int32(9440), chConf.GetPort())
+	assert.Equal(t, "staging", chConf.GetInstanceName())
+	assert.Equal(t, "analytics", chConf.GetDatabase())
 	assert.Equal(t, map[string]string{"max_execution_time": "300"}, chConf.GetSettings())
 	assert.Equal(
 		t,
@@ -377,6 +379,28 @@ func TestToProtoConnection_ClickhouseSettingsAndCluster(t *testing.T) {
 		chConf.GetCluster().GetMode(),
 	)
 	assert.Equal(t, "analytics_cluster", chConf.GetCluster().GetName())
+}
+
+// The instance name and the connection database survive a round trip through the
+// proto as two separate settings.
+func TestClickhouseInstanceNameAndDatabaseRoundTrip(t *testing.T) {
+	proto, err := ToProtoConnection("ch", &Connection{
+		Clickhouse: &ClickhouseConf{
+			Host:         "abc123xyz0.europe-west4.gcp.clickhouse.cloud",
+			InstanceName: "prod",
+			Database:     "analytics",
+			Username:     "scraper",
+			Password:     "sekret",
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "prod", proto.GetClickhouse().GetInstanceName())
+	assert.Equal(t, "analytics", proto.GetClickhouse().GetDatabase())
+
+	back := FromProtoConnection(proto)
+	require.NotNil(t, back.Clickhouse)
+	assert.Equal(t, "prod", back.Clickhouse.InstanceName)
+	assert.Equal(t, "analytics", back.Clickhouse.Database)
 }
 
 func TestToProtoConnection_ClickhouseNoClusterConfigured(t *testing.T) {

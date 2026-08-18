@@ -17,10 +17,7 @@ func (e *ClickhouseScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 	sql := scope.AppendScopeConditions(ctx, e.systemTablesSql(queryCatalogSql), "", "cols.schema", "cols.table")
 	return dwhexecclickhouse.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.CatalogColumnRow](func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
-			row.Database = e.conf.Hostname
-			if len(e.conf.DatabaseName) > 0 {
-				row.Database = e.conf.DatabaseName
-			}
+			row.Instance, row.Database = e.rowIdentity()
 			return row, nil
 		}),
 	)

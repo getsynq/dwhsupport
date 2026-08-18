@@ -179,6 +179,7 @@ func clickhouseConfToProto(c *ClickhouseConf) (*agentdwhv1.ClickhouseConf, error
 	return &agentdwhv1.ClickhouseConf{
 		Host:          c.Host,
 		Port:          int32(c.Port),
+		InstanceName:  c.InstanceName,
 		Database:      c.Database,
 		Username:      c.Username,
 		Password:      c.Password,
