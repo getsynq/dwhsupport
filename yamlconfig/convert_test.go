@@ -388,7 +388,7 @@ func TestToProtoConnection_ClickhouseSettingsAndCluster(t *testing.T) {
 func TestClickhouseInstanceNameAndDatabaseRoundTrip(t *testing.T) {
 	proto, err := ToProtoConnection("ch", &Connection{
 		Clickhouse: &ClickhouseConf{
-			Host:         "nogwv291ou.europe-west4.gcp.clickhouse.cloud",
+			Host:         "abc123xyz0.europe-west4.gcp.clickhouse.cloud",
 			InstanceName: "prod",
 			Database:     "analytics",
 			Username:     "scraper",
