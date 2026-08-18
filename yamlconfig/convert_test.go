@@ -381,10 +381,8 @@ func TestToProtoConnection_ClickhouseSettingsAndCluster(t *testing.T) {
 	assert.Equal(t, "analytics_cluster", chConf.GetCluster().GetName())
 }
 
-// The instance name and the connection database are two settings, not one, and
-// they survive a round trip through the proto in that shape. Crossing them
-// publishes the same warehouse under one name from an agent and another from the
-// cloud connection.
+// The instance name and the connection database survive a round trip through the
+// proto as two separate settings.
 func TestClickhouseInstanceNameAndDatabaseRoundTrip(t *testing.T) {
 	proto, err := ToProtoConnection("ch", &Connection{
 		Clickhouse: &ClickhouseConf{

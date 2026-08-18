@@ -13,6 +13,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 )
@@ -87,9 +88,29 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 	}
 
 	db := clickhouse.OpenDB(clickhouseOptions)
-	err := db.PingContext(ctx)
-	if err != nil {
-		return nil, exec.NewAuthError(err)
+	if err := db.PingContext(ctx); err != nil {
+		if conf.DefaultDatabase == "" {
+			return nil, exec.NewAuthError(err)
+		}
+
+		// The default database is a convenience for unqualified table names in a
+		// query, and the metadata scrape reads system tables and needs none of it.
+		// So a database that cannot be opened — dropped, renamed, or never granted
+		// to this user — must not take the connection down with it. Retry without
+		// it: an unqualified name then resolves against "default" and the query
+		// itself reports what is missing, rather than the whole integration going
+		// dark over a setting that buys it nothing.
+		_ = db.Close()
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"host":     conf.Hostname,
+			"database": conf.DefaultDatabase,
+		}).Warn("could not open a ClickHouse connection on the configured database, connecting without it")
+
+		clickhouseOptions.Auth.Database = ""
+		db = clickhouse.OpenDB(clickhouseOptions)
+		if err := db.PingContext(ctx); err != nil {
+			return nil, exec.NewAuthError(err)
+		}
 	}
 
 	return &ClickhouseExecutor{db: sqlx.NewDb(db, "clickhouse"), conf: conf}, nil

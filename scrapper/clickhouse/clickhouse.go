@@ -58,9 +58,6 @@ func (e *ClickhouseScrapper) systemTablesSql(sql string) string {
 // host has many spellings that name one service — a URL, a port, a
 // private-connectivity endpoint — and the reader reduces them to one; a
 // configured name has exactly one spelling and passes through as written.
-// Putting the host in the name's field left the reader unable to tell which of
-// the two it held, so it reduced neither, and one service reached over two
-// endpoints published as two.
 func (e *ClickhouseScrapper) rowIdentity() (instance, name string) {
 	return e.conf.Hostname, e.conf.InstanceName
 }

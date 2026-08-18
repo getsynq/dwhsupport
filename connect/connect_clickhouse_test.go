@@ -27,8 +27,8 @@ func TestClickhouseScrapperConf(t *testing.T) {
 	assert.Equal(t, 9440, got.Port)
 	assert.Equal(t, "scraper", got.Username)
 	assert.Equal(t, "sekret", got.Password)
-	// The two settings the connection spells separately stay separate: the name the
-	// scrape publishes under, and the database the connection opens with.
+	// The name the scrape publishes under and the database the connection opens
+	// with stay separate.
 	assert.Equal(t, "prod", got.InstanceName)
 	assert.Equal(t, "analytics", got.DefaultDatabase)
 	assert.False(t, got.NoSsl)
@@ -44,8 +44,7 @@ func TestClickhouseScrapperConf_Unconfigured(t *testing.T) {
 	assert.Nil(t, got.Settings)
 	assert.Equal(t, scrapperclickhouse.ClusterConf{}, got.Cluster)
 	assert.False(t, got.Cluster.SingleNode)
-	// No name configured leaves the scrape to publish under the connection host,
-	// the same identity a Coalesce Quality-hosted connection falls back to.
+	// No name configured leaves the scrape to publish under the connection host.
 	assert.Empty(t, got.InstanceName)
 	assert.Empty(t, got.DefaultDatabase)
 }
