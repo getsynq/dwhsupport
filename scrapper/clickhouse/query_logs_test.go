@@ -9,6 +9,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// The connection identity every query log below is read under: the endpoint, and
+// the name the workspace publishes this ClickHouse under.
+const (
+	testQueryLogHost = "clickhouse.example.com"
+	testQueryLogName = "analytics"
+)
+
 func TestConvertClickhouseRowToQueryLog(t *testing.T) {
 	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
 	require.NoError(t, err)
@@ -187,7 +194,7 @@ func TestConvertClickhouseRowToQueryLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := convertClickhouseRowToQueryLog(tt.row, tt.obfuscator, "clickhouse")
+			log, err := convertClickhouseRowToQueryLog(tt.row, tt.obfuscator, "clickhouse", testQueryLogHost, testQueryLogName)
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -216,7 +223,8 @@ func TestConvertClickhouseRowToQueryLog(t *testing.T) {
 			require.NotNil(t, log.DwhContext)
 			require.Equal(t, tt.row.CurrentDatabase, log.DwhContext.Schema)
 			require.Equal(t, tt.row.InitialUser, log.DwhContext.User)
-			require.Empty(t, log.DwhContext.Database) // ClickHouse doesn't have database concept
+			require.Equal(t, testQueryLogHost, log.DwhContext.Instance)
+			require.Equal(t, testQueryLogName, log.DwhContext.Database)
 
 			// Verify lineage when tables present (excluding temporary tables)
 			hasNonTempTables := false
@@ -259,6 +267,46 @@ func TestConvertClickhouseRowToQueryLog(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestConvertClickhouseRowToQueryLog_Identity pins the mapping a consumer keys
+// assets on: a query log carries the connection identity in the same two fields
+// rowIdentity writes on a scrapped row, so a query and the tables it reads resolve
+// to one warehouse. A configured name goes to Database and the endpoint to
+// Instance; with no name configured the endpoint stands alone, and a reader falls
+// back to it exactly as it does for a catalog row.
+func TestConvertClickhouseRowToQueryLog_Identity(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	row := &ClickhouseQueryLogSchema{
+		QueryType:                  "QueryFinish",
+		EventTimeMicroseconds:      time.Date(2025, 11, 1, 10, 30, 0, 0, time.UTC),
+		QueryStartTimeMicroseconds: time.Date(2025, 11, 1, 10, 30, 0, 0, time.UTC),
+		CurrentDatabase:            "default",
+		Query:                      "SELECT * FROM users",
+		QueryKind:                  "Select",
+		Tables:                     []string{"default.users"},
+		InitialUser:                "reader",
+		InitialQueryId:             "query-identity",
+	}
+
+	t.Run("named connection", func(t *testing.T) {
+		log, err := convertClickhouseRowToQueryLog(row, obfuscator, "clickhouse", testQueryLogHost, testQueryLogName)
+		require.NoError(t, err)
+		require.Equal(t, testQueryLogHost, log.DwhContext.Instance)
+		require.Equal(t, testQueryLogName, log.DwhContext.Database)
+		// A ClickHouse database is a schema, and stays one whatever the connection is called.
+		require.Equal(t, "default", log.DwhContext.Schema)
+	})
+
+	t.Run("unnamed connection", func(t *testing.T) {
+		log, err := convertClickhouseRowToQueryLog(row, obfuscator, "clickhouse", testQueryLogHost, "")
+		require.NoError(t, err)
+		require.Equal(t, testQueryLogHost, log.DwhContext.Instance)
+		require.Empty(t, log.DwhContext.Database)
+		require.Equal(t, "default", log.DwhContext.Schema)
+	})
 }
 
 func containsString(s, substr string) bool {
