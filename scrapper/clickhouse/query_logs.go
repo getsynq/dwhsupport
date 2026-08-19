@@ -98,7 +98,19 @@ func (s *ClickhouseScrapper) FetchQueryLogs(
 		return nil, err
 	}
 
-	return querylogs.NewSqlxRowsIterator[ClickhouseQueryLogSchema](rows, obfuscator, s.DialectType(), convertClickhouseRowToQueryLog), nil
+	// A query log carries the same identity as every catalog row of this connection
+	// — see rowIdentity. A consumer places the tables a query names below that
+	// identity, so a log without it names tables that belong to no warehouse.
+	instance, name := s.rowIdentity()
+	convert := func(
+		row *ClickhouseQueryLogSchema,
+		obfuscator querylogs.QueryObfuscator,
+		sqlDialect string,
+	) (*querylogs.QueryLog, error) {
+		return convertClickhouseRowToQueryLog(row, obfuscator, sqlDialect, instance, name)
+	}
+
+	return querylogs.NewSqlxRowsIterator[ClickhouseQueryLogSchema](rows, obfuscator, s.DialectType(), convert), nil
 }
 
 func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) string {
@@ -170,10 +182,14 @@ WHERE type in ('QueryFinish', 'ExceptionBeforeStart', 'ExceptionWhileProcessing'
 `
 }
 
+// convertClickhouseRowToQueryLog maps one system.query_log row onto a QueryLog.
+// instance and name are the connection's identity, mapped onto DwhContext the way
+// rowIdentity maps them onto a scrapped row.
 func convertClickhouseRowToQueryLog(
 	row *ClickhouseQueryLogSchema,
 	obfuscator querylogs.QueryObfuscator,
 	sqlDialect string,
+	instance, name string,
 ) (*querylogs.QueryLog, error) {
 	// Parse tables array into native lineage
 	var nativeLineage *querylogs.NativeLineage
@@ -293,7 +309,8 @@ func convertClickhouseRowToQueryLog(
 		NormalizedQueryHash: &normalizedQueryHash,
 		SqlDialect:          sqlDialect,
 		DwhContext: &querylogs.DwhContext{
-			Database: "",                  // ClickHouse doesn't have a separate database/instance concept
+			Instance: instance,            // the endpoint this metadata was read from
+			Database: name,                // the name this ClickHouse is published under, empty unless configured
 			Schema:   row.CurrentDatabase, // ClickHouse "database" is equivalent to "schema" in other systems
 			User:     row.InitialUser,
 		},

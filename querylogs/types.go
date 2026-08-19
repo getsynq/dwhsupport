@@ -102,14 +102,14 @@ type QueryLog struct {
 //   - Postgres: Instance=host, Database=database_name, Schema=schema_name
 //   - Trino: Instance=host, Database=catalog, Schema=schema
 //   - MySQL: Instance="", Database=host, Schema=schema_name
-//   - ClickHouse: Instance="", Database=hostname (or configured database alias), Schema=database_name
+//   - ClickHouse: Instance=host, Database=configured instance name (empty unless configured), Schema=database_name
 //   - DuckDB: Instance=motherduck_account, Database="", Schema=schema_name
 type DwhContext struct {
 	// Instance is the unique identifier for the data warehouse instance.
 	// This is typically the hostname, account ID, or workspace URL that uniquely
 	// identifies the data warehouse deployment.
-	// - Set by: Snowflake (account), Databricks (workspace_url), Redshift/Postgres/Trino (host), DuckDB (motherduck_account)
-	// - Empty for: BigQuery, ClickHouse, MySQL
+	// - Set by: Snowflake (account), Databricks (workspace_url), Redshift/Postgres/Trino/ClickHouse (host), DuckDB (motherduck_account)
+	// - Empty for: BigQuery, MySQL
 	Instance string
 
 	// Database name (may be empty for platforms without database level)
@@ -119,7 +119,8 @@ type DwhContext struct {
 	// - Redshift/Postgres: database_name
 	// - Trino: catalog
 	// - MySQL: host (used as instance identifier)
-	// - ClickHouse: hostname or configured database alias from config (used as instance identifier, NOT the schema-level database)
+	// - ClickHouse: the name the service is published under, from config; empty unless
+	//   one was configured, and then the instance names it. NOT the schema-level database
 	// - DuckDB: "" (empty)
 	Database string
 
