@@ -355,6 +355,7 @@ func (s *HelpersSuite) TestARowErrorIsReturned() {
 		mock.ExpectQuery(".*").WillReturnRows(
 			sqlmock.NewRows(upperCased("num_failures")).
 				AddRow(int64(1)).
+				AddRow(int64(2)).
 				RowError(1, errors.New("connection reset")),
 		)
 	})

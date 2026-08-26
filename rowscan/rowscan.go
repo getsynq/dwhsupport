@@ -142,19 +142,23 @@ func (s *Scanner[T]) RequireColumns(columns ...string) error {
 // LogColumnDrift reports the difference between the result set and the struct, so
 // a vendor adding or withdrawing a column surfaces in logs on the run it first
 // happens rather than the next time someone reads the code. source names the
-// object read, for example "SNOWFLAKE.ACCOUNT_USAGE.TASK_HISTORY".
+// object read, for example "SNOWFLAKE.ACCOUNT_USAGE.TASK_HISTORY"; it is left
+// empty by callers that read an arbitrary statement rather than a named object,
+// where the target type is what identifies the read.
 func (s *Scanner[T]) LogColumnDrift(ctx context.Context, source string) {
 	if len(s.unknown) == 0 && len(s.missing) == 0 {
 		return
 	}
-	logging.GetLogger(ctx).WithFields(
-		logrus.Fields{
-			"source":          source,
-			"target":          reflect.TypeFor[T]().String(),
-			"unknown_columns": s.unknown,
-			"missing_columns": s.missing,
-		},
-	).Warn("result set columns differ from the expected shape, scanning what matched")
+	fields := logrus.Fields{
+		"target":          reflect.TypeFor[T]().String(),
+		"unknown_columns": s.unknown,
+		"missing_columns": s.missing,
+	}
+	if source != "" {
+		fields["source"] = source
+	}
+	logging.GetLogger(ctx).WithFields(fields).
+		Warn("result set columns differ from the expected shape, scanning what matched")
 }
 
 // Scan reads the current row into dest.

@@ -18,7 +18,7 @@ with relations AS (select t.table_name
 select r.database_name as "database",
        r.schema_name   as "schema",
        r.table_name    as "table",
-       r.table_type    as "type",
+       r.table_type    as "table_type",
        r.is_view,
        r.table_comment,
        c.column_name as column,
