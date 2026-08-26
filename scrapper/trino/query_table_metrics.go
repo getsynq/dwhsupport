@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/logging"
+	"github.com/getsynq/dwhsupport/rowscan"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/jmoiron/sqlx"
 	"github.com/trinodb/trino-go-client/trino"
@@ -132,9 +133,15 @@ func (e *TrinoScrapper) showStatsMetricsStrategy(
 	dataSize := int64(0)
 	dataSizePresent := false
 
+	scanner, err := rowscan.New[trinoShowStatsRow](rows)
+	if err != nil {
+		return err
+	}
+	scanner.LogColumnDrift(ctx, query)
+
 	for rows.Next() {
 		var stat trinoShowStatsRow
-		if err := rows.StructScan(&stat); err != nil {
+		if err := scanner.Scan(rows, &stat); err != nil {
 			return err
 		}
 		if !stat.ColumnName.Valid { // NULL column_name row
@@ -196,9 +203,15 @@ func (e *TrinoScrapper) icebergMetricsStrategy(
 
 	var latestSnapshot *trinoIcebergSnapshotsRow
 
+	scanner, err := rowscan.New[trinoIcebergSnapshotsRow](rows)
+	if err != nil {
+		return err
+	}
+	scanner.LogColumnDrift(ctx, query)
+
 	for rows.Next() {
 		var stat trinoIcebergSnapshotsRow
-		if err := rows.StructScan(&stat); err != nil {
+		if err := scanner.Scan(rows, &stat); err != nil {
 			return err
 		}
 

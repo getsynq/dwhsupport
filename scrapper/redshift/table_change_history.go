@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec/querystats"
+	"github.com/getsynq/dwhsupport/rowscan"
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
@@ -53,10 +54,16 @@ func (e *RedshiftScrapper) FetchTableChangeHistory(
 	}
 	defer rows.Close()
 
+	scanner, err := rowscan.New[redshiftChangeRow](rows)
+	if err != nil {
+		return nil, err
+	}
+	scanner.LogColumnDrift(ctx, "sys_query_history")
+
 	var events []*scrapper.TableChangeEvent
 	for rows.Next() {
 		row := &redshiftChangeRow{}
-		if err := rows.StructScan(row); err != nil {
+		if err := scanner.Scan(rows, row); err != nil {
 			return nil, err
 		}
 		events = append(events, &scrapper.TableChangeEvent{
