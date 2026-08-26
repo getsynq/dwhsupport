@@ -67,14 +67,14 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 					return errors.Wrapf(err, "failed to query catalog for database %s", database)
 				}
 				defer rows.Close()
-				var tmpResults []*scrapper.CatalogColumnRow
-				for rows.Next() {
-					result := scrapper.CatalogColumnRow{}
-					if err := rows.StructScan(&result); err != nil {
-						return errors.Wrapf(err, "failed to scan catalog row for database %s", database)
-					}
+				tmpResults, err := scrapper.ScanAll[scrapper.CatalogColumnRow](
+					groupCtx, rows, fmt.Sprintf("%s.information_schema.columns", database),
+				)
+				if err != nil {
+					return err
+				}
+				for _, result := range tmpResults {
 					result.Instance = e.conf.Account
-					tmpResults = append(tmpResults, &result)
 				}
 
 				streamRows, err := e.showStreamsInDatabase(groupCtx, database)

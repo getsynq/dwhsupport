@@ -90,19 +90,16 @@ func (e *SnowflakeScrapper) queryTableChangeEvents(ctx context.Context, sql stri
 	}
 	defer rows.Close()
 
+	changeRows, err := scrapper.ScanAll[snowflakeTableChangeRow](ctx, rows, "the table change history")
+	if err != nil {
+		return nil, err
+	}
+
 	var events []*scrapper.TableChangeEvent
-	for rows.Next() {
-		row := &snowflakeTableChangeRow{}
-		if err := rows.StructScan(row); err != nil {
-			return nil, err
-		}
+	for _, row := range changeRows {
 		events = append(events, &scrapper.TableChangeEvent{
 			Timestamp: row.Timestamp,
 		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 
 	return events, nil

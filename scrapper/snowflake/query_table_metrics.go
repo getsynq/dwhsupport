@@ -64,18 +64,19 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 				}
 				defer rows.Close()
 
-				for rows.Next() {
-					result := scrapper.TableMetricsRow{}
-
-					if err := rows.StructScan(&result); err != nil {
-						return errors.Wrapf(err, "failed to scan metrics row for database %s", database)
-					}
+				metricsRows, err := scrapper.ScanAll[scrapper.TableMetricsRow](
+					groupCtx, rows, fmt.Sprintf("%s.information_schema.tables", database),
+				)
+				if err != nil {
+					return err
+				}
+				for _, result := range metricsRows {
 					result.Instance = e.conf.Account
 					if result.UpdatedAt != nil {
 						normalized := result.UpdatedAt.UTC()
 						result.UpdatedAt = &normalized
 					}
-					tmpResults = append(tmpResults, &result)
+					tmpResults = append(tmpResults, result)
 				}
 
 				m.Lock()

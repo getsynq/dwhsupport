@@ -169,11 +169,11 @@ func (e *SnowflakeScrapper) queryClusteringKeysInDatabase(ctx context.Context, d
 	}
 	defer rows.Close()
 
-	for rows.Next() {
-		row := &clusteringKeyRow{}
-		if err := rows.StructScan(row); err != nil {
-			return nil, err
-		}
+	clusteringRows, err := scrapper.ScanAll[clusteringKeyRow](ctx, rows, fmt.Sprintf("%s.information_schema.tables", database))
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range clusteringRows {
 		if row.ClusterBy == "" {
 			continue
 		}

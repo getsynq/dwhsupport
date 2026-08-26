@@ -77,13 +77,15 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 				}
 				defer rows.Close()
 
-				for rows.Next() {
-					result := scrapper.SqlDefinitionRow{}
-					if err := rows.StructScan(&result); err != nil {
-						return errors.Wrapf(err, "failed to scan sql definition row for database %s", database)
-					}
+				definitionRows, err := scrapper.ScanAll[scrapper.SqlDefinitionRow](
+					groupCtx, rows, fmt.Sprintf("%s.information_schema.views", database),
+				)
+				if err != nil {
+					return err
+				}
+				for _, result := range definitionRows {
 					result.Instance = e.conf.Account
-					tmpResults = append(tmpResults, &result)
+					tmpResults = append(tmpResults, result)
 				}
 
 				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
