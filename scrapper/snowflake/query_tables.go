@@ -67,16 +67,18 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 				}
 				defer rows.Close()
 
-				for rows.Next() {
-					result := scrapper.TableRow{}
-					if err := rows.StructScan(&result); err != nil {
-						return errors.Wrapf(err, "failed to scan table row for database %s", database)
-					}
+				tableRows, err := scrapper.ScanAll[scrapper.TableRow](
+					groupCtx, rows, fmt.Sprintf("%s.information_schema.tables", database),
+				)
+				if err != nil {
+					return err
+				}
+				for _, result := range tableRows {
 					result.Instance = e.conf.Account
 					if result.Description != nil && *result.Description == "" {
 						result.Description = nil
 					}
-					tmpResults = append(tmpResults, &result)
+					tmpResults = append(tmpResults, result)
 				}
 
 				streamRows, err := e.showStreamsInDatabase(groupCtx, database)

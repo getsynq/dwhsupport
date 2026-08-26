@@ -45,8 +45,6 @@ func (e *SnowflakeScrapper) QuerySchemas(origCtx context.Context) ([]*scrapper.S
 		}
 
 		g.Go(func() error {
-			var tmpResults []*scrapper.SchemaRow
-
 			query := scope.AppendSchemaScopeConditions(origCtx, fmt.Sprintf(schemasQuery, database), "s.catalog_name", "s.schema_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
@@ -59,16 +57,17 @@ func (e *SnowflakeScrapper) QuerySchemas(origCtx context.Context) ([]*scrapper.S
 			}
 			defer rows.Close()
 
-			for rows.Next() {
-				result := scrapper.SchemaRow{}
-				if err := rows.StructScan(&result); err != nil {
-					return errors.Wrapf(err, "failed to scan schema row for database %s", database)
-				}
+			tmpResults, err := scrapper.ScanAll[scrapper.SchemaRow](
+				groupCtx, rows, fmt.Sprintf("%s.information_schema.schemata", database),
+			)
+			if err != nil {
+				return err
+			}
+			for _, result := range tmpResults {
 				result.Instance = e.conf.Account
 				if result.Description != nil && *result.Description == "" {
 					result.Description = nil
 				}
-				tmpResults = append(tmpResults, &result)
 			}
 
 			m.Lock()
