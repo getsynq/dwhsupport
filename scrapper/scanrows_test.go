@@ -151,3 +151,52 @@ func (s *ScanAllSuite) TestTablesScanWhenTheAccountKeepsQuotedAliasesAsWritten()
 	s.Require().NotNil(got[0].Description)
 	s.Equal("an order", *got[0].Description)
 }
+
+// A warehouse-managed view gains a column on a vendor release without notice.
+// Failing the scan over it would turn every such release into a total ingestion
+// outage, so an unclaimed column is discarded and the rest of the row is kept.
+func (s *ScanAllSuite) TestAColumnNoFieldClaimsIsDiscarded() {
+	rows := s.resultSet(
+		[]string{"database", "schema", "table", "table_type", "is_view", "is_table", "SPCS_JOB_ID"},
+		[]driver.Value{"analytics", "public", "orders", "BASE TABLE", false, true, "a-job-id"},
+	)
+
+	got, err := scrapper.ScanAll[scrapper.TableRow](
+		context.Background(), rows, "analytics.information_schema.tables",
+	)
+
+	s.Require().NoError(err)
+	s.Require().Len(got, 1)
+	s.Equal("orders", got[0].Table)
+}
+
+// The other direction: a column withdrawn, or a customer pointing the read at a
+// view exposing a subset. The field it fed keeps its zero value rather than the
+// query failing outright, which is what pinning an explicit column list would do.
+func (s *ScanAllSuite) TestAFieldNoColumnFeedsKeepsItsZeroValue() {
+	rows := s.resultSet(
+		[]string{"database", "schema", "table"},
+		[]driver.Value{"analytics", "public", "orders"},
+	)
+
+	got, err := scrapper.ScanAll[scrapper.TableRow](
+		context.Background(), rows, "analytics.information_schema.tables",
+	)
+
+	s.Require().NoError(err)
+	s.Require().Len(got, 1)
+	s.Equal("orders", got[0].Table)
+	s.Equal("", got[0].TableType)
+	s.False(got[0].IsTable)
+}
+
+func (s *ScanAllSuite) TestAnEmptyResultSetIsNotAnError() {
+	rows := s.resultSet([]string{"DATABASE", "SCHEMA", "TABLE"})
+
+	got, err := scrapper.ScanAll[scrapper.TableRow](
+		context.Background(), rows, "analytics.information_schema.tables",
+	)
+
+	s.Require().NoError(err)
+	s.Empty(got)
+}
