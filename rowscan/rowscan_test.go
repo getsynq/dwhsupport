@@ -1,4 +1,4 @@
-package scrapper
+package rowscan
 
 import (
 	"context"
@@ -52,7 +52,7 @@ func mockRows(t *testing.T, columns []string, values ...[]driver.Value) *sqlx.Ro
 	return rows
 }
 
-func (s *RowScannerSuite) scanAll(rows *sqlx.Rows, scanner *RowScanner[scanTarget]) []scanTarget {
+func (s *RowScannerSuite) scanAll(rows *sqlx.Rows, scanner *Scanner[scanTarget]) []scanTarget {
 	var result []scanTarget
 	for rows.Next() {
 		var row scanTarget
@@ -72,7 +72,7 @@ func (s *RowScannerSuite) TestScansExactMatch() {
 		[]driver.Value{"b", "second", int64(2), nil, at, nil},
 	)
 
-	scanner, err := NewRowScanner[scanTarget](rows)
+	scanner, err := New[scanTarget](rows)
 	s.Require().NoError(err)
 	s.Empty(scanner.UnknownColumns())
 	s.Empty(scanner.MissingColumns())
@@ -100,7 +100,7 @@ func (s *RowScannerSuite) TestDiscardsUnknownColumns() {
 		[]driver.Value{"a", "vendor value", "first", int64(1), int64(7), nil, at, nil},
 	)
 
-	scanner, err := NewRowScanner[scanTarget](rows)
+	scanner, err := New[scanTarget](rows)
 	s.Require().NoError(err)
 	s.Equal([]string{"BRAND_NEW", "ANOTHER_NEW"}, scanner.UnknownColumns())
 	s.Empty(scanner.MissingColumns())
@@ -122,7 +122,7 @@ func (s *RowScannerSuite) TestReportsMissingColumns() {
 		[]driver.Value{"a", "first"},
 	)
 
-	scanner, err := NewRowScanner[scanTarget](rows)
+	scanner, err := New[scanTarget](rows)
 	s.Require().NoError(err)
 	s.Empty(scanner.UnknownColumns())
 	s.Equal([]string{"COUNT", "OPTIONAL", "AT", "AT_OR_NEVER"}, scanner.MissingColumns())
@@ -138,7 +138,7 @@ func (s *RowScannerSuite) TestReportsMissingColumns() {
 func (s *RowScannerSuite) TestRequireColumns() {
 	rows := mockRows(s.T(), []string{"ID", "NAME"}, []driver.Value{"a", "first"})
 
-	scanner, err := NewRowScanner[scanTarget](rows)
+	scanner, err := New[scanTarget](rows)
 	s.Require().NoError(err)
 
 	s.NoError(scanner.RequireColumns("ID", "NAME"))
@@ -157,7 +157,7 @@ func (s *RowScannerSuite) TestRequireColumns() {
 func (s *RowScannerSuite) TestMatchesColumnsCaseInsensitively() {
 	rows := mockRows(s.T(), []string{"id", "Name"}, []driver.Value{"a", "first"})
 
-	scanner, err := NewRowScanner[scanTarget](rows)
+	scanner, err := New[scanTarget](rows)
 	s.Require().NoError(err)
 	s.Empty(scanner.UnknownColumns())
 
@@ -172,7 +172,7 @@ func (s *RowScannerSuite) TestMatchesColumnsCaseInsensitively() {
 func (s *RowScannerSuite) TestIgnoresFieldsWithoutColumnTag() {
 	rows := mockRows(s.T(), []string{"ID", "INJECTED", "IGNORED"}, []driver.Value{"a", "from db", "from db"})
 
-	scanner, err := NewRowScanner[scanTarget](rows)
+	scanner, err := New[scanTarget](rows)
 	s.Require().NoError(err)
 	s.Equal([]string{"INJECTED", "IGNORED"}, scanner.UnknownColumns())
 
@@ -194,7 +194,7 @@ type embeddingTarget struct {
 func (s *RowScannerSuite) TestScansEmbeddedStructFields() {
 	rows := mockRows(s.T(), []string{"EXTRA", "ID"}, []driver.Value{"e", "a"})
 
-	scanner, err := NewRowScanner[embeddingTarget](rows)
+	scanner, err := New[embeddingTarget](rows)
 	s.Require().NoError(err)
 	s.Empty(scanner.UnknownColumns())
 	s.Empty(scanner.MissingColumns())
@@ -214,7 +214,7 @@ type duplicateTagTarget struct {
 func (s *RowScannerSuite) TestRejectsDuplicateColumnTag() {
 	rows := mockRows(s.T(), []string{"ID"}, []driver.Value{"a"})
 
-	_, err := NewRowScanner[duplicateTagTarget](rows)
+	_, err := New[duplicateTagTarget](rows)
 	s.Require().Error(err)
 	s.Contains(err.Error(), "claimed by more than one field")
 }
@@ -222,7 +222,7 @@ func (s *RowScannerSuite) TestRejectsDuplicateColumnTag() {
 func (s *RowScannerSuite) TestRejectsNonStructTarget() {
 	rows := mockRows(s.T(), []string{"ID"}, []driver.Value{"a"})
 
-	_, err := NewRowScanner[string](rows)
+	_, err := New[string](rows)
 	s.Require().Error(err)
 	s.Contains(err.Error(), "must be a struct")
 }
@@ -232,7 +232,7 @@ func (s *RowScannerSuite) TestRejectsNonStructTarget() {
 func (s *RowScannerSuite) TestDiscardsRepeatedColumn() {
 	rows := mockRows(s.T(), []string{"ID", "NAME", "ID"}, []driver.Value{"first", "n", "second"})
 
-	scanner, err := NewRowScanner[scanTarget](rows)
+	scanner, err := New[scanTarget](rows)
 	s.Require().NoError(err)
 	s.Equal([]string{"ID"}, scanner.UnknownColumns())
 
