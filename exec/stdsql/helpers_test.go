@@ -459,8 +459,7 @@ func (s *HelpersSuite) TestBatchedPostProcessorsRunAndCanDropRows() {
 // the whole of Path B: every caller in kernel-anomalies indexes the map with the
 // alias its own SQL asked for.
 func lookup(row exec.QueryMapResult, alias string) (any, bool) {
-	value, found := row[alias]
-	return value, found
+	return row.Get(alias)
 }
 
 // readInt64 mirrors how kernel-anomalies reads an evaluator's counts out of a
