@@ -3,6 +3,7 @@ package scrapper
 import (
 	"context"
 
+	"github.com/getsynq/dwhsupport/rowscan"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
@@ -21,7 +22,7 @@ import (
 // scan failure is reported against and what column drift is logged against — the
 // caller's own wrapping says which step it belonged to.
 func ScanAll[T any](ctx context.Context, rows *sqlx.Rows, source string) ([]*T, error) {
-	scanner, err := NewRowScanner[T](rows)
+	scanner, err := rowscan.New[T](rows)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to plan the scan of %s", source)
 	}

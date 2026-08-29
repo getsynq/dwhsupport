@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/getsynq/dwhsupport/rowscan"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -14,6 +15,10 @@ type SqlxRowsIterator[T any] struct {
 	convertFn  func(*T) (*QueryLog, error)
 	obfuscator QueryObfuscator
 	closed     bool
+	// scanner is planned from the open result set on the first row. Query
+	// history views are the ones a vendor most often adds a column to, and
+	// StructScan would fail every row over one it did not know.
+	scanner *rowscan.Scanner[T]
 }
 
 // NewSqlxRowsIterator creates a new iterator for sqlx.Rows with a conversion function.
@@ -58,8 +63,16 @@ func (it *SqlxRowsIterator[T]) Next(ctx context.Context) (*QueryLog, error) {
 		}
 
 		// Scan into struct
+		if it.scanner == nil {
+			scanner, err := rowscan.New[T](it.rows)
+			if err != nil {
+				return nil, err
+			}
+			scanner.LogColumnDrift(ctx, "query history")
+			it.scanner = scanner
+		}
 		var row T
-		if err := it.rows.StructScan(&row); err != nil {
+		if err := it.scanner.Scan(it.rows, &row); err != nil {
 			// Defensive: scan error, but don't crash entire ingestion
 			// Caller can decide whether to continue
 			return nil, err

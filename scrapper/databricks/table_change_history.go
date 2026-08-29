@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec/querystats"
+	"github.com/getsynq/dwhsupport/rowscan"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/sqldialect"
 )
@@ -41,10 +42,16 @@ func (e *DatabricksScrapper) FetchTableChangeHistory(
 	}
 	defer rows.Close()
 
+	scanner, err := rowscan.New[databricksHistoryRow](rows)
+	if err != nil {
+		return nil, err
+	}
+	scanner.LogColumnDrift(ctx, "DESCRIBE HISTORY")
+
 	var events []*scrapper.TableChangeEvent
 	for rows.Next() {
 		row := &databricksHistoryRow{}
-		if err := rows.StructScan(row); err != nil {
+		if err := scanner.Scan(rows, row); err != nil {
 			return nil, err
 		}
 

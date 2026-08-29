@@ -1,4 +1,4 @@
-package scrapper
+package rowscan
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// RowScanner scans a result set into a struct by `db` tag while tolerating a
+// Scanner scans a result set into a struct by `db` tag while tolerating a
 // result set whose columns do not match the struct exactly.
 //
 // sqlx's StructScan is all-or-nothing in one direction: a single result column
@@ -34,7 +34,7 @@ import (
 //
 // Only fields carrying an explicit `db` tag participate; fields the scrapper
 // fills in itself stay untouched. Matching is case-insensitive.
-type RowScanner[T any] struct {
+type Scanner[T any] struct {
 	// fieldIndex holds, per result column, the index path of the field it
 	// lands in, or nil for a column to discard.
 	fieldIndex [][]int
@@ -52,8 +52,8 @@ type dbField struct {
 	index  []int
 }
 
-// NewRowScanner plans how the columns of an open result set map onto T.
-func NewRowScanner[T any](rows *sqlx.Rows) (*RowScanner[T], error) {
+// New plans how the columns of an open result set map onto T.
+func New[T any](rows *sqlx.Rows) (*Scanner[T], error) {
 	structType := reflect.TypeFor[T]()
 	if structType.Kind() != reflect.Struct {
 		return nil, errors.Errorf("row scanner target must be a struct, got %s", structType)
@@ -74,7 +74,7 @@ func NewRowScanner[T any](rows *sqlx.Rows) (*RowScanner[T], error) {
 		indexByColumn[normalizeColumn(field.column)] = field.index
 	}
 
-	scanner := &RowScanner[T]{
+	scanner := &Scanner[T]{
 		fieldIndex: make([][]int, len(columns)),
 		targets:    make([]any, len(columns)),
 		sinks:      make([]any, len(columns)),
@@ -110,20 +110,20 @@ func NewRowScanner[T any](rows *sqlx.Rows) (*RowScanner[T], error) {
 // UnknownColumns lists result columns the struct has no field for. They are
 // discarded rather than fatal, and are the expected shape of a vendor adding a
 // column to a view we read.
-func (s *RowScanner[T]) UnknownColumns() []string {
+func (s *Scanner[T]) UnknownColumns() []string {
 	return s.unknown
 }
 
 // MissingColumns lists `db` tags the result set does not carry. Those fields stay
 // at their zero value.
-func (s *RowScanner[T]) MissingColumns() []string {
+func (s *Scanner[T]) MissingColumns() []string {
 	return s.missing
 }
 
 // RequireColumns fails when a column the caller cannot do without is absent from
 // the result set, so an unusable read is rejected up front instead of producing
 // rows with holes in them.
-func (s *RowScanner[T]) RequireColumns(columns ...string) error {
+func (s *Scanner[T]) RequireColumns(columns ...string) error {
 	var absent []string
 	for _, column := range columns {
 		for _, missing := range s.missing {
@@ -142,23 +142,27 @@ func (s *RowScanner[T]) RequireColumns(columns ...string) error {
 // LogColumnDrift reports the difference between the result set and the struct, so
 // a vendor adding or withdrawing a column surfaces in logs on the run it first
 // happens rather than the next time someone reads the code. source names the
-// object read, for example "SNOWFLAKE.ACCOUNT_USAGE.TASK_HISTORY".
-func (s *RowScanner[T]) LogColumnDrift(ctx context.Context, source string) {
+// object read, for example "SNOWFLAKE.ACCOUNT_USAGE.TASK_HISTORY"; it is left
+// empty by callers that read an arbitrary statement rather than a named object,
+// where the target type is what identifies the read.
+func (s *Scanner[T]) LogColumnDrift(ctx context.Context, source string) {
 	if len(s.unknown) == 0 && len(s.missing) == 0 {
 		return
 	}
-	logging.GetLogger(ctx).WithFields(
-		logrus.Fields{
-			"source":          source,
-			"target":          reflect.TypeFor[T]().String(),
-			"unknown_columns": s.unknown,
-			"missing_columns": s.missing,
-		},
-	).Warn("result set columns differ from the expected shape, scanning what matched")
+	fields := logrus.Fields{
+		"target":          reflect.TypeFor[T]().String(),
+		"unknown_columns": s.unknown,
+		"missing_columns": s.missing,
+	}
+	if source != "" {
+		fields["source"] = source
+	}
+	logging.GetLogger(ctx).WithFields(fields).
+		Warn("result set columns differ from the expected shape, scanning what matched")
 }
 
 // Scan reads the current row into dest.
-func (s *RowScanner[T]) Scan(rows *sqlx.Rows, dest *T) error {
+func (s *Scanner[T]) Scan(rows *sqlx.Rows, dest *T) error {
 	value := reflect.ValueOf(dest).Elem()
 	for i, index := range s.fieldIndex {
 		if index == nil {

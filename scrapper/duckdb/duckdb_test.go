@@ -254,6 +254,9 @@ func (s *LocalDuckDBScrapperSuite) TestQueryCatalog() {
 				s.NotNil(col.Comment)
 				s.Equal("Primary identifier", *col.Comment)
 				s.False(col.IsView)
+				// The relation's own type, which the query used to alias
+				// "type" as well and so lose to the column's data type.
+				s.Equal("BASE TABLE", col.TableType)
 			case "name":
 				foundNameColumn = true
 				s.Contains(col.Type, "VARCHAR")
