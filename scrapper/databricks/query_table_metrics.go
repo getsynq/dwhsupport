@@ -9,6 +9,7 @@ import (
 	"time"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
+	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -23,8 +24,10 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 
 	scopeFilter := e.effectiveScope(ctx)
 
+	throttleBefore := e.ThrottleStats()
+	defer func() { e.logThrottleStats(ctx, throttleBefore) }()
+
 	var res []*scrapper.TableMetricsRow
-	var errorMessages []string
 	var mutex sync.Mutex
 
 	noScan := " NOSCAN"
@@ -120,11 +123,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 						if sqlClient, err := e.lazyExecutor.Get(); err == nil {
 							err := sqlClient.Exec(groupCtx, sql)
 							if err != nil {
-								err = errors.Wrapf(err, "failed to %s", sql)
-								log.Warn(err)
-								mutex.Lock()
-								errorMessages = append(errorMessages, err.Error())
-								mutex.Unlock()
+								log.Warn(errors.Wrapf(err, "failed to %s", sql))
 							}
 						}
 
@@ -134,10 +133,16 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 						})
 						if err != nil {
 							err = errors.Wrapf(err, "failed to get properties of %s", tableInfo.FullName)
+							// A table whose properties the workspace refused to serve for exceeding
+							// its quota fails the run. The row counts and sizes of every table read
+							// before it are already in res, and reporting those as the workspace's
+							// metrics is how a rate-limited run looks like tables that stopped
+							// growing — the pacing has already spent its attempts by the time this
+							// is reached, so there is nothing left to wait out.
+							if dwhexecdatabricks.IsRateLimitError(err) {
+								return err
+							}
 							log.Warn(err)
-							mutex.Lock()
-							errorMessages = append(errorMessages, err.Error())
-							mutex.Unlock()
 						}
 						if r != nil {
 							mutex.Lock()

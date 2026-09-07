@@ -8,15 +8,16 @@ import (
 
 	"github.com/databricks/databricks-sdk-go"
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
-	"github.com/databricks/databricks-sdk-go/useragent"
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/lazy"
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type DatabricksScrapperConf struct {
@@ -87,13 +88,11 @@ var databricksReasonPhraseRegexp = regexp.MustCompile(`X-Databricks-Reason-Phras
 
 func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*DatabricksScrapper, error) {
 
-	useragent.WithProduct("synq", "1.0.0")
-
 	databricksConf := &databricks.Config{
 		Host: conf.WorkspaceUrl,
 	}
 	conf.Auth.Configure(databricksConf)
-	client, err := databricks.NewWorkspaceClient(databricksConf)
+	client, err := dwhexecdatabricks.NewWorkspaceClient(databricksConf)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +100,12 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 	// Poor man ping
 	_, err = client.CurrentUser.Me(ctx)
 	if err != nil {
+		// A workspace over its control-plane quota is not a workspace we cannot
+		// authenticate against, and reporting it as one sends the customer to check
+		// credentials that are fine.
+		if dwhexecdatabricks.IsRateLimitError(err) {
+			return nil, errors.Wrap(err, "failed to reach the workspace")
+		}
 		err := dwhexec.NewAuthError(err)
 		errText := err.Error()
 		ret := databricksReasonPhraseRegexp.FindAllStringSubmatch(errText, -1)
@@ -133,6 +138,34 @@ func (e *DatabricksScrapper) IsPermissionError(err error) bool {
 
 func (e *DatabricksScrapper) GetApiClient() *databricks.WorkspaceClient {
 	return e.client
+}
+
+// ThrottleStats reports how much the workspace's control-plane quota is shaping this
+// process — how many requests it has refused, how long requests spent held back, and
+// the spacing currently converged on. The throttle is shared by every client of the
+// workspace in this process, so the numbers cover the lineage walk and any other
+// enrolled producer too, not only this scrapper, and they run for the life of the
+// process: a caller reporting on one scrape takes a snapshot either side of it and
+// calls Since.
+func (e *DatabricksScrapper) ThrottleStats() dwhexecdatabricks.ThrottleStats {
+	return dwhexecdatabricks.ThrottleFor(e.conf.WorkspaceUrl).Stats()
+}
+
+// logThrottleStats says once, at the end of a scrape, that the workspace paced it —
+// the difference between a scrape that wants a tighter scope and one that is broken.
+// It reports what happened during this scrape rather than the throttle's running
+// totals, and says nothing at all for a workspace that refused nothing, which is the
+// normal case.
+func (e *DatabricksScrapper) logThrottleStats(ctx context.Context, before dwhexecdatabricks.ThrottleStats) {
+	stats := e.ThrottleStats().Since(before)
+	if !stats.Paced() {
+		return
+	}
+	logging.GetLogger(ctx).WithFields(logrus.Fields{
+		"rate_limit_refusals": stats.Refusals,
+		"throttle_wait_total": stats.Waited.Round(time.Second),
+		"throttle_interval":   stats.Interval,
+	}).Warn("Databricks rate limited this workspace; requests were paced to fit its quota")
 }
 
 func (e *DatabricksScrapper) Executor() (*dwhexecdatabricks.DatabricksExecutor, error) {
