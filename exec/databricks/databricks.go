@@ -7,7 +7,6 @@ import (
 
 	"github.com/databricks/databricks-sdk-go"
 	servicesql "github.com/databricks/databricks-sdk-go/service/sql"
-	"github.com/databricks/databricks-sdk-go/useragent"
 	_ "github.com/databricks/databricks-sql-go"
 	dbsql "github.com/databricks/databricks-sql-go"
 	"github.com/databricks/databricks-sql-go/auth/oauth/m2m"
@@ -79,13 +78,11 @@ func (e *DatabricksExecutor) Close() error {
 
 func NewDatabricksExecutor(ctx context.Context, conf *DatabricksConf) (*DatabricksExecutor, error) {
 
-	useragent.WithProduct("synq", "1.0.0")
-
 	databricksConfig := &databricks.Config{
 		Host: conf.WorkspaceUrl,
 	}
 	conf.Auth.Configure(databricksConfig)
-	client, err := databricks.NewWorkspaceClient(databricksConfig)
+	client, err := NewWorkspaceClient(databricksConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +90,12 @@ func NewDatabricksExecutor(ctx context.Context, conf *DatabricksConf) (*Databric
 	// Poor man ping
 	_, err = client.DataSources.List(ctx)
 	if err != nil {
+		// A workspace over its control-plane quota is not a workspace we cannot
+		// authenticate against, and reporting it as one sends the customer to check
+		// credentials that are fine.
+		if IsRateLimitError(err) {
+			return nil, errors.Wrap(err, "failed to reach the workspace")
+		}
 		return nil, exec.NewAuthError(err)
 	}
 
