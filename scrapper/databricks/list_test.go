@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/databricks/databricks-sdk-go"
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/stretchr/testify/require"
@@ -106,11 +106,29 @@ type fakeWorkspace struct {
 	// deniedSchemas holds schemas whose table listing answers as though the caller
 	// were not allowed to read them, keyed "catalog.schema".
 	deniedSchemas map[string]bool
+	// refuse, when set, decides whether the workspace answers a request by refusing it
+	// for exceeding its control-plane quota rather than serving it. It runs in front of
+	// every endpoint, the way a real limiter does.
+	refuse func(r *http.Request) *refusedRequest
+	// pacing, when set, is installed as the workspace's pacing before a scrapper is
+	// built against it, so a test converges in milliseconds rather than in
+	// production-sized waits.
+	pacing *dwhexecdatabricks.Pacing
+	// serverUrl is what the fake came up on, which is also the workspace URL a scrapper
+	// is configured with and the key its throttle lives under.
+	serverUrl string
+	// served counts the requests the fake answered, refusals included.
+	served int
+	// readProperties, when set, is what a per-table read answers with on top of what the
+	// listing carries — the statistics a metrics scrape goes back to each table for.
+	readProperties map[string]string
 	// listedCatalogs records the catalog of every schema listing served, and
 	// listedSchemas the "catalog.schema" of every table listing, so a test can tell
 	// what a scrape asked the API for rather than only what it returned.
 	listedCatalogs []string
 	listedSchemas  []string
+	// readTables records the full name of every per-table read served.
+	readTables []string
 
 	mu sync.Mutex
 }
@@ -142,6 +160,7 @@ func (f *fakeWorkspace) addTable(catalog, schema, table string) {
 	f.tables[key] = append(f.tables[key], servicecatalog.TableInfo{
 		Name: table, CatalogName: catalog, SchemaName: schema, FullName: key + "." + table,
 		TableType: servicecatalog.TableTypeManaged,
+		UpdatedAt: time.Now().UnixMilli(),
 		Columns: []servicecatalog.ColumnInfo{
 			{Name: "id", TypeText: "bigint", Position: 0, PartitionIndex: 1},
 		},
@@ -172,6 +191,21 @@ func (f *fakeWorkspace) addUnreadableSchema(catalog, schema string) {
 }
 
 func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
+	return f.startWith(t, &DatabricksScrapperConf{})
+}
+
+// startWith brings the fake up and builds a scrapper against it with a configuration
+// of the test's choosing.
+func (f *fakeWorkspace) startWith(t *testing.T, conf *DatabricksScrapperConf) *DatabricksScrapper {
+	t.Helper()
+	scrapper, err := f.tryStart(t, conf)
+	require.NoError(t, err)
+	return scrapper
+}
+
+// tryStart is startWith for a test that expects building the scrapper to fail — a
+// workspace that refuses the ping it comes up with.
+func (f *fakeWorkspace) tryStart(t *testing.T, conf *DatabricksScrapperConf) (*DatabricksScrapper, error) {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -215,21 +249,112 @@ func (f *fakeWorkspace) start(t *testing.T) *DatabricksScrapper {
 		page, next := f.page(t, r, len(tables))
 		f.writeJson(t, w, http.StatusOK, "tables", tables[page.from:page.to], next)
 	})
+	// One table's own metadata, which is what a metrics scrape reads per table on top of
+	// the listings.
+	mux.HandleFunc("/api/2.1/unity-catalog/tables/", func(w http.ResponseWriter, r *http.Request) {
+		fullName := strings.TrimPrefix(r.URL.Path, "/api/2.1/unity-catalog/tables/")
+		f.record(&f.readTables, fullName)
+		table, found := f.table(fullName)
+		if !found {
+			f.writeVanished(t, w, "TABLE_DOES_NOT_EXIST", fmt.Sprintf("Table '%s' does not exist.", fullName))
+			return
+		}
+		if len(f.readProperties) > 0 {
+			table.Properties = f.readProperties
+		}
+		f.writeJson(t, w, http.StatusOK, "", table, "")
+	})
+	// The ping and the warehouse lookup a scrapper makes on its way up. Answering no
+	// warehouse means no SQL executor, which is what keeps these tests to the REST
+	// client the pacing lives in.
+	mux.HandleFunc("/api/2.0/preview/scim/v2/Me", func(w http.ResponseWriter, r *http.Request) {
+		f.writeJson(t, w, http.StatusOK, "", map[string]any{"id": "1", "userName": "tester"}, "")
+	})
+	mux.HandleFunc("/api/2.0/preview/sql/data_sources", func(w http.ResponseWriter, r *http.Request) {
+		f.writeJson(t, w, http.StatusOK, "", []any{}, "")
+	})
+	mux.HandleFunc("/api/2.0/sql/warehouses", func(w http.ResponseWriter, r *http.Request) {
+		f.writeJson(t, w, http.StatusOK, "warehouses", []any{}, "")
+	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("unexpected Databricks request: %s %s", r.Method, r.URL)
 		w.WriteHeader(http.StatusNotImplemented)
 	})
 
-	server := httptest.NewServer(mux)
+	server := httptest.NewServer(f.gate(t, mux))
 	t.Cleanup(server.Close)
+	f.serverUrl = server.URL
 
-	client, err := databricks.NewWorkspaceClient(&databricks.Config{Host: server.URL, Token: "test-token"})
-	require.NoError(t, err)
-
-	conf := &DatabricksScrapperConf{
-		DatabricksConf: dwhexecdatabricks.DatabricksConf{WorkspaceUrl: server.URL},
+	if f.pacing != nil {
+		dwhexecdatabricks.UsePacing(server.URL, *f.pacing)
 	}
-	return &DatabricksScrapper{client: client, conf: conf, scope: ScopeFromConf(conf)}
+
+	conf.DatabricksConf = dwhexecdatabricks.DatabricksConf{
+		WorkspaceUrl: server.URL,
+		Auth:         dwhexecdatabricks.NewTokenAuth("test-token"),
+	}
+	// Built the way the product builds it, so what these tests drive is the paced client
+	// a scrape actually gets rather than one assembled here.
+	return NewDatabricksScrapper(context.Background(), conf)
+}
+
+// refusedRequest is one refusal the fake answers with.
+type refusedRequest struct {
+	status     int
+	retryAfter string
+	errorCode  string
+	message    string
+}
+
+// rateLimited is the refusal a workspace over its control-plane quota answers with.
+func rateLimited() *refusedRequest {
+	return &refusedRequest{
+		status:    http.StatusTooManyRequests,
+		errorCode: "REQUEST_LIMIT_EXCEEDED",
+		message:   "Rate limit exceeded. Please try again later.",
+	}
+}
+
+// gate puts the refusal hook in front of every endpoint the fake serves.
+func (f *fakeWorkspace) gate(t *testing.T, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		f.served++
+		refuse := f.refuse
+		f.mu.Unlock()
+
+		if refuse != nil {
+			if refused := refuse(r); refused != nil {
+				if refused.retryAfter != "" {
+					w.Header().Set("Retry-After", refused.retryAfter)
+				}
+				f.writeApiError(t, w, refused.status, refused.errorCode, refused.message)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// servedRequests is how many requests the fake answered, refusals included.
+func (f *fakeWorkspace) servedRequests() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.served
+}
+
+// table returns one table by its full name.
+func (f *fakeWorkspace) table(fullName string) (servicecatalog.TableInfo, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, tables := range f.tables {
+		for _, table := range tables {
+			if table.FullName == fullName {
+				return table, true
+			}
+		}
+	}
+	return servicecatalog.TableInfo{}, false
 }
 
 // record appends to one of the request logs. Page tokens mean one listing can be
@@ -320,10 +445,18 @@ func (f *fakeWorkspace) writeApiError(t *testing.T, w http.ResponseWriter, statu
 	}
 }
 
+// writeJson answers with rows under key, or with rows as the whole body when key is
+// empty — the shape of every endpoint that returns one object rather than a listing.
 func (f *fakeWorkspace) writeJson(t *testing.T, w http.ResponseWriter, status int, key string, rows any, nextPageToken string) {
 	t.Helper()
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
+	if key == "" {
+		if err := json.NewEncoder(w).Encode(rows); err != nil {
+			t.Errorf("failed to encode fake Databricks response: %v", err)
+		}
+		return
+	}
 	body := map[string]any{key: rows}
 	if nextPageToken != "" {
 		body["next_page_token"] = nextPageToken
