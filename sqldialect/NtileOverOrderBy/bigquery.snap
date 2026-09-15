@@ -1,0 +1,4 @@
+
+[TestWindowSuite/TestNtileOverOrderBy - 1]
+NTILE(16) over (order by id)
+---

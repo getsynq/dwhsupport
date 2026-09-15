@@ -1,0 +1,4 @@
+
+[TestWindowSuite/TestRowNumberOverEmptyWindow - 1]
+ROW_NUMBER() over ()
+---
