@@ -134,3 +134,5 @@ func (d *TrinoDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *TrinoDialect) SupportsCrossDatabaseQueries() bool { return true }
+
+func (d *TrinoDialect) SupportsAsBeforeTableAlias() bool { return true }

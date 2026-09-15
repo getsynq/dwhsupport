@@ -6,7 +6,7 @@ select
   SUM(MD5(COALESCE(TO_CHAR(id), '<NULL>') || '|' || COALESCE(TO_CHAR(name), '<NULL>') || '|' || COALESCE(TO_CHAR(value), '<NULL>'))) as checksum
 from (
 SELECT id, name, value FROM test_data
-) AS _recon_base 
+) "_recon_base" 
 where id >= 1 AND id < 100
 group by bucket
 order by bucket 

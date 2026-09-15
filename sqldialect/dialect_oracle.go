@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -84,7 +85,7 @@ func (d *OracleDialect) ResolveFieldRef(name string) string {
 	if isLikelyExpression(name) || isQuotedWith(name, '"', '"') {
 		return name
 	}
-	return QuoteForFoldUpper(name)
+	return OracleQuoteIfNeeded(name)
 }
 
 func (d *OracleDialect) StringLiteral(s string) string {
@@ -136,8 +137,28 @@ func (d *OracleDialect) FormatLimit(rowsSql string) string {
 
 func (d *OracleDialect) SupportsCrossDatabaseQueries() bool { return false }
 
+// SupportsAsBeforeTableAlias is false: Oracle rejects the keyword with
+// ORA-03048 ("SQL reserved word 'AS' is not syntactically valid"). It takes
+// AS only before a column alias.
+func (d *OracleDialect) SupportsAsBeforeTableAlias() bool { return false }
+
 func OracleQuoteIdentifier(identifier string) string {
 	return fmt.Sprintf("\"%s\"", identifier)
+}
+
+// OracleQuoteIfNeeded quotes an identifier the way QuoteForFoldUpper does, and
+// additionally quotes one that does not begin with a letter.
+//
+// Oracle requires an unquoted identifier to start with a letter — `_` and `$`
+// and `#` are legal inside it but not at the front. Every other dialect we
+// support takes a leading underscore, so a generated alias like `_recon_base`
+// reads fine everywhere else and fails here with "ORA-00911: _: invalid
+// character", pointing at the underscore rather than at the alias.
+func OracleQuoteIfNeeded(identifier string) string {
+	if !startsWithLetter(identifier) {
+		return OracleQuoteIdentifier(strings.ReplaceAll(identifier, `"`, `""`))
+	}
+	return QuoteForFoldUpper(identifier)
 }
 
 func oracleTimeTruncUnit(duration time.Duration) string {

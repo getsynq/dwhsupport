@@ -134,3 +134,5 @@ func (d *RedshiftDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *RedshiftDialect) SupportsCrossDatabaseQueries() bool { return true }
+
+func (d *RedshiftDialect) SupportsAsBeforeTableAlias() bool { return true }

@@ -152,6 +152,8 @@ func MSSQLQuoteIdentifier(identifier string) string {
 
 func (d *MSSQLDialect) SupportsCrossDatabaseQueries() bool { return false }
 
+func (d *MSSQLDialect) SupportsAsBeforeTableAlias() bool { return true }
+
 func mssqlTimeUnit(duration time.Duration) TimeUnit {
 	switch {
 	case duration >= 24*time.Hour:

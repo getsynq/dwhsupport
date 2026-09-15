@@ -40,6 +40,18 @@ type Dialect interface {
 	// SupportsCrossDatabaseQueries returns true if the dialect supports referencing
 	// the database/catalog as part of the SQL FQN (e.g. database.schema.table).
 	SupportsCrossDatabaseQueries() bool
+
+	// SupportsAsBeforeTableAlias reports whether the optional AS keyword may sit
+	// between a derived table and its alias — `(select ...) AS t` rather than
+	// `(select ...) t`.
+	//
+	// The keyword is optional in the SQL standard and most dialects document it
+	// as accepted, but Oracle rejects it outright (ORA-03048: SQL reserved word
+	// 'AS' is not syntactically valid), which used to fail every query that
+	// wrapped a caller's SQL as a subquery. Dropping it everywhere would be the
+	// smaller change but leaves the generated SQL harder to read on the
+	// dialects that do take it, so the keyword is a per-dialect answer.
+	SupportsAsBeforeTableAlias() bool
 }
 
 // utils

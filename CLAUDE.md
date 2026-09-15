@@ -157,11 +157,12 @@ CI builds/tests it as a separate `cli` job (`.github/workflows/go.yml`).
 
 ### Integration Test Suites
 
-Four embeddable test suites in `scrapper/scrappertest/`:
+Five embeddable test suites in `scrapper/scrappertest/`:
 - **ComplianceSuite** — validates all scrapper methods work or return ErrUnsupported
 - **ScopeComplianceSuite** — validates scope filtering (include/exclude)
 - **MonitorComplianceSuite** — tests QuerySegments/QueryCustomMetrics/QueryShape with dialect-specific SQL
 - **MetricsExecutionSuite** — generates SQL via `metrics/querybuilder` and executes against real databases
+- **SqlDialectExecutionSuite** — builds derived tables, window functions and qualified column refs with `sqldialect` and executes them, so a dialect that rejects what the builders emit fails here rather than in a customer's warehouse. Wired per warehouse in `scrapper/<wh>/sqldialect_execution_test.go`; the DuckDB copy is in-memory and runs in CI.
 
 Integration tests connect to dwhtesting staging databases via Twingate (no port-forwarding needed). Each scrapper package has a `base_test.go` that loads `../../.env` via `godotenv`. Env var prefixes per database:
 - `ORACLE_`, `MSSQL_`, `POSTGRES_`, `CLICKHOUSE_` — dwhtesting staging
@@ -193,6 +194,8 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - **Permission errors**: `exec/<dialect>.IsPermissionError(err)` is the single source of truth; scrappers delegate to it. Non-scrapper query paths (which hold an `exec` querier) reuse it too — don't re-match driver-specific errors elsewhere.
 - **Scope Filtering**: `scrapper/scope/` provides include/exclude scope filtering. SQL files use `/* SYNQ_SCOPE_FILTER */` placeholder at the injection point; `AppendScopeConditions` replaces it with `AND <conditions>` or empty string. Never use heuristic WHERE-append. Scope is **context-driven** (`scope.WithScope`), never a method parameter. Use `AppendSchemaScopeConditions(ctx, sql, dbCol, schemaCol)` for schema-level listings (no table column). `ScopedScrapper` post-filters results via `FilterRows`/`FilterDatabaseRows`/`FilterSchemaRows`, so SQL push-down is an optimization, not the enforcement boundary.
 - **Scope Compliance Testing**: `scrapper/scrappertest/ScopeComplianceSuite` is an embeddable test suite for validating scope filtering — embed alongside `ComplianceSuite` in warehouse integration tests
+- **Aliases and qualified refs**: an alias the builder mints uses `sqldialect.Alias`, never `Identifier`. `Identifier` quotes unconditionally on the dialects whose `Identifier` is a quoting function (Oracle, ClickHouse, BigQuery), pinning the alias to the case it was written in, while every reference to it — `QualifiedCol`, an outer WHERE, a GROUP BY — goes through `ResolveFieldRef` and folds. `as "key_val"` next to a reference to `key_val` is two different columns on Oracle. `Alias` and `QualifiedCol` both resolve through `ResolveFieldRef`, so they agree by construction; `TestSubqueryTableAliasMatchesQualifiedCol` pins that across every dialect. What the warehouse then reports the column as is still its own choice, so reads stay case-insensitive (`exec.QueryMapResult.Get`).
+- **Window functions**: `sqldialect.Over(fn).PartitionBy(...).OrderBy(...)` with `RowNumber()` / `Ntile(n)`. Frame clauses (ROWS/RANGE BETWEEN) are deliberately not modelled. Every dialect we support requires the `OVER` to carry an `ORDER BY` for `NTILE`.
 - **Query Helpers**: `scrapper/stdsql/` helpers (`QueryShape`, `QueryCustomMetrics`) accept `RowQuerier` interface — pass the executor directly, not `GetDb()`. Use `stdsql.RawDB{DB: db}` wrapper only in tests with raw `*sqlx.DB`.
 
 ## Snowflake DDL Parsing
@@ -217,6 +220,8 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 
 ## Oracle & MSSQL Gotchas
 
+- **Oracle rejects `AS` before a table alias**: `(select ...) AS t` fails with `ORA-03048: SQL reserved word 'AS' is not syntactically valid`. It is optional in the standard and accepted everywhere else, so it is a dialect flag — `Dialect.SupportsAsBeforeTableAlias()`, false only for Oracle.
+- **Oracle requires an unquoted identifier to start with a letter**: `_` / `$` / `#` are legal inside one but not at the front, so a generated alias like `_recon_base` fails with `ORA-00911: _: invalid character`. `OracleQuoteIfNeeded` quotes those; every other dialect takes a leading underscore raw.
 - **go-ora time.Time binding**: go-ora's `time.Time` bind parameters don't compare correctly with Oracle DATE columns. Use `TO_DATE(:1, 'YYYY-MM-DD HH24:MI:SS')` with `t.UTC().Format("2006-01-02 15:04:05")` string parameters instead.
 - **MSSQL DB_NAME() consistency**: Always use `DB_NAME()` in SQL queries to populate the database field, never `conf.Database` — avoids casing mismatches between user config and SQL Server's canonical name.
 - **sqldialect ResolveTime timezone**: Dialects that format time without timezone info (Oracle, MSSQL, ClickHouse) must call `.UTC()` before formatting to prevent wrong comparisons when Go runs in non-UTC timezone.

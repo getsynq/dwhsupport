@@ -137,3 +137,5 @@ func (d *DatabricksDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *DatabricksDialect) SupportsCrossDatabaseQueries() bool { return true }
+
+func (d *DatabricksDialect) SupportsAsBeforeTableAlias() bool { return true }
