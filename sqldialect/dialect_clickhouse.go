@@ -137,3 +137,5 @@ func (d *ClickHouseDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *ClickHouseDialect) SupportsCrossDatabaseQueries() bool { return false }
+
+func (d *ClickHouseDialect) SupportsAsBeforeTableAlias() bool { return true }

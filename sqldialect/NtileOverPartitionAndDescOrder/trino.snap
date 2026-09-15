@@ -1,0 +1,4 @@
+
+[TestWindowSuite/TestNtileOverPartitionAndDescOrder - 1]
+NTILE(8) over (partition by category, region order by id desc, created_at)
+---

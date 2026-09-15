@@ -148,3 +148,5 @@ func (d *BigQueryDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *BigQueryDialect) SupportsCrossDatabaseQueries() bool { return true }
+
+func (d *BigQueryDialect) SupportsAsBeforeTableAlias() bool { return true }

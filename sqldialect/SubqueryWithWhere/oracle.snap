@@ -5,7 +5,7 @@ select
   amount
 from (
 SELECT id, amount FROM transactions
-) AS txn 
+) txn 
 where amount > 100
  
 ---

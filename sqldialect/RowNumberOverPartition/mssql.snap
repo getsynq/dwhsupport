@@ -1,0 +1,4 @@
+
+[TestWindowSuite/TestRowNumberOverPartition - 1]
+ROW_NUMBER() over (partition by category order by id)
+---

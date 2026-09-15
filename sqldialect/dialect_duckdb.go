@@ -137,3 +137,5 @@ func (d *DuckDBDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *DuckDBDialect) SupportsCrossDatabaseQueries() bool { return false }
+
+func (d *DuckDBDialect) SupportsAsBeforeTableAlias() bool { return true }

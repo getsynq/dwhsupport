@@ -135,6 +135,8 @@ func (d *PostgresDialect) FormatLimit(rowsSql string) string {
 
 func (d *PostgresDialect) SupportsCrossDatabaseQueries() bool { return false }
 
+func (d *PostgresDialect) SupportsAsBeforeTableAlias() bool { return true }
+
 // prefersRowValueComparison: Postgres decomposes a native row-value comparison
 // `(a, b) >= (x, y)` into a leading-column index range scan, so it is the
 // index-friendly form (verified against a (workspace, path) btree). See

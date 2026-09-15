@@ -1,0 +1,18 @@
+
+[TestWindowSuite/TestNtileCheckpointQuery - 1]
+select
+  "_recon_bucketed".bucket as bucket, 
+  MIN("_recon_bucketed".key_val) as lo, 
+  MAX("_recon_bucketed".key_val) as hi, 
+  COUNT(*) as cnt
+from (
+select
+  id as key_val, 
+  NTILE(4) over (order by id) as bucket
+from (
+select id, name from products
+) "_recon_base" 
+) "_recon_bucketed" 
+group by "_recon_bucketed".bucket
+order by "_recon_bucketed".bucket 
+---

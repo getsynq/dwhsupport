@@ -3,5 +3,5 @@
 (
 SELECT id, name FROM users -- active users only
 WHERE active = true
-) AS users_active
+) users_active
 ---

@@ -5,8 +5,8 @@ select
   _recon_tgt.cnt as "target_cnt"
 from (
 SELECT COUNT(*) AS cnt FROM users
-) AS _recon_src cross join (
+) "_recon_src" cross join (
 SELECT COUNT(*) AS cnt FROM orders
-) AS _recon_tgt
+) "_recon_tgt"
  
 ---

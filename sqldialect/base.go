@@ -1152,7 +1152,11 @@ func SubqueryTable(rawSql string, alias string) *SubqueryTableExpr {
 }
 
 func (e *SubqueryTableExpr) ToSql(dialect Dialect) (string, error) {
-	return fmt.Sprintf("(\n%s\n) AS %s", e.rawSql, e.alias), nil
+	alias := dialect.ResolveFieldRef(e.alias)
+	if dialect.SupportsAsBeforeTableAlias() {
+		return fmt.Sprintf("(\n%s\n) AS %s", e.rawSql, alias), nil
+	}
+	return fmt.Sprintf("(\n%s\n) %s", e.rawSql, alias), nil
 }
 
 func (e *SubqueryTableExpr) IsTableExpr() {}

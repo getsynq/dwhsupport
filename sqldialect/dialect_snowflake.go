@@ -134,3 +134,5 @@ func (d *SnowflakeDialect) FormatLimit(rowsSql string) string {
 }
 
 func (d *SnowflakeDialect) SupportsCrossDatabaseQueries() bool { return true }
+
+func (d *SnowflakeDialect) SupportsAsBeforeTableAlias() bool { return true }

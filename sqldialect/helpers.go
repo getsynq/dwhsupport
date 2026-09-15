@@ -61,6 +61,16 @@ func needsQuoting(identifier string) bool {
 	return false
 }
 
+// startsWithLetter reports whether the identifier's first character is an ASCII
+// letter. An empty identifier does not count.
+func startsWithLetter(identifier string) bool {
+	if identifier == "" {
+		return false
+	}
+	r := identifier[0]
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+}
+
 // QuoteWithDoubleQuotesIfNeeded quotes an identifier with double quotes
 // (ANSI SQL standard) only when needed. Returns the identifier raw when it
 // contains only safe chars. Used by Trino, Postgres, Redshift, DuckDB.
