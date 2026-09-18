@@ -2,6 +2,7 @@ package sshtunnel
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net"
 	"sync"
@@ -12,15 +13,58 @@ import (
 )
 
 type SshTunnel struct {
-	Host       string
-	Port       int
-	User       string
-	PrivateKey []byte
-	Timeout    time.Duration
+	Host string
+	Port int
+	User string
+	// PrivateKeys are the keys offered to the server, most preferred first. SSH
+	// public-key auth tries them in order and the server accepts the first one
+	// it trusts, so a caller rotating its key can offer the new key alongside
+	// the one it replaces and no handshake breaks while the server's
+	// authorized_keys is being updated.
+	//
+	// Offer only the keys that are still meant to work: OpenSSH counts every
+	// attempt against MaxAuthTries (6 by default) and drops the connection once
+	// it is exhausted, so a long list of retired keys can fail a handshake the
+	// first entry would have completed.
+	PrivateKeys [][]byte
+	Timeout     time.Duration
 }
 
 func (r *SshTunnel) IsEnabled() bool {
-	return r != nil && r.Host != "" && len(r.PrivateKey) > 0
+	if r == nil || r.Host == "" {
+		return false
+	}
+	for _, key := range r.PrivateKeys {
+		if len(key) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// signers parses every configured private key. Keys that fail to parse are
+// skipped rather than failing the dial: with several keys offered, one unusable
+// entry must not take down a connection another key can still authenticate. All
+// parse errors are returned together when none of them parsed, so a tunnel with
+// nothing usable still says why.
+func (r *SshTunnel) signers() ([]ssh.Signer, error) {
+	var signers []ssh.Signer
+	var parseErrs []error
+	for i, key := range r.PrivateKeys {
+		if len(key) == 0 {
+			continue
+		}
+		signer, err := ssh.ParsePrivateKey(key)
+		if err != nil {
+			parseErrs = append(parseErrs, errors.Wrapf(err, "private key %d", i))
+			continue
+		}
+		signers = append(signers, signer)
+	}
+	if len(signers) == 0 {
+		return nil, errors.Wrap(stderrors.Join(parseErrs...), "failed to parse private key")
+	}
+	return signers, nil
 }
 
 type SshTunnelDialer struct {
@@ -73,9 +117,9 @@ func NewSshTunnelDialer(tunnel *SshTunnel) (*SshTunnelDialer, error) {
 		return nil, errors.New("tunnel is not enabled")
 	}
 
-	privateKey, err := ssh.ParsePrivateKey(tunnel.PrivateKey)
+	signers, err := tunnel.signers()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to parse private key")
+		return nil, err
 	}
 
 	timeout := tunnel.Timeout
@@ -85,11 +129,10 @@ func NewSshTunnelDialer(tunnel *SshTunnel) (*SshTunnelDialer, error) {
 
 	sshConfig := &ssh.ClientConfig{
 		User:            tunnel.User,
-		Auth:            []ssh.AuthMethod{},
+		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signers...)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Timeout:         timeout,
 	}
-	sshConfig.Auth = append(sshConfig.Auth, ssh.PublicKeys(privateKey))
 
 	client, err := ssh.Dial("tcp", fmt.Sprintf("%s:%d", tunnel.Host, tunnel.Port), sshConfig)
 	if err != nil {
