@@ -169,6 +169,9 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - `MARIADB_` — MariaDB on dwhtesting staging
 - `MYSQL_` — real MySQL on dwhtesting staging
 - `STARBURST_` — Starburst Galaxy (HTTPS), `TRINO_` — self-hosted Trino (plaintext HTTP)
+- `SNOWFLAKE_` — set `SNOWFLAKE_PRIVATE_KEY_FILE` for key-pair auth; a password is refused wherever the account enforces MFA
+
+`godotenv.Load` does NOT overwrite an already-set variable, so prefixing `go test` with env vars points a suite at a different account or dataset for one run without touching `.env`. `SqlDialectExecutionSuite` needs a table that actually exists — `SNOWFLAKE_TEST_TABLE_NAME` / `_KEY_FIELD` / `_SEGMENT_FIELD` override its defaults, which name a fixture only one account has.
 
 ## Releases
 
@@ -209,6 +212,8 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - When permissions are insufficient, Snowflake returns `UNKNOWN_TAG='#UNKNOWN_VALUE'` sentinels — filter these out
 - Column-level `COMMENT` appears inside `()` of column defs; table-level `COMMENT` appears after — use parenthesis depth tracking to disambiguate
 - Snowflake supports both `COMMENT='value'` and `COMMENT 'value'` syntax
+- **`cluster by (...)` between the table name and the column list defeats the per-object DDL split** — `ParseCreateStatementsPerObject` drops those tables, so `QuerySqlDefinitions` returns them with an empty `Sql` even though `GET_DDL` did contain them. The same table without CLUSTER BY parses.
+- **A SECURE VIEW has no definition for a non-owner role** — neither `information_schema.views.view_definition` nor `GET_DDL` returns it, so an empty `Sql` there is Snowflake behaviour, not a bug.
 
 ## Important Rules
 
