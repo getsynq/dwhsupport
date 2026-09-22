@@ -69,7 +69,10 @@ func TestCanonicalIdentDoesNotFold(t *testing.T) {
 
 func TestIdentEscapesTheClosingDelimiter(t *testing.T) {
 	assert.Equal(t, `"we""ird"`, mustSql(t, CanonicalIdent(`we"ird`), NewPostgresDialect()))
-	assert.Equal(t, "`we``ird`", mustSql(t, CanonicalIdent("we`ird"), NewBigQueryDialect()))
+	// BigQuery is the exception: "Quoted identifiers have the same escape
+	// sequences as string literals", so its delimiter is backslashed.
+	assert.Equal(t, "`we\\`ird`", mustSql(t, CanonicalIdent("we`ird"), NewBigQueryDialect()))
+	assert.Equal(t, "`we``ird`", mustSql(t, CanonicalIdent("we`ird"), NewMySQLDialect()))
 	assert.Equal(t, "[we]]ird]", mustSql(t, CanonicalIdent("we]ird"), NewMSSQLDialect()))
 }
 
@@ -145,7 +148,8 @@ func TestSplitQualifiedIdentRoundTripsAnEscapedDelimiter(t *testing.T) {
 	}{
 		"mssql":    {`[a]]b.c]`, "a]b.c", NewMSSQLDialect()},
 		"postgres": {`"a""b.c"`, `a"b.c`, NewPostgresDialect()},
-		"bigquery": {"`a``b.c`", "a`b.c", NewBigQueryDialect()},
+		"bigquery": {"`a\\`b.c`", "a`b.c", NewBigQueryDialect()},
+		"mysql":    {"`a``b.c`", "a`b.c", NewMySQLDialect()},
 	}
 	for label, c := range cases {
 		t.Run(label, func(t *testing.T) {

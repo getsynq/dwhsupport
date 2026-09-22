@@ -87,13 +87,18 @@ func (d *ClickHouseDialect) CurrentTimestamp() Expr {
 // always — unlike Identifier, which quotes only when a character demands it
 // and so lets a reserved word through bare.
 func (d *ClickHouseDialect) QuoteIdent(name string) string {
-	return QuoteIdentWithBackticks(name)
+	return identQuotingBackticks.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *ClickHouseDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingBackticks.unquote(text)
 }
 
 // FoldIdent returns the name an unquoted reference resolves to.
-// Identifier comparison ignores the written case, or preserves it
-// exactly; either way an unquoted reference resolves to the name as
-// written, so there is nothing to fold.
+// Identifiers are case-sensitive, quoted or not, so there is nothing to
+// fold.
 func (d *ClickHouseDialect) FoldIdent(name string) string {
 	return name
 }

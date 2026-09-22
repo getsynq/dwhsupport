@@ -1,0 +1,13 @@
+
+[TestIdentSuite/TestQualifiedIdent/oracle - 1]
+three parts                    "PROD_DATABASE"."ECO2_ORDERS_AIRBYTE"."ORDER"
+two parts                      "PUBLIC"."ORDER"
+one part                       "ORDERS"
+database absent                "PUBLIC"."ORDERS"
+schema absent                  "PROJ"."ORDERS"
+author quoted the table        "DB"."SCH"."events"
+author quoted with backticks   "PROJ"."DS"."events"
+mixed case throughout          "MYPROJECT"."MYSCHEMA"."MYTABLE"
+dash in the project            "my-project"."DATASET"."TABLE"
+
+---

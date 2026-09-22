@@ -2,7 +2,6 @@ package sqldialect
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -88,13 +87,23 @@ func (d *RedshiftDialect) CurrentTimestamp() Expr {
 // always — unlike Identifier, which quotes only when a character demands it
 // and so lets a reserved word through bare.
 func (d *RedshiftDialect) QuoteIdent(name string) string {
-	return QuoteIdentWithDoubleQuotes(name)
+	return identQuotingDoubleQuotes.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *RedshiftDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingDoubleQuotes.unquote(text)
 }
 
 // FoldIdent returns the name an unquoted reference resolves to.
-// An unquoted reference folds to lower case here.
+// An unquoted reference folds to lower case. So does a quoted one, unless
+// the cluster sets enable_case_sensitive_identifier: "ASCII letters in
+// standard and delimited identifiers are case-insensitive and are folded to
+// lowercase in the database." Quoting therefore buys reserved words and
+// punctuation here, not case.
 func (d *RedshiftDialect) FoldIdent(name string) string {
-	return strings.ToLower(name)
+	return foldIdentASCII(name, false)
 }
 
 func (d *RedshiftDialect) Identifier(identifier string) string {

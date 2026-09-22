@@ -1,0 +1,13 @@
+
+[TestIdentSuite/TestQualifiedIdent/mysql - 1]
+three parts                    `PROD_DATABASE`.`ECO2_ORDERS_AIRBYTE`.`ORDER`
+two parts                      `public`.`order`
+one part                       `orders`
+database absent                `public`.`orders`
+schema absent                  `proj`.`orders`
+author quoted the table        `DB`.`SCH`.`events`
+author quoted with backticks   `proj`.`ds`.`events`
+mixed case throughout          `MyProject`.`MySchema`.`MyTable`
+dash in the project            `my-project`.`dataset`.`table`
+
+---

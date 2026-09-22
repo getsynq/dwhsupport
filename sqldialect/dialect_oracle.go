@@ -81,13 +81,19 @@ func (d *OracleDialect) CurrentTimestamp() Expr {
 // always — unlike Identifier, which quotes only when a character demands it
 // and so lets a reserved word through bare.
 func (d *OracleDialect) QuoteIdent(name string) string {
-	return QuoteIdentWithDoubleQuotes(name)
+	return identQuotingDoubleQuotes.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *OracleDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingDoubleQuotes.unquote(text)
 }
 
 // FoldIdent returns the name an unquoted reference resolves to.
-// An unquoted reference folds to upper case here.
+// An unquoted reference folds to upper case.
 func (d *OracleDialect) FoldIdent(name string) string {
-	return strings.ToUpper(name)
+	return foldIdentASCII(name, true)
 }
 
 func (d *OracleDialect) Identifier(identifier string) string {

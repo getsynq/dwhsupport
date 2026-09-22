@@ -2,7 +2,6 @@ package sqldialect
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -88,13 +87,20 @@ func (d *SnowflakeDialect) CurrentTimestamp() Expr {
 // always — unlike Identifier, which quotes only when a character demands it
 // and so lets a reserved word through bare.
 func (d *SnowflakeDialect) QuoteIdent(name string) string {
-	return QuoteIdentWithDoubleQuotes(name)
+	return identQuotingDoubleQuotes.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *SnowflakeDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingDoubleQuotes.unquote(text)
 }
 
 // FoldIdent returns the name an unquoted reference resolves to.
-// An unquoted reference folds to upper case here.
+// An unquoted reference folds to upper case: unquoted identifiers "are
+// stored and resolved as uppercase characters".
 func (d *SnowflakeDialect) FoldIdent(name string) string {
-	return strings.ToUpper(name)
+	return foldIdentASCII(name, true)
 }
 
 func (d *SnowflakeDialect) Identifier(identifier string) string {

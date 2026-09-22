@@ -2,7 +2,6 @@ package sqldialect
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -88,13 +87,20 @@ func (d *DatabricksDialect) CurrentTimestamp() Expr {
 // always — unlike Identifier, which quotes only when a character demands it
 // and so lets a reserved word through bare.
 func (d *DatabricksDialect) QuoteIdent(name string) string {
-	return QuoteIdentWithBackticks(name)
+	return identQuotingBackticks.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *DatabricksDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingBackticks.unquote(text)
 }
 
 // FoldIdent returns the name an unquoted reference resolves to.
-// An unquoted reference folds to lower case here.
+// "Identifiers are case-insensitive when referenced", quoted or not, so
+// there is nothing to fold.
 func (d *DatabricksDialect) FoldIdent(name string) string {
-	return strings.ToLower(name)
+	return name
 }
 
 func (d *DatabricksDialect) Identifier(identifier string) string {

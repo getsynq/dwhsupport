@@ -32,6 +32,13 @@ type Dialect interface {
 	// whether the name still has to be folded.
 	QuoteIdent(name string) string
 
+	// UnquoteIdent strips one layer of identifier delimiters from text and
+	// decodes the escape inside, reporting whether the text carried any. It is
+	// the inverse of QuoteIdent, and dialect-specific for the same reason:
+	// BigQuery escapes its backtick as `\``, everyone else doubles the
+	// delimiter.
+	UnquoteIdent(text string) (string, bool)
+
 	// FoldIdent returns the name an unquoted reference resolves to on this
 	// engine — upper case on Snowflake and Oracle, lower on Postgres and the
 	// Presto family, unchanged where the comparison ignores case. Quoting an
@@ -73,10 +80,12 @@ type Dialect interface {
 
 type TimeUnit string
 
-const TimeUnitSecond TimeUnit = "SECOND"
-const TimeUnitMinute TimeUnit = "MINUTE"
-const TimeUnitHour TimeUnit = "HOUR"
-const TimeUnitDay TimeUnit = "DAY"
+const (
+	TimeUnitSecond TimeUnit = "SECOND"
+	TimeUnitMinute TimeUnit = "MINUTE"
+	TimeUnitHour   TimeUnit = "HOUR"
+	TimeUnitDay    TimeUnit = "DAY"
+)
 
 func getTimeUnitWithInterval(duration time.Duration) (unit TimeUnit, interval int64) {
 	switch duration {
