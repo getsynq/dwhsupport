@@ -83,6 +83,27 @@ func (d *BigQueryDialect) CurrentTimestamp() Expr {
 	return Fn("CURRENT_TIMESTAMP")
 }
 
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *BigQueryDialect) QuoteIdent(name string) string {
+	return identQuotingBackticksEscape.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *BigQueryDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingBackticksEscape.unquote(text)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// Dataset and table names are case-sensitive and column names are matched
+// case-insensitively, so an unquoted reference resolves to the name as
+// written and there is nothing to fold.
+func (d *BigQueryDialect) FoldIdent(name string) string {
+	return name
+}
+
 func (d *BigQueryDialect) Identifier(identifier string) string {
 	return QuoteWithBackticksIfNeeded(identifier)
 }

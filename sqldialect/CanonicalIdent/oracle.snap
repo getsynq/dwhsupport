@@ -1,0 +1,23 @@
+
+[TestIdentSuite/TestCanonicalIdent/oracle - 1]
+reserved word                          "order"          "order"                  resolves to "order"
+reserved word, upper                   "ORDER"          "ORDER"                  resolves to "ORDER"
+plain lower                            "orders"         "orders"                 resolves to "orders"
+plain upper                            "ORDERS"         "ORDERS"                 resolves to "ORDERS"
+mixed case                             "MyTable"        "MyTable"                resolves to "MyTable"
+leading digit                          "1st_table"      "1st_table"              resolves to "1st_table"
+space                                  "Created At"     "Created At"             resolves to "Created At"
+dash                                   "my-table"       "my-table"               resolves to "my-table"
+dot                                    "my.table"       "my.table"               resolves to "my.table"
+non-ascii                              "zamówienia"     "zamówienia"             resolves to "zamówienia"
+double quote inside                    "we\"ird"        "we""ird"                resolves to "we\"ird"
+backtick inside                        "we`ird"         "we`ird"                 resolves to "we`ird"
+bracket inside                         "we]ird"         "we]ird"                 resolves to "we]ird"
+backslash inside                       "we\\ird"        "we\ird"                 resolves to "we\\ird"
+pre-quoted, double quotes              "\"events\""     """events"""             resolves to "\"events\""
+pre-quoted, backticks                  "`events`"       "`events`"               resolves to "`events`"
+pre-quoted, brackets                   "[events]"       "[events]"               resolves to "[events]"
+pre-quoted with an escaped delimiter   "\"we\"\"ird\""  """we""""ird"""          resolves to "\"we\"\"ird\""
+empty                                  ""                                        resolves to ""
+
+---

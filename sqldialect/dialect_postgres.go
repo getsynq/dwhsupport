@@ -83,6 +83,26 @@ func (d *PostgresDialect) CurrentTimestamp() Expr {
 	return Sql("CURRENT_TIMESTAMP")
 }
 
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *PostgresDialect) QuoteIdent(name string) string {
+	return identQuotingDoubleQuotes.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *PostgresDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingDoubleQuotes.unquote(text)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// An unquoted reference folds to lower case: "Key words and unquoted
+// identifiers are case-insensitive" and are "folded to lower case".
+func (d *PostgresDialect) FoldIdent(name string) string {
+	return identFoldingLower.fold(name)
+}
+
 func (d *PostgresDialect) Identifier(identifier string) string {
 	return QuoteWithDoubleQuotesIfNeeded(identifier)
 }

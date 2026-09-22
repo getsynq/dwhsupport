@@ -23,6 +23,28 @@ type Dialect interface {
 
 	Identifier(string) string
 	ResolveFieldRef(string) string
+
+	// QuoteIdent wraps a name in this dialect's identifier delimiters,
+	// always. Identifier quotes only when a character demands it, which is a
+	// character-class test and therefore blind to reserved words: a column
+	// called `group` comes back bare and the statement fails to parse. Reach
+	// for it through Ident rather than directly — that type also settles
+	// whether the name still has to be folded.
+	QuoteIdent(name string) string
+
+	// UnquoteIdent strips one layer of identifier delimiters from text and
+	// decodes the escape inside, reporting whether the text carried any. It is
+	// the inverse of QuoteIdent, and dialect-specific for the same reason:
+	// BigQuery escapes its backtick as `\``, everyone else doubles the
+	// delimiter.
+	UnquoteIdent(text string) (string, bool)
+
+	// FoldIdent returns the name an unquoted reference resolves to on this
+	// engine — upper case on Snowflake and Oracle, lower on Postgres and the
+	// Presto family, unchanged where the comparison ignores case. Quoting an
+	// identifier pins its case, so a written name is folded first to keep it
+	// addressing the object it addressed unquoted.
+	FoldIdent(name string) string
 	StringLiteral(string) string
 	ToString(Expr) Expr
 	Coalesce(exprs ...Expr) Expr
@@ -58,10 +80,12 @@ type Dialect interface {
 
 type TimeUnit string
 
-const TimeUnitSecond TimeUnit = "SECOND"
-const TimeUnitMinute TimeUnit = "MINUTE"
-const TimeUnitHour TimeUnit = "HOUR"
-const TimeUnitDay TimeUnit = "DAY"
+const (
+	TimeUnitSecond TimeUnit = "SECOND"
+	TimeUnitMinute TimeUnit = "MINUTE"
+	TimeUnitHour   TimeUnit = "HOUR"
+	TimeUnitDay    TimeUnit = "DAY"
+)
 
 func getTimeUnitWithInterval(duration time.Duration) (unit TimeUnit, interval int64) {
 	switch duration {

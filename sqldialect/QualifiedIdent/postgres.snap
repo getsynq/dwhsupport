@@ -1,0 +1,13 @@
+
+[TestIdentSuite/TestQualifiedIdent/postgres - 1]
+three parts                    "prod_database"."eco2_orders_airbyte"."order"
+two parts                      "public"."order"
+one part                       "orders"
+database absent                "public"."orders"
+schema absent                  "proj"."orders"
+author quoted the table        "db"."sch"."events"
+author quoted with backticks   "proj"."ds"."events"
+mixed case throughout          "myproject"."myschema"."mytable"
+dash in the project            "my-project"."dataset"."table"
+
+---

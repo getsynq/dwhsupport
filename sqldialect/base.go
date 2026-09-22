@@ -78,8 +78,10 @@ type LimitExpr struct {
 	rows *IntLitExpr
 }
 
-var _ Expr = (*LimitExpr)(nil)
-var _ LimitClauseExpr = (*LimitExpr)(nil)
+var (
+	_ Expr            = (*LimitExpr)(nil)
+	_ LimitClauseExpr = (*LimitExpr)(nil)
+)
 
 func Limit(rows *IntLitExpr) LimitClauseExpr {
 	return &LimitExpr{rows}
@@ -123,8 +125,10 @@ type IdentifierExpr struct {
 	identifier string
 }
 
-var _ Expr = (*IdentifierExpr)(nil)
-var _ TextExpr = (*IdentifierExpr)(nil)
+var (
+	_ Expr     = (*IdentifierExpr)(nil)
+	_ TextExpr = (*IdentifierExpr)(nil)
+)
 
 func Identifier(identifier string) *IdentifierExpr {
 	return &IdentifierExpr{identifier: identifier}
@@ -151,8 +155,10 @@ type OrderExpr struct {
 	desc bool
 }
 
-var _ Expr = (*OrderExpr)(nil)
-var _ OrderByExpr = (*OrderExpr)(nil)
+var (
+	_ Expr        = (*OrderExpr)(nil)
+	_ OrderByExpr = (*OrderExpr)(nil)
+)
 
 func Asc(expr Expr) OrderByExpr {
 	return &OrderExpr{expr: expr, desc: false}
@@ -435,8 +441,7 @@ func (s *StarExpr) ToSql(dialect Dialect) (string, error) {
 	return "*", nil
 }
 
-type NullExpr struct {
-}
+type NullExpr struct{}
 
 var _ Expr = (*NullExpr)(nil)
 
@@ -490,8 +495,10 @@ type TextColExpr struct {
 	ColBaseExpr
 }
 
-var _ Expr = (*TextColExpr)(nil)
-var _ TextExpr = (*TextColExpr)(nil)
+var (
+	_ Expr     = (*TextColExpr)(nil)
+	_ TextExpr = (*TextColExpr)(nil)
+)
 
 func TextCol(name string) *TextColExpr {
 	return &TextColExpr{ColBaseExpr: ColBaseExpr{sql: name}}
@@ -507,8 +514,10 @@ type TimeColExpr struct {
 	name string
 }
 
-var _ Expr = (*TimeColExpr)(nil)
-var _ TimeExpr = (*TimeColExpr)(nil)
+var (
+	_ Expr     = (*TimeColExpr)(nil)
+	_ TimeExpr = (*TimeColExpr)(nil)
+)
 
 func TimeCol(name string) *TimeColExpr {
 	return &TimeColExpr{name: name}
@@ -524,8 +533,10 @@ type NumericColExpr struct {
 	ColBaseExpr
 }
 
-var _ Expr = (*NumericColExpr)(nil)
-var _ NumericExpr = (*NumericColExpr)(nil)
+var (
+	_ Expr        = (*NumericColExpr)(nil)
+	_ NumericExpr = (*NumericColExpr)(nil)
+)
 
 func NumericCol(name string) *NumericColExpr {
 	return &NumericColExpr{ColBaseExpr: ColBaseExpr{sql: name}}
@@ -547,9 +558,18 @@ type TableFqnExpr struct {
 	tableId   string
 }
 
-var _ Expr = (*TableFqnExpr)(nil)
-var _ TableExpr = (*TableFqnExpr)(nil)
+var (
+	_ Expr      = (*TableFqnExpr)(nil)
+	_ TableExpr = (*TableFqnExpr)(nil)
+)
 
+// TableFqn names a table through the dialect's ResolveFqn, whose per-dialect
+// quoting is inconsistent by history: some engines protect the case of the
+// parts, others hand them to the engine raw and let it fold them, and none of
+// them quote a part that happens to be a reserved word.
+//
+// QualifiedIdent is the replacement for anything being written now: an Ident
+// says which form its name is in, so the rendering does not have to guess.
 func TableFqn(projectId, datasetId, tableId string) *TableFqnExpr {
 	return &TableFqnExpr{
 		projectId: projectId,
@@ -629,8 +649,10 @@ type JoinExpr struct {
 	how   JoinDefExpr
 }
 
-var _ Expr = (*JoinExpr)(nil)
-var _ TableExpr = (*JoinExpr)(nil)
+var (
+	_ Expr      = (*JoinExpr)(nil)
+	_ TableExpr = (*JoinExpr)(nil)
+)
 
 func Join(other TableExpr, how JoinDefExpr) *JoinExpr {
 	return &JoinExpr{
@@ -667,8 +689,10 @@ type CrossJoinExpr struct {
 	other TableExpr
 }
 
-var _ Expr = (*CrossJoinExpr)(nil)
-var _ TableExpr = (*CrossJoinExpr)(nil)
+var (
+	_ Expr      = (*CrossJoinExpr)(nil)
+	_ TableExpr = (*CrossJoinExpr)(nil)
+)
 
 // CrossJoin builds a CROSS JOIN expression against the given table.
 func CrossJoin(other TableExpr) JoinTableExpr {
@@ -696,8 +720,10 @@ type JoinOnExpr struct {
 	conds []CondExpr
 }
 
-var _ Expr = (*JoinOnExpr)(nil)
-var _ JoinDefExpr = (*JoinOnExpr)(nil)
+var (
+	_ Expr        = (*JoinOnExpr)(nil)
+	_ JoinDefExpr = (*JoinOnExpr)(nil)
+)
 
 func On(conds ...CondExpr) *JoinOnExpr {
 	return &JoinOnExpr{conds: conds}
@@ -718,8 +744,10 @@ type JoinUsingExpr struct {
 	exprs []Expr
 }
 
-var _ Expr = (*JoinUsingExpr)(nil)
-var _ JoinDefExpr = (*JoinUsingExpr)(nil)
+var (
+	_ Expr        = (*JoinUsingExpr)(nil)
+	_ JoinDefExpr = (*JoinUsingExpr)(nil)
+)
 
 func Using(exprs ...Expr) *JoinUsingExpr {
 	return &JoinUsingExpr{exprs: exprs}
@@ -762,8 +790,10 @@ type StringLitExpr struct {
 	val string
 }
 
-var _ Expr = (*StringLitExpr)(nil)
-var _ TextExpr = (*StringLitExpr)(nil)
+var (
+	_ Expr     = (*StringLitExpr)(nil)
+	_ TextExpr = (*StringLitExpr)(nil)
+)
 
 func String(val string) *StringLitExpr {
 	return &StringLitExpr{val: val}
@@ -916,11 +946,12 @@ func (e *CoalesceExpr) ToSql(dialect Dialect) (string, error) {
 // ToStringExpr
 //
 
-var _ Expr = (*CountAllExpr)(nil)
-var _ NumericExpr = (*CountAllExpr)(nil)
+var (
+	_ Expr        = (*CountAllExpr)(nil)
+	_ NumericExpr = (*CountAllExpr)(nil)
+)
 
-type CountAllExpr struct {
-}
+type CountAllExpr struct{}
 
 func (c CountAllExpr) IsNumericExpr() {}
 
@@ -974,8 +1005,10 @@ type ToFloat64Expr struct {
 	expr Expr
 }
 
-var _ Expr = (*ToFloat64Expr)(nil)
-var _ NumericExpr = (*ToFloat64Expr)(nil)
+var (
+	_ Expr        = (*ToFloat64Expr)(nil)
+	_ NumericExpr = (*ToFloat64Expr)(nil)
+)
 
 func ToFloat64(expr Expr) *ToFloat64Expr {
 	return &ToFloat64Expr{expr: expr}
@@ -1143,8 +1176,10 @@ type SubqueryTableExpr struct {
 	alias  string
 }
 
-var _ Expr = (*SubqueryTableExpr)(nil)
-var _ TableExpr = (*SubqueryTableExpr)(nil)
+var (
+	_ Expr      = (*SubqueryTableExpr)(nil)
+	_ TableExpr = (*SubqueryTableExpr)(nil)
+)
 
 // SubqueryTable creates a subquery table expression
 func SubqueryTable(rawSql string, alias string) *SubqueryTableExpr {

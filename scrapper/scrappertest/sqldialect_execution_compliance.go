@@ -251,3 +251,149 @@ func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_NtileCheckpoints() {
 		s.False(s.column(row, "cnt").IsNull)
 	}
 }
+
+// identConformanceNames are the identifier shapes a customer actually manages
+// to write. They are exercised as column aliases rather than as objects, so
+// the suite still never writes — an alias is an identifier, and the engine
+// reports back what it made of it.
+//
+// The delimiter characters are deliberately absent. BigQuery parses
+// `select 1 as ` + "`we\\`ird`" + ` exactly as intended and then rejects the result with
+// "Invalid field name", because what a column may be *named* is a separate
+// rule from how an identifier is quoted — so a failure here would say nothing
+// about the escape. The escapes are pinned by the per-dialect goldens and by
+// the Ident round-trip test instead.
+var identConformanceNames = []string{
+	"order",
+	"group",
+	"orders",
+	"ORDERS",
+	"MyTable",
+	"Created At",
+	"my-table",
+	"zamówienia",
+}
+
+// TestSqlDialectExecution_IdentQuotingIsAccepted renders each awkward name as
+// a quoted alias and reads the value back under it.
+//
+// This is what the snapshots cannot tell us: whether the engine accepts the
+// delimiters we chose for it, and whether a reserved word survives being
+// quoted — the failure this whole concept exists to prevent.
+func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_IdentQuotingIsAccepted() {
+	s.skipIfNil()
+
+	dialect := s.Scrapper.SqlDialect()
+	for _, name := range identConformanceNames {
+		s.Run(name, func() {
+			ident := CanonicalIdent(name)
+			sel := NewSelect().
+				From(SubqueryTable(s.sideQuery(), "_recon_base")).
+				Cols(As(Int64(1), ident)).
+				WithLimit(Limit(Int64(1)))
+
+			rows := s.execute(sel)
+			s.Require().Len(rows, 1)
+			s.False(s.column(rows[0], ident.Name(dialect)).IsNull)
+		})
+	}
+}
+
+// TestSqlDialectExecution_WrittenIdentBehavesLikeTheUnquotedReference is the
+// invariant that makes the conversion safe to ship, and it is asserted the
+// only way that holds on every engine: run the same aggregate twice, once with
+// the name written straight into the SQL and once through WrittenIdent, and
+// require the two to agree — including when they agree by both failing.
+//
+// Whatever the engine does with the unquoted form, the quoted form has to do
+// the same thing. On Snowflake a lower-case name folds up and both resolve; on
+// ClickHouse an upper-case one resolves on neither side because the engine is
+// case-sensitive; on Trino both fold down. A fold that is wrong in either
+// direction breaks the agreement, on the engine rather than in a snapshot.
+//
+// A column alias is deliberately not used as the probe. Trino and Athena
+// report an alias back under the case it was written in even though they
+// resolve an object name folded to lower, so what an alias comes back as says
+// nothing about how a reference resolves.
+func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_WrittenIdentBehavesLikeTheUnquotedReference() {
+	s.skipIfNil()
+
+	for _, written := range []string{
+		s.Config.KeyField,
+		strings.ToLower(s.Config.KeyField),
+		strings.ToUpper(s.Config.KeyField),
+	} {
+		s.Run(written, func() {
+			unquoted, unquotedErr := s.tryScalar(Fn("MIN", Sql(written)))
+			quoted, quotedErr := s.tryScalar(Fn("MIN", WrittenIdent(written)))
+
+			if unquotedErr != nil {
+				s.Errorf(quotedErr, "unquoted %q was rejected (%v) but WrittenIdent resolved it", written, unquotedErr)
+				return
+			}
+			s.Require().NoError(quotedErr, "unquoted %q resolves, so WrittenIdent must too", written)
+			s.Equal(unquoted, quoted, "WrittenIdent(%q) reached a different column than the unquoted reference", written)
+		})
+	}
+}
+
+// tryScalar runs one aggregate over the side query and returns its value,
+// handing back the engine's error instead of failing the test — the callers
+// here are asking what the engine does, not asserting that it succeeds.
+func (s *SqlDialectExecutionSuite) tryScalar(expr Expr) (any, error) {
+	s.T().Helper()
+
+	sel := NewSelect().
+		From(SubqueryTable(s.sideQuery(), "_recon_base")).
+		Cols(As(expr, Alias("probe")))
+
+	sql, err := sel.ToSql(s.Scrapper.SqlDialect())
+	s.Require().NoError(err)
+	s.T().Logf("Generated SQL:\n%s", sql)
+
+	it, err := s.Scrapper.RunRawQuery(s.ctx(), sql)
+	if errors.Is(err, scrapper.ErrUnsupported) {
+		s.T().Skip("RunRawQuery unsupported")
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer it.Close()
+
+	row, err := it.Next(s.ctx())
+	if err != nil {
+		return nil, err
+	}
+	for _, cv := range row {
+		if strings.EqualFold(cv.Name, "probe") {
+			return cv.Value, nil
+		}
+	}
+	s.Failf("column not found", "no probe column in %v", row)
+	return nil, nil
+}
+
+// TestSqlDialectExecution_QualifiedIdentNamesTheTable reads the configured
+// table through QualifiedIdent instead of through ResolveFqn, which is how a
+// table reference from a config file reaches the FROM clause.
+func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_QualifiedIdentNamesTheTable() {
+	s.skipIfNil()
+
+	fqn := QualifiedIdent(
+		WrittenIdent(s.Config.TableFqn.ProjectId()),
+		WrittenIdent(s.Config.TableFqn.DatasetId()),
+		WrittenIdent(s.Config.TableFqn.TableId()),
+	)
+	if !s.Scrapper.SqlDialect().SupportsCrossDatabaseQueries() {
+		fqn = QualifiedIdent(
+			WrittenIdent(s.Config.TableFqn.DatasetId()),
+			WrittenIdent(s.Config.TableFqn.TableId()),
+		)
+	}
+
+	sel := NewSelect().From(fqn).Cols(As(CountAll(), Alias("row_count")))
+
+	rows := s.execute(sel)
+	s.Require().Len(rows, 1)
+	s.False(s.column(rows[0], "row_count").IsNull)
+}

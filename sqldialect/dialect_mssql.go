@@ -82,6 +82,26 @@ func (d *MSSQLDialect) CurrentTimestamp() Expr {
 	return Sql("GETUTCDATE()")
 }
 
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *MSSQLDialect) QuoteIdent(name string) string {
+	return identQuotingBrackets.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *MSSQLDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingBrackets.unquote(text)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// Case sensitivity is a property of the collation, not of the quoting, so
+// an unquoted reference resolves to the name as written.
+func (d *MSSQLDialect) FoldIdent(name string) string {
+	return name
+}
+
 func (d *MSSQLDialect) Identifier(identifier string) string {
 	return MSSQLQuoteIdentifier(identifier)
 }

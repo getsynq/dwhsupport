@@ -96,6 +96,28 @@ func (d *MySQLDialect) CurrentTimestamp() Expr {
 	return Fn("CURRENT_TIMESTAMP")
 }
 
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *MySQLDialect) QuoteIdent(name string) string {
+	return identQuotingBackticks.quote(name)
+}
+
+// UnquoteIdent is the inverse: it strips one layer of delimiters and decodes
+// the escape inside, reporting whether the text carried any.
+func (d *MySQLDialect) UnquoteIdent(text string) (string, bool) {
+	return identQuotingBackticks.unquote(text)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// Whether a table name is case-sensitive is a property of the filesystem
+// and lower_case_table_names, not of the quoting, and column names are
+// matched case-insensitively — so an unquoted reference resolves to the
+// name as written.
+func (d *MySQLDialect) FoldIdent(name string) string {
+	return name
+}
+
 func (d *MySQLDialect) Identifier(identifier string) string {
 	return QuoteWithBackticksIfNeeded(identifier)
 }
