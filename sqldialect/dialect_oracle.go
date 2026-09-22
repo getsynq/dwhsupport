@@ -77,6 +77,19 @@ func (d *OracleDialect) CurrentTimestamp() Expr {
 	return Sql("CURRENT_TIMESTAMP")
 }
 
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *OracleDialect) QuoteIdent(name string) string {
+	return QuoteIdentWithDoubleQuotes(name)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// An unquoted reference folds to upper case here.
+func (d *OracleDialect) FoldIdent(name string) string {
+	return strings.ToUpper(name)
+}
+
 func (d *OracleDialect) Identifier(identifier string) string {
 	return OracleQuoteIdentifier(identifier)
 }

@@ -83,6 +83,21 @@ func (d *DuckDBDialect) CurrentTimestamp() Expr {
 	return Fn("now")
 }
 
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *DuckDBDialect) QuoteIdent(name string) string {
+	return QuoteIdentWithDoubleQuotes(name)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// Identifier comparison ignores the written case, or preserves it
+// exactly; either way an unquoted reference resolves to the name as
+// written, so there is nothing to fold.
+func (d *DuckDBDialect) FoldIdent(name string) string {
+	return name
+}
+
 func (d *DuckDBDialect) Identifier(identifier string) string {
 	return QuoteWithDoubleQuotesIfNeeded(identifier)
 }

@@ -23,6 +23,21 @@ type Dialect interface {
 
 	Identifier(string) string
 	ResolveFieldRef(string) string
+
+	// QuoteIdent wraps a name in this dialect's identifier delimiters,
+	// always. Identifier quotes only when a character demands it, which is a
+	// character-class test and therefore blind to reserved words: a column
+	// called `group` comes back bare and the statement fails to parse. Reach
+	// for it through Ident rather than directly — that type also settles
+	// whether the name still has to be folded.
+	QuoteIdent(name string) string
+
+	// FoldIdent returns the name an unquoted reference resolves to on this
+	// engine — upper case on Snowflake and Oracle, lower on Postgres and the
+	// Presto family, unchanged where the comparison ignores case. Quoting an
+	// identifier pins its case, so a written name is folded first to keep it
+	// addressing the object it addressed unquoted.
+	FoldIdent(name string) string
 	StringLiteral(string) string
 	ToString(Expr) Expr
 	Coalesce(exprs ...Expr) Expr

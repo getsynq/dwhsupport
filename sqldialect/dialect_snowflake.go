@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -81,6 +82,19 @@ func (d *SnowflakeDialect) AddTime(expr Expr, duration time.Duration) Expr {
 
 func (d *SnowflakeDialect) CurrentTimestamp() Expr {
 	return Fn("CURRENT_TIMESTAMP")
+}
+
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *SnowflakeDialect) QuoteIdent(name string) string {
+	return QuoteIdentWithDoubleQuotes(name)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// An unquoted reference folds to upper case here.
+func (d *SnowflakeDialect) FoldIdent(name string) string {
+	return strings.ToUpper(name)
 }
 
 func (d *SnowflakeDialect) Identifier(identifier string) string {

@@ -96,6 +96,21 @@ func (d *MySQLDialect) CurrentTimestamp() Expr {
 	return Fn("CURRENT_TIMESTAMP")
 }
 
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *MySQLDialect) QuoteIdent(name string) string {
+	return QuoteIdentWithBackticks(name)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// Identifier comparison ignores the written case, or preserves it
+// exactly; either way an unquoted reference resolves to the name as
+// written, so there is nothing to fold.
+func (d *MySQLDialect) FoldIdent(name string) string {
+	return name
+}
+
 func (d *MySQLDialect) Identifier(identifier string) string {
 	return QuoteWithBackticksIfNeeded(identifier)
 }

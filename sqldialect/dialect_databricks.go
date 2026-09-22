@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -81,6 +82,19 @@ func (d *DatabricksDialect) AddTime(expr Expr, duration time.Duration) Expr {
 
 func (d *DatabricksDialect) CurrentTimestamp() Expr {
 	return Fn("CURRENT_TIMESTAMP")
+}
+
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *DatabricksDialect) QuoteIdent(name string) string {
+	return QuoteIdentWithBackticks(name)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// An unquoted reference folds to lower case here.
+func (d *DatabricksDialect) FoldIdent(name string) string {
+	return strings.ToLower(name)
 }
 
 func (d *DatabricksDialect) Identifier(identifier string) string {

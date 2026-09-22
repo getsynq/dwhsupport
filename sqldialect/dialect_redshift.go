@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -81,6 +82,19 @@ func (d *RedshiftDialect) AddTime(expr Expr, duration time.Duration) Expr {
 
 func (d *RedshiftDialect) CurrentTimestamp() Expr {
 	return Sql("CURRENT_TIMESTAMP::timestamp")
+}
+
+// QuoteIdent renders name wrapped in this dialect's identifier delimiters,
+// always — unlike Identifier, which quotes only when a character demands it
+// and so lets a reserved word through bare.
+func (d *RedshiftDialect) QuoteIdent(name string) string {
+	return QuoteIdentWithDoubleQuotes(name)
+}
+
+// FoldIdent returns the name an unquoted reference resolves to.
+// An unquoted reference folds to lower case here.
+func (d *RedshiftDialect) FoldIdent(name string) string {
+	return strings.ToLower(name)
 }
 
 func (d *RedshiftDialect) Identifier(identifier string) string {
