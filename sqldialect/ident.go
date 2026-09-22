@@ -23,8 +23,8 @@ import (
 //
 // Nothing is decoded at construction, because both the delimiters and the
 // escape inside them belong to the dialect: BigQuery writes a backtick inside
-// a quoted identifier as `\“ after the manner of a string literal, and
-// everyone else doubles the delimiter.
+// a quoted identifier as a backslash followed by the backtick, after the
+// manner of a string literal, and everyone else doubles the delimiter.
 type Ident struct {
 	text      string
 	written   bool
@@ -367,13 +367,16 @@ func (f identFolding) canBeUnquoted(name string) bool {
 // to interpret.
 //
 // It takes no dialect because it runs where none is known yet — parsing a
-// to find where a quote ends. A doubled closing delimiter never ends a quote.
-// A backslash ends one only inside backticks, which is where BigQuery's
-// escaped delimiter lives; inside a double quote or a bracket a backslash is
-// a literal character on every dialect that uses those, so Postgres
-// `"a\\".orders` still splits into two parts. The one shape left ambiguous is
-// a MySQL backtick name ending in a backslash.
-// one part; the benefit is that BigQuery's `\“ does not cut a name in half.
+// `table:` entry — so it knows every dialect's delimiters and has to decide,
+// without knowing which one applies, where each quote ends. A doubled closing
+// delimiter never ends a quote. A backslash escapes the character after it
+// only inside backticks, which is where BigQuery's escaped delimiter lives;
+// inside a double quote or a bracket a backslash is a literal character on
+// every dialect that uses those, so Postgres `"a\\".orders` still splits into
+// two parts. The one shape left ambiguous is a MySQL backtick name ending in a
+// backslash, which reads as escaping its closing backtick and so comes back as
+// one part; the benefit is that BigQuery's escaped backtick does not cut a
+// name in half.
 //
 // An unterminated quote is not an error here: the remainder comes back as one
 // part, and whichever engine receives it reports the problem in its own terms.
