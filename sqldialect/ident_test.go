@@ -111,6 +111,13 @@ func TestSplitQualifiedIdent(t *testing.T) {
 		{"[a.b].c", []string{"[a.b]", "c"}},
 		{`db."my.schema".t`, []string{"db", `"my.schema"`, "t"}},
 		{`"unterminated.x`, []string{`"unterminated.x`}},
+		// A doubled closing delimiter is one literal delimiter, not the end of
+		// the quote. MSSQL's `]]` is the case that shows it: `"` and backticks
+		// survive a naive scan only because the second one reopens the quote.
+		{`[a]]b.c]`, []string{`[a]]b.c]`}},
+		{`[a]]b].c`, []string{`[a]]b]`, "c"}},
+		{`"a""b.c"`, []string{`"a""b.c"`}},
+		{"`a``b.c`", []string{"`a``b.c`"}},
 	}
 	for _, c := range cases {
 		t.Run(c.text, func(t *testing.T) {
@@ -126,4 +133,28 @@ func TestSplitQualifiedIdentFeedsIdentsThatSurviveTheDot(t *testing.T) {
 		idents[i] = WrittenIdent(p)
 	}
 	assert.Equal(t, `"public"."my.table"`, mustSql(t, QualifiedIdent(idents...), NewPostgresDialect()))
+}
+
+// The split and the unwrap have to agree about an escaped delimiter, or a name
+// containing one comes back as two parts or loses a character on the way.
+func TestSplitQualifiedIdentRoundTripsAnEscapedDelimiter(t *testing.T) {
+	cases := map[string]struct {
+		text    string
+		name    string
+		dialect Dialect
+	}{
+		"mssql":    {`[a]]b.c]`, "a]b.c", NewMSSQLDialect()},
+		"postgres": {`"a""b.c"`, `a"b.c`, NewPostgresDialect()},
+		"bigquery": {"`a``b.c`", "a`b.c", NewBigQueryDialect()},
+	}
+	for label, c := range cases {
+		t.Run(label, func(t *testing.T) {
+			parts := SplitQualifiedIdent(c.text)
+			require.Len(t, parts, 1)
+
+			ident := CanonicalIdent(parts[0])
+			assert.Equal(t, c.name, ident.Name(c.dialect))
+			assert.Equal(t, c.text, mustSql(t, ident, c.dialect))
+		})
+	}
 }

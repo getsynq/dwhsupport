@@ -115,6 +115,9 @@ func (q *QualifiedIdentExpr) IsTableExpr() {}
 // the form it was written, quotes included, for CanonicalIdent or WrittenIdent
 // to interpret.
 //
+// A doubled closing delimiter is the escape for one literal delimiter, so it
+// does not end the quote — `[a]]b.c]` is one part whose name is `a]b.c`.
+//
 // An unterminated quote is not an error here: the remainder is returned as one
 // part, and whichever engine receives it reports the problem in its own terms.
 func SplitQualifiedIdent(text string) []string {
@@ -127,11 +130,16 @@ func SplitQualifiedIdent(text string) []string {
 	for i := 0; i < len(text); i++ {
 		c := text[i]
 		switch {
+		case inQuote && c == closing:
+			current.WriteByte(c)
+			if i+1 < len(text) && text[i+1] == closing {
+				current.WriteByte(closing)
+				i++
+				continue
+			}
+			inQuote = false
 		case inQuote:
 			current.WriteByte(c)
-			if c == closing {
-				inQuote = false
-			}
 		case c == '"' || c == '`' || c == '[':
 			current.WriteByte(c)
 			inQuote, closing = true, closingDelimiter(c)
