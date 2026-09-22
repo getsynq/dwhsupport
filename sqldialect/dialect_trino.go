@@ -99,7 +99,7 @@ func (d *TrinoDialect) UnquoteIdent(text string) (string, bool) {
 // FoldIdent returns the name an unquoted reference resolves to.
 // An unquoted reference folds to lower case.
 func (d *TrinoDialect) FoldIdent(name string) string {
-	return foldIdentASCII(name, false)
+	return identFoldingLower.fold(name)
 }
 
 func (d *TrinoDialect) Identifier(identifier string) string {

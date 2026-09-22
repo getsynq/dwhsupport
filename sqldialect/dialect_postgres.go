@@ -100,7 +100,7 @@ func (d *PostgresDialect) UnquoteIdent(text string) (string, bool) {
 // An unquoted reference folds to lower case: "Key words and unquoted
 // identifiers are case-insensitive" and are "folded to lower case".
 func (d *PostgresDialect) FoldIdent(name string) string {
-	return foldIdentASCII(name, false)
+	return identFoldingLower.fold(name)
 }
 
 func (d *PostgresDialect) Identifier(identifier string) string {

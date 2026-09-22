@@ -100,7 +100,7 @@ func (d *SnowflakeDialect) UnquoteIdent(text string) (string, bool) {
 // An unquoted reference folds to upper case: unquoted identifiers "are
 // stored and resolved as uppercase characters".
 func (d *SnowflakeDialect) FoldIdent(name string) string {
-	return foldIdentASCII(name, true)
+	return identFoldingUpper.fold(name)
 }
 
 func (d *SnowflakeDialect) Identifier(identifier string) string {

@@ -1,6 +1,9 @@
 package sqldialect
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // Ident is one SQL identifier — a database, schema, table, column or alias
 // name — carried as a name rather than as SQL text, and always rendered
@@ -23,18 +26,22 @@ import "strings"
 // a quoted identifier as `\“ after the manner of a string literal, and
 // everyone else doubles the delimiter.
 type Ident struct {
-	text    string
-	written bool
+	text      string
+	written   bool
+	canonical bool
 }
 
 // CanonicalIdent builds an Ident from a name already in the engine's own
 // spelling — a QueryShape column, a catalog row, anything the warehouse itself
-// handed back. The case is rendered as given.
+// handed back. It is rendered exactly as given, case and all.
 //
-// Text that already carries identifier quotes is unwrapped first, so a caller
-// that cannot tell which form it holds still gets one layer of quotes out.
-func CanonicalIdent(text string) Ident {
-	return Ident{text: text}
+// Nothing is unwrapped, because at this end of the pipe a delimiter is part of
+// the name: a Postgres column really called `"foo"`, quotes included, comes
+// back from QueryShape spelled that way, and reading the quotes as syntax
+// would address the column `foo` instead. Text a person wrote is the other
+// case — see WrittenIdent.
+func CanonicalIdent(name string) Ident {
+	return Ident{text: name, canonical: true}
 }
 
 // WrittenIdent builds an Ident from text a person wrote — a `table:` entry in
@@ -52,6 +59,9 @@ func WrittenIdent(text string) Ident {
 
 // Name returns the identifier without quotes, under the case it resolves to.
 func (i Ident) Name(dialect Dialect) string {
+	if i.canonical {
+		return i.text
+	}
 	name, quoted := dialect.UnquoteIdent(i.text)
 	if i.written && !quoted {
 		return dialect.FoldIdent(name)
@@ -169,6 +179,15 @@ func (q identQuoting) unquote(text string) (string, bool) {
 	return strings.ReplaceAll(inner, string(closing)+string(closing), string(closing)), true
 }
 
+// unescapeBackslash decodes the escape sequences a quoted identifier accepts
+// on a dialect that escapes like a string literal — BigQuery, whose reference
+// says so outright. Skipping the byte after a backslash is not enough:
+// `\x41` is the identifier `A`, and dropping only the backslash would leave
+// `x41`, a different object.
+//
+// A sequence the reference does not define is an error on the engine, so the
+// backslash is simply dropped there and the engine gets to complain about the
+// name rather than about our reading of it.
 func unescapeBackslash(s string) string {
 	if !strings.Contains(s, `\`) {
 		return s
@@ -176,12 +195,103 @@ func unescapeBackslash(s string) string {
 	var out strings.Builder
 	out.Grow(len(s))
 	for i := 0; i < len(s); i++ {
-		if s[i] == '\\' && i+1 < len(s) {
-			i++
+		if s[i] != '\\' || i+1 >= len(s) {
+			out.WriteByte(s[i])
+			continue
 		}
-		out.WriteByte(s[i])
+		i++
+		switch c := s[i]; c {
+		case 'a':
+			out.WriteByte('\a')
+		case 'b':
+			out.WriteByte('\b')
+		case 'f':
+			out.WriteByte('\f')
+		case 'n':
+			out.WriteByte('\n')
+		case 'r':
+			out.WriteByte('\r')
+		case 't':
+			out.WriteByte('\t')
+		case 'v':
+			out.WriteByte('\v')
+		case 'x', 'X':
+			if r, n := readIdentEscapeHex(s[i+1:], 2); n > 0 {
+				out.WriteRune(r)
+				i += n
+				continue
+			}
+			out.WriteByte(c)
+		case 'u':
+			if r, n := readIdentEscapeHex(s[i+1:], 4); n > 0 {
+				out.WriteRune(r)
+				i += n
+				continue
+			}
+			out.WriteByte(c)
+		case 'U':
+			if r, n := readIdentEscapeHex(s[i+1:], 8); n > 0 {
+				out.WriteRune(r)
+				i += n
+				continue
+			}
+			out.WriteByte(c)
+		default:
+			if r, n := readIdentEscapeOctal(s[i:]); n > 0 {
+				out.WriteRune(r)
+				i += n - 1
+				continue
+			}
+			out.WriteByte(c)
+		}
 	}
 	return out.String()
+}
+
+// readIdentEscapeHex reads exactly n hex digits, returning the rune they spell
+// and how many bytes it consumed. It returns 0 when the digits are not there,
+// which leaves the caller emitting the escape character literally.
+func readIdentEscapeHex(s string, n int) (rune, int) {
+	if len(s) < n {
+		return 0, 0
+	}
+	var value rune
+	for i := 0; i < n; i++ {
+		digit := hexDigitValue(s[i])
+		if digit < 0 {
+			return 0, 0
+		}
+		value = value<<4 | rune(digit)
+	}
+	return value, n
+}
+
+// readIdentEscapeOctal reads the three-octal-digit form, `\ooo`.
+func readIdentEscapeOctal(s string) (rune, int) {
+	if len(s) < 3 {
+		return 0, 0
+	}
+	var value rune
+	for i := 0; i < 3; i++ {
+		if s[i] < '0' || s[i] > '7' {
+			return 0, 0
+		}
+		value = value<<3 | rune(s[i]-'0')
+	}
+	return value, 3
+}
+
+func hexDigitValue(c byte) int {
+	switch {
+	case c >= '0' && c <= '9':
+		return int(c - '0')
+	case c >= 'a' && c <= 'f':
+		return int(c-'a') + 10
+	case c >= 'A' && c <= 'F':
+		return int(c-'A') + 10
+	default:
+		return -1
+	}
 }
 
 func identClosingDelimiter(open byte) byte {
@@ -195,47 +305,54 @@ func identClosingDelimiter(open byte) byte {
 	}
 }
 
-// foldIdentASCII folds the ASCII letters of a name the way an engine folds an
-// unquoted reference — but only when the engine would have taken the name
-// unquoted in the first place.
+// identFolding describes how one dialect resolves an unquoted reference: which
+// way the case goes, and which names it would have accepted unquoted at all.
 //
-// A name carrying a space, a dash, a dot or a non-ASCII letter was never a
-// valid unquoted reference, so there is no unquoted resolution to preserve and
-// folding it would only invent a different object: `Created At` stays
-// `"Created At"` rather than becoming `"CREATED AT"`. The folding is ASCII-only
-// for the same reason — every dialect here restricts an unquoted identifier to
-// ASCII letters, digits and underscore, so a Unicode letter can only have
-// arrived quoted.
-func foldIdentASCII(name string, upper bool) string {
-	if !isUnquotedIdent(name) {
-		return name
-	}
-	out := []byte(name)
-	for i, c := range out {
-		switch {
-		case upper && c >= 'a' && c <= 'z':
-			out[i] = c - ('a' - 'A')
-		case !upper && c >= 'A' && c <= 'Z':
-			out[i] = c + ('a' - 'A')
-		}
-	}
-	return string(out)
+// The second half is what keeps the fold honest. Folding a name the engine
+// would have rejected unquoted preserves nothing — there was no unquoted
+// resolution — and only invents a different object: `Created At` would become
+// `"CREATED AT"`. Folding a name the engine *would* have taken is mandatory
+// for the same reason in reverse: Oracle resolves `sales#q1` as `SALES#Q1`, so
+// quoting it without folding addresses something else.
+type identFolding struct {
+	upper bool
+	// extra lists the non-alphanumeric ASCII characters this dialect allows
+	// after the first character of an unquoted identifier, beyond `_`.
+	extra string
+	// unicode marks a dialect whose unquoted identifiers may carry letters
+	// from outside ASCII — Postgres takes letters with diacritics and
+	// non-Latin letters, Oracle the database character set.
+	unicode bool
 }
 
-// isUnquotedIdent reports whether a name could have been written without
-// quotes: an ASCII letter, underscore or dollar to start, then letters, digits,
-// underscores and dollars. It is the intersection of the dialects' unquoted
-// rules rather than any single one, which is the safe side — a name it rejects
-// is quoted as written, and a quoted name always resolves.
-func isUnquotedIdent(name string) bool {
+var (
+	identFoldingLower       = identFolding{extra: "$", unicode: true}
+	identFoldingUpper       = identFolding{upper: true, extra: "$"}
+	identFoldingUpperOracle = identFolding{upper: true, extra: "$#", unicode: true}
+)
+
+// fold returns the name an unquoted reference resolves to, or the name
+// untouched when it could not have been written unquoted here.
+func (f identFolding) fold(name string) string {
+	if !f.canBeUnquoted(name) {
+		return name
+	}
+	if f.upper {
+		return strings.ToUpper(name)
+	}
+	return strings.ToLower(name)
+}
+
+func (f identFolding) canBeUnquoted(name string) bool {
 	if name == "" {
 		return false
 	}
-	for i := 0; i < len(name); i++ {
-		c := name[i]
+	for i, r := range name {
 		switch {
-		case c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'):
-		case c >= '0' && c <= '9' && i > 0:
+		case r == '_' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z'):
+		case i > 0 && r >= '0' && r <= '9':
+		case i > 0 && strings.ContainsRune(f.extra, r):
+		case f.unicode && r > unicode.MaxASCII && unicode.IsLetter(r):
 		default:
 			return false
 		}
@@ -250,10 +367,12 @@ func isUnquotedIdent(name string) bool {
 // to interpret.
 //
 // It takes no dialect because it runs where none is known yet — parsing a
-// config file, long before a connection is opened — and it does not need one
-// to find where a quote ends. Both escapes are honoured, a doubled closing
-// delimiter and a backslashed one. The cost is a name ending in a literal
-// backslash on a doubling dialect (MySQL “ `a\` “.`b`), which reads here as
+// to find where a quote ends. A doubled closing delimiter never ends a quote.
+// A backslash ends one only inside backticks, which is where BigQuery's
+// escaped delimiter lives; inside a double quote or a bracket a backslash is
+// a literal character on every dialect that uses those, so Postgres
+// `"a\\".orders` still splits into two parts. The one shape left ambiguous is
+// a MySQL backtick name ending in a backslash.
 // one part; the benefit is that BigQuery's `\“ does not cut a name in half.
 //
 // An unterminated quote is not an error here: the remainder comes back as one
@@ -268,7 +387,7 @@ func SplitQualifiedIdent(text string) []string {
 	for i := 0; i < len(text); i++ {
 		c := text[i]
 		switch {
-		case inQuote && c == '\\' && i+1 < len(text):
+		case inQuote && closing == '`' && c == '\\' && i+1 < len(text):
 			current.WriteByte(c)
 			i++
 			current.WriteByte(text[i])

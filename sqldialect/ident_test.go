@@ -64,7 +64,9 @@ func TestWrittenIdentHonoursQuotesTheAuthorWrote(t *testing.T) {
 func TestCanonicalIdentDoesNotFold(t *testing.T) {
 	assert.Equal(t, `"MyCol"`, mustSql(t, CanonicalIdent("MyCol"), NewSnowflakeDialect()))
 	assert.Equal(t, `"MyCol"`, mustSql(t, CanonicalIdent("MyCol"), NewPostgresDialect()))
-	assert.Equal(t, `"MyCol"`, mustSql(t, CanonicalIdent(`"MyCol"`), NewPostgresDialect()))
+	// A name the engine handed back is literal all the way down: a column
+	// really called `"MyCol"`, quotes included, keeps them.
+	assert.Equal(t, `"""MyCol"""`, mustSql(t, CanonicalIdent(`"MyCol"`), NewPostgresDialect()))
 }
 
 func TestIdentEscapesTheClosingDelimiter(t *testing.T) {
@@ -76,10 +78,10 @@ func TestIdentEscapesTheClosingDelimiter(t *testing.T) {
 	assert.Equal(t, "[we]]ird]", mustSql(t, CanonicalIdent("we]ird"), NewMSSQLDialect()))
 }
 
-// Unwrapping undoes the doubling, so a round trip is the identity rather than
-// a name that grows a delimiter every pass.
+// Unwrapping undoes the doubling, so text a person wrote round trips to
+// itself rather than growing a delimiter every pass.
 func TestIdentRoundTripsAnEscapedDelimiter(t *testing.T) {
-	assert.Equal(t, `"we""ird"`, mustSql(t, CanonicalIdent(`"we""ird"`), NewPostgresDialect()))
+	assert.Equal(t, `"we""ird"`, mustSql(t, WrittenIdent(`"we""ird"`), NewPostgresDialect()))
 }
 
 func TestQualifiedIdentQuotesEachPartOnItsOwn(t *testing.T) {
@@ -156,9 +158,53 @@ func TestSplitQualifiedIdentRoundTripsAnEscapedDelimiter(t *testing.T) {
 			parts := SplitQualifiedIdent(c.text)
 			require.Len(t, parts, 1)
 
-			ident := CanonicalIdent(parts[0])
+			ident := WrittenIdent(parts[0])
 			assert.Equal(t, c.name, ident.Name(c.dialect))
 			assert.Equal(t, c.text, mustSql(t, ident, c.dialect))
 		})
 	}
+}
+
+// BigQuery quoted identifiers take the string-literal escapes, so `\x41` is
+// the identifier `A`. Dropping only the backslash would leave `x41`, which is
+// a different object rather than a syntax error.
+func TestWrittenIdentDecodesBigQueryEscapes(t *testing.T) {
+	bq := NewBigQueryDialect()
+	cases := map[string]string{
+		"`\\x41`":       "A",
+		"`\\u0041`":     "A",
+		"`\\U00000041`": "A",
+		"`\\101`":       "A",
+		"`a\\tb`":       "a\tb",
+		"`we\\`ird`":    "we`ird",
+		"`a\\\\b`":      `a\b`,
+	}
+	for text, want := range cases {
+		t.Run(text, func(t *testing.T) {
+			assert.Equal(t, want, WrittenIdent(text).Name(bq))
+		})
+	}
+}
+
+// Oracle takes `#` in an unquoted identifier and folds it up, so quoting the
+// name without folding would address a different object.
+func TestWrittenIdentFoldsNamesEachEngineWouldHaveTakenUnquoted(t *testing.T) {
+	assert.Equal(t, `"SALES#Q1"`, mustSql(t, WrittenIdent("sales#q1"), NewOracleDialect()))
+	assert.Equal(t, `"SALES$Q1"`, mustSql(t, WrittenIdent("sales$q1"), NewSnowflakeDialect()))
+	// Postgres folds letters with diacritics the same as any other letter.
+	assert.Equal(t, `"école"`, mustSql(t, WrittenIdent("ÉCOLE"), NewPostgresDialect()))
+	// Snowflake's unquoted grammar is ASCII, so a non-ASCII name could only
+	// ever have been quoted — it is left as written rather than upper-cased.
+	assert.Equal(t, `"zamówienia"`, mustSql(t, WrittenIdent("zamówienia"), NewSnowflakeDialect()))
+	// A name no engine would take unquoted keeps its case on every dialect.
+	assert.Equal(t, `"Created At"`, mustSql(t, WrittenIdent("Created At"), NewSnowflakeDialect()))
+	assert.Equal(t, `"Created At"`, mustSql(t, WrittenIdent("Created At"), NewPostgresDialect()))
+}
+
+// A backslash is a literal character inside a double-quoted or bracketed
+// identifier, so it must not swallow the closing delimiter there.
+func TestSplitQualifiedIdentTreatsBackslashAsAnEscapeOnlyInBackticks(t *testing.T) {
+	assert.Equal(t, []string{`"a\\"`, "orders"}, SplitQualifiedIdent(`"a\\".orders`))
+	assert.Equal(t, []string{`[a\\]`, "orders"}, SplitQualifiedIdent(`[a\\].orders`))
+	assert.Equal(t, []string{"`a\\`b.c`"}, SplitQualifiedIdent("`a\\`b.c`"))
 }

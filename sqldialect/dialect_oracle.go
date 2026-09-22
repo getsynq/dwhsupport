@@ -93,7 +93,7 @@ func (d *OracleDialect) UnquoteIdent(text string) (string, bool) {
 // FoldIdent returns the name an unquoted reference resolves to.
 // An unquoted reference folds to upper case.
 func (d *OracleDialect) FoldIdent(name string) string {
-	return foldIdentASCII(name, true)
+	return identFoldingUpperOracle.fold(name)
 }
 
 func (d *OracleDialect) Identifier(identifier string) string {

@@ -14,10 +14,10 @@ double quote inside                    "we\"ird"        `we"ird`                
 backtick inside                        "we`ird"         `we\`ird`                resolves to "we`ird"
 bracket inside                         "we]ird"         `we]ird`                 resolves to "we]ird"
 backslash inside                       "we\\ird"        `we\\ird`                resolves to "we\\ird"
-pre-quoted, double quotes              "\"events\""     `events`                 resolves to "events"
-pre-quoted, backticks                  "`events`"       `events`                 resolves to "events"
-pre-quoted, brackets                   "[events]"       `events`                 resolves to "events"
-pre-quoted with an escaped delimiter   "\"we\"\"ird\""  `we"ird`                 resolves to "we\"ird"
+pre-quoted, double quotes              "\"events\""     `"events"`               resolves to "\"events\""
+pre-quoted, backticks                  "`events`"       `\`events\``             resolves to "`events`"
+pre-quoted, brackets                   "[events]"       `[events]`               resolves to "[events]"
+pre-quoted with an escaped delimiter   "\"we\"\"ird\""  `"we""ird"`              resolves to "\"we\"\"ird\""
 empty                                  ""                                        resolves to ""
 
 ---

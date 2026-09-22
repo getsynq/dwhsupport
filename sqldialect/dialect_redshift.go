@@ -103,7 +103,7 @@ func (d *RedshiftDialect) UnquoteIdent(text string) (string, bool) {
 // lowercase in the database." Quoting therefore buys reserved words and
 // punctuation here, not case.
 func (d *RedshiftDialect) FoldIdent(name string) string {
-	return foldIdentASCII(name, false)
+	return identFoldingLower.fold(name)
 }
 
 func (d *RedshiftDialect) Identifier(identifier string) string {
