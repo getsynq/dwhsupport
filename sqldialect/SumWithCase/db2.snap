@@ -1,0 +1,4 @@
+
+[TestSubquerySuite/TestSumWithCase - 1]
+SUM(CASE WHEN status = 'active' THEN amount ELSE 0 END)
+---

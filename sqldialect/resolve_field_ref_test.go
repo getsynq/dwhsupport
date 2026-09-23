@@ -191,6 +191,7 @@ func TestResolveFieldRef_CommaColumnQuoted(t *testing.T) {
 	}{
 		{"snowflake", NewSnowflakeDialect(), `"a, b"`, "coalesce(a, b)"},
 		{"oracle", NewOracleDialect(), `"a, b"`, "coalesce(a, b)"},
+		{"db2", NewDb2Dialect(), `"a, b"`, "coalesce(a, b)"},
 		{"postgres", NewPostgresDialect(), `"a, b"`, "coalesce(a, b)"},
 		{"redshift", NewRedshiftDialect(), `"a, b"`, "coalesce(a, b)"},
 		{"trino", NewTrinoDialect(), `"a, b"`, "coalesce(a, b)"},

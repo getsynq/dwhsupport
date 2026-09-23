@@ -39,6 +39,7 @@ func TestParseTimestamp_WarehouseTextForms(t *testing.T) {
 		{"Oracle TIMESTAMP", "15-MAR-24 10.20.30.123456000 AM", instant},
 		{"Oracle TIMESTAMP WITH TIME ZONE", "15-MAR-24 12.20.30.123456000 PM +02:00", instant},
 		{"Oracle DATE", "15-MAR-24", date},
+		{"Db2 TIMESTAMP", "2024-03-15-10.20.30.123456", instant},
 		{"Databricks / RFC 3339", "2024-03-15T10:20:30.123456Z", instant},
 		{"RFC 3339 with offset", "2024-03-15T12:20:30.123456+02:00", instant},
 		{"ISO without zone", "2024-03-15T10:20:30.123456", instant},

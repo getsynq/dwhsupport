@@ -1,0 +1,8 @@
+
+[TestCaseExprSuite/TestCaseInColumnList - 1]
+select
+  id, 
+  CASE WHEN amount > 100 THEN 'high' WHEN amount > 10 THEN 'medium' ELSE 'low' END as category
+from orders 
+ 
+---

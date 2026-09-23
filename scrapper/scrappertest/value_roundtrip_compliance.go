@@ -134,6 +134,15 @@ var roundTripExprs = map[string]map[scrapper.ValueKind]string{
 		scrapper.KindFloat:       `CAST(12.5 AS BINARY_DOUBLE)`,
 		scrapper.KindText:        `'it''s a back\slash'`,
 	},
+	// Db2 LUW has neither TIMESTAMP WITH TIME ZONE nor a UUID type.
+	"db2": {
+		scrapper.KindTimestamp: `TIMESTAMP '2024-03-15 10:20:30.123456'`,
+		scrapper.KindDate:      `DATE '2024-03-15'`,
+		scrapper.KindNumeric:   `CAST(12345678901234.567890 AS DECIMAL(20,6))`,
+		scrapper.KindInteger:   `CAST(9007199254740993 AS BIGINT)`,
+		scrapper.KindFloat:     `CAST(12.5 AS DOUBLE)`,
+		scrapper.KindText:      `'it''s a back\slash'`,
+	},
 	"trino": {
 		scrapper.KindTimestamp:   `TIMESTAMP '2024-03-15 10:20:30.123456'`,
 		scrapper.KindTimestampTz: `TIMESTAMP '2024-03-15 12:20:30.123456 +02:00'`,
@@ -364,8 +373,11 @@ func (s *ValueRoundTripSuite) selectValue(expr string) string {
 // selectFrom reads outer from a derived table whose only column, v, is expr.
 func (s *ValueRoundTripSuite) selectFrom(expr, outer string) string {
 	inner := "SELECT " + expr + " AS v"
-	if s.Scrapper.DialectType() == "oracle" {
+	switch s.Scrapper.DialectType() {
+	case "oracle":
 		inner += " FROM dual"
+	case "db2":
+		inner += " FROM SYSIBM.SYSDUMMY1"
 	}
 	tableAlias := " AS t"
 	if !s.Scrapper.SqlDialect().SupportsAsBeforeTableAlias() {

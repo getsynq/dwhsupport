@@ -97,7 +97,7 @@ All data models are in `scrapper/models.go`:
 ### Adding a Method to the Scrapper Interface
 
 A new `Scrapper` method must be added in all of these or the build breaks:
-- `scrapper/interface.go` (the interface) + each warehouse's `query_*.go` (12 impls; `ErrUnsupported` is fine)
+- `scrapper/interface.go` (the interface) + each warehouse's `query_*.go` (13 impls; `ErrUnsupported` is fine)
 - Decorators: `scrapper/scope/scoped_scrapper.go`, `scrapper/reject/rejecting_scrapper.go`, `scrapper/sanitize/sanitizing_scrapper.go`, `pool/scrapper.go`
 - `./mockgen.sh` to regenerate `scrapper/mocks.go`
 - Test stubs that implement Scrapper: `scrapper/unwrap_test.go` and the mock scrappers in `scrapper/{reject,sanitize,scope}/*_test.go` and `pool/scrapper_test.go`
@@ -144,6 +144,7 @@ CI builds/tests it as a separate `cli` job (`.github/workflows/go.yml`).
 - Trino
 - Oracle
 - MSSQL
+- Db2 (LUW)
 
 ## Testing
 
@@ -168,6 +169,7 @@ Six embeddable test suites in `scrapper/scrappertest/`:
 
 Integration tests connect to dwhtesting staging databases via Twingate (no port-forwarding needed). Each scrapper package has a `base_test.go` that loads `../../.env` via `godotenv`. Env var prefixes per database:
 - `ORACLE_`, `MSSQL_`, `POSTGRES_`, `CLICKHOUSE_` — dwhtesting staging
+- `DB2_` (`DB2_HOSTNAME`, `DB2_PORT`, `DB2_DATABASE`, `DB2_USER`, `DB2_PASSWORD`) — dwhtesting staging
 - `MARIADB_` — MariaDB on dwhtesting staging
 - `MYSQL_` — real MySQL on dwhtesting staging
 - `STARBURST_` — Starburst Galaxy (HTTPS), `TRINO_` — self-hosted Trino (plaintext HTTP)
@@ -227,6 +229,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
     | BigQuery | `` ` `` | **`\``** | nothing — datasets and tables are case-sensitive, columns matched case-insensitively |
     | ClickHouse, MySQL, Databricks | `` ` `` | doubled | nothing |
     | MSSQL, Fabric | `[` `]` | `]]` | nothing — case is the collation's business |
+    | Db2 | `"` | doubled | UPPER; `#`, `$`, `@` and non-ASCII letters are legal unquoted, a leading `_` is not |
 
     Folding applies only to a name the engine would have taken unquoted in the first place, and each dialect's own unquoted grammar decides that: `Created At` was never an unquoted reference anywhere, so it is quoted as written rather than upper-cased into a different object, while Oracle's `sales#q1` and Postgres's `ÉCOLE` were, and are folded. Getting that gate wrong in either direction moves which object is addressed, which is why it is per-dialect rather than a lowest common denominator.
   - **The engines are asked directly, not just read about.** `scrappertest.SqlDialectExecutionSuite` carries three identifier checks that run against every warehouse (`TestSqlDialectExecution_IdentQuotingIsAccepted`, `…_WrittenIdentBehavesLikeTheUnquotedReference`, `…_QualifiedIdentNamesTheTable`). They use column aliases and reads, never DDL. Two things they taught that the docs do not say plainly: BigQuery parses `` `we\`ird` `` correctly and then rejects it with "Invalid field name", because what a column may be *named* is a separate rule from how an identifier is quoted; and Trino and Athena report an alias back under the case it was written in even though they resolve object names folded to lower — which is why the fold is probed by resolving a column two ways rather than by reading an alias back.
@@ -259,6 +262,17 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 - **MariaDB vs MySQL detection**: `MySQLScrapper` detects MariaDB at construction via `SELECT VERSION()` (contains "mariadb"). Used for SQL branching — e.g., MySQL has `ENFORCED` column in `TABLE_CONSTRAINTS` for CHECK constraints, MariaDB does not.
 - **MySQL FQN mapping**: MySQL `ResolveFqn` uses `datasetId.tableId`. When constructing `TableFqn` for MySQL, put database name in `datasetId` (second arg), not `projectId` (first arg): `TableFqn("", dbName, tableName)`.
 - **MySQL dialect compatibility**: `DATE_ADD`/`DATE_SUB` (not `DATEADD`), `CAST AS DOUBLE` (not `FLOAT`), `NULL` for `MEDIAN` (no built-in aggregate). These work on both MySQL and MariaDB.
+
+## Db2 Gotchas
+
+- **Driver: `github.com/getsynq/go-db2`**, our fork of the pure-Go `go-db2/go-db2` (DRDA, no CGO, no IBM clidriver). Branch `getsynq/fixes` carries fixes proposed upstream (go-db2/go-db2#37-#40 and follow-ups) plus a module rename, so consumers get the fixed driver without a `replace`. Once upstream has merged them, switch back to `github.com/go-db2/go-db2`.
+- **LUW only.** The scrapper reads `SYSCAT.*`; Db2 for z/OS (`SYSIBM.SYS*`) and Db2 for i (`QSYS2`) keep their catalogs elsewhere and are not supported.
+- **One database per connection**, like Postgres: an instance holds several databases, each with its own `SYSCAT`, and SQL cannot reach another one without federation (a nickname, which the scrapper lists as `NICKNAME`). `Database` is reported as `CURRENT SERVER`, the name the server uses, not the configured alias.
+- **System schemas are `SYS%`** (Db2 refuses to create a user schema with that prefix) plus `NULLID` and `SQLJ`.
+- **Table metrics are statistics**: `CARD`/`NPAGES` are -1 until RUNSTATS (or automatic statistics) ran, reported as unknown, and `updated_at` is `STATS_TIME` — Db2 keeps no time of the last data change.
+- **`SUBSTR` fails (SQLCODE -138) when start+length runs past the string**, and `LENGTH` counts bytes; the dialect uses `SUBSTRING(..., CODEUNITS32)` and `CHARACTER_LENGTH`.
+- **`VARCHAR(timestamp)` renders `2024-03-15-10.20.30.123456`**, which `ParseTimestamp` knows.
+- **The test instance is amd64-only and needs a privileged container**; under Rosetta on an arm64 Mac it is too slow to use. GoLand listens on `127.0.0.1:50000`, so a local port-forward needs another port.
 
 ## Oracle & MSSQL Gotchas
 

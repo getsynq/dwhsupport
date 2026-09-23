@@ -33,12 +33,25 @@ func TestIdentQuotesAReservedWord(t *testing.T) {
 		"databricks": {NewDatabricksDialect(), "`order`"},
 		"mssql":      {NewMSSQLDialect(), "[order]"},
 		"fabric":     {NewFabricDialect(), "[order]"},
+		"db2":        {NewDb2Dialect(), `"ORDER"`},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			assert.Equal(t, c.want, mustSql(t, WrittenIdent("order"), c.dialect))
 		})
 	}
+}
+
+// Db2 folds an unquoted name to upper case and takes #, $ and @ inside one, but
+// rejects one that starts with an underscore, which therefore has to be quoted
+// as written.
+func TestDb2Identifiers(t *testing.T) {
+	d := NewDb2Dialect()
+	assert.Equal(t, `"SALES#Q1"`, mustSql(t, WrittenIdent("sales#q1"), d))
+	assert.Equal(t, `"A@B"`, mustSql(t, WrittenIdent("a@b"), d))
+	assert.Equal(t, `"_recon_base"`, d.ResolveFieldRef("_recon_base"))
+	assert.Equal(t, "created_at", d.ResolveFieldRef("created_at"))
+	assert.Equal(t, `"createdAt"`, d.ResolveFieldRef("createdAt"))
 }
 
 // Quoting pins the case, so a written name is folded first: the quoted form has

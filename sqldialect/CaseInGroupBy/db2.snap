@@ -1,0 +1,9 @@
+
+[TestCaseExprSuite/TestCaseInGroupBy - 1]
+select
+  CASE WHEN id < 100 THEN 0 ELSE 1 END as bucket, 
+  COUNT(*) as cnt
+from data 
+group by bucket
+ 
+---

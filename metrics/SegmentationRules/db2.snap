@@ -1,0 +1,35 @@
+
+[TestMetricsSuite/TestSegmentationRules/db2_allowed_segments - 1]
+select
+  COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '') as "segment", 
+  COUNT(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
+from "default"."runs" 
+where COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '') in ('synq-demo', 'synq-demo-2')
+group by COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '')
+order by COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '') 
+---
+
+[TestMetricsSuite/TestSegmentationRules/db2_empty_exclude - 1]
+select
+  COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '') as "segment", 
+  COUNT(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
+from "default"."runs" 
+group by COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '')
+order by COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '') 
+---
+
+[TestMetricsSuite/TestSegmentationRules/db2_empty_include - 1]
+select
+  COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '') as "segment", 
+  COUNT(ingested_at) as "num_not_null", 
+  min(ingested_at) as "min", 
+  max(ingested_at) as "max"
+from "default"."runs" 
+where (1=2)
+group by COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '')
+order by COALESCE(SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), '') 
+---
