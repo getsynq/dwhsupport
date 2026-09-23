@@ -1,10 +1,19 @@
 package db2
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsPermissionError(t *testing.T) {
@@ -30,7 +39,7 @@ func TestDriverConfig(t *testing.T) {
 	assert.False(t, cfg.UseSSL)
 	assert.EqualValues(t, 3, cfg.SecurityMechanism)
 
-	cfg, err = driverConfig(&Db2Conf{Hostname: "h", Security: "ssl", SSLServerCertificate: "/ca.pem", Authentication: "server_encrypt"})
+	cfg, err = driverConfig(&Db2Conf{Hostname: "h", Security: "ssl", SSLServerCertificateFile: "/ca.pem", Authentication: "server_encrypt"})
 	assert.NoError(t, err)
 	assert.Equal(t, 50001, cfg.Port)
 	assert.True(t, cfg.UseSSL)
@@ -41,4 +50,36 @@ func TestDriverConfig(t *testing.T) {
 	assert.Error(t, err)
 	_, err = driverConfig(&Db2Conf{Authentication: "KERBEROS"})
 	assert.Error(t, err)
+}
+
+func TestDriverConfig_InlineCertificate(t *testing.T) {
+	certPEM := selfSignedPEM(t)
+
+	cfg, err := driverConfig(&Db2Conf{Hostname: "h", Security: "SSL", SSLServerCertificatePEM: certPEM})
+	require.NoError(t, err)
+	assert.True(t, cfg.UseSSL)
+	assert.Empty(t, cfg.SSLRootCAPath)
+	require.NotNil(t, cfg.TLSConfig)
+	require.NotNil(t, cfg.TLSConfig.RootCAs)
+
+	_, err = driverConfig(&Db2Conf{Hostname: "h", Security: "SSL", SSLServerCertificatePEM: "not a certificate"})
+	assert.Error(t, err)
+
+	_, err = driverConfig(&Db2Conf{Hostname: "h", Security: "SSL", SSLServerCertificatePEM: certPEM, SSLServerCertificateFile: "/ca.pem"})
+	assert.Error(t, err)
+}
+
+func selfSignedPEM(t *testing.T) string {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "db2 test"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
 }

@@ -1,7 +1,7 @@
-buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260209202127-80ab13bee0bf.1 h1:dUbIV5hBj4hXx9gKSs1ZE3F+FPAeAifcG/z6EI8bMg0=
-buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260209202127-80ab13bee0bf.1/go.mod h1:TCt1lluMFnctISJXvkIQ4x3ABrPuUKCWKyjKdkJNBpw=
-buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260818104000-645e1e5e0c2c.1 h1:nJPsCS1w7wF1NBnSDWZuJpTGRhWetsS2egQpFmni4KA=
-buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260818104000-645e1e5e0c2c.1/go.mod h1:Q/N3xIn3AApQo6JRbgcJk0r75RaKpWdAewGxh9y9X64=
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.2 h1:efCr041QT0K78zp/3wOhCdOmNSvDzLhhueu03hGS3bw=
+buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.2/go.mod h1:TCt1lluMFnctISJXvkIQ4x3ABrPuUKCWKyjKdkJNBpw=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260923134820-308a3cc2e09d.2 h1:UZ8+wHg5XeEVwA7foRlA9OKFumjP42m4H+DG2c2sR9w=
+buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260923134820-308a3cc2e09d.2/go.mod h1:Oe7WFt9HlHgUiT5nNLKLcf0kiiJSOyXMCAiQzds2e88=
 cel.dev/expr v0.24.0 h1:56OvJKSH3hDGL0ml5uSxZmz3/3Pq4tJ+fb1unVLAFcY=
 cel.dev/expr v0.24.0/go.mod h1:hLPLo1W4QUmuYdA72RBX06QTs6MXw941piREPl3Yfiw=
 cloud.google.com/go v0.121.6 h1:waZiuajrI28iAf40cWgycWNgaXPO06dupuS+sgibK6c=
@@ -201,8 +201,8 @@ github.com/fsnotify/fsnotify v1.9.0 h1:2Ml+OJNzbYCTzsxtv8vKSFD9PbJjmhYF14k/jKC7S
 github.com/fsnotify/fsnotify v1.9.0/go.mod h1:8jBTzvmWwFyi3Pb8djgCCO5IBqzKJ/Jwo8TRcHyHii0=
 github.com/gabriel-vasile/mimetype v1.4.9 h1:5k+WDwEsD9eTLL8Tz3L0VnmVh9QxGjRmjBvAG7U/oYY=
 github.com/gabriel-vasile/mimetype v1.4.9/go.mod h1:WnSQhFKJuBlRyLiKohA/2DtIlPFAbguNaG7QCHcyGok=
-github.com/getsynq/go-db2 v0.0.0-20260923130003-0b40aa53491b h1:iMvB2kSKApzwBwrtykn8gx17WmKWTduh+5XNrkYTBHc=
-github.com/getsynq/go-db2 v0.0.0-20260923130003-0b40aa53491b/go.mod h1:ZR3R4EwmfedVm9YJjuj15SsVZuO4CXDf9xigdrTOUjg=
+github.com/getsynq/go-db2 v0.0.0-20260923134226-9a48283f9643 h1:od1fC9W+K5TYwgTE4hzS1uuZOJ27SvUkBUiJCSOSARI=
+github.com/getsynq/go-db2 v0.0.0-20260923134226-9a48283f9643/go.mod h1:ZR3R4EwmfedVm9YJjuj15SsVZuO4CXDf9xigdrTOUjg=
 github.com/gkampitakis/ciinfo v0.3.2 h1:JcuOPk8ZU7nZQjdUhctuhQofk7BGHuIy0c9Ez8BNhXs=
 github.com/gkampitakis/ciinfo v0.3.2/go.mod h1:1NIwaOcFChN4fa/B0hEBdAb6npDlFL8Bwx4dfRLRqAo=
 github.com/gkampitakis/go-diff v1.3.2 h1:Qyn0J9XJSDTgnsgHRdz9Zp24RaJeKMUHg2+PDZZdC4M=
