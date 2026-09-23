@@ -1,0 +1,156 @@
+
+[TestSqlLiteral_PerDialect/clickhouse - 1]
+timestamp: toDateTime64('2024-03-15 10:20:30.123456789', 9, 'UTC')
+timestamptz: toDateTime64('2024-03-15 10:20:30.123456789', 9, 'UTC')
+date: toDate32('2024-03-15')
+numeric: toDecimal256('12345678901234.567890', 6)
+numeric: toDecimal256('-42', 0)
+integer: toDecimal256('1180591620717411303424', 0)
+float: 12.5
+text: 'it''s a back\\slash'
+uuid: toUUID('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11')
+
+---
+
+[TestSqlLiteral_PerDialect/snowflake - 1]
+timestamp: TO_TIMESTAMP_NTZ('2024-03-15 10:20:30.123456789')
+timestamptz: TO_TIMESTAMP_TZ('2024-03-15 10:20:30.123456789 +00:00')
+date: DATE '2024-03-15'
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\\slash'
+uuid: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
+
+[TestSqlLiteral_PerDialect/redshift - 1]
+timestamp: CAST('2024-03-15 10:20:30.123456' AS TIMESTAMP)
+timestamptz: CAST('2024-03-15 10:20:30.123456+00:00' AS TIMESTAMPTZ)
+date: CAST('2024-03-15' AS DATE)
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\\slash'
+uuid: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
+
+[TestSqlLiteral_PerDialect/bigquery - 1]
+timestamp: DATETIME '2024-03-15 10:20:30.123456'
+timestamptz: TIMESTAMP '2024-03-15 10:20:30.123456+00:00'
+date: DATE '2024-03-15'
+numeric: BIGNUMERIC '12345678901234.567890'
+numeric: BIGNUMERIC '-42'
+integer: BIGNUMERIC '1180591620717411303424'
+float: 12.5
+text: 'it\'s a back\\slash'
+uuid: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
+
+[TestSqlLiteral_PerDialect/postgres - 1]
+timestamp: TIMESTAMP '2024-03-15 10:20:30.123456'
+timestamptz: TIMESTAMPTZ '2024-03-15 10:20:30.123456+00:00'
+date: DATE '2024-03-15'
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\slash'
+uuid: CAST('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AS UUID)
+
+---
+
+[TestSqlLiteral_PerDialect/mysql - 1]
+timestamp: CAST('2024-03-15 10:20:30.123456' AS DATETIME(6))
+timestamptz: CAST('2024-03-15 10:20:30.123456' AS DATETIME(6))
+date: DATE '2024-03-15'
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\\slash'
+uuid: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
+
+[TestSqlLiteral_PerDialect/databricks - 1]
+timestamp: TIMESTAMP_NTZ '2024-03-15 10:20:30.123456'
+timestamptz: TIMESTAMP '2024-03-15 10:20:30.123456+00:00'
+date: DATE '2024-03-15'
+numeric: 12345678901234.567890BD
+numeric: -42BD
+integer: 1180591620717411303424BD
+float: 12.5
+text: 'it\'s a back\\slash'
+uuid: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
+
+[TestSqlLiteral_PerDialect/duckdb - 1]
+timestamp: TIMESTAMP '2024-03-15 10:20:30.123456'
+timestamptz: TIMESTAMPTZ '2024-03-15 10:20:30.123456+00:00'
+date: DATE '2024-03-15'
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\slash'
+uuid: CAST('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AS UUID)
+
+---
+
+[TestSqlLiteral_PerDialect/trino - 1]
+timestamp: TIMESTAMP '2024-03-15 10:20:30.123456789'
+timestamptz: TIMESTAMP '2024-03-15 10:20:30.123456789 UTC'
+date: DATE '2024-03-15'
+numeric: DECIMAL '12345678901234.567890'
+numeric: DECIMAL '-42'
+integer: DECIMAL '1180591620717411303424'
+float: 12.5
+text: 'it''s a back\slash'
+uuid: UUID 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
+
+[TestSqlLiteral_PerDialect/oracle - 1]
+timestamp: TIMESTAMP '2024-03-15 10:20:30.123456789'
+timestamptz: TIMESTAMP '2024-03-15 10:20:30.123456789 +00:00'
+date: DATE '2024-03-15'
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\slash'
+uuid: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
+
+[TestSqlLiteral_PerDialect/mssql - 1]
+timestamp: CAST('2024-03-15 10:20:30.1234567' AS DATETIME2(7))
+timestamptz: CAST('2024-03-15 10:20:30.1234567 +00:00' AS DATETIMEOFFSET(7))
+date: CAST('2024-03-15' AS DATE)
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\slash'
+uuid: CAST('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AS UNIQUEIDENTIFIER)
+
+---
+
+[TestSqlLiteral_PerDialect/fabric - 1]
+timestamp: CAST('2024-03-15 10:20:30.123456' AS DATETIME2(6))
+timestamptz: CAST('2024-03-15 10:20:30.123456' AS DATETIME2(6))
+date: CAST('2024-03-15' AS DATE)
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\slash'
+uuid: CAST('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AS UNIQUEIDENTIFIER)
+
+---
