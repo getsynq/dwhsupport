@@ -61,11 +61,17 @@ func TestParseTimestamp_RejectsNonTimestamps(t *testing.T) {
 	}
 }
 
-// TestMetricValueFromText_TimestamptzText: a timestamptz watermark read as
-// text over the metrics path used to become IgnoredValue.
-func TestMetricValueFromText_TimestamptzText(t *testing.T) {
+// TestMetricValueFromText_StaysNarrow pins what the metrics path reads out of
+// text. It is kept to what it has always been, because every text form it
+// learns to read is more customer data a monitor can take out. ParseTimestamp
+// reads the rest, on the raw path.
+func TestMetricValueFromText_StaysNarrow(t *testing.T) {
 	want := time.Date(2024, 3, 15, 10, 20, 30, 123456000, time.UTC)
-	assert.Equal(t, TimeValue(want), MetricValueFromText("2024-03-15 10:20:30.123456+00"))
+	assert.Equal(t, TimeValue(want), MetricValueFromText("2024-03-15T10:20:30.123456Z"))
+	assert.Equal(t, TimeValue(want), MetricValueFromText("2024-03-15 10:20:30.123456"))
+	for _, text := range []string{"2024-03-15 10:20:30.123456+00", "2024-03-15", "15-MAR-24", "hello"} {
+		assert.Equalf(t, IgnoredValue{}, MetricValueFromText(text), "%q", text)
+	}
 	assert.Equal(t, IntValue(42), MetricValueFromText("42"))
 	assert.Equal(t, DoubleValue(1.5), MetricValueFromText("1.5"))
 	assert.Equal(t, IntValue(1), MetricValueFromText("true"))

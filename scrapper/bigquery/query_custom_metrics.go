@@ -116,10 +116,10 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 					f, _ := v.Float64()
 					colValue.Value = scrapper.DoubleValue(f)
 				case string:
-					// A number or timestamp cast to STRING reads back as one,
-					// as it does on every other warehouse; other text is
-					// ignored.
-					colValue.Value = scrapper.MetricValueFromText(v)
+					// Text never leaves the metrics path (see
+					// scrapper.MetricValueFromText), and on BigQuery a
+					// metric is always typed, so a string is not one.
+					colValue.Value = scrapper.IgnoredValue{}
 				default:
 					// Unsupported type
 					colValue.Value = scrapper.IgnoredValue{}

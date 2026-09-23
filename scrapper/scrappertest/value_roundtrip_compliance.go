@@ -280,13 +280,8 @@ func (s *ValueRoundTripSuite) runKind(kind scrapper.ValueKind) {
 
 		// The warehouse picks the precision of its own text rendering
 		// (Snowflake's default is milliseconds), so only the instant is
-		// checked, to the millisecond.
-		metric := s.metricsValue(sql)
-		s.Require().False(metric.IsNull, "value should not be null")
-		got, ok := metric.Value.(scrapper.TimeValue)
-		s.Require().Truef(ok, "QueryCustomMetrics should decode the text form to a TimeValue, got %T %v", metric.Value, metric.Value)
-		s.WithinDuration(s.wantTime(kind), time.Time(got), time.Millisecond)
-
+		// checked, to the millisecond. This reads the raw path only: the
+		// metrics path keeps text out on purpose (scrapper.MetricValueFromText).
 		raw, _ := s.rawValue(sql)
 		s.Require().False(raw.IsNull, "value should not be null")
 		parsed, ok := scrapper.AsTime(raw.Value)

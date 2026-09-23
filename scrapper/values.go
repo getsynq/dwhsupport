@@ -124,10 +124,15 @@ func startsWithDigit(s string) bool {
 }
 
 // MetricValueFromText is how the metrics path (QueryCustomMetrics) reads a
-// cell a driver handed back as text: an integer, a float, a boolean (as 1/0)
-// or a timestamp in any form ParseTimestamp knows. Anything else is
-// IgnoredValue. The metrics path carries numbers and times only, and its
-// consumers reject a StringValue.
+// cell a driver handed back as text: an integer, a float, a boolean (as 1/0),
+// or a timestamp in RFC 3339 or "2006-01-02 15:04:05.999999999". Anything
+// else is IgnoredValue.
+//
+// It is deliberately narrower than ParseTimestamp. The metrics path returns
+// metrics, not the data they were computed from, and callers rely on it never
+// handing back text; each form it learns to parse is more of a table's
+// contents it returns. A caller that needs a value read back as it is uses
+// RunRawQuery.
 func MetricValueFromText(s string) Value {
 	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
 		return IntValue(v)
@@ -141,11 +146,17 @@ func MetricValueFromText(s string) Value {
 		}
 		return IntValue(0)
 	}
-	if t, ok := ParseTimestamp(s); ok {
-		return TimeValue(t)
+	for _, layout := range metricTimestampLayouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			return TimeValue(t.UTC())
+		}
 	}
 	return IgnoredValue{}
 }
+
+// metricTimestampLayouts are the only text forms the metrics path reads as a
+// time. See MetricValueFromText for why the list is short.
+var metricTimestampLayouts = []string{time.RFC3339Nano, "2006-01-02 15:04:05.999999999"}
 
 // DecimalValueFromText decodes the text of an exact numeric (NUMERIC,
 // DECIMAL, NUMBER, Snowflake's FIXED) without going through float64: an
