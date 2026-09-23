@@ -272,6 +272,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 - **Table metrics are statistics**: `CARD`/`NPAGES` are -1 until RUNSTATS (or automatic statistics) ran, reported as unknown, and `updated_at` is `STATS_TIME` — Db2 keeps no time of the last data change.
 - **`SUBSTR` fails (SQLCODE -138) when start+length runs past the string**, and `LENGTH` counts bytes; the dialect uses `SUBSTRING(..., CODEUNITS32)` and `CHARACTER_LENGTH`.
 - **`VARCHAR(timestamp)` renders `2024-03-15-10.20.30.123456`**, which `ParseTimestamp` knows.
+- **Query logs are the package cache** (`MON_GET_PKG_CACHE_STMT`), like Oracle's `V$SQL`: one row per cached statement with metrics summed over its executions, no executing user, no per-execution status. Its timestamps are the server's local time, converted with `- CURRENT TIMEZONE`. `STMTID` hashes the normalized text (statements differing only in a comment share it) and is the `NormalizedQueryHash`; `EXECUTABLE_ID` is the entry's id. Needs EXECUTE on `MON_GET_PKG_CACHE_STMT`.
 - **The test instance is amd64-only and needs a privileged container**; under Rosetta on an arm64 Mac it is too slow to use. GoLand listens on `127.0.0.1:50000`, so a local port-forward needs another port.
 
 ## Oracle & MSSQL Gotchas
