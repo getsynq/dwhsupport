@@ -1,0 +1,21 @@
+# Policy for the aggregate status check maintained by the github-aggregate-status
+# app (getsynq/cloud, dev-infra/github/aggregate-status). The app reads this file
+# from the base branch, never the PR head, so an edit takes effect once merged to
+# main, not on the PR that makes it. Anything left out here takes the app's
+# defaults, and those never approve.
+
+# Pull requests whose entire diff matches one of these get an approving review
+# from the app. It approves, it does not merge: the pull request still has to be
+# green, and a later push that takes the diff outside this list withdraws the
+# approval. "*" spans directory separators, so "*.md" is any markdown file at any
+# depth.
+autoApprovePaths:
+  - "*.md"
+
+# Check names that never block the aggregate. The Slack emoji workflow triggers
+# on pull_request_review, so without the workflow entry approving a pull request
+# sends its aggregate back to pending until that run ends, which is exactly when
+# auto-merge wants to fire. The app's defaults only name the job.
+advisory:
+  - slack-pr-react
+  - "workflow:Slack emoji PR updates"
