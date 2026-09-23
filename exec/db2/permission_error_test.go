@@ -69,6 +69,16 @@ func TestDriverConfig_InlineCertificate(t *testing.T) {
 	assert.Error(t, err)
 }
 
+// A certificate without Security SSL must not fall back to plain TCP/IP, which
+// with the default SERVER authentication sends the password unencrypted.
+func TestDriverConfig_CertificateWithoutSSL(t *testing.T) {
+	_, err := driverConfig(&Db2Conf{Hostname: "h", SSLServerCertificatePEM: selfSignedPEM(t)})
+	assert.Error(t, err)
+
+	_, err = driverConfig(&Db2Conf{Hostname: "h", SSLServerCertificateFile: "/ca.pem"})
+	assert.Error(t, err)
+}
+
 func selfSignedPEM(t *testing.T) string {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
