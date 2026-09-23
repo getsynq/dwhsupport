@@ -41,8 +41,9 @@ type Db2Conf struct {
 	// TCP/IP connection.
 	Security string
 	// SSLServerCertificateFile is the path to a PEM file holding the server's
-	// certificate or the CA that signed it (SSLServerCertificate). Empty, with
-	// SSLServerCertificatePEM empty too, uses the system trust store.
+	// certificate or the CA that signed it (SSLServerCertificate). Requires
+	// Security SSL. Empty, with SSLServerCertificatePEM empty too, uses the
+	// system trust store.
 	SSLServerCertificateFile string
 	// SSLServerCertificatePEM is the same certificate as PEM text, for callers
 	// that hold it in memory and have no file to point at. Mutually exclusive
@@ -84,6 +85,11 @@ func driverConfig(conf *Db2Conf) (*godb2.Config, error) {
 
 	switch strings.ToUpper(conf.Security) {
 	case "":
+		// A certificate means the caller expects TLS. Falling back to plain
+		// TCP/IP would send the password unencrypted under SERVER authentication.
+		if conf.SSLServerCertificateFile != "" || conf.SSLServerCertificatePEM != "" {
+			return nil, errors.New("db2: a server certificate is set but Security is not SSL")
+		}
 	case "SSL":
 		cfg.UseSSL = true
 		if conf.SSLServerCertificateFile != "" && conf.SSLServerCertificatePEM != "" {

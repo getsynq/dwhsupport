@@ -359,12 +359,13 @@ type Db2Conf struct {
 	Security string `yaml:"security,omitempty" jsonschema:"enum=SSL,enum=ssl"`
 	// Path to the server's certificate, or the certificate of the CA that
 	// signed it, in PEM format (SSLServerCertificate), such as the .arm file
-	// extracted from the instance's keystore with gsk8capicmd_64. Leave it and
-	// ssl_server_certificate_pem out to check the server against the system
-	// trust store.
+	// extracted from the instance's keystore with gsk8capicmd_64. Needs
+	// security set to SSL. Leave it and ssl_server_certificate_pem out to check
+	// the server against the system trust store.
 	SSLServerCertificateFile string `yaml:"ssl_server_certificate_file,omitempty" jsonschema:"example=/opt/certs/db2server.arm"`
 	// Content of the same certificate, starting with
-	// -----BEGIN CERTIFICATE-----, for when you can't point to a file.
+	// -----BEGIN CERTIFICATE-----, for when you can't point to a file. Needs
+	// security set to SSL.
 	SSLServerCertificatePEM string `yaml:"ssl_server_certificate_pem,omitempty"`
 	// How the authorization ID and password travel to the server
 	// (AUTHENTICATION). SERVER (default) sends them unencrypted, so use it with
