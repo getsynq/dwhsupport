@@ -386,7 +386,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryCustomMetrics_DirectDB() {
 	FROM test_clickhouse_scrapper
 	ORDER BY id`
 
-	result, err := scrapperstdsql.QueryCustomMetrics(s.ctx, s.clickhouseScrapper.executor, sql)
+	result, err := scrapperstdsql.QueryCustomMetrics(s.ctx, s.clickhouseScrapper.executor, "clickhouse", sql)
 	s.Require().NoError(err)
 	s.Require().Len(result, 2)
 

@@ -31,5 +31,5 @@ func (e *OracleScrapper) QueryShape(ctx context.Context, sql string) ([]*scrappe
 		}
 	}
 
-	return result, nil
+	return scrapper.SetKinds(e.DialectType(), result), nil
 }

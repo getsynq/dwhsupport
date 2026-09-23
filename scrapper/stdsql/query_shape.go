@@ -24,7 +24,10 @@ func (r *RawDB) QueryRows(ctx context.Context, q string, args ...interface{}) (*
 	return r.DB.QueryxContext(ctx, q, args...)
 }
 
-func QueryShape(ctx context.Context, db RowQuerier, sql string) ([]*scrapper.QueryShapeColumn, error) {
+// QueryShape describes the columns sql returns without running it. dialect is
+// Scrapper.DialectType(), which NativeValueKind needs to fill in each
+// column's Kind.
+func QueryShape(ctx context.Context, db RowQuerier, dialect string, sql string) ([]*scrapper.QueryShapeColumn, error) {
 	wrappedSQL := fmt.Sprintf("WITH _synq_shape_cte AS (%s) SELECT * FROM _synq_shape_cte LIMIT 0", sql)
 
 	collector, ctx := querystats.Start(ctx)
@@ -50,5 +53,5 @@ func QueryShape(ctx context.Context, db RowQuerier, sql string) ([]*scrapper.Que
 		}
 	}
 
-	return result, nil
+	return scrapper.SetKinds(dialect, result), nil
 }

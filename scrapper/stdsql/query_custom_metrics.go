@@ -3,7 +3,6 @@ package stdsql
 import (
 	"context"
 	"math/big"
-	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -12,7 +11,10 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 )
 
-func QueryCustomMetrics(ctx context.Context, db RowQuerier, sqlQuery string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
+// QueryCustomMetrics runs a metrics query. dialect is Scrapper.DialectType(),
+// which decides what each column's native type means; a time is decoded by
+// its column's kind (see scrapper.NormalizeTimeOfKind).
+func QueryCustomMetrics(ctx context.Context, db RowQuerier, dialect string, sqlQuery string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
 	var rowCount int64
@@ -29,8 +31,10 @@ func QueryCustomMetrics(ctx context.Context, db RowQuerier, sqlQuery string, arg
 	}
 
 	columns := make([]string, len(columnTypes))
+	kinds := make([]scrapper.ValueKind, len(columnTypes))
 	for i, ct := range columnTypes {
 		columns[i] = ct.Name()
+		kinds[i] = scrapper.NativeValueKind(dialect, ct.DatabaseTypeName())
 	}
 
 	result := make([]*scrapper.CustomMetricsRow, 0)
@@ -83,7 +87,7 @@ func QueryCustomMetrics(ctx context.Context, db RowQuerier, sqlQuery string, arg
 			}
 
 			if !isNull {
-				colValue.Value = convertToScrapperValue(rawValue)
+				colValue.Value = convertToScrapperValue(rawValue, kinds[i])
 			}
 
 			row.ColumnValues = append(row.ColumnValues, colValue)
@@ -137,8 +141,9 @@ type bigInter interface {
 	BigInt() *big.Int
 }
 
-// convertToScrapperValue converts database driver values to scrapper value types
-func convertToScrapperValue(v any) scrapper.Value {
+// convertToScrapperValue converts database driver values to scrapper value
+// types. kind is the column's, and decides how a time is normalised.
+func convertToScrapperValue(v any, kind scrapper.ValueKind) scrapper.Value {
 	switch val := v.(type) {
 	case int64:
 		return scrapper.IntValue(val)
@@ -172,7 +177,10 @@ func convertToScrapperValue(v any) scrapper.Value {
 		}
 		return scrapper.IntValue(0)
 	case time.Time:
-		return scrapper.TimeValue(val)
+		return scrapper.TimeValue(scrapper.NormalizeTimeOfKind(val, kind))
+	case *big.Rat:
+		f, _ := val.Float64()
+		return scrapper.DoubleValue(f)
 	case *big.Int:
 		// Handle *big.Int (e.g., DuckDB hugeint)
 		// If it fits in int64, use IntValue; otherwise use BigIntValue to preserve precision
@@ -232,27 +240,8 @@ func parseByteValue(val []byte) scrapper.Value {
 	return parseStringValue(string(val))
 }
 
-// parseStringValue parses a string value and determines its type
+// parseStringValue reads a cell the driver handed back as text; see
+// scrapper.MetricValueFromText.
 func parseStringValue(strVal string) scrapper.Value {
-	// Try parsing as different types
-	if v, err := strconv.ParseInt(strVal, 10, 64); err == nil {
-		return scrapper.IntValue(v)
-	}
-	if v, err := strconv.ParseFloat(strVal, 64); err == nil {
-		return scrapper.DoubleValue(v)
-	}
-	if v, err := strconv.ParseBool(strVal); err == nil {
-		if v {
-			return scrapper.IntValue(1)
-		}
-		return scrapper.IntValue(0)
-	}
-	if t, err := time.Parse(time.RFC3339Nano, strVal); err == nil {
-		return scrapper.TimeValue(t)
-	}
-	if t, err := time.Parse("2006-01-02 15:04:05.999999999", strVal); err == nil {
-		return scrapper.TimeValue(t)
-	}
-	// Unsupported type
-	return scrapper.IgnoredValue{}
+	return scrapper.MetricValueFromText(strVal)
 }

@@ -8,5 +8,5 @@ import (
 )
 
 func (e *MSSQLScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
-	return scrapperstdsql.RunRawQuery(ctx, e.executor, sql)
+	return scrapperstdsql.RunRawQuery(ctx, e.executor, e.DialectType(), sql)
 }

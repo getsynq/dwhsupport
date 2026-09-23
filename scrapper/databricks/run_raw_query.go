@@ -12,5 +12,5 @@ func (e *DatabricksScrapper) RunRawQuery(ctx context.Context, sql string) (scrap
 	if err != nil {
 		return nil, err
 	}
-	return scrapperstdsql.RunRawQuery(ctx, executor, sql)
+	return scrapperstdsql.RunRawQuery(ctx, executor, e.DialectType(), sql)
 }

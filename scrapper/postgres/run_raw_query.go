@@ -8,5 +8,5 @@ import (
 )
 
 func (e *PostgresScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
-	return scrapperstdsql.RunRawQuery(ctx, e.executor, sql)
+	return scrapperstdsql.RunRawQuery(ctx, e.executor, e.DialectType(), sql)
 }

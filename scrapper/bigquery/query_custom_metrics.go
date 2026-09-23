@@ -2,6 +2,7 @@ package bigquery
 
 import (
 	"context"
+	"math/big"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -109,12 +110,16 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 				case civil.Date:
 					colValue.Value = scrapper.TimeValue(v.In(time.UTC))
 				case time.Time:
-					colValue.Value = scrapper.TimeValue(v)
+					colValue.Value = scrapper.TimeValue(v.UTC())
+				case *big.Rat:
+					// NUMERIC and BIGNUMERIC.
+					f, _ := v.Float64()
+					colValue.Value = scrapper.DoubleValue(f)
 				case string:
-					// Try to parse string as other types
-					// For BigQuery, we'll just treat strings as ignored values
-					// as they're typically already properly typed
-					colValue.Value = scrapper.IgnoredValue{}
+					// A number or timestamp cast to STRING reads back as one,
+					// as it does on every other warehouse; other text is
+					// ignored.
+					colValue.Value = scrapper.MetricValueFromText(v)
 				default:
 					// Unsupported type
 					colValue.Value = scrapper.IgnoredValue{}
