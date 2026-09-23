@@ -75,6 +75,13 @@ func TestConvertToRawValue(t *testing.T) {
 	}
 }
 
+// A 16-byte text column is not a binary UUID. go-sql-driver/mysql hands every
+// VARCHAR back as []byte, so this used to render any 16-character string as a
+// UUID.
+func TestConvertToRawValue_SixteenByteTextIsNotUUID(t *testing.T) {
+	assert.Equal(t, scrapper.StringValue("abcdefghijklmnop"), convertToRawValue([]byte("abcdefghijklmnop"), "VARCHAR"))
+}
+
 func TestConvertToRawValue_TimeStillTyped(t *testing.T) {
 	// time.Time is a Stringer but must keep going through convertToScrapperValue
 	// so it lands as TimeValue, not a string.

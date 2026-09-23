@@ -203,6 +203,18 @@ func (s *ValueRoundTripSuite) TestValueRoundTrip_Double()      { s.runKind(KindD
 func (s *ValueRoundTripSuite) TestValueRoundTrip_Text()        { s.runKind(KindText) }
 func (s *ValueRoundTripSuite) TestValueRoundTrip_UUID()        { s.runKind(KindUUID) }
 
+// TestValueRoundTrip_SixteenCharacterText reads back text exactly 16 bytes
+// long, which is also the length of a binary UUID. Drivers that hand text
+// back as []byte (MySQL, MariaDB) must not have it decoded as one.
+func (s *ValueRoundTripSuite) TestValueRoundTrip_SixteenCharacterText() {
+	if s.Scrapper == nil {
+		s.T().Skip("Scrapper not set")
+	}
+	cv := s.rawValue(s.selectValue(`'abcdefghijklmnop'`))
+	s.Require().False(cv.IsNull)
+	s.Equal(scrapper.StringValue("abcdefghijklmnop"), cv.Value)
+}
+
 func (s *ValueRoundTripSuite) runKind(kind ValueKind) {
 	if s.Scrapper == nil {
 		s.T().Skip("Scrapper not set")
