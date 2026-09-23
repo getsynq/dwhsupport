@@ -45,7 +45,27 @@ type Dialect interface {
 	// identifier pins its case, so a written name is folded first to keep it
 	// addressing the object it addressed unquoted.
 	FoldIdent(name string) string
+
+	// StringLiteral quotes s as a string literal, escaping it the way this
+	// engine reads one back: doubled quotes everywhere, and a doubled
+	// backslash on the engines that treat a backslash as an escape.
 	StringLiteral(string) string
+
+	// TimestampLiteral, TimestampTzLiteral, DateLiteral, NumericLiteral and
+	// UUIDLiteral write a value read from a column of that type back as a
+	// literal of the same type, so that `column = literal` holds (see
+	// literal.go). Times are written in UTC at the engine's full precision:
+	// TimestampLiteral takes a zone-less timestamp's wall clock, as decoded
+	// in UTC, and TimestampTzLiteral an instant. NumericLiteral takes plain
+	// decimal text and keeps every digit.
+	//
+	// ResolveTime is not one of these: it truncates to the second, and every
+	// monitor's SQL depends on what it renders.
+	TimestampLiteral(time.Time) string
+	TimestampTzLiteral(time.Time) string
+	DateLiteral(time.Time) string
+	NumericLiteral(decimal string) (string, error)
+	UUIDLiteral(string) string
 	ToString(Expr) Expr
 	Coalesce(exprs ...Expr) Expr
 	ConcatWithSeparator(separator string, exprs ...Expr) Expr

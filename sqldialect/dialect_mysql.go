@@ -132,8 +132,11 @@ func (d *MySQLDialect) ResolveFieldRef(name string) string {
 	return QuoteWithBackticksIfNeeded(name)
 }
 
+// StringLiteral doubles backslashes as well as quotes: MySQL and MariaDB read
+// a backslash in a string literal as an escape unless the server runs with
+// NO_BACKSLASH_ESCAPES, which is not the default.
 func (d *MySQLDialect) StringLiteral(s string) string {
-	return StandardSQLStringLiteral(s)
+	return backslashStringLiteral(s, "''")
 }
 
 func (d *MySQLDialect) ToString(expr Expr) Expr {

@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -118,8 +119,17 @@ func (d *BigQueryDialect) ResolveFieldRef(name string) string {
 	return QuoteWithBackticksIfNeeded(name)
 }
 
+// StringLiteral escapes backslashes and quotes with a backslash: BigQuery
+// string literals take C-style escape sequences, so a `\s` in the input would
+// otherwise be read as an escape (and rejected), and a newline would end the
+// literal. A doubled quote is not an escape on BigQuery: it is rejected as
+// two string literals missing the whitespace between them.
 func (d *BigQueryDialect) StringLiteral(s string) string {
-	return StandardSQLStringLiteral(s)
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `'`, `\'`)
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	return "'" + s + "'"
 }
 
 func (d *BigQueryDialect) ToString(expr Expr) Expr {

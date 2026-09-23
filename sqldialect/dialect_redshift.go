@@ -117,8 +117,10 @@ func (d *RedshiftDialect) ResolveFieldRef(name string) string {
 	return QuoteForFoldLower(name)
 }
 
+// StringLiteral doubles backslashes as well as quotes: unlike Postgres,
+// Redshift reads a backslash in a string literal as an escape.
 func (d *RedshiftDialect) StringLiteral(s string) string {
-	return StandardSQLStringLiteral(s)
+	return backslashStringLiteral(s, "''")
 }
 
 func (d *RedshiftDialect) ToString(expr Expr) Expr {
