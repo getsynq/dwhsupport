@@ -329,6 +329,8 @@ var (
 	identFoldingLower       = identFolding{extra: "$", unicode: true}
 	identFoldingUpper       = identFolding{upper: true, extra: "$"}
 	identFoldingUpperOracle = identFolding{upper: true, extra: "$#", unicode: true}
+	// Db2 takes #, $ and @ inside an unquoted name, and letters outside ASCII.
+	identFoldingUpperDb2 = identFolding{upper: true, extra: "$#@", unicode: true}
 )
 
 // fold returns the name an unquoted reference resolves to, or the name

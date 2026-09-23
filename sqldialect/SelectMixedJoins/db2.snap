@@ -1,0 +1,6 @@
+
+[TestCrossJoinSuite/TestSelectMixedJoins - 1]
+select *
+from a cross join b join c on a.id = c.id
+ 
+---

@@ -1,0 +1,4 @@
+
+[TestRowCompareSuite/TestCompositeLt - 1]
+(workspace < 'ws' or (workspace = 'ws') and (path < 'p'))
+---

@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestConcatWithToString - 1]
+VARCHAR(id) || '|' || VARCHAR(amount)
+---

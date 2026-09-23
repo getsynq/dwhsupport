@@ -1,0 +1,312 @@
+
+[TestProfileSuite/TestProfileColumns/db2_multi_condition_multi_segmentation - 1]
+select
+  SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32) as "segment", 
+  SUBSTRING(VARCHAR(run_status), 1, 100, CODEUNITS32) as "segment2", 
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32) as "segment3", 
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+where (run_status > 0) and (run_type > 0)
+group by
+  SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), 
+  SUBSTRING(VARCHAR(run_status), 1, 100, CODEUNITS32), 
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_multi_condition_no_segmentation - 1]
+select
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+where (run_status > 0) and (run_type > 0)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_multi_condition_single_segmentation_all - 1]
+select
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32) as "segment", 
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+where (run_status > 0) and (run_type > 0)
+group by SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_no_conditions_multi_segmentation - 1]
+select
+  SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32) as "segment", 
+  SUBSTRING(VARCHAR(run_status), 1, 100, CODEUNITS32) as "segment2", 
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32) as "segment3", 
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+group by
+  SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), 
+  SUBSTRING(VARCHAR(run_status), 1, 100, CODEUNITS32), 
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_no_conditions_no_segmentation - 1]
+select
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_no_conditions_single_segmentation_all - 1]
+select
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32) as "segment", 
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+group by SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_single_condition_multi_segmentation - 1]
+select
+  SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32) as "segment", 
+  SUBSTRING(VARCHAR(run_status), 1, 100, CODEUNITS32) as "segment2", 
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32) as "segment3", 
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+where (1=1)
+group by
+  SUBSTRING(VARCHAR(workspace), 1, 100, CODEUNITS32), 
+  SUBSTRING(VARCHAR(run_status), 1, 100, CODEUNITS32), 
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_single_condition_no_segmentation - 1]
+select
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+where (1=1)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---
+
+[TestProfileSuite/TestProfileColumns/db2_single_condition_single_segmentation_all - 1]
+select
+  SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32) as "segment", 
+  COUNT(*) as "num_rows", 
+  COUNT(workspace) as "workspace__num_not_null", 
+  COUNT(distinct workspace) as "workspace__num_unique", 
+  SUM(CASE WHEN workspace = '' THEN 1 ELSE 0 END) as "workspace__num_empty", 
+  CAST(min(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__min_length", 
+  CAST(max(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__max_length", 
+  CAST(avg(CHARACTER_LENGTH(workspace)) AS DOUBLE) as "workspace__mean_length", 
+  COUNT(meta) as "meta__num_not_null", 
+  COUNT(distinct meta) as "meta__num_unique", 
+  SUM(CASE WHEN meta = '' THEN 1 ELSE 0 END) as "meta__num_empty", 
+  CAST(min(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__min_length", 
+  CAST(max(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__max_length", 
+  CAST(avg(CHARACTER_LENGTH(meta)) AS DOUBLE) as "meta__mean_length", 
+  COUNT(run_status) as "run_status__num_not_null", 
+  COUNT(distinct run_status) as "run_status__num_unique", 
+  SUM(CASE WHEN run_status = 0 THEN 1 ELSE 0 END) as "run_status__num_empty", 
+  CAST(avg(run_status) AS DOUBLE) as "run_status__mean", 
+  CAST(min(run_status) AS DOUBLE) as "run_status__min", 
+  CAST(max(run_status) AS DOUBLE) as "run_status__max", 
+  CAST(MEDIAN(run_status) AS DOUBLE) as "run_status__median", 
+  CAST(STDDEV(run_status) AS DOUBLE) as "run_status__stddev", 
+  COUNT(created_at) as "created_at__num_not_null", 
+  min(created_at) as "created_at__min", 
+  max(created_at) as "created_at__max", 
+  SUM(CASE WHEN sku is not null THEN 1 ELSE 0 END) as "sku__num_not_null"
+from "default"."runs" 
+where (1=1)
+group by SUBSTRING(VARCHAR(run_type), 1, 100, CODEUNITS32)
+order by "num_rows" desc FETCH FIRST 1000 ROWS ONLY
+---

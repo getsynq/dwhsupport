@@ -1,0 +1,4 @@
+
+[TestCaseExprSuite/TestCaseWithComplexExpressions - 1]
+CASE WHEN id >= 1 AND id < 100 THEN 0 WHEN id >= 100 AND id < 200 THEN 1 END
+---

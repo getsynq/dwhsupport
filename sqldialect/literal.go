@@ -332,6 +332,31 @@ func (d *OracleDialect) UUIDLiteral(s string) string {
 	return d.StringLiteral(s)
 }
 
+// Db2
+
+func (d *Db2Dialect) TimestampLiteral(t time.Time) string {
+	return fmt.Sprintf("TIMESTAMP '%s'", wallClock(t, 9))
+}
+
+// TimestampTzLiteral is a zone-less TIMESTAMP in UTC: Db2 LUW has no
+// TIMESTAMP WITH TIME ZONE.
+func (d *Db2Dialect) TimestampTzLiteral(t time.Time) string {
+	return d.TimestampLiteral(t)
+}
+
+func (d *Db2Dialect) DateLiteral(t time.Time) string {
+	return fmt.Sprintf("DATE '%s'", dateOnly(t))
+}
+
+func (d *Db2Dialect) NumericLiteral(s string) (string, error) {
+	return checkDecimal(s)
+}
+
+// UUIDLiteral is text: Db2 has no UUID type.
+func (d *Db2Dialect) UUIDLiteral(s string) string {
+	return d.StringLiteral(s)
+}
+
 // Trino (and Athena, which uses this dialect)
 
 func (d *TrinoDialect) TimestampLiteral(t time.Time) string {

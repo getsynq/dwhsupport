@@ -1,0 +1,4 @@
+
+[TestCaseExprSuite/TestCaseWithoutElse - 1]
+CASE WHEN col > 10 THEN 1 END
+---
