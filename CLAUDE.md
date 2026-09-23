@@ -269,7 +269,8 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 
 ## Db2 Gotchas
 
-- **Driver: `github.com/getsynq/go-db2`**, our fork of the pure-Go `go-db2/go-db2` (DRDA, no CGO, no IBM clidriver). Branch `getsynq/fixes` carries fixes proposed upstream (go-db2/go-db2#37-#40 and follow-ups) plus a module rename, so consumers get the fixed driver without a `replace`. Once upstream has merged them, switch back to `github.com/go-db2/go-db2`.
+- **Driver: `github.com/getsynq/go-db2`**, our fork of the pure-Go `go-db2/go-db2` (DRDA, no CGO, no IBM clidriver). Branch `getsynq/fixes` carries fixes proposed upstream (go-db2/go-db2#37-#43) plus a module rename, so consumers get the fixed driver without a `replace`. Once upstream has merged them, switch back to `github.com/go-db2/go-db2`.
+- **Statement size**: statements up to 1 MB go through (`scrapper/db2/large_query_test.go`); before go-db2/go-db2#43 anything over about 32 KB failed with `EOF`. A string bind parameter works up to Db2's VARCHAR limit of 32672 characters, and 32673 gets SQLCODE -302. A 40000-character one returns no rows instead of an error, so check the length before binding.
 - **LUW only.** The scrapper reads `SYSCAT.*`; Db2 for z/OS (`SYSIBM.SYS*`) and Db2 for i (`QSYS2`) keep their catalogs elsewhere and are not supported.
 - **One database per connection**, like Postgres: an instance holds several databases, each with its own `SYSCAT`, and SQL cannot reach another one without federation (a nickname, which the scrapper lists as `NICKNAME`). `Database` is reported as `CURRENT SERVER`, the name the server uses, not the configured alias.
 - **System schemas are `SYS%`** (Db2 refuses to create a user schema with that prefix) plus `NULLID` and `SQLJ`.
