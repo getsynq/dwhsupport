@@ -14,6 +14,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
 
@@ -118,10 +119,14 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 		if probeRows != nil {
 			probeRows.Close()
 		}
+		// The driver wraps a timeout in its own error, so ask the probe's context
+		// whether it ran out rather than comparing the error. A catalog whose
+		// backend is gone can take longer than the probe to say so.
+		timedOut := errors.Is(probeCtx.Err(), context.DeadlineExceeded)
 		cancel()
 
 		if probeErr != nil {
-			if isCatalogUnavailableError(probeErr) || probeErr == context.DeadlineExceeded {
+			if isCatalogUnavailableError(probeErr) || timedOut {
 				logging.GetLogger(ctx).WithField("catalog", catalog).WithError(probeErr).
 					Warn("Catalog is no longer available")
 				unavailableCatalogs = append(unavailableCatalogs, catalog)

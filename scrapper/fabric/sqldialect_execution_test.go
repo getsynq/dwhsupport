@@ -35,7 +35,7 @@ func (s *FabricSqlDialectExecutionSuite) SetupSuite() {
 			"sales",
 			"products",
 		),
-		KeyField:     "id",
+		KeyField:     "product_id",
 		SegmentField: "category",
 	}
 }

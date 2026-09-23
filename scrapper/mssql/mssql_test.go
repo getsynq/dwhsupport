@@ -231,9 +231,20 @@ func (s *MSSQLScrapperSuite) TestQueryTableConstraints() {
 	var foundProductsPK, foundOrderItemsCompositePK bool
 	var foundProductsSkuUnique, foundProductsCategoryIdx bool
 	var foundOrderItemsUniqueConstraint bool
+	var foundCheckConstraint bool
 	for _, c := range constraints {
 		s.Equal(s.databaseName, c.Database)
 		s.NotEmpty(c.ConstraintName)
+
+		// A CHECK constraint belongs to the table, not to one column (several
+		// of the fixture's reference two), so it is reported without one, as
+		// on Oracle.
+		if c.ConstraintType == scrapper.ConstraintTypeCheck {
+			foundCheckConstraint = true
+			s.Empty(c.ColumnName, "CHECK constraints should have empty column name")
+			s.NotEmpty(c.ConstraintExpression, "CHECK constraints should have expression")
+			continue
+		}
 		s.NotEmpty(c.ColumnName)
 
 		switch {
@@ -255,6 +266,7 @@ func (s *MSSQLScrapperSuite) TestQueryTableConstraints() {
 	s.True(foundProductsSkuUnique, "Should find UNIQUE INDEX for products.sku")
 	s.True(foundProductsCategoryIdx, "Should find INDEX for products.category")
 	s.True(foundOrderItemsUniqueConstraint, "Should find UNIQUE constraint on order_items")
+	s.True(foundCheckConstraint, "Should find at least one CHECK constraint")
 }
 
 func (s *MSSQLScrapperSuite) TestFetchQueryLogs() {
