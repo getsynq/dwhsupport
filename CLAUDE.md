@@ -14,6 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Formatting
 - `golines -w -m 150 .` - Format all Go files with max line length of 150
+- gofmt's doc-comment reflow (which golines runs) turns `''` in a comment into `”`. Write "a doubled quote" instead of a literal `''` in doc comments.
 
 ### Building
 - `go build ./...` - Build all packages
@@ -60,7 +61,7 @@ The library is organized into three main layers:
 - `QueryTables(ctx)` - Get table metadata
 - `QueryDatabases(ctx)` - Get database metadata
 - `QuerySegments(ctx, sql, args)` - Query custom segments
-- `QueryCustomMetrics(ctx, sql, args)` - Query custom metrics
+- `QueryCustomMetrics(ctx, sql, args)` - Query custom metrics (never returns text by design: read values back with `RunRawQuery`)
 - `QueryShape(ctx, sql)` - Get column schema for a SQL query
 - `QueryTableConstraints(ctx)` - Get table constraints (indexes, keys)
 - `Close()` - Close underlying executor
@@ -170,6 +171,12 @@ Integration tests connect to dwhtesting staging databases via Twingate (no port-
 - `MYSQL_` — real MySQL on dwhtesting staging
 - `STARBURST_` — Starburst Galaxy (HTTPS), `TRINO_` — self-hosted Trino (plaintext HTTP)
 - `SNOWFLAKE_` — set `SNOWFLAKE_PRIVATE_KEY_FILE` for key-pair auth; a password is refused wherever the account enforces MFA
+- `ATHENA_`, `BIGQUERY_` (`BIGQUERY_CREDENTIALS_FILE`), `DATABRICKS_` — in `.env`
+- `REDSHIFT_`, `FABRIC_` — not in `.env`; the credentials are in the cloud repo's `dev-infra/dwhtesting/integrations/{redshift,fabric}.json`, so export them for the run
+
+`git archive origin/main | tar -x -C <dir>` plus a copy of `.env` runs the same tests on untouched main, to tell a pre-existing failure from one a branch caused.
+
+Suites that assert exact fixture rows fail when the dwhtesting seed has drifted. Duplicated rows (reseeds from before a seed's insert guard) and a full disk both look like code bugs, so check the fixture before the code. ClickHouse dedupes with `OPTIMIZE TABLE <t> FINAL DEDUPLICATE`.
 
 `godotenv.Load` does NOT overwrite an already-set variable, so prefixing `go test` with env vars points a suite at a different account or dataset for one run without touching `.env`. `SqlDialectExecutionSuite` needs a table that actually exists — `SNOWFLAKE_TEST_TABLE_NAME` / `_KEY_FIELD` / `_SEGMENT_FIELD` override its defaults, which name a fixture only one account has.
 
