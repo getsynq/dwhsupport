@@ -37,7 +37,7 @@ func (s *DuckDBScrapperSuite) TestQueryCustomMetrics_HugeInt() {
 		9223372036854775807::bigint as big_value,
 		42::int as normal_value`
 
-	result, err := scrapperstdsql.QueryCustomMetrics(ctx, &scrapperstdsql.RawDB{DB: db}, sql)
+	result, err := scrapperstdsql.QueryCustomMetrics(ctx, &scrapperstdsql.RawDB{DB: db}, "duckdb", sql)
 	s.Require().NoError(err, "QueryCustomMetrics should handle hugeint type")
 	s.Require().Len(result, 1)
 
@@ -83,7 +83,7 @@ func (s *DuckDBScrapperSuite) TestQueryCustomMetrics_HugeIntWithinInt64Range() {
 	// Test hugeint that fits within int64 range - should be converted to IntValue
 	sql := `SELECT 12345::hugeint as small_huge_value`
 
-	result, err := scrapperstdsql.QueryCustomMetrics(ctx, &scrapperstdsql.RawDB{DB: db}, sql)
+	result, err := scrapperstdsql.QueryCustomMetrics(ctx, &scrapperstdsql.RawDB{DB: db}, "duckdb", sql)
 	s.Require().NoError(err, "QueryCustomMetrics should handle hugeint that fits in int64")
 	s.Require().Len(result, 1)
 
@@ -398,7 +398,7 @@ func (s *LocalDuckDBScrapperSuite) TestQueryShape_StdSQL() {
 	defer db.Close()
 
 	sql := `SELECT 1::INTEGER as id, 'hello'::VARCHAR as name, 3.14::DOUBLE as value`
-	columns, err := scrapperstdsql.QueryShape(ctx, &scrapperstdsql.RawDB{DB: db}, sql)
+	columns, err := scrapperstdsql.QueryShape(ctx, &scrapperstdsql.RawDB{DB: db}, "duckdb", sql)
 	s.Require().NoError(err)
 	s.Require().Len(columns, 3)
 
@@ -491,8 +491,8 @@ func (s *LocalDuckDBScrapperSuite) TestRunRawQuery_PreservesAllColumns() {
 	s.Equal("name_col", row1[0].Name)
 	s.Equal(scrapper.StringValue("Alice"), row1[0].Value)
 
-	// Decimal → DoubleValue.
-	s.IsType(scrapper.DoubleValue(0), row1[1].Value)
+	// Decimal → its exact digits, not a float64.
+	s.Equal(scrapper.StringValue("100.5"), row1[1].Value)
 
 	// Timestamp → TimeValue.
 	s.IsType(scrapper.TimeValue(time.Time{}), row1[2].Value)

@@ -12,7 +12,7 @@ select
 from CUSTOM_SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
 where
   END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
-  (DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(ANALYTICS)[\"'' \\t\\n\\r]*[.].*', 'is'))
+  (DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE(QUERY_TEXT, '.*["'' \\t\\n\\r]?(ANALYTICS)["'' \\t\\n\\r]*[.].*', 'is'))
  
 ---
 
@@ -29,7 +29,7 @@ select
 from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
 where
   END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
-  (DATABASE_NAME in ('DATA_WAREHOUSE', 'DB-WITH-DASH') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(DATA_WAREHOUSE|DB-WITH-DASH)[\"'' \\t\\n\\r]*[.].*', 'is'))
+  (DATABASE_NAME in ('DATA_WAREHOUSE', 'DB-WITH-DASH') or REGEXP_LIKE(QUERY_TEXT, '.*["'' \\t\\n\\r]?(DATA_WAREHOUSE|DB-WITH-DASH)["'' \\t\\n\\r]*[.].*', 'is'))
  
 ---
 
@@ -46,7 +46,7 @@ select
 from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
 where
   END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
-  (DATABASE_NAME in ('NYC_TAXI', 'PRODUCTION_DB', 'DEV_DB') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(NYC_TAXI|PRODUCTION_DB|DEV_DB)[\"'' \\t\\n\\r]*[.].*', 'is'))
+  (DATABASE_NAME in ('NYC_TAXI', 'PRODUCTION_DB', 'DEV_DB') or REGEXP_LIKE(QUERY_TEXT, '.*["'' \\t\\n\\r]?(NYC_TAXI|PRODUCTION_DB|DEV_DB)["'' \\t\\n\\r]*[.].*', 'is'))
  
 ---
 
@@ -78,7 +78,7 @@ select
 from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
 where
   END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
-  (DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(ANALYTICS)[\"'' \\t\\n\\r]*[.].*', 'is'))
+  (DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE(QUERY_TEXT, '.*["'' \\t\\n\\r]?(ANALYTICS)["'' \\t\\n\\r]*[.].*', 'is'))
  
 ---
 
@@ -95,6 +95,6 @@ select
 from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY 
 where
   END_TIME between to_timestamp_ltz('2025-10-28T12:00:00Z') and to_timestamp_ltz('2025-11-04T12:00:00Z') and 
-  (DATABASE_NAME in ('NYC_TAXI') or REGEXP_LIKE(QUERY_TEXT, '.*[\"'' \\t\\n\\r]?(NYC_TAXI)[\"'' \\t\\n\\r]*[.].*', 'is'))
+  (DATABASE_NAME in ('NYC_TAXI') or REGEXP_LIKE(QUERY_TEXT, '.*["'' \\t\\n\\r]?(NYC_TAXI)["'' \\t\\n\\r]*[.].*', 'is'))
  
 ---

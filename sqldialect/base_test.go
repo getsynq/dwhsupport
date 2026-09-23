@@ -187,11 +187,29 @@ func (s *BaseSuite) TestIsUpper() {
 	}
 }
 
+// TestStringLiteral pins how each dialect escapes a string literal. The
+// standard is doubled quotes and nothing else; the dialects whose engines read
+// a backslash as an escape character double it too, and BigQuery and
+// Databricks, where a doubled quote is not an escape, write it as \' instead.
+// scrappertest.ValueRoundTripSuite checks the same escaping against each real
+// engine.
 func (s *BaseSuite) TestStringLiteral() {
+	backslashDoubled := map[string]bool{"snowflake": true, "redshift": true, "mysql": true, "clickhouse": true}
+	backslashQuote := map[string]bool{"bigquery": true, "databricks": true}
+
 	testCases := []struct {
 		name     string
 		input    string
 		expected string
+		// escaped is the expected literal on the dialects that escape with a
+		// backslash; empty means the same as expected.
+		escaped string
+		// quoteEscaped is the expected literal on the dialects that also
+		// escape the quote with a backslash; empty means the same as escaped.
+		quoteEscaped string
+		// bigquery is the expected literal on BigQuery, which also escapes a
+		// newline; empty means the same as quoteEscaped.
+		bigquery string
 	}{
 		{
 			name:     "simple string",
@@ -204,19 +222,22 @@ func (s *BaseSuite) TestStringLiteral() {
 			expected: "''",
 		},
 		{
-			name:     "string with single quote",
-			input:    "it's",
-			expected: "'it''s'",
+			name:         "string with single quote",
+			input:        "it's",
+			expected:     "'it''s'",
+			quoteEscaped: `'it\'s'`,
 		},
 		{
-			name:     "string with multiple single quotes",
-			input:    "it's a 'test'",
-			expected: "'it''s a ''test'''",
+			name:         "string with multiple single quotes",
+			input:        "it's a 'test'",
+			expected:     "'it''s a ''test'''",
+			quoteEscaped: `'it\'s a \'test\''`,
 		},
 		{
-			name:     "string with only single quote",
-			input:    "'",
-			expected: "''''",
+			name:         "string with only single quote",
+			input:        "'",
+			expected:     "''''",
+			quoteEscaped: `'\''`,
 		},
 		{
 			name:     "string with double quotes (no escaping needed)",
@@ -227,11 +248,13 @@ func (s *BaseSuite) TestStringLiteral() {
 			name:     "string with backslash",
 			input:    `path\to\file`,
 			expected: `'path\to\file'`,
+			escaped:  `'path\\to\\file'`,
 		},
 		{
 			name:     "string with newline",
 			input:    "line1\nline2",
 			expected: "'line1\nline2'",
+			bigquery: `'line1\nline2'`,
 		},
 	}
 
@@ -239,8 +262,25 @@ func (s *BaseSuite) TestStringLiteral() {
 		s.Run(dialect.Name, func() {
 			for _, tc := range testCases {
 				s.Run(tc.name, func() {
+					escaped := tc.escaped
+					if escaped == "" {
+						escaped = tc.expected
+					}
+					quoteEscaped := tc.quoteEscaped
+					if quoteEscaped == "" {
+						quoteEscaped = escaped
+					}
+					expected := tc.expected
+					switch {
+					case dialect.Name == "bigquery" && tc.bigquery != "":
+						expected = tc.bigquery
+					case backslashQuote[dialect.Name]:
+						expected = quoteEscaped
+					case backslashDoubled[dialect.Name]:
+						expected = escaped
+					}
 					result := dialect.Dialect.StringLiteral(tc.input)
-					s.Equal(tc.expected, result, "Failed for input: %q", tc.input)
+					s.Equal(expected, result, "Failed for input: %q", tc.input)
 				})
 			}
 		})

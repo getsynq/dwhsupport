@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +43,7 @@ func (e *BigQueryScrapper) RunRawQuery(ctx context.Context, sql string) (scrappe
 			Name:       field.Name,
 			NativeType: string(field.Type),
 			Position:   int32(i + 1),
+			Kind:       scrapper.NativeValueKind(e.DialectType(), string(field.Type)),
 		}
 		columnNames[i] = field.Name
 	}
@@ -134,7 +136,10 @@ func bqValueToScrapperValue(v bigquery.Value) scrapper.Value {
 		}
 		return scrapper.IntValue(0)
 	case time.Time:
-		return scrapper.TimeValue(val)
+		return scrapper.TimeValue(val.UTC())
+	case *big.Rat:
+		// NUMERIC and BIGNUMERIC. fmt.Sprint of a *big.Rat is "p/q".
+		return scrapper.DecimalValueFromRat(val)
 	case civil.DateTime:
 		return scrapper.TimeValue(val.In(time.UTC))
 	case civil.Date:

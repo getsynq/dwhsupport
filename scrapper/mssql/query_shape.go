@@ -31,5 +31,5 @@ func (e *MSSQLScrapper) QueryShape(ctx context.Context, sql string) ([]*scrapper
 		}
 	}
 
-	return result, nil
+	return scrapper.SetKinds(e.DialectType(), result), nil
 }

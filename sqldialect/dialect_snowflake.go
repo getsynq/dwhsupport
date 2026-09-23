@@ -114,8 +114,10 @@ func (d *SnowflakeDialect) ResolveFieldRef(name string) string {
 	return QuoteForFoldUpper(name)
 }
 
+// StringLiteral doubles backslashes as well as quotes: Snowflake reads a
+// backslash in a single-quoted literal as an escape.
 func (d *SnowflakeDialect) StringLiteral(s string) string {
-	return StandardSQLStringLiteral(s)
+	return backslashStringLiteral(s, "''")
 }
 
 func (d *SnowflakeDialect) ToString(expr Expr) Expr {

@@ -22,7 +22,10 @@ import (
 // are not sidelined, and string columns come back as StringValue rather than
 // being re-parsed and collapsed to IgnoredValue. Unknown driver types fall
 // back to StringValue(fmt.Sprint(v)) so nothing is silently dropped.
-func RunRawQuery(ctx context.Context, db RowQuerier, sqlQuery string) (scrapper.RawQueryRowIterator, error) {
+//
+// dialect is Scrapper.DialectType(). It decides what each column's native
+// type means (Columns()[i].Kind), which is how each cell is decoded.
+func RunRawQuery(ctx context.Context, db RowQuerier, dialect string, sqlQuery string) (scrapper.RawQueryRowIterator, error) {
 	collector, ctx := querystats.Start(ctx)
 
 	sqlRows, err := db.QueryRows(ctx, sqlQuery)
@@ -45,6 +48,7 @@ func RunRawQuery(ctx context.Context, db RowQuerier, sqlQuery string) (scrapper.
 			Name:       ct.Name(),
 			NativeType: ct.DatabaseTypeName(),
 			Position:   int32(i + 1),
+			Kind:       scrapper.NativeValueKind(dialect, ct.DatabaseTypeName()),
 		}
 		columnNames[i] = ct.Name()
 	}
@@ -109,7 +113,7 @@ func (it *rawRowsIterator) Next(ctx context.Context) ([]*scrapper.ColumnValue, e
 		raw := *(scanners[i].(*any))
 		cv := &scrapper.ColumnValue{Name: name, IsNull: raw == nil}
 		if raw != nil {
-			cv.Value = convertToRawValue(raw, it.columns[i].NativeType)
+			cv.Value = convertToRawValue(raw, it.columns[i])
 		}
 		values[i] = cv
 	}
@@ -139,11 +143,16 @@ func (it *rawRowsIterator) closeLocked() error {
 // to a single JsonValue, and falls back to Stringer / fmt.Sprint for unknown
 // scalar driver types so RunRawQuery never drops a value.
 //
-// nativeType is the column's DatabaseTypeName(); it disambiguates the two cases
-// Go types alone cannot: a native nested type (ClickHouse Array/Map/Tuple, whose
+// col carries the column's DatabaseTypeName() and its Kind. The name settles
+// the cases Go types alone cannot: a native nested type (ClickHouse Array/Map/Tuple, whose
 // driver values may include []uint8 integer arrays) versus a JSON-string type
-// (Snowflake ARRAY/OBJECT/VARIANT), versus a plain text/blob column.
-func convertToRawValue(v any, nativeType string) scrapper.Value {
+// (Snowflake ARRAY/OBJECT/VARIANT), versus a plain text/blob column. It also
+// keeps an exact numeric exact: drivers hand NUMERIC/DECIMAL/NUMBER (and
+// Snowflake's FIXED, which is every Snowflake integer too) back as text or as
+// a decimal type, and it becomes an IntValue or BigIntValue when whole and a
+// StringValue with the warehouse's digits otherwise, so float64 never touches it.
+func convertToRawValue(v any, col *scrapper.QueryShapeColumn) scrapper.Value {
+	nativeType, kind := col.NativeType, col.Kind
 	// Native nested types (ClickHouse Array/Map/Tuple/Nested): the driver returns
 	// nested Go slices/maps, and Array(UInt8) arrives as []uint8 — render bytes as
 	// an integer array, not a string.
@@ -155,6 +164,9 @@ func convertToRawValue(v any, nativeType string) scrapper.Value {
 
 	switch val := v.(type) {
 	case string:
+		if kind == scrapper.KindNumeric {
+			return scrapper.DecimalValueFromText(val)
+		}
 		// Semi-structured string columns (Snowflake ARRAY/OBJECT/VARIANT) carry
 		// JSON text; preserve their structure as JsonValue.
 		if isJSONTextType(nativeType) {
@@ -174,8 +186,21 @@ func convertToRawValue(v any, nativeType string) scrapper.Value {
 		// Format as canonical xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
 		return scrapper.StringValue(uuid.UUID(val).String())
 	case []byte:
-		if id, ok := tryUUIDFromBytes(val); ok {
-			return scrapper.StringValue(id)
+		if kind == scrapper.KindNumeric {
+			return scrapper.DecimalValueFromText(string(val))
+		}
+		// SQL Server stores a UNIQUEIDENTIFIER with its first three groups
+		// little-endian, and go-mssqldb hands back those bytes as stored.
+		if len(val) == 16 && strings.EqualFold(nativeType, "UNIQUEIDENTIFIER") {
+			return scrapper.StringValue(mssqlGUIDString(val))
+		}
+		// Only a column that may hold a UUID is read as one: a text column
+		// comes back as []byte too (go-sql-driver/mysql), and 16 or 36
+		// characters of text are not a UUID.
+		if kind == scrapper.KindUUID || kind == scrapper.KindUnknown {
+			if id, ok := tryUUIDFromBytes(val); ok {
+				return scrapper.StringValue(id)
+			}
 		}
 		// Postgres/Redshift array columns: lib/pq returns the PG array literal as
 		// []byte under a `_ELEM`-style type name (e.g. _INT4 → `{1,2,3}`).
@@ -210,7 +235,13 @@ func convertToRawValue(v any, nativeType string) scrapper.Value {
 		}
 	}
 
-	converted := convertToScrapperValue(v)
+	// Decimal types (duckdb.Decimal, shopspring's decimal.Decimal) print their
+	// exact digits; convertToScrapperValue would go through float64.
+	if s, ok := v.(fmt.Stringer); ok && kind == scrapper.KindNumeric {
+		return scrapper.DecimalValueFromText(s.String())
+	}
+
+	converted := convertToScrapperValue(v, kind)
 	if _, ignored := converted.(scrapper.IgnoredValue); ignored {
 		if s, ok := v.(fmt.Stringer); ok {
 			return scrapper.StringValue(sanitizeRawString(s.String()))
@@ -302,6 +333,18 @@ func tryUUIDFromBytes(b []byte) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// mssqlGUIDString formats a UNIQUEIDENTIFIER stored in SQL Server's byte
+// order, where the first three groups are little-endian and the last two are
+// as written, as the canonical string SQL Server itself prints.
+func mssqlGUIDString(b []byte) string {
+	var id uuid.UUID
+	id[0], id[1], id[2], id[3] = b[3], b[2], b[1], b[0]
+	id[4], id[5] = b[5], b[4]
+	id[6], id[7] = b[7], b[6]
+	copy(id[8:], b[8:])
+	return id.String()
 }
 
 func sanitizeRawString(s string) string {

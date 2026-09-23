@@ -15,13 +15,13 @@ func (e *AthenaScrapper) QuerySegments(ctx context.Context, sql string, args ...
 }
 
 func (e *AthenaScrapper) QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
-	return scrapperstdsql.QueryCustomMetrics(ctx, e.executor, sql, args...)
+	return scrapperstdsql.QueryCustomMetrics(ctx, e.executor, e.DialectType(), sql, args...)
 }
 
 func (e *AthenaScrapper) QueryShape(ctx context.Context, sql string) ([]*scrapper.QueryShapeColumn, error) {
-	return scrapperstdsql.QueryShape(ctx, e.executor, sql)
+	return scrapperstdsql.QueryShape(ctx, e.executor, e.DialectType(), sql)
 }
 
 func (e *AthenaScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
-	return scrapperstdsql.RunRawQuery(ctx, e.executor, sql)
+	return scrapperstdsql.RunRawQuery(ctx, e.executor, e.DialectType(), sql)
 }

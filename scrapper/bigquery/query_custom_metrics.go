@@ -2,6 +2,7 @@ package bigquery
 
 import (
 	"context"
+	"math/big"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -109,11 +110,15 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 				case civil.Date:
 					colValue.Value = scrapper.TimeValue(v.In(time.UTC))
 				case time.Time:
-					colValue.Value = scrapper.TimeValue(v)
+					colValue.Value = scrapper.TimeValue(v.UTC())
+				case *big.Rat:
+					// NUMERIC and BIGNUMERIC.
+					f, _ := v.Float64()
+					colValue.Value = scrapper.DoubleValue(f)
 				case string:
-					// Try to parse string as other types
-					// For BigQuery, we'll just treat strings as ignored values
-					// as they're typically already properly typed
+					// Text never leaves the metrics path (see
+					// scrapper.MetricValueFromText), and on BigQuery a
+					// metric is always typed, so a string is not one.
 					colValue.Value = scrapper.IgnoredValue{}
 				default:
 					// Unsupported type

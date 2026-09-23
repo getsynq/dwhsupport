@@ -8,5 +8,5 @@ import (
 )
 
 func (e *SnowflakeScrapper) QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*scrapper.CustomMetricsRow, error) {
-	return scrappersqtsql.QueryCustomMetrics(ctx, e.executor, sql, args...)
+	return scrappersqtsql.QueryCustomMetrics(ctx, e.executor, e.DialectType(), sql, args...)
 }

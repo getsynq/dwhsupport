@@ -117,8 +117,11 @@ func (d *ClickHouseDialect) ResolveFieldRef(name string) string {
 	return QuoteWithBackticksIfNeeded(name)
 }
 
+// StringLiteral doubles backslashes as well as quotes: ClickHouse reads a
+// backslash in a string literal as an escape, so `a\nb` would become a
+// newline.
 func (d *ClickHouseDialect) StringLiteral(s string) string {
-	return StandardSQLStringLiteral(s)
+	return backslashStringLiteral(s, "''")
 }
 
 func (d *ClickHouseDialect) ToString(expr Expr) Expr {

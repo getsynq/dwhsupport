@@ -32,5 +32,5 @@ func (e *BigQueryScrapper) QueryShape(ctx context.Context, sql string) ([]*scrap
 		}
 	}
 
-	return result, nil
+	return scrapper.SetKinds(e.DialectType(), result), nil
 }

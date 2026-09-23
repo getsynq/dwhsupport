@@ -276,9 +276,10 @@ func (s *SnowflakeScrapper) buildQueryLogsSql(ctx context.Context, from time.Tim
 		// Condition 2: REGEXP_LIKE on QUERY_TEXT to catch queries that reference the database
 		// This handles both: NYC_TAXI.PUBLIC and "NYC_TAXI"."PUBLIC"
 		// Match database name with optional quotes/whitespace before the dot
-		// Note: Snowflake doesn't support \s, so we use explicit character class
-		// Single quotes in SQL strings must be escaped by doubling them
-		regexpString := fmt.Sprintf(`.*[\"' \\t\\n\\r]?(%s)[\"' \\t\\n\\r]*[.].*`, strings.Join(databasesForQueryLogs, "|"))
+		// Note: Snowflake doesn't support \s, so we use explicit character class.
+		// This is the regex itself: sqldialect.String escapes it for the
+		// string literal, backslashes included.
+		regexpString := fmt.Sprintf(`.*["' \t\n\r]?(%s)["' \t\n\r]*[.].*`, strings.Join(databasesForQueryLogs, "|"))
 		dbMatchConditions = append(dbMatchConditions,
 			sqldialect.FnCond("REGEXP_LIKE",
 				sqldialect.TextCol("QUERY_TEXT"),

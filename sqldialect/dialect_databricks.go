@@ -117,8 +117,12 @@ func (d *DatabricksDialect) ResolveFieldRef(name string) string {
 	return QuoteWithBackticksIfNeeded(name)
 }
 
+// StringLiteral escapes backslashes and quotes with a backslash: Spark SQL
+// reads a backslash in a string literal as an escape, and reads a doubled
+// quote as the end of one literal and the start of the next, which it
+// concatenates, so the quote is lost.
 func (d *DatabricksDialect) StringLiteral(s string) string {
-	return StandardSQLStringLiteral(s)
+	return backslashStringLiteral(s, `\'`)
 }
 
 func (d *DatabricksDialect) ToString(expr Expr) Expr {
