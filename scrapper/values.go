@@ -86,6 +86,7 @@ var timestampLayouts = []string{
 	"02-Jan-06 03.04.05.999999999 PM Z07:00",
 	"02-Jan-06 03.04.05.999999999 PM",
 	"02-Jan-06",
+	"2006-01-02-15.04.05.999999999", // Db2's own timestamp text form
 	time.DateOnly,
 }
 

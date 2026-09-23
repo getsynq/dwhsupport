@@ -77,6 +77,13 @@ func NativeValueKind(dialect string, nativeType string) ValueKind {
 		case "FLOAT":
 			return KindNumeric
 		}
+	case "db2":
+		switch t {
+		case "DECFLOAT":
+			return KindNumeric
+		case "GRAPHIC", "VARGRAPHIC", "LONG VARCHAR", "DBCLOB", "XML":
+			return KindText
+		}
 	case "mssql", "fabric":
 		switch t {
 		case "BIT":

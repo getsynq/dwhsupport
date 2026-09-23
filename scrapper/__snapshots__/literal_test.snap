@@ -154,3 +154,16 @@ text: 'it''s a back\slash'
 uuid: CAST('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AS UNIQUEIDENTIFIER)
 
 ---
+
+[TestSqlLiteral_PerDialect/db2 - 1]
+timestamp: TIMESTAMP '2024-03-15 10:20:30.123456789'
+timestamptz: TIMESTAMP '2024-03-15 10:20:30.123456789'
+date: DATE '2024-03-15'
+numeric: 12345678901234.567890
+numeric: -42
+integer: 1180591620717411303424
+float: 12.5
+text: 'it''s a back\slash'
+uuid: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+
+---
