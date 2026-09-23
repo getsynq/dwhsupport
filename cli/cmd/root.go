@@ -29,7 +29,7 @@ var rootCmd = &cobra.Command{
 	Long: `dwhctl is a universal command-line interface over the Coalesce Quality dwhsupport
 Scrapper interface. It connects to any supported warehouse (Snowflake, BigQuery,
 Databricks, Postgres, Redshift, ClickHouse, DuckDB, MySQL, Trino, Oracle, MSSQL,
-Athena, Fabric) and extracts catalog and metadata metrics with a single binary —
+Athena, Fabric, Db2) and extracts catalog and metadata metrics with a single binary —
 no warehouse-specific tooling required.
 
 Every command reads a connection config (from --config, --config-inline, stdin,

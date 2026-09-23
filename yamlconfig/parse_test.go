@@ -17,7 +17,7 @@ func TestParseConnections_FullExample(t *testing.T) {
 	// Parse without env expansion — env vars remain as literal "${VAR}"
 	conns, err := ParseConnections(data, ParseOptions{})
 	require.NoError(t, err)
-	assert.Len(t, conns, 14)
+	assert.Len(t, conns, 15)
 
 	// Postgres
 	pg := conns["pg-local"]
@@ -141,6 +141,21 @@ func TestParseConnections_FullExample(t *testing.T) {
 	require.Len(t, fabric.Fabric.Scope.Exclude, 1)
 	assert.Equal(t, "staging", fabric.Fabric.Scope.Exclude[0].Schema)
 	assert.Equal(t, "tmp_*", fabric.Fabric.Scope.Exclude[0].Table)
+
+	// Db2
+	db2 := conns["db2-prod"]
+	require.NotNil(t, db2)
+	assert.Equal(t, "Db2 Production", db2.Name)
+	assert.Equal(t, "db2", db2.DialectType())
+	require.NotNil(t, db2.Db2)
+	assert.Equal(t, "db2.example.com", db2.Db2.Hostname)
+	assert.Equal(t, 50001, db2.Db2.Port)
+	assert.Equal(t, "SAMPLE", db2.Db2.Database)
+	assert.Equal(t, "db2inst1", db2.Db2.User)
+	assert.Equal(t, "${DB2_PASSWORD}", db2.Db2.Password)
+	assert.Equal(t, "SSL", db2.Db2.Security)
+	assert.Equal(t, "/opt/certs/db2server.arm", db2.Db2.SSLServerCertificateFile)
+	assert.Equal(t, "SERVER_ENCRYPT", db2.Db2.Authentication)
 }
 
 func TestParseConnections_EnvExpansion(t *testing.T) {

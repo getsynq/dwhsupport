@@ -3,7 +3,7 @@ module github.com/getsynq/dwhsupport
 go 1.25.5
 
 require (
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260818104000-645e1e5e0c2c.1
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260923134820-308a3cc2e09d.2
 	cloud.google.com/go v0.121.6
 	cloud.google.com/go/bigquery v1.69.0
 	github.com/ClickHouse/ch-go v0.68.0
@@ -20,7 +20,7 @@ require (
 	github.com/databricks/databricks-sql-go v1.7.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/duckdb/duckdb-go/v2 v2.5.5
-	github.com/getsynq/go-db2 v0.0.0-20260923130003-0b40aa53491b
+	github.com/getsynq/go-db2 v0.0.0-20260923140156-bf38f793d9a9
 	github.com/gkampitakis/go-snaps v0.5.14
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/google/uuid v1.6.0
@@ -54,7 +54,7 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260209202127-80ab13bee0bf.1 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.2 // indirect
 	cloud.google.com/go/auth v0.16.4 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect

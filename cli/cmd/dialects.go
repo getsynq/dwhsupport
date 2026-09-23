@@ -20,6 +20,7 @@ var supportedDialects = []map[string]any{
 	{"dialect": "mssql", "config_key": "mssql", "example_fields": "host, port, database, username, password"},
 	{"dialect": "athena", "config_key": "athena", "example_fields": "region, workgroup, catalog"},
 	{"dialect": "fabric", "config_key": "fabric", "example_fields": "host, database, auth_type|client_id+client_secret+tenant_id"},
+	{"dialect": "db2", "config_key": "db2", "example_fields": "hostname, port, database, user, password"},
 	{"dialect": "duckdb", "config_key": "duckdb", "example_fields": "path|motherduck_account (requires CGO build)"},
 }
 

@@ -18,8 +18,8 @@ require (
 )
 
 require (
-	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260209202127-80ab13bee0bf.1 // indirect
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260818104000-645e1e5e0c2c.1 // indirect
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.2 // indirect
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20260923134820-308a3cc2e09d.2 // indirect
 	cloud.google.com/go v0.121.6 // indirect
 	cloud.google.com/go/auth v0.16.4 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
@@ -88,6 +88,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.9 // indirect
+	github.com/getsynq/go-db2 v0.0.0-20260923140156-bf38f793d9a9 // indirect
 	github.com/go-faster/city v1.0.1 // indirect
 	github.com/go-faster/errors v0.7.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect

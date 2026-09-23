@@ -2,6 +2,8 @@ package db2
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"strings"
 
@@ -38,10 +40,15 @@ type Db2Conf struct {
 	// Security is "SSL" to connect over TLS (SECURITY=SSL); empty for a plain
 	// TCP/IP connection.
 	Security string
-	// SSLServerCertificate is the path to a PEM file holding the server's
-	// certificate or the CA that signed it (SSLServerCertificate). Empty uses
-	// the system trust store.
-	SSLServerCertificate string
+	// SSLServerCertificateFile is the path to a PEM file holding the server's
+	// certificate or the CA that signed it (SSLServerCertificate). Requires
+	// Security SSL. Empty, with SSLServerCertificatePEM empty too, uses the
+	// system trust store.
+	SSLServerCertificateFile string
+	// SSLServerCertificatePEM is the same certificate as PEM text, for callers
+	// that hold it in memory and have no file to point at. Mutually exclusive
+	// with SSLServerCertificateFile.
+	SSLServerCertificatePEM string
 	// Authentication selects how the password is sent (AUTHENTICATION):
 	// "SERVER" (default) sends it in the clear, so pair it with SSL;
 	// "SERVER_ENCRYPT" encrypts user ID and password with a Diffie-Hellman
@@ -78,9 +85,24 @@ func driverConfig(conf *Db2Conf) (*godb2.Config, error) {
 
 	switch strings.ToUpper(conf.Security) {
 	case "":
+		// A certificate means the caller expects TLS. Falling back to plain
+		// TCP/IP would send the password unencrypted under SERVER authentication.
+		if conf.SSLServerCertificateFile != "" || conf.SSLServerCertificatePEM != "" {
+			return nil, errors.New("db2: a server certificate is set but Security is not SSL")
+		}
 	case "SSL":
 		cfg.UseSSL = true
-		cfg.SSLRootCAPath = conf.SSLServerCertificate
+		if conf.SSLServerCertificateFile != "" && conf.SSLServerCertificatePEM != "" {
+			return nil, errors.New("db2: set SSLServerCertificateFile or SSLServerCertificatePEM, not both")
+		}
+		cfg.SSLRootCAPath = conf.SSLServerCertificateFile
+		if conf.SSLServerCertificatePEM != "" {
+			pool := x509.NewCertPool()
+			if !pool.AppendCertsFromPEM([]byte(conf.SSLServerCertificatePEM)) {
+				return nil, errors.New("db2: SSLServerCertificatePEM holds no PEM certificate")
+			}
+			cfg.TLSConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
+		}
 	default:
 		return nil, errors.Errorf("db2: unsupported Security %q, expected SSL or empty", conf.Security)
 	}

@@ -53,6 +53,8 @@ func FromProtoConnection(proto *agentdwhv1.Connection) *Connection {
 		conn.Athena = athenaConfFromProto(t.Athena)
 	case *agentdwhv1.Connection_Fabric:
 		conn.Fabric = fabricConfFromProto(t.Fabric)
+	case *agentdwhv1.Connection_Db2:
+		conn.Db2 = db2ConfFromProto(t.Db2)
 	}
 
 	return conn
@@ -233,6 +235,23 @@ func mssqlConfFromProto(c *agentdwhv1.MSSQLConf) *MSSQLConf {
 		FedAuth:             c.GetFedAuth(),
 		AccessToken:         c.GetAccessToken(),
 		ApplicationClientId: c.GetApplicationClientId(),
+	}
+}
+
+func db2ConfFromProto(c *agentdwhv1.Db2Conf) *Db2Conf {
+	if c == nil {
+		return nil
+	}
+	return &Db2Conf{
+		Hostname:                 c.GetHostname(),
+		Port:                     int(c.GetPort()),
+		Database:                 c.GetDatabase(),
+		User:                     c.GetUser(),
+		Password:                 c.GetPassword(),
+		Security:                 c.GetSecurity(),
+		SSLServerCertificateFile: c.GetSslServerCertificateFile(),
+		SSLServerCertificatePEM:  c.GetSslServerCertificatePem(),
+		Authentication:           c.GetAuthentication(),
 	}
 }
 

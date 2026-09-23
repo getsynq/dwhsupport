@@ -138,6 +138,18 @@ connections:
           - schema: staging
             table: tmp_*
 
+  "db2-prod":
+    name: "Db2 Production"
+    db2:
+      hostname: db2.example.com
+      port: 50001
+      database: SAMPLE
+      user: db2inst1
+      password: ${DB2_PASSWORD}
+      security: SSL
+      ssl_server_certificate_file: /opt/certs/db2server.arm
+      authentication: SERVER_ENCRYPT
+
   "athena-prod":
     athena:
       region: eu-central-1

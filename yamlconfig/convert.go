@@ -96,6 +96,10 @@ func ToProtoConnection(id string, conn *Connection) (*agentdwhv1.Connection, err
 		proto.Config = &agentdwhv1.Connection_Fabric{
 			Fabric: fabricConfToProto(conn.Fabric),
 		}
+	case conn.Db2 != nil:
+		proto.Config = &agentdwhv1.Connection_Db2{
+			Db2: db2ConfToProto(conn.Db2),
+		}
 	default:
 		return nil, fmt.Errorf("no database type configured")
 	}
@@ -283,6 +287,20 @@ func mssqlConfToProto(c *MSSQLConf) *agentdwhv1.MSSQLConf {
 		FedAuth:             c.FedAuth,
 		AccessToken:         c.AccessToken,
 		ApplicationClientId: c.ApplicationClientId,
+	}
+}
+
+func db2ConfToProto(c *Db2Conf) *agentdwhv1.Db2Conf {
+	return &agentdwhv1.Db2Conf{
+		Hostname:                 c.Hostname,
+		Port:                     int32(c.Port),
+		Database:                 c.Database,
+		User:                     c.User,
+		Password:                 c.Password,
+		Security:                 c.Security,
+		SslServerCertificateFile: c.SSLServerCertificateFile,
+		SslServerCertificatePem:  c.SSLServerCertificatePEM,
+		Authentication:           c.Authentication,
 	}
 }
 
