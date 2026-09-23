@@ -9,6 +9,7 @@ import (
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
+	dwhexecdb2 "github.com/getsynq/dwhsupport/exec/db2"
 	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
@@ -22,6 +23,7 @@ import (
 	scrapperbigquery "github.com/getsynq/dwhsupport/scrapper/bigquery"
 	scrapperclickhouse "github.com/getsynq/dwhsupport/scrapper/clickhouse"
 	scrapperdatabricks "github.com/getsynq/dwhsupport/scrapper/databricks"
+	scrapperdb2 "github.com/getsynq/dwhsupport/scrapper/db2"
 	scrapperfabric "github.com/getsynq/dwhsupport/scrapper/fabric"
 	scrappermssql "github.com/getsynq/dwhsupport/scrapper/mssql"
 	scrappermysql "github.com/getsynq/dwhsupport/scrapper/mysql"
@@ -225,6 +227,23 @@ func Fabric(ctx context.Context, t *agentdwhv1.FabricConf) (*scrapperfabric.Fabr
 	})
 }
 
+// Db2 builds a Db2Scrapper for one database of a Db2 LUW instance.
+func Db2(ctx context.Context, t *agentdwhv1.Db2Conf) (*scrapperdb2.Db2Scrapper, error) {
+	return scrapperdb2.NewDb2Scrapper(ctx, &scrapperdb2.Db2ScrapperConf{
+		Db2Conf: dwhexecdb2.Db2Conf{
+			Hostname:                 t.GetHostname(),
+			Port:                     int(t.GetPort()),
+			Database:                 t.GetDatabase(),
+			User:                     t.GetUser(),
+			Password:                 t.GetPassword(),
+			Security:                 t.GetSecurity(),
+			SSLServerCertificateFile: t.GetSslServerCertificateFile(),
+			SSLServerCertificatePEM:  t.GetSslServerCertificatePem(),
+			Authentication:           t.GetAuthentication(),
+		},
+	})
+}
+
 func Oracle(ctx context.Context, t *agentdwhv1.OracleConf) (*scrapperoracle.OracleScrapper, error) {
 	return scrapperoracle.NewOracleScrapper(ctx, &scrapperoracle.OracleScrapperConf{
 		OracleConf: dwhexecoracle.OracleConf{
@@ -280,6 +299,8 @@ func Connect(ctx context.Context, conf *agentdwhv1.Connection) (scrapper.Scrappe
 		return Athena(ctx, t.Athena)
 	case *agentdwhv1.Connection_Fabric:
 		return Fabric(ctx, t.Fabric)
+	case *agentdwhv1.Connection_Db2:
+		return Db2(ctx, t.Db2)
 	default:
 		return nil, errors.New("unsupported database type")
 	}

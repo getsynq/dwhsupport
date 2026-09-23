@@ -14,7 +14,7 @@ can be a human table or a machine format (JSON, YAML, TOON, TSV).
 
 **Supported warehouses:** Snowflake, BigQuery, Databricks, Postgres, Redshift,
 ClickHouse, MySQL/MariaDB, Trino/Starburst, Oracle, MSSQL / Azure SQL, Athena,
-Microsoft Fabric — and DuckDB/MotherDuck in CGO-enabled builds.
+Microsoft Fabric, IBM Db2 LUW — and DuckDB/MotherDuck in CGO-enabled builds.
 
 ---
 
@@ -380,6 +380,27 @@ fabric:
   # or a pre-acquired token:
   access_token: ${FABRIC_ACCESS_TOKEN}
 ```
+</details>
+
+<details>
+<summary><b>db2</b> — IBM Db2 for Linux, UNIX and Windows</summary>
+
+```yaml
+db2:
+  hostname: db2.example.com         # ✱ HOSTNAME
+  port: 50000                       # PORT, the instance's SVCENAME (50001 with SSL)
+  database: SAMPLE                  # ✱ DATABASE, as in CONNECT TO
+  user: db2inst1                    # ✱ UID, an OS or LDAP user
+  password: ${DB2_PASSWORD}         # ✱ PWD
+  security: SSL                     # SECURITY, leave out for plain TCP/IP
+  ssl_server_certificate_file: /opt/certs/db2server.arm   # SSLServerCertificate
+  # or the certificate itself:
+  # ssl_server_certificate_pem: |
+  #   -----BEGIN CERTIFICATE-----
+  #   ...
+  authentication: SERVER_ENCRYPT    # AUTHENTICATION, SERVER by default
+```
+One connection per database. No Db2 client or driver needs to be installed.
 </details>
 
 <details>

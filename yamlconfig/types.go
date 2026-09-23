@@ -32,6 +32,7 @@ type Connection struct {
 	DuckDB     *DuckDBConf     `yaml:"duckdb,omitempty"`
 	Athena     *AthenaConf     `yaml:"athena,omitempty"`
 	Fabric     *FabricConf     `yaml:"fabric,omitempty"`
+	Db2        *Db2Conf        `yaml:"db2,omitempty"`
 }
 
 // DialectType returns the warehouse type string for this connection, or empty if none is set.
@@ -63,6 +64,8 @@ func (c *Connection) DialectType() string {
 		return "athena"
 	case c.Fabric != nil:
 		return "fabric"
+	case c.Db2 != nil:
+		return "db2"
 	default:
 		return ""
 	}
@@ -328,6 +331,46 @@ type FabricConf struct {
 	// Optional include/exclude filter that limits which databases, schemas and
 	// tables are scanned. When omitted, the whole workspace is scanned.
 	Scope *ScopeConf `yaml:"scope,omitempty"`
+}
+
+// Db2Conf contains the connection settings for IBM Db2 for Linux, UNIX and
+// Windows (Db2 LUW). Each connection opens one database, so add one per
+// database you want to monitor. The keyword in parentheses after each field
+// is the matching keyword of a Db2 CLI connection string, db2cli.ini or
+// db2dsdriver.cfg, and takes the same values. No Db2 client or driver needs to
+// be installed. Db2 for z/OS and Db2 for i are not supported.
+type Db2Conf struct {
+	// Host name or IP address of the Db2 server (HOSTNAME).
+	Hostname string `yaml:"hostname" jsonschema:"required,example=db2.example.com"`
+	// TCP/IP port of the instance (PORT): the SVCENAME database manager
+	// configuration parameter, or SSL_SVCENAME when security is SSL. Optional,
+	// defaults to 50000, or 50001 with SSL.
+	Port int `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	// Database name or alias (DATABASE), as in CONNECT TO <database>.
+	Database string `yaml:"database" jsonschema:"required,example=SAMPLE"`
+	// Authorization ID to connect with (UID). Db2 checks it against the
+	// server's operating system, or LDAP when an LDAP plugin is configured.
+	User string `yaml:"user" jsonschema:"required,example=db2inst1"`
+	// Password of the authorization ID (PWD). Supply it through an environment
+	// variable (e.g. ${DB2_PASSWORD}) rather than committing it in plain text.
+	Password string `yaml:"password" jsonschema:"required,example=${DB2_PASSWORD}"`
+	// Set to SSL to connect over SSL/TLS (SECURITY=SSL). Leave it out for a
+	// plain TCP/IP connection.
+	Security string `yaml:"security,omitempty" jsonschema:"enum=SSL,enum=ssl"`
+	// Path to the server's certificate, or the certificate of the CA that
+	// signed it, in PEM format (SSLServerCertificate), such as the .arm file
+	// extracted from the instance's keystore with gsk8capicmd_64. Leave it and
+	// ssl_server_certificate_pem out to check the server against the system
+	// trust store.
+	SSLServerCertificateFile string `yaml:"ssl_server_certificate_file,omitempty" jsonschema:"example=/opt/certs/db2server.arm"`
+	// Content of the same certificate, starting with
+	// -----BEGIN CERTIFICATE-----, for when you can't point to a file.
+	SSLServerCertificatePEM string `yaml:"ssl_server_certificate_pem,omitempty"`
+	// How the authorization ID and password travel to the server
+	// (AUTHENTICATION). SERVER (default) sends them unencrypted, so use it with
+	// SSL on an untrusted network. SERVER_ENCRYPT encrypts them and needs the
+	// instance's AUTHENTICATION to accept encrypted credentials.
+	Authentication string `yaml:"authentication,omitempty" jsonschema:"enum=SERVER,enum=SERVER_ENCRYPT"`
 }
 
 // OracleConf contains Oracle Database connection parameters.

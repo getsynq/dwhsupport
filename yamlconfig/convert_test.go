@@ -19,7 +19,7 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 
 	protos, err := ToProtoConnections(conns)
 	require.NoError(t, err)
-	assert.Len(t, protos, 14)
+	assert.Len(t, protos, 15)
 
 	// Verify Postgres
 	pg := protos["pg-local"]
@@ -144,6 +144,39 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	require.Len(t, fabricScope.GetExclude(), 1)
 	assert.Equal(t, "staging", fabricScope.GetExclude()[0].GetSchema())
 	assert.Equal(t, "tmp_*", fabricScope.GetExclude()[0].GetTable())
+
+	// Verify Db2
+	db2 := protos["db2-prod"]
+	require.NotNil(t, db2)
+	assert.Equal(t, "Db2 Production", db2.GetName())
+	db2Conf := db2.GetDb2()
+	require.NotNil(t, db2Conf)
+	assert.Equal(t, "db2.example.com", db2Conf.GetHostname())
+	assert.Equal(t, int32(50001), db2Conf.GetPort())
+	assert.Equal(t, "SAMPLE", db2Conf.GetDatabase())
+	assert.Equal(t, "db2inst1", db2Conf.GetUser())
+	assert.Equal(t, "SSL", db2Conf.GetSecurity())
+	assert.Equal(t, "/opt/certs/db2server.arm", db2Conf.GetSslServerCertificateFile())
+	assert.Empty(t, db2Conf.GetSslServerCertificatePem())
+	assert.Equal(t, "SERVER_ENCRYPT", db2Conf.GetAuthentication())
+}
+
+func TestFromProtoConnection_Db2(t *testing.T) {
+	original := &Db2Conf{
+		Hostname:                "db2.example.com",
+		Port:                    50001,
+		Database:                "SAMPLE",
+		User:                    "db2inst1",
+		Password:                "secret",
+		Security:                "SSL",
+		SSLServerCertificatePEM: "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----\n",
+		Authentication:          "SERVER",
+	}
+	pb, err := ToProtoConnection("db2", &Connection{Db2: original})
+	require.NoError(t, err)
+	rt := FromProtoConnection(pb)
+	require.NotNil(t, rt)
+	assert.Equal(t, original, rt.Db2)
 }
 
 func TestToProtoConnection_DefaultName(t *testing.T) {
