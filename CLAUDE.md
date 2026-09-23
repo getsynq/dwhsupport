@@ -93,6 +93,9 @@ All data models are in `scrapper/models.go`:
 
 4. Register the new dialect in `sqldialect/dialects.go` `DialectsToTest()` and regenerate snapshots:
    - `UPDATE_SNAPS=true go test ./sqldialect/... ./metrics/... -count=1`
+   - Also add the dialect's row to the hand-written per-dialect tables (`sqldialect/ident_test.go`, `resolve_field_ref_test.go`); they don't iterate `DialectsToTest()`, so nothing fails if you skip them.
+5. Values: a `case` in `scrapper/literal.go` `NativeValueKind` for native type names the shared table lacks, the engine's `CAST(ts AS VARCHAR)` text in `scrapper/values.go` `timestampLayouts` (plus a row in `values_test.go`), and `roundTripExprs` in `scrappertest/value_roundtrip_compliance.go`. If the engine has no `SELECT` without `FROM`, extend `selectFrom` too (Oracle `dual`, Db2 `SYSIBM.SYSDUMMY1`).
+6. Settle each dialect choice by running it on the engine first (unquoted identifier rules, `SUBSTR` past the end of a string, what `LENGTH` counts, time arithmetic). The docs missed Db2's `SUBSTR` failing with -138 and its leading-`_` rule.
 
 ### Adding a Method to the Scrapper Interface
 
@@ -254,6 +257,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 ## Important Rules
 
 - **Public repo**: Never include customer-specific data (table names, schemas, tag values) in test files — use generic placeholders like `MY_DB.MY_SCHEMA.MY_TABLE`
+- **Public repo, internal refs**: no links to private repos (`getsynq/cloud#…`) and no internal hostnames (`*.svc.cluster.local`) in PR bodies, code or tests. Test defaults are `127.0.0.1`; the dwhtesting hosts go in `.env`.
 - **Errors: use `github.com/pkg/errors`, not stdlib `errors`/`fmt.Errorf`.** `errors.New` / `errors.Errorf` / `errors.Wrap` capture a stacktrace, which is what makes failures in the `sqldialect` AST (`ToSql` returning an error from deep in a nested expression) actually debuggable. Plain `fmt.Errorf` loses that.
 
 ## MySQL Gotchas
@@ -277,7 +281,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 ## Oracle & MSSQL Gotchas
 
 - **Oracle rejects `AS` before a table alias**: `(select ...) AS t` fails with `ORA-03048: SQL reserved word 'AS' is not syntactically valid`. It is optional in the standard and accepted everywhere else, so it is a dialect flag — `Dialect.SupportsAsBeforeTableAlias()`, false only for Oracle.
-- **Oracle requires an unquoted identifier to start with a letter**: `_` / `$` / `#` are legal inside one but not at the front, so a generated alias like `_recon_base` fails with `ORA-00911: _: invalid character`. `OracleQuoteIfNeeded` quotes those; every other dialect takes a leading underscore raw.
+- **Oracle requires an unquoted identifier to start with a letter**: `_` / `$` / `#` are legal inside one but not at the front, so a generated alias like `_recon_base` fails with `ORA-00911: _: invalid character`. `OracleQuoteIfNeeded` quotes those. Db2 rejects a leading `_` too (SQLCODE -20521, `Db2QuoteIfNeeded`); every other dialect takes it raw.
 - **go-ora time.Time binding**: go-ora's `time.Time` bind parameters don't compare correctly with Oracle DATE columns. Use `TO_DATE(:1, 'YYYY-MM-DD HH24:MI:SS')` with `t.UTC().Format("2006-01-02 15:04:05")` string parameters instead.
 - **MSSQL DB_NAME() consistency**: Always use `DB_NAME()` in SQL queries to populate the database field, never `conf.Database` — avoids casing mismatches between user config and SQL Server's canonical name.
 - **sqldialect ResolveTime timezone**: Dialects that format time without timezone info (Oracle, MSSQL, ClickHouse) must call `.UTC()` before formatting to prevent wrong comparisons when Go runs in non-UTC timezone.
