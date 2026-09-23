@@ -16,12 +16,12 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// newDb2ScrapperFromEnv connects to the dwhtesting Db2 (lib/db2 in the cloud
-// repo's dev-infra/dwhtesting) over Twingate unless DB2_* says otherwise.
+// newDb2ScrapperFromEnv connects to a pre-seeded Db2 (e.g. via dwhtesting
+// staging infra) described by DB2_*.
 func newDb2ScrapperFromEnv(ctx context.Context) (*Db2Scrapper, error) {
 	return NewDb2Scrapper(ctx, &Db2ScrapperConf{
 		Db2Conf: dwhexecdb2.Db2Conf{
-			Hostname: testenv.EnvOrDefault("DB2_HOSTNAME", "db2.dwh-testing.svc.cluster.local"),
+			Hostname: testenv.EnvOrDefault("DB2_HOSTNAME", "127.0.0.1"),
 			Port:     testenv.EnvOrDefaultInt("DB2_PORT", 50000),
 			Database: testenv.EnvOrDefault("DB2_DATABASE", "TESTDB"),
 			User:     testenv.EnvOrDefault("DB2_USER", "synq_reader"),

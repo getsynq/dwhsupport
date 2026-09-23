@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// Db2ScrapperSuite checks the scrapper against the dwhtesting seed
-// (lib/db2/seed.sql in the cloud repo's dev-infra/dwhtesting).
+// Db2ScrapperSuite checks the scrapper against the dwhtesting seed (schemas
+// DWH_SALES and DWH_ANALYTICS in database TESTDB).
 type Db2ScrapperSuite struct {
 	suite.Suite
 	scrapper *Db2Scrapper

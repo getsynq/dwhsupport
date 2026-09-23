@@ -169,7 +169,7 @@ Six embeddable test suites in `scrapper/scrappertest/`:
 
 Integration tests connect to dwhtesting staging databases via Twingate (no port-forwarding needed). Each scrapper package has a `base_test.go` that loads `../../.env` via `godotenv`. Env var prefixes per database:
 - `ORACLE_`, `MSSQL_`, `POSTGRES_`, `CLICKHOUSE_` — dwhtesting staging
-- `DB2_` (`DB2_HOSTNAME`, `DB2_DATABASE`, …) — dwhtesting staging; the defaults already point at it over Twingate
+- `DB2_` (`DB2_HOSTNAME`, `DB2_PORT`, `DB2_DATABASE`, `DB2_USER`, `DB2_PASSWORD`) — dwhtesting staging
 - `MARIADB_` — MariaDB on dwhtesting staging
 - `MYSQL_` — real MySQL on dwhtesting staging
 - `STARBURST_` — Starburst Galaxy (HTTPS), `TRINO_` — self-hosted Trino (plaintext HTTP)
