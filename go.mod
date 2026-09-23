@@ -20,7 +20,7 @@ require (
 	github.com/databricks/databricks-sql-go v1.7.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/duckdb/duckdb-go/v2 v2.5.5
-	github.com/getsynq/go-db2 v0.0.0-20260923140156-bf38f793d9a9
+	github.com/getsynq/go-db2 v0.0.0-20260923230204-7bb458d01af8
 	github.com/gkampitakis/go-snaps v0.5.14
 	github.com/go-sql-driver/mysql v1.9.2
 	github.com/google/uuid v1.6.0
