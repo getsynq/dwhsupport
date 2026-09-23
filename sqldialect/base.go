@@ -622,12 +622,17 @@ type CteAliasExpr struct {
 	alias string
 }
 
+// CteFqn names a CTE. The same expression renders both the declaration
+// (`with <name> AS (...)`) and every FROM that reads it, and it resolves
+// through ResolveFieldRef like SubqueryTable's alias does, so a QualifiedCol
+// naming the CTE spells it the same way. That quotes a name the dialect cannot
+// take bare, such as a leading underscore on Oracle and Db2.
 func CteFqn(alias string) *CteAliasExpr {
 	return &CteAliasExpr{alias: alias}
 }
 
 func (t *CteAliasExpr) ToSql(dialect Dialect) (string, error) {
-	return t.alias, nil
+	return dialect.ResolveFieldRef(t.alias), nil
 }
 
 func (t *CteAliasExpr) IsTableExpr() {}

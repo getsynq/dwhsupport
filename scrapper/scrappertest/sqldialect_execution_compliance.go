@@ -151,6 +151,29 @@ func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_SubqueryTable() {
 	s.False(s.column(rows[0], "row_count").IsNull, "row_count should not be null")
 }
 
+// TestSqlDialectExecution_CteWithLimit is the data-preview shape: an arbitrary
+// query wrapped in a CTE whose name starts with an underscore, read back and
+// capped. Oracle (ORA-00911) and Db2 (SQL20521N, a leading `_` starts a
+// conditional compilation directive) reject that name unquoted, so the CTE's
+// declaration, the FROM that reads it and any column qualified by it all have
+// to agree on quoting it.
+func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_CteWithLimit() {
+	s.skipIfNil()
+
+	const cteName = "_synq_preview_cte"
+	cte := CteFqn(cteName)
+	sel := NewSelect().
+		Cte(cte, Sql(s.sideQuery())).
+		From(cte).
+		Cols(As(QualifiedCol(cteName, s.Config.KeyField), Alias("key_val"))).
+		WithLimit(Limit(Int64(5)))
+
+	rows := s.execute(sel)
+	s.Require().NotEmpty(rows)
+	s.LessOrEqual(len(rows), 5)
+	s.False(s.column(rows[0], "key_val").IsNull)
+}
+
 // TestSqlDialectExecution_QualifiedCol references a column through the derived
 // table's alias. The alias and the qualifier have to be spelled the same way
 // after the dialect's case folding, which is why both go through the builder
