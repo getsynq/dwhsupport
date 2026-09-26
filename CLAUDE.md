@@ -248,6 +248,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 
 - Snowflake DDL parsing uses `go-sqllexer` with `sqllexer.DBMSSnowflake` — never use regex for SQL parsing
 - `GET_DDL('SCHEMA', ...)` returns full DDL including `WITH TAG (...)` and `COMMENT` clauses
+- **The name inside `GET_DDL` is quoted part by part** (`'"DB"."raw"'`, through `getDdlQuery`). GET_DDL resolves the name like any other reference, so unquoted it folds to upper case: a lower-case schema that a loader created quoted fails with 2003 "does not exist or not authorized" on every scan, and one that has an upper-case twin (`raw` beside `RAW`) silently gets the twin's DDL. The names come from information_schema and are exact, so quoting always addresses the listed object. `SchemaDdlIntegrationSuite` checks it on the real account with a case variant of `SNOWFLAKE_SCHEMA`, which needs no `CREATE SCHEMA`.
 - When permissions are insufficient, Snowflake returns `UNKNOWN_TAG='#UNKNOWN_VALUE'` sentinels — filter these out
 - Column-level `COMMENT` appears inside `()` of column defs; table-level `COMMENT` appears after — use parenthesis depth tracking to disambiguate
 - Snowflake supports both `COMMENT='value'` and `COMMENT 'value'` syntax
