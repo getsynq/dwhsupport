@@ -7,19 +7,27 @@ import (
 	"testing"
 
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
+	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"github.com/snowflakedb/gosnowflake"
 	"github.com/stretchr/testify/suite"
 )
+
+// sqlCompilationErrorNumber is what Snowflake answers a statement naming an
+// object it cannot resolve with. gosnowflake's ErrObjectNotExistOrAuthorized is
+// the connect-time counterpart, which a query never returns.
+const sqlCompilationErrorNumber = 2003
 
 // SchemaDdlIntegrationSuite asks a real Snowflake account for the DDL of a
 // schema by the name the account itself reports for it. The schema names a
 // scan reads out of information_schema are exact, case included, so a GET_DDL
 // has to address exactly that schema: a lower-case name must not resolve to an
 // upper-case schema of the same letters. Snowflake folds an unquoted name to
-// upper case, which is how a lower-case schema read as "does not exist or not
-// authorized" on every scan, and how a lower-case schema with an upper-case
-// twin was given the twin's DDL.
+// upper case, so asked unquoted, a lower-case schema reads as "does not exist
+// or not authorized" and a lower-case schema with an upper-case twin gets the
+// twin's DDL.
 //
 // It needs no privilege beyond reading the configured schema, which is why it
 // probes with a case variant of an existing schema instead of creating one.
@@ -84,6 +92,24 @@ func (s *SchemaDdlIntegrationSuite) TestSchemaDdlOfTheReportedName() {
 	s.Contains(strings.ToUpper(ddl), "CREATE")
 }
 
+// A table's definition comes only from its schema's GET_DDL, split per object,
+// so every table of the configured schema carrying one shows the quoted
+// statement resolved and its output was matched back to the listed tables.
+func (s *SchemaDdlIntegrationSuite) TestEveryTableOfTheSchemaGetsItsDdl() {
+	ctx := scope.WithScope(s.ctx, &scope.ScopeFilter{Include: []scope.ScopeRule{{Database: s.database, Schema: s.schema}}})
+	rows, err := s.scrapper.QuerySqlDefinitions(ctx)
+	s.Require().NoError(err)
+
+	tables := lo.Filter(rows, func(row *scrapper.SqlDefinitionRow, _ int) bool { return !row.IsView })
+	if len(tables) == 0 {
+		s.T().Skipf("schema %s.%s has no tables", s.database, s.schema)
+	}
+	for _, row := range tables {
+		s.Equalf(s.schema, row.Schema, "row outside the scoped schema: %s", row.Table)
+		s.Containsf(strings.ToUpper(row.Sql), "CREATE", "table %s.%s.%s has no DDL", row.Database, row.Schema, row.Table)
+	}
+}
+
 func (s *SchemaDdlIntegrationSuite) TestSchemaDdlOfACaseVariantNamesNoSchema() {
 	// No schema is called the lower-case spelling of the configured one, so
 	// the only correct answer is Snowflake's "does not exist or not
@@ -93,5 +119,6 @@ func (s *SchemaDdlIntegrationSuite) TestSchemaDdlOfACaseVariantNamesNoSchema() {
 	s.Require().Errorf(err, "GET_DDL resolved %q to the schema %q", strings.ToLower(s.schema), s.schema)
 	var sfErr *gosnowflake.SnowflakeError
 	s.Require().True(errors.As(err, &sfErr), "not a Snowflake error: %v", err)
-	s.Equal(gosnowflake.ErrObjectNotExistOrAuthorized, sfErr.Number)
+	s.Equal(sqlCompilationErrorNumber, sfErr.Number, "not a compilation error: %v", err)
+	s.Contains(sfErr.Message, "does not exist or not authorized")
 }

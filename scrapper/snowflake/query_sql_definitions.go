@@ -11,6 +11,7 @@ import (
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
+	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/getsynq/dwhsupport/sqlparser"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -297,12 +298,32 @@ func UnQuote(key string) string {
 }
 
 func (e *SnowflakeScrapper) getDdl(ctx context.Context, kind string, parts ...string) (string, error) {
+	query, err := getDdlQuery(kind, parts...)
+	if err != nil {
+		return "", err
+	}
 	var res []string
-	var err = e.executor.Select(ctx, &res, fmt.Sprintf("SELECT GET_DDL('%s', '%s', TRUE)", kind, strings.Join(parts, ".")))
+	err = e.executor.Select(ctx, &res, query)
 	if len(res) > 0 {
 		return fixDdl(res[0]), nil
 	}
 	return "", err
+}
+
+// getDdlQuery builds the GET_DDL statement for the object the parts name, from
+// the database down. Each part is a name as Snowflake itself reports it, out
+// of information_schema, and is quoted, because only a quoted name is resolved
+// exactly as written. Unquoted, a lower-case schema `raw` folds to `RAW`:
+// GET_DDL then answers "does not exist or not authorized" when there is no
+// `RAW`, and returns the other schema's DDL when there is one.
+func getDdlQuery(kind string, parts ...string) (string, error) {
+	dialect := sqldialect.NewSnowflakeDialect()
+	idents := lo.Map(parts, func(part string, _ int) sqldialect.Ident { return sqldialect.CanonicalIdent(part) })
+	name, err := sqldialect.QualifiedIdent(idents...).ToSql(dialect)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to quote the name of the %s to read the DDL of", kind)
+	}
+	return fmt.Sprintf("SELECT GET_DDL(%s, %s, TRUE)", dialect.StringLiteral(kind), dialect.StringLiteral(name)), nil
 }
 
 var ddlReplacer = strings.NewReplacer(
