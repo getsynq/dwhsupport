@@ -115,7 +115,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 					tableInfo := tableInfo
 					metricsRow := metricsRow
 					g.Go(func() error {
-						sql := fmt.Sprintf("ANALYZE TABLE %s COMPUTE STATISTICS%s", tableInfo.FullName, noScan)
+						sql := analyzeTableStatement(tableInfo, noScan)
 						log.WithField("sql", sql).WithFields(logrus.Fields{
 							"table_updated_at": time.UnixMilli(tableInfo.UpdatedAt).Format(time.RFC3339),
 							"last_analyzed_at": lastMetricsFetchTime.Format(time.RFC3339),
@@ -184,6 +184,10 @@ func (e *DatabricksScrapper) shouldRefreshTableInfo(lastMetricsFetchTime time.Ti
 		return false
 	}
 	return lastMetricsFetchTime.Before(tableUpdate)
+}
+
+func analyzeTableStatement(tableInfo servicecatalog.TableInfo, noScan string) string {
+	return fmt.Sprintf("ANALYZE TABLE %s COMPUTE STATISTICS%s", tableInfo.FullName, noScan)
 }
 
 func extractNumericProperty(properties map[string]string, s string) (int64, bool) {

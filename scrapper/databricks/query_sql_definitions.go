@@ -122,10 +122,13 @@ func (e *DatabricksScrapper) showCreateTable(
 	table string,
 ) (string, error) {
 	var res []string
-	sql := fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`.`%s`", catalog, schema, table)
-	var err = sqlClient.Select(ctx, &res, sql)
+	var err = sqlClient.Select(ctx, &res, showCreateTableStatement(catalog, schema, table))
 	if len(res) > 0 {
 		return res[0], err
 	}
 	return "", err
+}
+
+func showCreateTableStatement(catalog, schema, table string) string {
+	return fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`.`%s`", catalog, schema, table)
 }
