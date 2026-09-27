@@ -105,8 +105,12 @@ func (e *DatabricksScrapper) queryTags(
 	executor *dwhexecdatabricks.DatabricksExecutor,
 	catalog, informationSchemaTable string,
 ) ([]*Tags, error) {
+	sql, err := tagsStatement(catalog, informationSchemaTable)
+	if err != nil {
+		return nil, err
+	}
 	var tags []*Tags
-	err := executor.Select(ctx, &tags, tagsStatement(catalog, informationSchemaTable))
+	err = executor.Select(ctx, &tags, sql)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to fetch tags from %s.INFORMATION_SCHEMA.%s", catalog, informationSchemaTable)
 	}
@@ -122,8 +126,12 @@ func (e *DatabricksScrapper) queryTags(
 	return res, nil
 }
 
-func tagsStatement(catalog, informationSchemaTable string) string {
-	return fmt.Sprintf("SELECT * FROM `%s`.information_schema.%s", catalog, informationSchemaTable)
+func tagsStatement(catalog, informationSchemaTable string) (string, error) {
+	name, err := quotedName(catalog, "information_schema", informationSchemaTable)
+	if err != nil {
+		return "", err
+	}
+	return "SELECT * FROM " + name, nil
 }
 
 func (e *DatabricksScrapper) createTagsLookup(ctx context.Context, catalogName string) (map[string][]*Tags, error) {

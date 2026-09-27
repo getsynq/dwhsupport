@@ -2,7 +2,6 @@ package databricks
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
@@ -121,14 +120,22 @@ func (e *DatabricksScrapper) showCreateTable(
 	schema string,
 	table string,
 ) (string, error) {
+	sql, err := showCreateTableStatement(catalog, schema, table)
+	if err != nil {
+		return "", err
+	}
 	var res []string
-	var err = sqlClient.Select(ctx, &res, showCreateTableStatement(catalog, schema, table))
+	err = sqlClient.Select(ctx, &res, sql)
 	if len(res) > 0 {
 		return res[0], err
 	}
 	return "", err
 }
 
-func showCreateTableStatement(catalog, schema, table string) string {
-	return fmt.Sprintf("SHOW CREATE TABLE `%s`.`%s`.`%s`", catalog, schema, table)
+func showCreateTableStatement(catalog, schema, table string) (string, error) {
+	name, err := quotedName(catalog, schema, table)
+	if err != nil {
+		return "", err
+	}
+	return "SHOW CREATE TABLE " + name, nil
 }

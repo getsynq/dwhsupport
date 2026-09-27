@@ -6,6 +6,7 @@ import (
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // tableInfo builds a listing row the way Unity Catalog returns one: FullName is
@@ -83,7 +84,9 @@ func TestAnalyzeTableStatementQuotesEachPart(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, analyzeTableStatement(tc.table, tc.noScan))
+			sql, err := analyzeTableStatement(tc.table, tc.noScan)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, sql)
 		})
 	}
 }
@@ -92,15 +95,13 @@ func TestAnalyzeTableStatementQuotesEachPart(t *testing.T) {
 // between the backticks as it came, so a backtick inside one closed the
 // identifier early.
 func TestShowCreateTableStatementEscapesBackticks(t *testing.T) {
-	assert.Equal(t,
-		"SHOW CREATE TABLE `my-catalog`.`my_schema`.`we``ird`",
-		showCreateTableStatement("my-catalog", "my_schema", "we`ird"),
-	)
+	sql, err := showCreateTableStatement("my-catalog", "my_schema", "we`ird")
+	require.NoError(t, err)
+	assert.Equal(t, "SHOW CREATE TABLE `my-catalog`.`my_schema`.`we``ird`", sql)
 }
 
 func TestTagsStatementEscapesBackticks(t *testing.T) {
-	assert.Equal(t,
-		"SELECT * FROM `my-cata``log`.information_schema.TABLE_TAGS",
-		tagsStatement("my-cata`log", "TABLE_TAGS"),
-	)
+	sql, err := tagsStatement("my-cata`log", "TABLE_TAGS")
+	require.NoError(t, err)
+	assert.Equal(t, "SELECT * FROM `my-cata``log`.`information_schema`.`TABLE_TAGS`", sql)
 }

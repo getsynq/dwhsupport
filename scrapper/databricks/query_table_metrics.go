@@ -115,7 +115,10 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 					tableInfo := tableInfo
 					metricsRow := metricsRow
 					g.Go(func() error {
-						sql := analyzeTableStatement(tableInfo, noScan)
+						sql, err := analyzeTableStatement(tableInfo, noScan)
+						if err != nil {
+							return errors.Wrapf(err, "failed to build ANALYZE TABLE for %s", tableInfo.FullName)
+						}
 						log.WithField("sql", sql).WithFields(logrus.Fields{
 							"table_updated_at": time.UnixMilli(tableInfo.UpdatedAt).Format(time.RFC3339),
 							"last_analyzed_at": lastMetricsFetchTime.Format(time.RFC3339),
@@ -186,8 +189,12 @@ func (e *DatabricksScrapper) shouldRefreshTableInfo(lastMetricsFetchTime time.Ti
 	return lastMetricsFetchTime.Before(tableUpdate)
 }
 
-func analyzeTableStatement(tableInfo servicecatalog.TableInfo, noScan string) string {
-	return fmt.Sprintf("ANALYZE TABLE %s COMPUTE STATISTICS%s", tableInfo.FullName, noScan)
+func analyzeTableStatement(tableInfo servicecatalog.TableInfo, noScan string) (string, error) {
+	name, err := quotedName(tableInfo.CatalogName, tableInfo.SchemaName, tableInfo.Name)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("ANALYZE TABLE %s COMPUTE STATISTICS%s", name, noScan), nil
 }
 
 func extractNumericProperty(properties map[string]string, s string) (int64, bool) {
