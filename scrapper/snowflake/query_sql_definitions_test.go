@@ -385,3 +385,49 @@ func (s *QuerySqlDefinitionsSuite) TestIsSharedDatabaseUnavailableError() {
 	regularErr := errors.New("regular error")
 	s.False(isSharedDatabaseUnavailableError(regularErr))
 }
+
+func (s *QuerySqlDefinitionsSuite) TestGetDdlQueryQuotesEveryPart() {
+	cases := []struct {
+		name     string
+		parts    []string
+		expected string
+	}{
+		{
+			name:     "upper-case names address the same objects quoted",
+			parts:    []string{"MY_DB", "MY_SCHEMA"},
+			expected: `SELECT GET_DDL('SCHEMA', '"MY_DB"."MY_SCHEMA"', TRUE)`,
+		},
+		{
+			name:     "a lower-case schema keeps its case",
+			parts:    []string{"MY_DB", "raw"},
+			expected: `SELECT GET_DDL('SCHEMA', '"MY_DB"."raw"', TRUE)`,
+		},
+		{
+			name:     "a mixed-case schema keeps its case",
+			parts:    []string{"MY_DB", "Raw_staging"},
+			expected: `SELECT GET_DDL('SCHEMA', '"MY_DB"."Raw_staging"', TRUE)`,
+		},
+		{
+			name:     "a dot inside a name stays inside one identifier",
+			parts:    []string{"MY_DB", "raw.v2"},
+			expected: `SELECT GET_DDL('SCHEMA', '"MY_DB"."raw.v2"', TRUE)`,
+		},
+		{
+			name:     "a double quote inside a name is doubled",
+			parts:    []string{"MY_DB", `my"schema`},
+			expected: `SELECT GET_DDL('SCHEMA', '"MY_DB"."my""schema"', TRUE)`,
+		},
+		{
+			name:     "a single quote and a backslash are escaped for the string literal",
+			parts:    []string{"MY_DB", `it's\raw`},
+			expected: `SELECT GET_DDL('SCHEMA', '"MY_DB"."it''s\\raw"', TRUE)`,
+		},
+	}
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			query, err := getDdlQuery("SCHEMA", c.parts...)
+			s.Require().NoError(err)
+			s.Equal(c.expected, query)
+		})
+	}
+}
