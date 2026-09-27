@@ -11,7 +11,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
-	godb2 "github.com/getsynq/go-db2"
+	godb2 "github.com/go-db2/go-db2"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
@@ -21,7 +21,7 @@ import (
 // The fields follow the keywords of a Db2 CLI/ODBC connection string, so a
 // DBA can fill them from what they already use, e.g.
 // `HOSTNAME=db2.example.com;PORT=50000;DATABASE=SAMPLE;UID=reader;PWD=...;SECURITY=SSL`.
-// The driver speaks DRDA itself (github.com/getsynq/go-db2): no IBM client,
+// The driver speaks DRDA itself (github.com/go-db2/go-db2): no IBM client,
 // clidriver or db2dsdriver.cfg is involved.
 type Db2Conf struct {
 	// Hostname is the Db2 server (HOSTNAME).
