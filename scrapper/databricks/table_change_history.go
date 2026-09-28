@@ -9,7 +9,6 @@ import (
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/rowscan"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/getsynq/dwhsupport/sqldialect"
 )
 
 type databricksHistoryRow struct {
@@ -36,7 +35,11 @@ func (e *DatabricksScrapper) FetchTableChangeHistory(
 		return nil, err
 	}
 
-	rows, err := executor.QueryRows(ctx, e.buildTableChangeHistorySQL(fqn, from, to, limit))
+	sql, err := e.buildTableChangeHistorySQL(fqn, from, to, limit)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := executor.QueryRows(ctx, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -95,9 +98,11 @@ func (e *DatabricksScrapper) FetchTableChangeHistory(
 	return events, nil
 }
 
-func (e *DatabricksScrapper) buildTableChangeHistorySQL(fqn scrapper.DwhFqn, from, to time.Time, limit int) string {
-	dialect := sqldialect.NewDatabricksDialect()
-	tableFqn := fmt.Sprintf("%s.%s.%s", dialect.Identifier(fqn.DatabaseName), dialect.Identifier(fqn.SchemaName), dialect.Identifier(fqn.ObjectName))
+func (e *DatabricksScrapper) buildTableChangeHistorySQL(fqn scrapper.DwhFqn, from, to time.Time, limit int) (string, error) {
+	tableFqn, err := quotedName(fqn.DatabaseName, fqn.SchemaName, fqn.ObjectName)
+	if err != nil {
+		return "", err
+	}
 	return fmt.Sprintf(`SELECT
     version,
     timestamp,
@@ -115,7 +120,7 @@ LIMIT %d`,
 		from.UTC().Format("2006-01-02T15:04:05"),
 		to.UTC().Format("2006-01-02T15:04:05"),
 		limit,
-	)
+	), nil
 }
 
 func normalizeDatabricksOperation(op string) string {

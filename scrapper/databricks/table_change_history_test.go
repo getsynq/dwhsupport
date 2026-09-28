@@ -46,7 +46,8 @@ func (s *TableChangeHistorySuite) TestBuildTableChangeHistorySQL() {
 	scrpr := &DatabricksScrapper{}
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			sql := scrpr.buildTableChangeHistorySQL(tc.fqn, from, to, tc.limit)
+			sql, err := scrpr.buildTableChangeHistorySQL(tc.fqn, from, to, tc.limit)
+			s.Require().NoError(err)
 			s.NotEmpty(sql)
 			snaps.MatchSnapshot(s.T(), sql)
 		})
@@ -59,7 +60,8 @@ func (s *TableChangeHistorySuite) TestBuildTableChangeHistorySQLIdentifierQuotin
 	scrpr := &DatabricksScrapper{}
 
 	fqn := scrapper.DwhFqn{DatabaseName: "my_catalog", SchemaName: "my_schema", ObjectName: "my_table"}
-	sql := scrpr.buildTableChangeHistorySQL(fqn, from, to, 100)
+	sql, err := scrpr.buildTableChangeHistorySQL(fqn, from, to, 100)
+	s.Require().NoError(err)
 
 	// Table identifiers should be backtick-quoted
 	s.Contains(sql, "`my_catalog`")
