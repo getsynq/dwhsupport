@@ -199,7 +199,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 
 ## Special Patterns
 
-- **Query Logs**: `querylogs/` defines `QueryLogsProvider` interface with `FetchQueryLogs` returning a `QueryLogIterator`. Implementations use `querylogs.NewSqlxRowsIterator[T]` with a warehouse-specific schema struct and converter function. See `scrapper/redshift/query_logs.go` for the canonical pattern.
+- **Query Logs**: `querylogs/` defines `QueryLogsProvider` interface with `FetchQueryLogs` returning a `QueryLogIterator`. Implementations use `querylogs.NewSqlxRowsIterator[T]` with a warehouse-specific schema struct and converter function. See `scrapper/snowflake/query_logs.go` for the canonical pattern; Redshift has its own iterator because one statement spans several rows.
 - **Scrapper Configs**: All scrapper configs must be proper structs embedding their executor config (not type aliases). Each scrapper should have an `Executor()` accessor method. Example: `type MSSQLScrapperConf struct { dwhexecmssql.MSSQLConf }`.
 - **Lazy Loading**: `lazy/lazy.go` provides lazy initialization pattern
 - **SSH Tunneling**: `sshtunnel/ssh_tunnel.go` supports SSH tunnel connections
@@ -267,6 +267,15 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 - **MariaDB vs MySQL detection**: `MySQLScrapper` detects MariaDB at construction via `SELECT VERSION()` (contains "mariadb"). Used for SQL branching — e.g., MySQL has `ENFORCED` column in `TABLE_CONSTRAINTS` for CHECK constraints, MariaDB does not.
 - **MySQL FQN mapping**: MySQL `ResolveFqn` uses `datasetId.tableId`. When constructing `TableFqn` for MySQL, put database name in `datasetId` (second arg), not `projectId` (first arg): `TableFqn("", dbName, tableName)`.
 - **MySQL dialect compatibility**: `DATE_ADD`/`DATE_SUB` (not `DATEADD`), `CAST AS DOUBLE` (not `FLOAT`), `NULL` for `MEDIAN` (no built-in aggregate). These work on both MySQL and MariaDB.
+
+## Redshift Gotchas
+
+- **Query text is C-escaped.** `SYS_QUERY_HISTORY.query_text` and `SYS_QUERY_TEXT.text` store a line feed as `\n`, a carriage return as `\r` and a backslash doubled; a tab is stored as it is. `unescapeQueryText` reverses it. Passed through raw, a `--` comment swallows the rest of the statement.
+- **`query_text` is only the first chunk.** `SYS_QUERY_TEXT` holds the whole statement in chunks of at most 4000 bytes, keyed by `query_id` and `sequence`, and Redshift often ends a chunk short of 4000, so length alone cannot tell a cut statement from a complete one. `query_logs.sql` joins the chunks for any `query_text` of at least `queryTextChunkMinBytes`, one row per chunk in sequence order, and `queryLogIterator` collects them. Chunks are joined before unescaping and before UTF-8 cleanup, because a chunk can end inside an escape or a multi-byte character. Missing chunks set `IsTruncated`.
+- **`query_id` is the run, `generic_query_hash` is the shape.** The generic hash ignores literals and covers the whole statement, not just the first chunk, so it is the `NormalizedQueryHash`.
+- **`end_time` is a zone-less UTC timestamp.** `FetchQueryLogs` converts its bounds to UTC; a bound in another zone would be compared by its wall clock.
+- **A cluster that cannot read `SYS_QUERY_TEXT` or `pg_user` falls back** to `query_logs_history.sql` (missing object, refused, or unsupported join; `canReadHistoryAlone`), so the fetch degrades to logs without user names and with long statements flagged truncated instead of failing.
+- **`TestRedshiftQueryLogsSuite`** runs statements on the real cluster and reads them back. `SYS_QUERY_HISTORY` shows a session's own queries only, unless the user has `SYSLOG ACCESS UNRESTRICTED` or the `sys:monitor` role.
 
 ## Db2 Gotchas
 

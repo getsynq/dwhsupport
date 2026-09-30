@@ -220,7 +220,7 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := convertRedshiftRowToQueryLog(tt.row, tt.obfuscator, "redshift", "test-host.redshift.amazonaws.com", "test_database")
+			log, err := convertRedshiftRowToQueryLog(tt.row, nil, tt.obfuscator, "redshift", "test-host.redshift.amazonaws.com", "test_database")
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -242,11 +242,12 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 			require.Equal(t, tt.row.StartTime, log.StartedAt)
 			require.Equal(t, tt.row.EndTime, log.FinishedAt)
 
-			// QueryID should be generic hash if available (trimmed), otherwise string of query_id
+			// QueryID is the run, the generic hash (trimmed) is the normalized hash
+			require.Equal(t, "12345", log.QueryID)
 			if tt.row.GenericQueryHash != nil && strings.TrimSpace(*tt.row.GenericQueryHash) != "" {
-				require.Equal(t, strings.TrimSpace(*tt.row.GenericQueryHash), log.QueryID)
+				require.Equal(t, strings.TrimSpace(*tt.row.GenericQueryHash), *log.NormalizedQueryHash)
 			} else {
-				require.Contains(t, log.QueryID, "12345")
+				require.Nil(t, log.NormalizedQueryHash)
 			}
 
 			require.Equal(t, tt.expectedSQL, log.SQL)
@@ -323,8 +324,8 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 				require.Equal(t, "8t9wfhBxtpU=", fields["user_query_hash"].GetStringValue())
 				require.Equal(t, "default", fields["query_label"].GetStringValue())
 
-				// Verify QueryID is trimmed
-				require.Equal(t, "8t9wfhBxtpU=", log.QueryID)
+				// Verify the normalized hash is trimmed
+				require.Equal(t, "8t9wfhBxtpU=", *log.NormalizedQueryHash)
 
 				// Verify QueryType is trimmed
 				require.Equal(t, "COPY", log.QueryType)
@@ -350,4 +351,57 @@ func int64Ptr(i int64) *int64 {
 
 func boolPtr(b bool) *bool {
 	return &b
+}
+
+// SYS_QUERY_HISTORY stores query_text C-escaped: a line break is the two characters `\n`, a carriage
+// return `\r`, and a backslash is doubled. A `--` comment then swallows the rest of the statement.
+func TestConvertRedshiftRowUnescapesQueryText(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	endTime := time.Date(2025, 11, 1, 10, 35, 0, 0, time.UTC)
+	row := &RedshiftQueryLogSchema{
+		QueryId:   42,
+		EndTime:   &endTime,
+		QueryText: strPtr(`select 1 as a, -- comment\n  'back\\slash' as b,\r\n  'lit\\nchars' as c`),
+	}
+
+	log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
+	require.NoError(t, err)
+	require.Equal(t, "select 1 as a, -- comment\n  'back\\slash' as b,\r\n  'lit\\nchars' as c", log.SQL)
+}
+
+// query_text holds the start of a statement, cut short of 4000 bytes. A statement cut there is not
+// SQL, and the processor only skips it when IsTruncated says so.
+func TestConvertRedshiftRowFlagsTextCutAtTheCap(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	endTime := time.Date(2025, 11, 1, 10, 35, 0, 0, time.UTC)
+	text := "select '" + strings.Repeat("x", 4000-len("select '"))
+	row := &RedshiftQueryLogSchema{QueryId: 42, EndTime: &endTime, QueryText: &text}
+
+	log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
+	require.NoError(t, err)
+	require.True(t, log.IsTruncated)
+}
+
+// generic_query_hash is the same for every run of a statement shape; the run is query_id.
+func TestConvertRedshiftRowIdentifiesTheRun(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	endTime := time.Date(2025, 11, 1, 10, 35, 0, 0, time.UTC)
+	row := &RedshiftQueryLogSchema{
+		QueryId:          1750077804,
+		EndTime:          &endTime,
+		QueryText:        strPtr("select 1 where 5 = 5"),
+		GenericQueryHash: strPtr("v2DdY0D8q/k=                            "),
+	}
+
+	log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
+	require.NoError(t, err)
+	require.Equal(t, "1750077804", log.QueryID)
+	require.NotNil(t, log.NormalizedQueryHash)
+	require.Equal(t, "v2DdY0D8q/k=", *log.NormalizedQueryHash)
 }

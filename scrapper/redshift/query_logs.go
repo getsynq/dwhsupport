@@ -3,16 +3,41 @@ package redshift
 import (
 	"context"
 	_ "embed"
-	"fmt"
+	"io"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/querylogs"
+	"github.com/getsynq/dwhsupport/rowscan"
+	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
-//go:embed query_logs.sql
-var queryLogsSql string
+var (
+	//go:embed query_logs_history.sql
+	queryLogsHistorySql string
+
+	//go:embed query_logs.sql
+	queryLogsTemplate string
+
+	// queryLogsSql reads SYS_QUERY_HISTORY together with each statement's user name and, for a long
+	// one, its SYS_QUERY_TEXT chunks.
+	queryLogsSql = strings.Replace(queryLogsTemplate, "/* SYS_QUERY_HISTORY */", queryLogsHistorySql, 1)
+)
+
+// queryTextChunkMinBytes is the shortest query_text that may be only the start of a statement.
+//
+// SYS_QUERY_HISTORY.query_text is the first chunk of the statement's text, and SYS_QUERY_TEXT holds
+// every chunk, keyed by query_id and sequence. A chunk holds at most 4000 bytes, but Redshift ends one
+// short of that often enough that the length of query_text alone cannot tell a cut statement from a
+// complete one. Any statement whose query_text is at least this long has its chunks joined, and a
+// shorter one is always complete.
+const queryTextChunkMinBytes = 3800
 
 type RedshiftQueryLogSchema struct {
 	UserId                *int64     `db:"user_id"`
@@ -45,6 +70,15 @@ type RedshiftQueryLogSchema struct {
 	ShortQueryAccelerated *string    `db:"short_query_accelerated"`
 	GenericQueryHash      *string    `db:"generic_query_hash"`
 	UserQueryHash         *string    `db:"user_query_hash"`
+	UserName              *string    `db:"user_name"`
+	TextSequence          *int64     `db:"text_sequence"`
+	TextChunk             *string    `db:"text_chunk"`
+}
+
+// queryTextChunk is one SYS_QUERY_TEXT row of a statement, still escaped.
+type queryTextChunk struct {
+	sequence int64
+	text     string
 }
 
 func (s *RedshiftScrapper) FetchQueryLogs(
@@ -54,25 +88,230 @@ func (s *RedshiftScrapper) FetchQueryLogs(
 ) (querylogs.QueryLogIterator, error) {
 	// Validate obfuscator is provided
 	if obfuscator == nil {
-		return nil, fmt.Errorf("obfuscator is required")
+		return nil, errors.New("obfuscator is required")
 	}
 
-	// Use native QueryRows - returns sqlx.Rows iterator
-	rows, err := s.Executor().QueryRows(ctx, queryLogsSql, from, to)
+	return fetchQueryLogs(ctx, s.Executor().QueryRows, from, to, obfuscator, s.DialectType(), s.conf.Host, s.conf.Database)
+}
+
+type rowsQuerier func(ctx context.Context, sql string, args ...any) (*sqlx.Rows, error)
+
+func fetchQueryLogs(
+	ctx context.Context,
+	query rowsQuerier,
+	from, to time.Time,
+	obfuscator querylogs.QueryObfuscator,
+	sqlDialect, host, database string,
+) (querylogs.QueryLogIterator, error) {
+	// end_time is a zone-less timestamp in UTC, and a bound in any other zone would be compared by its
+	// wall clock.
+	from, to = from.UTC(), to.UTC()
+	rows, err := query(ctx, queryLogsSql, from, to, queryTextChunkMinBytes)
+	if err != nil && canReadHistoryAlone(err) {
+		// A cluster that cannot read SYS_QUERY_TEXT or pg_user still has its query history. Its logs
+		// carry no user name, and a statement long enough to have been cut is flagged as truncated.
+		logging.GetLogger(ctx).WithError(err).
+			Warn("Redshift query logs: reading SYS_QUERY_HISTORY without SYS_QUERY_TEXT and pg_user")
+		rows, err = query(ctx, queryLogsHistorySql, from, to)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	host := s.conf.Host
-	database := s.conf.Database
-	return querylogs.NewSqlxRowsIterator[RedshiftQueryLogSchema](
-		rows,
-		obfuscator,
-		s.DialectType(),
-		func(row *RedshiftQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
-			return convertRedshiftRowToQueryLog(row, obfuscator, sqlDialect, host, database)
+	return &queryLogIterator{
+		rows: rows,
+		convert: func(row *RedshiftQueryLogSchema, chunks []queryTextChunk) (*querylogs.QueryLog, error) {
+			return convertRedshiftRowToQueryLog(row, chunks, obfuscator, sqlDialect, host, database)
 		},
-	), nil
+	}, nil
+}
+
+// canReadHistoryAlone reports whether err is one the history-only query may not hit: something
+// query_logs.sql reads beyond SYS_QUERY_HISTORY is missing, refused, or cannot be joined on this
+// cluster.
+func canReadHistoryAlone(err error) bool {
+	pqError := &pq.Error{}
+	if !errors.As(err, &pqError) {
+		return false
+	}
+	switch pqError.Code {
+	case "42P01", // undefined_table
+		"42703", // undefined_column
+		"42883", // undefined_function
+		"42501", // insufficient_privilege
+		"0A000": // feature_not_supported, which a leader-node-only join raises
+		return true
+	}
+	return false
+}
+
+// queryLogIterator turns the rows of query_logs.sql into one QueryLog per statement. A statement long
+// enough to have been cut arrives as one row per SYS_QUERY_TEXT chunk, next to each other and in
+// sequence order, and the iterator collects them before converting.
+type queryLogIterator struct {
+	rows    *sqlx.Rows
+	convert func(*RedshiftQueryLogSchema, []queryTextChunk) (*querylogs.QueryLog, error)
+	scanner *rowscan.Scanner[RedshiftQueryLogSchema]
+	// ahead is a row already read that starts the next statement.
+	ahead  *RedshiftQueryLogSchema
+	closed bool
+}
+
+func (it *queryLogIterator) Next(ctx context.Context) (*querylogs.QueryLog, error) {
+	for {
+		if it.closed {
+			return nil, io.EOF
+		}
+
+		select {
+		case <-ctx.Done():
+			it.Close()
+			return nil, ctx.Err()
+		default:
+		}
+
+		first := it.ahead
+		it.ahead = nil
+		if first == nil {
+			row, err := it.scan(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if row == nil {
+				it.Close()
+				return nil, io.EOF
+			}
+			first = row
+		}
+
+		chunks := appendChunk(nil, first)
+		for {
+			row, err := it.scan(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if row == nil {
+				break
+			}
+			if row.QueryId != first.QueryId || row.TextSequence == nil {
+				it.ahead = row
+				break
+			}
+			chunks = appendChunk(chunks, row)
+		}
+
+		log, err := it.convert(first, chunks)
+		if err != nil {
+			return nil, err
+		}
+		if log == nil {
+			continue
+		}
+		return log, nil
+	}
+}
+
+// scan reads the next row, or returns nil once the rows are exhausted.
+func (it *queryLogIterator) scan(ctx context.Context) (*RedshiftQueryLogSchema, error) {
+	if !it.rows.Next() {
+		return nil, it.rows.Err()
+	}
+	if it.scanner == nil {
+		scanner, err := rowscan.New[RedshiftQueryLogSchema](it.rows)
+		if err != nil {
+			return nil, err
+		}
+		scanner.LogColumnDrift(ctx, "query history")
+		it.scanner = scanner
+	}
+	var row RedshiftQueryLogSchema
+	if err := it.scanner.Scan(it.rows, &row); err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (it *queryLogIterator) Close() error {
+	if it.closed {
+		return nil
+	}
+	it.closed = true
+	return it.rows.Close()
+}
+
+func appendChunk(chunks []queryTextChunk, row *RedshiftQueryLogSchema) []queryTextChunk {
+	if row.TextSequence == nil {
+		return chunks
+	}
+	text := ""
+	if row.TextChunk != nil {
+		text = *row.TextChunk
+	}
+	return append(chunks, queryTextChunk{sequence: *row.TextSequence, text: text})
+}
+
+// statementText returns the text of the statement as it ran, and whether it is incomplete.
+//
+// The chunks are joined before unescaping, because a chunk can end in the middle of an escape
+// sequence, or of a multi-byte character.
+func statementText(row *RedshiftQueryLogSchema, chunks []queryTextChunk) (string, bool) {
+	historyText := ""
+	if row.QueryText != nil {
+		historyText = *row.QueryText
+	}
+	if len(historyText) < queryTextChunkMinBytes {
+		return unescapeQueryText(historyText), false
+	}
+
+	chunks = slices.Clone(chunks)
+	slices.SortStableFunc(chunks, func(a, b queryTextChunk) int { return int(a.sequence - b.sequence) })
+	chunks = slices.CompactFunc(chunks, func(a, b queryTextChunk) bool { return a.sequence == b.sequence })
+
+	var text strings.Builder
+	contiguous := 0
+	for _, chunk := range chunks {
+		if chunk.sequence != int64(contiguous) {
+			break
+		}
+		text.WriteString(chunk.text)
+		contiguous++
+	}
+	if contiguous == 0 {
+		// SYS_QUERY_TEXT has none of it, so query_text is all there is.
+		return unescapeQueryText(historyText), true
+	}
+	return unescapeQueryText(text.String()), contiguous < len(chunks)
+}
+
+// unescapeQueryText reverses the escaping Redshift applies to query text in SYS_QUERY_HISTORY and
+// SYS_QUERY_TEXT: a line feed is stored as `\n`, a carriage return as `\r`, and a backslash is doubled.
+// A tab is stored as it is. Any other backslash is left alone.
+func unescapeQueryText(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\\' && i+1 < len(s) {
+			switch s[i+1] {
+			case 'n':
+				b.WriteByte('\n')
+				i++
+				continue
+			case 'r':
+				b.WriteByte('\r')
+				i++
+				continue
+			case '\\':
+				b.WriteByte('\\')
+				i++
+				continue
+			}
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 // trimStringPtr trims whitespace from a string pointer and returns it
@@ -87,6 +326,7 @@ func trimStringPtr(s *string) *string {
 
 func convertRedshiftRowToQueryLog(
 	row *RedshiftQueryLogSchema,
+	chunks []queryTextChunk,
 	obfuscator querylogs.QueryObfuscator,
 	sqlDialect string,
 	host string,
@@ -119,6 +359,7 @@ func convertRedshiftRowToQueryLog(
 		"status":        querylogs.TrimmedStringPtrValue(row.Status),
 		"start_time":    querylogs.TimePtrValue(row.StartTime),
 		"end_time":      querylogs.TimePtrValue(row.EndTime),
+		"user_name":     querylogs.TrimmedStringPtrValue(row.UserName),
 
 		// Redshift-specific fields
 		"user_id":                 querylogs.IntPtrValue(row.UserId),
@@ -146,12 +387,10 @@ func convertRedshiftRowToQueryLog(
 		"user_query_hash":         querylogs.TrimmedStringPtrValue(row.UserQueryHash),
 	}
 
-	// Get query text, sanitize and apply obfuscation
-	queryText := ""
-	if row.QueryText != nil {
-		queryText = strings.TrimSpace(strings.ToValidUTF8(*row.QueryText, ""))
-		queryText = obfuscator.Obfuscate(queryText)
-	}
+	// Rebuild the statement from its chunks, sanitize and apply obfuscation
+	queryText, isTruncated := statementText(row, chunks)
+	queryText = strings.TrimSpace(strings.ToValidUTF8(queryText, ""))
+	queryText = obfuscator.Obfuscate(queryText)
 
 	// Get query type - trim whitespace
 	queryType := ""
@@ -169,22 +408,25 @@ func convertRedshiftRowToQueryLog(
 		// Fall back to config database if not in row data
 		dwhContext.Database = configDatabase
 	}
-	// Redshift doesn't provide user in SYS_QUERY_HISTORY, but we have user_id
-	// We'll leave User empty for now
+	// A user dropped since the query ran has no name left, only its user_id in metadata.
+	if trimmed := trimStringPtr(row.UserName); trimmed != nil {
+		dwhContext.User = *trimmed
+	}
 
-	// Use query_id as QueryID - trim whitespace from generic hash
-	queryID := fmt.Sprintf("%d", row.QueryId)
+	// generic_query_hash is shared by every statement that differs only in its literals, so it
+	// identifies the shape, not the run.
+	var normalizedQueryHash *string
 	if trimmed := trimStringPtr(row.GenericQueryHash); trimmed != nil && *trimmed != "" {
-		queryID = *trimmed // Prefer generic hash if available
+		normalizedQueryHash = trimmed
 	}
 
 	return &querylogs.QueryLog{
 		CreatedAt:                createdAt,
 		StartedAt:                row.StartTime, // When query execution started
 		FinishedAt:               row.EndTime,   // When query execution finished
-		QueryID:                  queryID,
+		QueryID:                  strconv.FormatInt(row.QueryId, 10),
 		SQL:                      queryText,
-		NormalizedQueryHash:      nil, // Redshift doesn't provide normalized query hash
+		NormalizedQueryHash:      normalizedQueryHash,
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                queryType,
@@ -192,6 +434,7 @@ func convertRedshiftRowToQueryLog(
 		Metadata:                 querylogs.NewMetadataStruct(metadata),
 		SqlObfuscationMode:       obfuscator.Mode(),
 		HasCompleteNativeLineage: false, // Redshift doesn't provide lineage in SYS_QUERY_HISTORY
+		IsTruncated:              isTruncated,
 		NativeLineage:            nil,
 	}, nil
 }
