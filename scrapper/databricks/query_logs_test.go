@@ -204,7 +204,7 @@ func TestConvertDatabricksQueryInfoToQueryLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := convertDatabricksQueryInfoToQueryLog(tt.queryInfo, tt.obfuscator, "databricks", "https://test.cloud.databricks.com")
+			log, err := convertDatabricksQueryInfoToQueryLog(tt.queryInfo, tt.obfuscator, "databricks", "https://test.cloud.databricks.com", "")
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -288,4 +288,120 @@ func TestConvertDatabricksQueryInfoToQueryLog(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Databricks masks the statement text as a literal placeholder for a principal that is
+// neither an account admin nor in the account's PII-access group. The placeholder is not SQL:
+// the log keeps everything else it carries, with empty SQL and the redaction marker.
+func TestConvertDatabricksQueryInfoToQueryLog_RedactedText(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+	obfuscatorRedact, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationRedactLiterals)
+	require.NoError(t, err)
+
+	startTime := time.Date(2026, 9, 1, 10, 30, 0, 0, time.UTC)
+	queryInfo := func(text string, statementType servicesql.QueryStatementType) *servicesql.QueryInfo {
+		return &servicesql.QueryInfo{
+			QueryId:          "query-redacted",
+			QueryText:        text,
+			QueryStartTimeMs: startTime.UnixMilli(),
+			QueryEndTimeMs:   startTime.Add(time.Second).UnixMilli(),
+			Status:           servicesql.QueryStatusFinished,
+			StatementType:    statementType,
+			UserName:         "analyst@example.com",
+			WarehouseId:      "warehouse-1",
+			Duration:         1000,
+			Metrics:          &servicesql.QueryMetrics{ReadBytes: 2048},
+		}
+	}
+
+	tests := []struct {
+		name         string
+		queryInfo    *servicesql.QueryInfo
+		obfuscator   querylogs.QueryObfuscator
+		wantSQL      string
+		wantRedacted bool
+	}{
+		{name: "placeholder", queryInfo: queryInfo("<REDACTED>", servicesql.QueryStatementTypeSelect), obfuscator: obfuscator, wantRedacted: true},
+		{name: "mixed_case", queryInfo: queryInfo("<Redacted>", servicesql.QueryStatementTypeSelect), obfuscator: obfuscator, wantRedacted: true},
+		{
+			name:         "surrounding_whitespace",
+			queryInfo:    queryInfo(" <REDACTED>\n", servicesql.QueryStatementTypeSelect),
+			obfuscator:   obfuscator,
+			wantRedacted: true,
+		},
+		{name: "insert", queryInfo: queryInfo("<REDACTED>", servicesql.QueryStatementTypeInsert), obfuscator: obfuscator, wantRedacted: true},
+		{
+			name:         "not_left_to_the_obfuscator",
+			queryInfo:    queryInfo("<REDACTED>", servicesql.QueryStatementTypeSelect),
+			obfuscator:   obfuscatorRedact,
+			wantRedacted: true,
+		},
+		{
+			name:       "placeholder_inside_real_sql",
+			queryInfo:  queryInfo("SELECT '<REDACTED>' AS note", servicesql.QueryStatementTypeSelect),
+			obfuscator: obfuscator,
+			wantSQL:    "SELECT '<REDACTED>' AS note",
+		},
+		{name: "empty_text", queryInfo: queryInfo("", servicesql.QueryStatementTypeSelect), obfuscator: obfuscator},
+		{
+			name:       "dropped_insert_is_not_redacted",
+			queryInfo:  queryInfo("INSERT INTO t VALUES (1)", servicesql.QueryStatementTypeInsert),
+			obfuscator: obfuscator,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log, err := convertDatabricksQueryInfoToQueryLog(tt.queryInfo, tt.obfuscator, "databricks", "https://test.cloud.databricks.com", "")
+			require.NoError(t, err)
+			require.NotNil(t, log)
+			require.Equal(t, tt.wantSQL, log.SQL)
+			require.Equal(t, tt.wantRedacted, log.IsTextRedacted())
+
+			fields := log.Metadata.GetFields()
+			if tt.wantRedacted {
+				require.True(t, fields[querylogs.MetadataQueryTextRedacted].GetBoolValue())
+			} else {
+				require.NotContains(t, fields, querylogs.MetadataQueryTextRedacted)
+			}
+
+			// What the warehouse reported about the run survives the missing text.
+			require.Equal(t, "query-redacted", log.QueryID)
+			require.Equal(t, "SUCCESS", log.Status)
+			require.Equal(t, "analyst@example.com", log.DwhContext.User)
+			require.Equal(t, "warehouse-1", fields["warehouse_id"].GetStringValue())
+			require.EqualValues(t, 1000, fields["duration_ms"].GetNumberValue())
+			require.EqualValues(t, 2048, fields["metrics"].GetStructValue().GetFields()["read_bytes"].GetNumberValue())
+		})
+	}
+}
+
+func TestConvertDatabricksQueryInfoToQueryLog_UserDisplayName(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	applicationId := "8b2d6a3e-1f4c-4b7a-9c0e-2d5f6a7b8c9d"
+	queryInfo := &servicesql.QueryInfo{
+		QueryId:       "query-sp",
+		QueryText:     "SELECT 1",
+		Status:        servicesql.QueryStatusFinished,
+		StatementType: servicesql.QueryStatementTypeSelect,
+		UserName:      applicationId,
+	}
+
+	t.Run("named", func(t *testing.T) {
+		log, err := convertDatabricksQueryInfoToQueryLog(queryInfo, obfuscator, "databricks", "https://test.cloud.databricks.com", "etl-runner")
+		require.NoError(t, err)
+		// The application id stays the login; the display name only describes it.
+		require.Equal(t, applicationId, log.DwhContext.User)
+		require.Equal(t, applicationId, log.Metadata.GetFields()["user_name"].GetStringValue())
+		require.Equal(t, "etl-runner", log.Metadata.GetFields()["user_display_name"].GetStringValue())
+	})
+
+	t.Run("unnamed", func(t *testing.T) {
+		log, err := convertDatabricksQueryInfoToQueryLog(queryInfo, obfuscator, "databricks", "https://test.cloud.databricks.com", "")
+		require.NoError(t, err)
+		require.NotContains(t, log.Metadata.GetFields(), "user_display_name")
+	})
 }

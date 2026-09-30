@@ -13,6 +13,8 @@ import (
 	"time"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
+	serviceiam "github.com/databricks/databricks-sdk-go/service/iam"
+	servicesql "github.com/databricks/databricks-sdk-go/service/sql"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/stretchr/testify/require"
 )
@@ -129,6 +131,14 @@ type fakeWorkspace struct {
 	listedSchemas  []string
 	// readTables records the full name of every per-table read served.
 	readTables []string
+	// queryHistory is what the Query History API answers with, in one page.
+	queryHistory []servicesql.QueryInfo
+	// servicePrincipals is what the SCIM service principal listing resolves an
+	// application id against; denyServicePrincipals refuses that listing instead.
+	servicePrincipals     []serviceiam.ServicePrincipal
+	denyServicePrincipals bool
+	// lookedUpPrincipals records the application id of every service principal lookup.
+	lookedUpPrincipals []string
 
 	mu sync.Mutex
 }
@@ -275,6 +285,35 @@ func (f *fakeWorkspace) tryStart(t *testing.T, conf *DatabricksScrapperConf) (*D
 	})
 	mux.HandleFunc("/api/2.0/sql/warehouses", func(w http.ResponseWriter, r *http.Request) {
 		f.writeJson(t, w, http.StatusOK, "warehouses", []any{}, "")
+	})
+	mux.HandleFunc("/api/2.0/sql/history/queries", func(w http.ResponseWriter, r *http.Request) {
+		f.writeJson(t, w, http.StatusOK, "res", f.queryHistory, "")
+	})
+	// SCIM pages by startIndex, which the SDK advances from the startIndex the response
+	// echoes and stops at the first empty page, so the whole answer is served on page one.
+	mux.HandleFunc("/api/2.0/preview/scim/v2/ServicePrincipals", func(w http.ResponseWriter, r *http.Request) {
+		startIndex := r.URL.Query().Get("startIndex")
+		filter := r.URL.Query().Get("filter")
+		if startIndex == "1" {
+			f.record(&f.lookedUpPrincipals, filter)
+		}
+		if f.denyServicePrincipals {
+			f.writeApiError(t, w, http.StatusForbidden, "PERMISSION_DENIED", "Only workspace admins can list service principals.")
+			return
+		}
+		matching := []serviceiam.ServicePrincipal{}
+		if startIndex == "1" {
+			for _, principal := range f.servicePrincipals {
+				if filter == fmt.Sprintf("applicationId eq %q", principal.ApplicationId) {
+					matching = append(matching, principal)
+				}
+			}
+		}
+		index, err := strconv.ParseInt(startIndex, 10, 64)
+		require.NoError(t, err)
+		f.writeJson(t, w, http.StatusOK, "", serviceiam.ListServicePrincipalResponse{
+			Resources: matching, StartIndex: index, TotalResults: int64(len(matching)),
+		}, "")
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("unexpected Databricks request: %s %s", r.Method, r.URL)
