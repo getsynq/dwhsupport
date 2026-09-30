@@ -25,11 +25,17 @@ type databricksQueryLogIterator struct {
 	currentIdx    int
 	nextPageToken string
 	hasNextPage   bool
+	principals    *servicePrincipalNames
 }
 
 const (
 	defaultQueryLogsStartTimeBuffer = 2 * time.Hour
 	maxResultsPerPage               = 1000 // Databricks max is 1000
+
+	// redactedQueryText is what the Query History API returns as query_text to a principal
+	// that is neither an account admin nor a member of the account's databricks_pii_access
+	// group. It is a placeholder, not SQL.
+	redactedQueryText = "<REDACTED>"
 )
 
 func (s *DatabricksScrapper) FetchQueryLogs(
@@ -62,6 +68,7 @@ func (s *DatabricksScrapper) FetchQueryLogs(
 		obfuscator:   obfuscator,
 		sqlDialect:   s.DialectType(),
 		hasNextPage:  true, // Assume there's at least one page to fetch
+		principals:   newServicePrincipalNames(workspaceServicePrincipalLookup(s)),
 	}
 
 	return iter, nil
@@ -114,7 +121,9 @@ func (it *databricksQueryLogIterator) Next(ctx context.Context) (*querylogs.Quer
 		}
 
 		// Convert to QueryLog
-		log, err := convertDatabricksQueryInfoToQueryLog(&queryInfo, it.obfuscator, it.sqlDialect, it.scrapper.conf.WorkspaceUrl)
+		log, err := convertDatabricksQueryInfoToQueryLog(
+			&queryInfo, it.obfuscator, it.sqlDialect, it.scrapper.conf.WorkspaceUrl, it.principals.DisplayName(ctx, queryInfo.UserName),
+		)
 		if err != nil {
 			// Don't auto-close on conversion error
 			return nil, err
@@ -180,6 +189,7 @@ func convertDatabricksQueryInfoToQueryLog(
 	obfuscator querylogs.QueryObfuscator,
 	sqlDialect string,
 	workspaceUrl string,
+	userDisplayName string,
 ) (*querylogs.QueryLog, error) {
 	// Skip SHOW and USE statements
 	switch queryInfo.StatementType {
@@ -209,7 +219,8 @@ func convertDatabricksQueryInfoToQueryLog(
 	// data. Also drop anything over 1 MB as a hard size cap. Empty SQL is its own
 	// signal to downstream consumers that lineage parsing is not possible.
 	queryText := ""
-	if queryInfo.StatementType != servicesql.QueryStatementTypeInsert && len(queryInfo.QueryText) <= 1*1024*1024 {
+	textRedacted := isRedactedQueryText(queryInfo.QueryText)
+	if !textRedacted && queryInfo.StatementType != servicesql.QueryStatementTypeInsert && len(queryInfo.QueryText) <= 1*1024*1024 {
 		queryText = strings.TrimSpace(strings.ToValidUTF8(queryInfo.QueryText, ""))
 		queryText = obfuscator.Obfuscate(queryText)
 	}
@@ -249,6 +260,12 @@ func convertDatabricksQueryInfoToQueryLog(
 	}
 	if queryInfo.ErrorMessage != "" {
 		metadata["error_message"] = querylogs.StringValue(queryInfo.ErrorMessage)
+	}
+	if textRedacted {
+		metadata[querylogs.MetadataQueryTextRedacted] = querylogs.BoolValue(true)
+	}
+	if userDisplayName != "" {
+		metadata["user_display_name"] = querylogs.StringValue(userDisplayName)
 	}
 
 	// Add metrics if available
@@ -344,4 +361,11 @@ func convertDatabricksQueryInfoToQueryLog(
 		HasCompleteNativeLineage: false, // Databricks doesn't provide lineage in QueryHistory
 		NativeLineage:            nil,
 	}, nil
+}
+
+// isRedactedQueryText reports whether the Query History API withheld the statement text.
+// Databricks documents the placeholder in upper case but spells it "<Redacted>" in places,
+// so the comparison ignores case.
+func isRedactedQueryText(queryText string) bool {
+	return strings.EqualFold(strings.TrimSpace(queryText), redactedQueryText)
 }
