@@ -220,7 +220,7 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log, err := convertRedshiftRowToQueryLog(tt.row, tt.obfuscator, "redshift", "test-host.redshift.amazonaws.com", "test_database")
+			log, err := convertRedshiftRowToQueryLog(tt.row, nil, tt.obfuscator, "redshift", "test-host.redshift.amazonaws.com", "test_database")
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -242,11 +242,12 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 			require.Equal(t, tt.row.StartTime, log.StartedAt)
 			require.Equal(t, tt.row.EndTime, log.FinishedAt)
 
-			// QueryID should be generic hash if available (trimmed), otherwise string of query_id
+			// QueryID is the run, the generic hash (trimmed) is the normalized hash
+			require.Equal(t, "12345", log.QueryID)
 			if tt.row.GenericQueryHash != nil && strings.TrimSpace(*tt.row.GenericQueryHash) != "" {
-				require.Equal(t, strings.TrimSpace(*tt.row.GenericQueryHash), log.QueryID)
+				require.Equal(t, strings.TrimSpace(*tt.row.GenericQueryHash), *log.NormalizedQueryHash)
 			} else {
-				require.Contains(t, log.QueryID, "12345")
+				require.Nil(t, log.NormalizedQueryHash)
 			}
 
 			require.Equal(t, tt.expectedSQL, log.SQL)
@@ -323,8 +324,8 @@ func TestConvertRedshiftRowToQueryLog(t *testing.T) {
 				require.Equal(t, "8t9wfhBxtpU=", fields["user_query_hash"].GetStringValue())
 				require.Equal(t, "default", fields["query_label"].GetStringValue())
 
-				// Verify QueryID is trimmed
-				require.Equal(t, "8t9wfhBxtpU=", log.QueryID)
+				// Verify the normalized hash is trimmed
+				require.Equal(t, "8t9wfhBxtpU=", *log.NormalizedQueryHash)
 
 				// Verify QueryType is trimmed
 				require.Equal(t, "COPY", log.QueryType)
@@ -365,7 +366,7 @@ func TestConvertRedshiftRowUnescapesQueryText(t *testing.T) {
 		QueryText: strPtr(`select 1 as a, -- comment\n  'back\\slash' as b,\r\n  'lit\\nchars' as c`),
 	}
 
-	log, err := convertRedshiftRowToQueryLog(row, obfuscator, "redshift", "host", "db")
+	log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
 	require.NoError(t, err)
 	require.Equal(t, "select 1 as a, -- comment\n  'back\\slash' as b,\r\n  'lit\\nchars' as c", log.SQL)
 }
@@ -380,7 +381,7 @@ func TestConvertRedshiftRowFlagsTextCutAtTheCap(t *testing.T) {
 	text := "select '" + strings.Repeat("x", 4000-len("select '"))
 	row := &RedshiftQueryLogSchema{QueryId: 42, EndTime: &endTime, QueryText: &text}
 
-	log, err := convertRedshiftRowToQueryLog(row, obfuscator, "redshift", "host", "db")
+	log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
 	require.NoError(t, err)
 	require.True(t, log.IsTruncated)
 }
@@ -398,7 +399,7 @@ func TestConvertRedshiftRowIdentifiesTheRun(t *testing.T) {
 		GenericQueryHash: strPtr("v2DdY0D8q/k=                            "),
 	}
 
-	log, err := convertRedshiftRowToQueryLog(row, obfuscator, "redshift", "host", "db")
+	log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
 	require.NoError(t, err)
 	require.Equal(t, "1750077804", log.QueryID)
 	require.NotNil(t, log.NormalizedQueryHash)
