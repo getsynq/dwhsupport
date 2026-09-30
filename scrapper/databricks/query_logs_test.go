@@ -289,3 +289,26 @@ func TestConvertDatabricksQueryInfoToQueryLog(t *testing.T) {
 		})
 	}
 }
+
+// Databricks masks the statement text as a literal placeholder for a principal that is
+// neither an account admin nor in the account's PII-access group.
+func TestConvertDatabricksQueryInfoToQueryLog_RedactedText(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	startTime := time.Date(2026, 9, 1, 10, 30, 0, 0, time.UTC)
+	queryInfo := &servicesql.QueryInfo{
+		QueryId:          "query-redacted",
+		QueryText:        "<REDACTED>",
+		QueryStartTimeMs: startTime.UnixMilli(),
+		QueryEndTimeMs:   startTime.Add(time.Second).UnixMilli(),
+		Status:           servicesql.QueryStatusFinished,
+		StatementType:    servicesql.QueryStatementTypeSelect,
+		UserName:         "analyst@example.com",
+	}
+
+	log, err := convertDatabricksQueryInfoToQueryLog(queryInfo, obfuscator, "databricks", "https://test.cloud.databricks.com")
+	require.NoError(t, err)
+	require.NotNil(t, log)
+	require.Equal(t, "<REDACTED>", log.SQL)
+}
