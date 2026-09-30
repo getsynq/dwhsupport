@@ -186,7 +186,7 @@ Suites that assert exact fixture rows fail when the dwhtesting seed has drifted.
 
 Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) resolve against the package directory, so from a git worktree symlink `.env` and the key files into the worktree root, or override the path with an absolute one on the command line.
 
-`godotenv.Load` does NOT overwrite an already-set variable, so prefixing `go test` with env vars points a suite at a different account or dataset for one run without touching `.env`. `SqlDialectExecutionSuite` needs a table that actually exists — `SNOWFLAKE_TEST_TABLE_NAME` / `_KEY_FIELD` / `_SEGMENT_FIELD` override its defaults, which name a fixture only one account has.
+`godotenv.Load` does NOT overwrite an already-set variable, so prefixing `go test` with env vars points a suite at a different account or dataset for one run without touching `.env`. A BigQuery statement that reads no table runs in the US multi-region, so `INFORMATION_SCHEMA.JOBS` of the configured region never lists it: `BigQueryQueryLogsSuite` reads a fixture table for that reason. `SqlDialectExecutionSuite` needs a table that actually exists — `SNOWFLAKE_TEST_TABLE_NAME` / `_KEY_FIELD` / `_SEGMENT_FIELD` override its defaults, which name a fixture only one account has.
 
 ## Releases
 

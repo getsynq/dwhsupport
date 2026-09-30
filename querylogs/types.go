@@ -50,7 +50,8 @@ type QueryLog struct {
 
 	// NormalizedQueryHash is a hash of the normalized/parameterized query (without literal values)
 	// Used for lineage caching - queries that differ only in literal values share the same lineage
-	// Available for: Snowflake (QUERY_PARAMETERIZED_HASH), ClickHouse (cityHash64(normalizeQuery)), Redshift (generic_query_hash)
+	// Available for: Snowflake (QUERY_PARAMETERIZED_HASH), ClickHouse (cityHash64(normalizeQuery)), Redshift (generic_query_hash),
+	// BigQuery (query_info.query_hashes.normalized_literals, query jobs only)
 	// For platforms without native support, this field is nil
 	NormalizedQueryHash *string
 

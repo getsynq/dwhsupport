@@ -58,6 +58,16 @@ type BigQueryQueryLogSchema struct {
 	TransactionId    bigquery.NullString `bigquery:"transaction_id"`
 	ParentJobId      bigquery.NullString `bigquery:"parent_job_id"`
 	TransferredBytes bigquery.NullInt64  `bigquery:"transferred_bytes"`
+	// QueryHashes is read from query_info (see queryLogColumnExpressions).
+	QueryHashes *struct {
+		NormalizedLiterals bigquery.NullString `bigquery:"normalized_literals"`
+	} `bigquery:"query_hashes"`
+}
+
+// queryLogColumnExpressions selects the columns of BigQueryQueryLogSchema that are not top-level
+// columns of INFORMATION_SCHEMA.JOBS.
+var queryLogColumnExpressions = map[string]string{
+	"query_hashes": "query_info.query_hashes AS query_hashes",
 }
 
 type bigqueryQueryLogIterator struct {
@@ -160,6 +170,11 @@ func getBigQueryFields(v interface{}) []string {
 
 func (s *BigQueryScrapper) buildQueryLogsSql(from, to time.Time) (string, error) {
 	schemaColumns := getBigQueryFields(&BigQueryQueryLogSchema{})
+	for i, column := range schemaColumns {
+		if expression, ok := queryLogColumnExpressions[column]; ok {
+			schemaColumns[i] = expression
+		}
+	}
 
 	wheres := []string{
 		"state = 'DONE'",
@@ -296,6 +311,14 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 	}
 	// BigQuery doesn't have a default schema/dataset context in INFORMATION_SCHEMA.JOBS
 
+	// normalized_literals ignores comments, parameter values and literals. BigQuery sets it for query
+	// jobs only, so a load job has none.
+	var normalizedQueryHash *string
+	if row.QueryHashes != nil && row.QueryHashes.NormalizedLiterals.Valid && row.QueryHashes.NormalizedLiterals.StringVal != "" {
+		hash := row.QueryHashes.NormalizedLiterals.StringVal
+		normalizedQueryHash = &hash
+	}
+
 	// Timing information
 	startedAt := row.StartTime
 	finishedAt := row.EndTime
@@ -306,7 +329,7 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		FinishedAt:               &finishedAt, // When query execution finished
 		QueryID:                  row.JobId.StringVal,
 		SQL:                      queryText,
-		NormalizedQueryHash:      nil, // BigQuery doesn't provide normalized query hash
+		NormalizedQueryHash:      normalizedQueryHash,
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.StatementType.StringVal,
