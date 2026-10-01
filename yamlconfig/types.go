@@ -280,6 +280,12 @@ type MSSQLConf struct {
 	AccessToken string `yaml:"access_token,omitempty"`
 	// Azure AD application client ID for service principal auth.
 	ApplicationClientId string `yaml:"application_client_id,omitempty"`
+	// Sign in as the user running the agent or CLI instead of a SQL Server login,
+	// the same as `sqlcmd -E` (Windows Authentication). On Windows this uses the
+	// logged-in user (SSPI); on macOS and Linux the Kerberos ticket from `kinit`,
+	// read from the file cache named by KRB5CCNAME or /tmp/krb5cc_<uid>. Leave
+	// username, password, access_token and fed_auth empty.
+	IntegratedAuth bool `yaml:"integrated_auth,omitempty"`
 }
 
 // FabricConf contains the connection settings for a Microsoft Fabric Warehouse

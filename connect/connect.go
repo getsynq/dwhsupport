@@ -202,6 +202,7 @@ func MSSQL(ctx context.Context, t *agentdwhv1.MSSQLConf) (*scrappermssql.MSSQLSc
 			FedAuth:             t.GetFedAuth(),
 			AccessToken:         t.GetAccessToken(),
 			ApplicationClientID: t.GetApplicationClientId(),
+			IntegratedAuth:      t.GetIntegratedAuth(),
 		},
 	})
 }

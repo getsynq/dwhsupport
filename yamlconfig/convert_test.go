@@ -19,7 +19,7 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 
 	protos, err := ToProtoConnections(conns)
 	require.NoError(t, err)
-	assert.Len(t, protos, 15)
+	assert.Len(t, protos, 16)
 
 	// Verify Postgres
 	pg := protos["pg-local"]
@@ -97,6 +97,7 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	require.NotNil(t, mssqlConf)
 	assert.Equal(t, int32(1433), mssqlConf.GetPort())
 	assert.True(t, mssqlConf.GetTrustCert())
+	assert.True(t, protos["mssql-onprem"].GetMssql().GetIntegratedAuth())
 
 	// Verify Oracle
 	ora := protos["oracle-prod"]
@@ -177,6 +178,15 @@ func TestFromProtoConnection_Db2(t *testing.T) {
 	rt := FromProtoConnection(pb)
 	require.NotNil(t, rt)
 	assert.Equal(t, original, rt.Db2)
+}
+
+func TestFromProtoConnection_MSSQLIntegratedAuth(t *testing.T) {
+	original := &MSSQLConf{Host: "sqlserver.corp.example.com", Database: "warehouse", IntegratedAuth: true}
+	pb, err := ToProtoConnection("mssql", &Connection{MSSQL: original})
+	require.NoError(t, err)
+	rt := FromProtoConnection(pb)
+	require.NotNil(t, rt)
+	assert.Equal(t, original, rt.MSSQL)
 }
 
 func TestToProtoConnection_DefaultName(t *testing.T) {

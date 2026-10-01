@@ -24,9 +24,11 @@ import (
 //  2. Azure AD Federated Auth: set FedAuth to an Azure AD method (e.g. ActiveDirectoryDefault,
 //     ActiveDirectoryMSI, ActiveDirectoryServicePrincipal). Used with Azure SQL Database.
 //  3. SQL Server Authentication: set User and Password for standard username/password auth.
+//  4. Integrated Authentication: set IntegratedAuth to sign in as the identity running the process.
 //
 // For Azure SQL Database, Azure AD authentication (options 1-2) is recommended.
-// For on-premises SQL Server, use SQL Server Authentication (option 3).
+// For on-premises SQL Server, use SQL Server Authentication (option 3) or, where the server
+// accepts Windows Authentication, Integrated Authentication (option 4).
 type MSSQLConf struct {
 	// User is the SQL Server login or Azure AD username.
 	// For Azure AD Service Principal, this is the Application (Client) ID.
@@ -69,6 +71,11 @@ type MSSQLConf struct {
 	// Used with ActiveDirectoryServicePrincipal (identifies the app registration)
 	// and ActiveDirectoryMSI with user-assigned managed identity (resource ID).
 	ApplicationClientID string
+
+	// IntegratedAuth signs in as the identity running the process, the same as `sqlcmd -E`:
+	// the logged-in Windows user (SSPI) on Windows, and the Kerberos ticket from `kinit` elsewhere.
+	// User, Password, AccessToken and FedAuth must be empty.
+	IntegratedAuth bool
 }
 
 var _ stdsql.StdSqlExecutor = &MSSQLExecutor{}
@@ -86,6 +93,14 @@ func NewMSSQLExecutor(ctx context.Context, conf *MSSQLConf) (*MSSQLExecutor, err
 	if conf.Port == 0 {
 		conf.Port = 1433
 	}
+	if conf.IntegratedAuth && (conf.User != "" || conf.Password != "" || conf.AccessToken != "" || conf.FedAuth != "") {
+		return nil, errIntegratedAuthWithCredentials
+	}
+
+	connStr, err := buildConnectionString(conf)
+	if err != nil {
+		return nil, err
+	}
 
 	var db *sqlx.DB
 
@@ -93,7 +108,7 @@ func NewMSSQLExecutor(ctx context.Context, conf *MSSQLConf) (*MSSQLExecutor, err
 	case conf.AccessToken != "":
 		// Token-based auth: use the access token connector directly.
 		connector, err := mssqldb.NewAccessTokenConnector(
-			buildConnectionString(conf),
+			connStr,
 			func() (string, error) { return conf.AccessToken, nil },
 		)
 		if err != nil {
@@ -103,17 +118,14 @@ func NewMSSQLExecutor(ctx context.Context, conf *MSSQLConf) (*MSSQLExecutor, err
 
 	case conf.FedAuth != "":
 		// Azure AD federated auth: use the azuread driver.
-		connStr := buildConnectionString(conf)
-		var err error
 		db, err = sqlx.Open("azuresql", connStr)
 		if err != nil {
 			return nil, err
 		}
 
 	default:
-		// Standard SQL Server authentication: username/password.
-		connStr := buildConnectionString(conf)
-		var err error
+		// SQL Server authentication (username/password) or integrated authentication, which
+		// buildConnectionString selects through the authenticator parameter.
 		db, err = sqlx.Open("sqlserver", connStr)
 		if err != nil {
 			return nil, err
@@ -128,8 +140,15 @@ func NewMSSQLExecutor(ctx context.Context, conf *MSSQLConf) (*MSSQLExecutor, err
 	return &MSSQLExecutor{conf: conf, db: db}, nil
 }
 
-func buildConnectionString(conf *MSSQLConf) string {
+func buildConnectionString(conf *MSSQLConf) (string, error) {
 	query := url.Values{}
+	if conf.IntegratedAuth {
+		params, err := integratedAuthParams()
+		if err != nil {
+			return "", err
+		}
+		query = params
+	}
 	query.Add("database", conf.Database)
 	query.Add("app name", "synq.io")
 	if conf.TrustCert {
@@ -156,7 +175,7 @@ func buildConnectionString(conf *MSSQLConf) string {
 		u.User = url.UserPassword(conf.User, conf.Password)
 	}
 
-	return u.String()
+	return u.String(), nil
 }
 
 func (e *MSSQLExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {

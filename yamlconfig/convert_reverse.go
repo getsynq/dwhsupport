@@ -235,6 +235,7 @@ func mssqlConfFromProto(c *agentdwhv1.MSSQLConf) *MSSQLConf {
 		FedAuth:             c.GetFedAuth(),
 		AccessToken:         c.GetAccessToken(),
 		ApplicationClientId: c.GetApplicationClientId(),
+		IntegratedAuth:      c.GetIntegratedAuth(),
 	}
 }
 
