@@ -94,6 +94,12 @@ connections:
       trust_cert: true
       encrypt: "true"
 
+  "mssql-onprem":
+    mssql:
+      host: sqlserver.corp.example.com
+      database: warehouse
+      integrated_auth: true
+
   "oracle-prod":
     oracle:
       host: oracle.example.com

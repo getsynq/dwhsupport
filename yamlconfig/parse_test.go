@@ -17,7 +17,7 @@ func TestParseConnections_FullExample(t *testing.T) {
 	// Parse without env expansion — env vars remain as literal "${VAR}"
 	conns, err := ParseConnections(data, ParseOptions{})
 	require.NoError(t, err)
-	assert.Len(t, conns, 15)
+	assert.Len(t, conns, 16)
 
 	// Postgres
 	pg := conns["pg-local"]
@@ -84,6 +84,13 @@ func TestParseConnections_FullExample(t *testing.T) {
 	assert.Equal(t, 1433, mssql.MSSQL.Port)
 	assert.True(t, mssql.MSSQL.TrustCert)
 	assert.Equal(t, "true", mssql.MSSQL.Encrypt)
+	assert.False(t, mssql.MSSQL.IntegratedAuth)
+
+	onprem := conns["mssql-onprem"]
+	require.NotNil(t, onprem)
+	require.NotNil(t, onprem.MSSQL)
+	assert.True(t, onprem.MSSQL.IntegratedAuth)
+	assert.Empty(t, onprem.MSSQL.Username)
 
 	// Oracle
 	ora := conns["oracle-prod"]
