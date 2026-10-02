@@ -135,10 +135,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	if err != nil {
 		return nil, err
 	}
-	ignoreDbDdls := map[string]bool{}
-	for _, db := range allDatabases {
-		ignoreDbDdls[db.Name] = db.Kind == "IMPORTED DATABASE"
-	}
+	ignoreDbDdls := sharedDatabases(allDatabases)
 
 	if len(finalResults) > 0 {
 		perSchema := lo.GroupBy(
@@ -295,6 +292,22 @@ func UnQuote(key string) string {
 		key = strings.Trim(key, "'")
 	}
 	return key
+}
+
+// sharedDatabases names the databases another account or Snowflake itself
+// provides: an imported share, and an application such as the SNOWFLAKE
+// database. GET_DDL refuses every object in one ("not supported on shared
+// database"), so asking only repeats the same failure on every scan. They are
+// matched by kind rather than by origin: a replica can carry an origin and
+// still answers GET_DDL.
+func sharedDatabases(databases []*DbDesc) map[string]bool {
+	shared := map[string]bool{}
+	for _, database := range databases {
+		if database.Kind == "IMPORTED DATABASE" || database.Kind == "APPLICATION" {
+			shared[database.Name] = true
+		}
+	}
+	return shared
 }
 
 func (e *SnowflakeScrapper) getDdl(ctx context.Context, kind string, parts ...string) (string, error) {
