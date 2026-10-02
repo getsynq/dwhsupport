@@ -24,8 +24,10 @@ func (s *QuerySqlDefinitionsSuite) TestSharedDatabases() {
 		{Name: "SNOWFLAKE", Kind: "APPLICATION", Origin: "SNOWFLAKE.ACCOUNT_USAGE"},
 		{Name: "PARTNER_DATA", Kind: "IMPORTED DATABASE", Origin: "ABC123.PARTNER.SHARE"},
 		{Name: "MY_APP_PKG", Kind: "APPLICATION PACKAGE"},
+		{Name: "REPLICA_DB", Kind: "STANDARD", Origin: "ORG.PRIMARY_ACCT.REPLICA_DB"},
+		{Name: "SHARE_WITHOUT_ORIGIN", Kind: "IMPORTED DATABASE"},
 	}
-	s.Equal(map[string]bool{"SNOWFLAKE": true, "PARTNER_DATA": true}, sharedDatabases(databases))
+	s.Equal(map[string]bool{"SNOWFLAKE": true, "PARTNER_DATA": true, "SHARE_WITHOUT_ORIGIN": true}, sharedDatabases(databases))
 	s.Empty(sharedDatabases(nil))
 }
 

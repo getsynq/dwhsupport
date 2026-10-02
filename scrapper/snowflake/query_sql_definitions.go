@@ -295,14 +295,15 @@ func UnQuote(key string) string {
 }
 
 // sharedDatabases names the databases another account or Snowflake itself
-// provides: an imported share, and the SNOWFLAKE database, which SHOW DATABASES
-// lists as an APPLICATION. Each carries the origin it was shared from, and
-// GET_DDL refuses every object in one ("not supported on shared database"), so
-// asking only repeats the same failure on every scan.
+// provides: an imported share, and an application such as the SNOWFLAKE
+// database. GET_DDL refuses every object in one ("not supported on shared
+// database"), so asking only repeats the same failure on every scan. They are
+// matched by kind rather than by origin: a replica can carry an origin and
+// still answers GET_DDL.
 func sharedDatabases(databases []*DbDesc) map[string]bool {
 	shared := map[string]bool{}
 	for _, database := range databases {
-		if database.Origin != "" {
+		if database.Kind == "IMPORTED DATABASE" || database.Kind == "APPLICATION" {
 			shared[database.Name] = true
 		}
 	}
