@@ -135,10 +135,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	if err != nil {
 		return nil, err
 	}
-	ignoreDbDdls := map[string]bool{}
-	for _, db := range allDatabases {
-		ignoreDbDdls[db.Name] = db.Kind == "IMPORTED DATABASE"
-	}
+	ignoreDbDdls := sharedDatabases(allDatabases)
 
 	if len(finalResults) > 0 {
 		perSchema := lo.GroupBy(
@@ -295,6 +292,16 @@ func UnQuote(key string) string {
 		key = strings.Trim(key, "'")
 	}
 	return key
+}
+
+func sharedDatabases(databases []*DbDesc) map[string]bool {
+	shared := map[string]bool{}
+	for _, database := range databases {
+		if database.Kind == "IMPORTED DATABASE" {
+			shared[database.Name] = true
+		}
+	}
+	return shared
 }
 
 func (e *SnowflakeScrapper) getDdl(ctx context.Context, kind string, parts ...string) (string, error) {
