@@ -233,6 +233,54 @@ func (s *ValueRoundTripSuite) TestValueRoundTrip_SixteenCharacterText() {
 	s.Equal(scrapper.StringValue("abcdefghijklmnop"), cv.Value)
 }
 
+// TestValueRoundTrip_Null reads a NULL of every type the suite covers, which
+// has to come back as NULL on both paths: never as an empty string or a zero,
+// which a consumer cannot tell from a value.
+func (s *ValueRoundTripSuite) TestValueRoundTrip_Null() {
+	if s.Scrapper == nil {
+		s.T().Skip("Scrapper not set")
+	}
+	for kind, expr := range roundTripExprs[s.Scrapper.DialectType()] {
+		s.Run(string(kind), func() {
+			// A CASE with no ELSE is a NULL of the type of its THEN. go-ora
+			// returns no row at all for one folded to a constant NULL string
+			// or time, so Oracle's are cast.
+			nullExpr := "CASE WHEN 1 = 0 THEN " + expr + " END"
+			if cast, ok := oracleNulls[kind]; ok && s.Scrapper.DialectType() == "oracle" {
+				nullExpr = cast
+			}
+			null := s.selectValue(nullExpr)
+			cv, _ := s.rawValue(null)
+			s.Truef(cv.IsNull, "RunRawQuery: want NULL, got %T %v", cv.Value, cv.Value)
+			s.Nil(cv.Value, "RunRawQuery")
+
+			metrics := s.metricsValue(null)
+			s.Truef(metrics.IsNull, "QueryCustomMetrics: want NULL, got %T %v", metrics.Value, metrics.Value)
+		})
+	}
+}
+
+var oracleNulls = map[scrapper.ValueKind]string{
+	scrapper.KindTimestamp:   "CAST(NULL AS TIMESTAMP(6))",
+	scrapper.KindTimestampTz: "CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE)",
+	scrapper.KindDate:        "CAST(NULL AS DATE)",
+	scrapper.KindText:        "CAST(NULL AS VARCHAR2(10))",
+}
+
+// TestValueRoundTrip_EmptyText reads back an empty string, which is a value
+// and not a NULL.
+func (s *ValueRoundTripSuite) TestValueRoundTrip_EmptyText() {
+	if s.Scrapper == nil {
+		s.T().Skip("Scrapper not set")
+	}
+	if s.Scrapper.DialectType() == "oracle" {
+		s.T().Skip("Oracle has no empty string: '' is NULL")
+	}
+	cv, _ := s.rawValue(s.selectValue(`''`))
+	s.Require().False(cv.IsNull, "an empty string is not NULL")
+	s.Equal(scrapper.StringValue(""), cv.Value)
+}
+
 func (s *ValueRoundTripSuite) runKind(kind scrapper.ValueKind) {
 	if s.Scrapper == nil {
 		s.T().Skip("Scrapper not set")
