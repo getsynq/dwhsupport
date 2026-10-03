@@ -161,6 +161,10 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	if creds.SessionToken != "" {
 		driverConf.SetSessionToken(creds.SessionToken)
 	}
+	// Athena leaves a NULL out of a result row, and the driver's default
+	// fills it with "", which a NULL number, time or text then cannot be told
+	// apart from. An empty string is present in the row and stays "".
+	driverConf.SetMissingAsNil(true)
 	wgWrapper := athenadriver.NewDefaultWG(wgName, nil, nil)
 	if err := driverConf.SetWorkGroup(wgWrapper); err != nil {
 		return nil, fmt.Errorf("athena: set workgroup: %w", err)
