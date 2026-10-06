@@ -2,10 +2,13 @@ package db2
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
+	dwhexecdb2 "github.com/getsynq/dwhsupport/exec/db2"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 )
 
@@ -30,7 +33,7 @@ type authIdSource struct {
 
 // SYSIBMADM.AUTHORIZATIONIDS gathers every authorization ID any SYSCAT.*AUTH
 // view names. The SYSCAT union lists a subset of it (the grants that say most
-// about a login), so it is read only when the admin view is refused.
+// about a login), so it is read only when the admin view did not answer.
 var authIdSources = []authIdSource{
 	{
 		source: "db2.sysibmadm.authorizationids",
@@ -47,7 +50,7 @@ UNION SELECT TRIM(grantee) FROM SYSCAT.TABAUTH WHERE granteetype = 'U'`,
 	},
 }
 
-const sessionUserSql = `VALUES SESSION_USER`
+const sessionUserSql = `SELECT TRIM(SESSION_USER) AS authid FROM SYSIBM.SYSDUMMY1`
 
 const roleAuthSql = `SELECT TRIM(grantee) AS grantee, TRIM(rolename) AS rolename FROM SYSCAT.ROLEAUTH WHERE granteetype = 'U'`
 
@@ -60,6 +63,28 @@ type db2RoleAuthRow struct {
 	RoleName string `db:"ROLENAME"`
 }
 
+// rowQuerier is the part of the executor the listing needs, so the tests can
+// answer it with sqlmock.
+type rowQuerier interface {
+	QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error)
+}
+
+// unavailableErrors matches what Db2 answers a name this version or install
+// does not have with: -204 / 42704 an undefined object (SYSIBMADM views are
+// absent from some installs), -206 / 42703 an undefined column (SYSCAT.DBAUTH
+// grew SECADMAUTH and others over versions), -440 / 42884 an undefined
+// routine. The separators follow exec/db2's permissionErrors.
+var unavailableErrors = regexp.MustCompile(`SQLCODE[=:]\s*-(204|206|440)\b|SQLSTATE[=:]\s*(42704|42703|42884)\b`)
+
+// isUnavailable reports an error that says this Db2 has no such view, column or
+// routine.
+func isUnavailable(err error) bool {
+	if err == nil {
+		return false
+	}
+	return unavailableErrors.MatchString(err.Error())
+}
+
 // QueryPlatformUsers lists the authorization IDs of type user the database
 // knows from its grants, with the roles granted to each. Db2 has no catalog
 // of users (see platformUsersCompletenessReason), so the listing is never
@@ -68,37 +93,42 @@ type db2RoleAuthRow struct {
 // to a group does not reach the users of that group either, as their
 // membership lives outside the database.
 //
-// The first of authIdSources the role may read is the listing; each one
-// refused before it is reported as a refused source.
+// The first of authIdSources that answers is the listing. Each one before it
+// that did not is reported as refused, unavailable or failed, and the next is
+// read whatever the reason: a failure of one view (a timeout, a decode error)
+// says nothing about the others, and a connection that is down fails them all,
+// which fails the call.
 func (e *Db2Scrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	return e.queryPlatformUsers(ctx, authIdSources)
+	return listDb2PlatformUsers(ctx, e.executor, authIdSources)
 }
 
-func (e *Db2Scrapper) queryPlatformUsers(ctx context.Context, sources []authIdSource) (*scrapper.PlatformUsers, error) {
+func listDb2PlatformUsers(ctx context.Context, q rowQuerier, sources []authIdSource) (*scrapper.PlatformUsers, error) {
 	var listings []*scrapper.PlatformUserListing
-	var lastErr error
 	for _, source := range sources {
-		authIds, err := e.selectAuthIds(ctx, source)
+		authIds, err := selectAuthIds(ctx, q, source)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
 		if err != nil {
-			if !e.IsPermissionError(err) {
-				return nil, err
-			}
 			logging.GetLogger(ctx).WithError(err).Warnf("cannot read %s", source.object)
-			listings = append(listings, scrapper.RefusedPlatformUserSource(source.source, scrapper.PlatformUserSourceSQL, err))
-			lastErr = err
+			listings = append(listings, scrapper.PlatformUserSourceError(
+				source.source, scrapper.PlatformUserSourceSQL, err, dwhexecdb2.IsPermissionError, isUnavailable,
+			))
 			continue
 		}
-		listings = append(listings, e.authIdListing(ctx, source, authIds))
+		listing, err := authIdListing(ctx, q, source, authIds)
+		if err != nil {
+			return nil, err
+		}
+		listings = append(listings, listing)
 		break
 	}
-	users := scrapper.NewPlatformUsers(listings...)
-	if users.AllRefused() && lastErr != nil {
-		return nil, lastErr
-	}
-	return users, nil
+	return scrapper.CollectPlatformUsers(ctx, listings...)
 }
 
-func (e *Db2Scrapper) authIdListing(ctx context.Context, source authIdSource, authIds []string) *scrapper.PlatformUserListing {
+// authIdListing adds what is known about each authorization ID. Nothing here
+// fails the listing; only a context that is done does.
+func authIdListing(ctx context.Context, q rowQuerier, source authIdSource, authIds []string) (*scrapper.PlatformUserListing, error) {
 	listing := &scrapper.PlatformUserListing{
 		Source:             source.source,
 		Kind:               scrapper.PlatformUserSourceSQL,
@@ -124,30 +154,36 @@ func (e *Db2Scrapper) authIdListing(ctx context.Context, source authIdSource, au
 
 	// The user we connect as authenticated, so it is a login even when it
 	// holds nothing but what PUBLIC holds.
-	var sessionUser []string
-	if err := e.executor.Select(ctx, &sessionUser, sessionUserSql); err != nil {
+	sessionUser, err := selectAuthIds(ctx, q, authIdSource{object: "SESSION_USER", query: sessionUserSql})
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
 		logging.GetLogger(ctx).WithError(err).Warn("cannot read SESSION_USER, listing users without it")
-	} else {
-		for _, u := range sessionUser {
-			listing.Users = append(listing.Users, &scrapper.PlatformUser{Login: strings.TrimSpace(u)})
-		}
+	}
+	for _, u := range sessionUser {
+		listing.Users = append(listing.Users, &scrapper.PlatformUser{Login: u})
 	}
 
-	rolesByLogin, err := e.selectRoleGrants(ctx)
+	rolesByLogin, err := selectRoleGrants(ctx, q)
 	switch {
 	case err == nil:
 		listing.AssignRoles(rolesByLogin)
-	case e.IsPermissionError(err):
+	case ctx.Err() != nil:
+		return nil, ctx.Err()
+	case dwhexecdb2.IsPermissionError(err):
 		listing.Skip(scrapper.PlatformUserFactRoles, "SYSCAT.ROLEAUTH was refused ("+platformUsersGrant+")")
+	case isUnavailable(err):
+		listing.Skip(scrapper.PlatformUserFactRoles, "this Db2 cannot read SYSCAT.ROLEAUTH: "+err.Error())
 	default:
 		logging.GetLogger(ctx).WithError(err).Warn("cannot read SYSCAT.ROLEAUTH, listing users without roles")
 		listing.Skip(scrapper.PlatformUserFactRoles, "reading SYSCAT.ROLEAUTH failed: "+err.Error())
 	}
-	return listing
+	return listing, nil
 }
 
-func (e *Db2Scrapper) selectAuthIds(ctx context.Context, source authIdSource) ([]string, error) {
-	rows, err := e.executor.QueryRows(ctx, source.query)
+func selectAuthIds(ctx context.Context, q rowQuerier, source authIdSource) ([]string, error) {
+	rows, err := q.QueryRows(ctx, source.query)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to list authorization IDs from %s", source.object)
 	}
@@ -158,13 +194,13 @@ func (e *Db2Scrapper) selectAuthIds(ctx context.Context, source authIdSource) ([
 	}
 	authIds := make([]string, 0, len(scanned))
 	for _, r := range scanned {
-		authIds = append(authIds, r.AuthId)
+		authIds = append(authIds, strings.TrimSpace(r.AuthId))
 	}
 	return authIds, nil
 }
 
-func (e *Db2Scrapper) selectRoleGrants(ctx context.Context) (map[string][]string, error) {
-	rows, err := e.executor.QueryRows(ctx, roleAuthSql)
+func selectRoleGrants(ctx context.Context, q rowQuerier) (map[string][]string, error) {
+	rows, err := q.QueryRows(ctx, roleAuthSql)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list role grants from SYSCAT.ROLEAUTH")
 	}

@@ -84,14 +84,14 @@ func (s *Db2PlatformUsersSuite) TestDb2FallsBackToTheCatalog() {
 		object: "MON_GET_CONNECTION",
 		query:  refusedQuery,
 	}
-	_, err := sc.selectAuthIds(s.T().Context(), refusedView)
+	_, err := selectAuthIds(s.T().Context(), sc.executor, refusedView)
 	if !sc.IsPermissionError(err) {
 		s.T().Skipf("the test role may run MON_GET_CONNECTION, so it cannot stand in for a refusal: %v", err)
 	}
 
-	result, err := sc.queryPlatformUsers(s.T().Context(), []authIdSource{refusedView, authIdSources[1]})
+	result, err := listDb2PlatformUsers(s.T().Context(), sc.executor, []authIdSource{refusedView, authIdSources[1]})
 	s.Require().NoError(err, "a refused admin view falls back rather than failing")
-	s.False(result.AllRefused())
+	s.True(result.Answered())
 	s.Require().Len(result.Sources, 2)
 	s.Equal("db2.sysibmadm.authorizationids", result.Sources[0].Source)
 	s.NotEmpty(result.Sources[0].Refused)
@@ -105,16 +105,34 @@ func (s *Db2PlatformUsersSuite) TestDb2FallsBackToTheCatalog() {
 	s.Equal(logins(full.Source("db2.sysibmadm.authorizationids")), logins(fallback))
 }
 
-func (s *Db2PlatformUsersSuite) TestDb2EverySourceRefusedIsAPermissionError() {
+func (s *Db2PlatformUsersSuite) TestDb2EverySourceRefusedIsAResult() {
 	sc := s.db2()
 	refused := authIdSource{source: "db2.refused", object: "MON_GET_CONNECTION", query: refusedQuery}
-	_, err := sc.selectAuthIds(s.T().Context(), refused)
+	_, err := selectAuthIds(s.T().Context(), sc.executor, refused)
 	if !sc.IsPermissionError(err) {
 		s.T().Skipf("the test role may run MON_GET_CONNECTION: %v", err)
 	}
-	result, err := sc.queryPlatformUsers(s.T().Context(), []authIdSource{refused, refused})
-	s.Nil(result)
-	s.True(sc.IsPermissionError(err), "a refused listing is a permission error, not an empty list: %v", err)
+	result, err := listDb2PlatformUsers(s.T().Context(), sc.executor, []authIdSource{refused, refused})
+	s.Require().NoError(err, "a missing grant never fails the fetch")
+	s.False(result.Answered())
+	s.NotEmpty(result.Reconcile().Refused, "the refusal is reported, not an empty list")
+}
+
+// TestDb2MissingViewIsUnavailable asks for a view this Db2 does not have, the
+// way SYSIBMADM.AUTHORIZATIONIDS is absent from some installs, and checks it
+// is reported unavailable and the SYSCAT union answers in its place.
+func (s *Db2PlatformUsersSuite) TestDb2MissingViewIsUnavailable() {
+	missing := authIdSource{
+		source: authIdSources[0].source,
+		object: "SYSIBMADM.NO_SUCH_VIEW",
+		query:  `SELECT TRIM(authid) AS authid FROM SYSIBMADM.NO_SUCH_VIEW`,
+	}
+	result, err := listDb2PlatformUsers(s.T().Context(), s.db2().executor, []authIdSource{missing, authIdSources[1]})
+	s.Require().NoError(err)
+	s.Require().Len(result.Sources, 2)
+	s.Contains(result.Sources[0].Unavailable, "-204")
+	s.True(result.Sources[1].Answered())
+	s.NotEmpty(result.Sources[1].Users)
 }
 
 func (s *Db2PlatformUsersSuite) TestDb2ListsTheSessionUserEvenWithoutAGrant() {
@@ -123,7 +141,7 @@ func (s *Db2PlatformUsersSuite) TestDb2ListsTheSessionUserEvenWithoutAGrant() {
 		object: "SYSIBMADM.AUTHORIZATIONIDS",
 		query:  `SELECT TRIM(authid) AS authid FROM SYSIBMADM.AUTHORIZATIONIDS WHERE 1 = 0`,
 	}
-	result, err := s.db2().queryPlatformUsers(s.T().Context(), []authIdSource{nobody})
+	result, err := listDb2PlatformUsers(s.T().Context(), s.db2().executor, []authIdSource{nobody})
 	s.Require().NoError(err)
 	users := result.Source("db2.nobody")
 	s.Require().NotNil(users)
