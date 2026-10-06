@@ -134,13 +134,33 @@ func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_RolesDefaultRoleAndExpi
 	s.Empty(e.DefaultRole)
 }
 
-func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_NoGrantIsAPermissionError() {
+func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_NoGrantIsARefusedSource() {
 	sc := s.throwawayUser("pu_nogrant_"+s.suffix, "")
 
+	result, err := sc.QueryPlatformUsers(context.Background())
+	s.Require().NoError(err, "a refused system.users is a state of the result, not an error of the call")
+	src, err := scrappertest.OnlyPlatformUserSource(result, nil)
+	s.Require().NoError(err)
+	s.Equal(platformUsersSource, src.Source)
+	s.Contains(src.Refused, "system.users", "the fan-out falls back to the local read, whose refusal names system.users")
+	s.Empty(src.Unavailable)
+	s.Empty(src.Failed)
+	s.Empty(src.Users)
+	s.NotEmpty(result.Reconcile().Refused)
+}
+
+func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_NoRemoteReadsTheNodeAlone() {
+	login := "pu_noremote_" + s.suffix
+	sc := s.throwawayUser(login, "", "GRANT SELECT ON system.users TO %s", "GRANT SELECT ON system.role_grants TO %s")
+
 	users, err := scrappertest.OnlyPlatformUserSource(sc.QueryPlatformUsers(context.Background()))
-	s.Require().Error(err)
-	s.Nil(users)
-	s.True(sc.IsPermissionError(err), "a refused system.users must be a permission error, got %v", err)
+	s.Require().NoError(err)
+	s.True(users.Answered())
+	s.Equal(scrapper.PlatformUsersLimited, users.Completeness)
+	s.Contains(users.CompletenessReason, "READ ON REMOTE")
+	s.NotNil(s.findUser(users, login))
+	s.NotNil(s.findUser(users, os.Getenv("CLICKHOUSE_USER")))
+	s.False(users.IsSkipped(scrapper.PlatformUserFactRoles), "role grants fall back to the local read too: %v", users.SkippedFacts)
 }
 
 func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_RefusedRolesAreSkipped() {
