@@ -55,18 +55,22 @@ const serviceAccountsCompletenessReason = "the list holds every service account 
 //   - bigquery.iam_policy, the users and service accounts bound in the
 //     project's IAM policy, with the roles bound to each.
 //
-// Neither fills in the other's facts; Reconcile does that. A source the role
-// may not read is a refused source. When both refuse, the call returns the
-// permission error instead. Any other error fails the call.
+// Neither fills in the other's facts; Reconcile does that. A source that could
+// not be read is a state of the result (see platformUserSourceError), so a missing
+// grant or a disabled API never fails the fetch.
 func (e *BigQueryScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	httpClient, err := dwhexecbigquery.NewHTTPClient(ctx, &e.conf.BigQueryConf, cloudresourcemanager.CloudPlatformReadOnlyScope)
+	// The IAM API accepts only the cloud-platform scope: a cloud-platform.read-only
+	// token is refused with "insufficient authentication scopes" by
+	// serviceAccounts.list. Both calls only read; the role's grants, not the
+	// scope, decide what they may see.
+	httpClient, err := dwhexecbigquery.NewHTTPClient(ctx, &e.conf.BigQueryConf, iam.CloudPlatformScope)
 	if err != nil {
 		return nil, err
 	}
 
 	accounts, accountsErr := e.listServiceAccounts(ctx, httpClient)
 	policy, policyErr := e.getIamPolicy(ctx, httpClient)
-	return platformUsersFromSources(accounts, accountsErr, policy, policyErr)
+	return platformUsersFromSources(ctx, accounts, accountsErr, policy, policyErr)
 }
 
 func (e *BigQueryScrapper) listServiceAccounts(ctx context.Context, httpClient *http.Client) ([]*iam.ServiceAccount, error) {
@@ -103,41 +107,54 @@ func (e *BigQueryScrapper) getIamPolicy(ctx context.Context, httpClient *http.Cl
 }
 
 // platformUsersFromSources builds the result from what each source answered.
-// A permission error makes that source refused; any other error fails the
-// call, since a source that is merely unreachable would otherwise read like
-// one the customer has to grant.
+// It errors only as CollectPlatformUsers does: when neither source answered
+// and one of them failed outright.
 func platformUsersFromSources(
+	ctx context.Context,
 	accounts []*iam.ServiceAccount, accountsErr error,
 	policy *cloudresourcemanager.Policy, policyErr error,
 ) (*scrapper.PlatformUsers, error) {
-	var sources []*scrapper.PlatformUserListing
-	var refusal error
-
-	switch {
-	case accountsErr == nil:
-		sources = append(sources, platformUsersFromServiceAccounts(accounts))
-	case dwhexecbigquery.IsPermissionError(accountsErr):
-		refusal = accountsErr
-		sources = append(sources, scrapper.RefusedPlatformUserSource(platformUserSourceServiceAccounts, scrapper.PlatformUserSourceAPI, accountsErr))
-	default:
-		return nil, accountsErr
+	accountsSource := platformUserSourceError(platformUserSourceServiceAccounts, accountsErr)
+	if accountsSource == nil {
+		accountsSource = platformUsersFromServiceAccounts(accounts)
 	}
-
-	switch {
-	case policyErr == nil:
-		sources = append(sources, platformUsersFromPolicy(policy))
-	case dwhexecbigquery.IsPermissionError(policyErr):
-		refusal = policyErr
-		sources = append(sources, scrapper.RefusedPlatformUserSource(platformUserSourceIamPolicy, scrapper.PlatformUserSourceAPI, policyErr))
-	default:
-		return nil, policyErr
+	policySource := platformUserSourceError(platformUserSourceIamPolicy, policyErr)
+	if policySource == nil {
+		policySource = platformUsersFromPolicy(policy)
 	}
+	return scrapper.CollectPlatformUsers(ctx, accountsSource, policySource)
+}
 
-	result := scrapper.NewPlatformUsers(sources...)
-	if result.AllRefused() {
-		return nil, refusal
+// platformUserSourceError records a source that could not be read, or returns
+// nil when err is nil:
+//
+//   - unavailable when the API it is read through is disabled
+//     (SERVICE_DISABLED, a 403 like a refusal). No grant to the role fixes
+//     it: a project owner has to enable the API, which may be a deliberate
+//     choice, so it reads like a platform without the source rather than a
+//     role without a grant. The reason names the API and where to enable it;
+//   - refused on any other permission error (IsPermissionError);
+//   - failed otherwise (5xx, timeout).
+func platformUserSourceError(source string, err error) *scrapper.PlatformUserListing {
+	if err == nil {
+		return nil
 	}
-	return result, nil
+	if info, disabled := serviceDisabledFromErr(err); disabled {
+		service := info.service
+		if service == "" {
+			service = "the Google API this source is read through"
+		}
+		// Google checks the API in the project the call is billed to (a
+		// service account key's own project), which need not be the BigQuery
+		// project; the activation URL names the right one.
+		reason := errors.Errorf("%s is not enabled in the Google Cloud project the credentials call it from", service)
+		if info.activationURL != "" {
+			reason = errors.Errorf("%s is not enabled in the Google Cloud project the credentials call it from, enable it at %s",
+				service, info.activationURL)
+		}
+		return scrapper.UnavailablePlatformUserSource(source, scrapper.PlatformUserSourceAPI, reason)
+	}
+	return scrapper.PlatformUserSourceError(source, scrapper.PlatformUserSourceAPI, err, dwhexecbigquery.IsPermissionError, nil)
 }
 
 // platformUsersFromServiceAccounts lists every service account of the

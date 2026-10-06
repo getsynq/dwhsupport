@@ -347,9 +347,11 @@ type BigQueryPlatformUsersSuite struct {
 
 // TestBigQueryPlatformUsersSuite lists the project's service accounts and IAM
 // policy members. The test service account is both, so it is the connected
-// login the listing must contain. It may read neither source, so with the
-// dwhtesting key the call returns the permission error and the suite skips; a
-// key with roles/iam.securityReviewer runs it through.
+// login the listing must contain. With the dwhtesting key neither source
+// answers (the IAM API is disabled in the key's project, and the key may not
+// read the project policy), so the result says so and the suite skips; a key
+// with roles/iam.securityReviewer, from a project with the IAM API enabled,
+// runs it through.
 func TestBigQueryPlatformUsersSuite(t *testing.T) {
 	skipIfNoBigQuery(t)
 	suite.Run(t, new(BigQueryPlatformUsersSuite))

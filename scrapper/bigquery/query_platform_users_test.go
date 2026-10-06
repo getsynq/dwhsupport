@@ -1,9 +1,11 @@
 package bigquery
 
 import (
+	"context"
 	"testing"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/cloudresourcemanager/v1"
@@ -158,9 +160,11 @@ func TestPlatformUsersFromServiceAccounts(t *testing.T) {
 }
 
 func TestPlatformUsersFromSources(t *testing.T) {
+	ctx := context.Background()
 	accounts := []*iam.ServiceAccount{
 		{Email: "loader@my-project.iam.gserviceaccount.com", UniqueId: "1001", DisplayName: "Loader"},
 		{Email: "unbound@my-project.iam.gserviceaccount.com", UniqueId: "1002"},
+		{Email: "recreated@my-project.iam.gserviceaccount.com", UniqueId: "1003"},
 	}
 	policy := &cloudresourcemanager.Policy{Bindings: []*cloudresourcemanager.Binding{
 		{Role: "roles/bigquery.user", Members: []string{
@@ -169,11 +173,11 @@ func TestPlatformUsersFromSources(t *testing.T) {
 			"deleted:serviceAccount:recreated@my-project.iam.gserviceaccount.com?uid=1",
 		}},
 	}}
-	accounts = append(accounts, &iam.ServiceAccount{Email: "recreated@my-project.iam.gserviceaccount.com", UniqueId: "1003"})
 	refused := &googleapi.Error{Code: 403, Message: "The caller does not have permission"}
+	unavailable := &googleapi.Error{Code: 503, Message: "backend unavailable"}
 
 	t.Run("both sources, kept apart", func(t *testing.T) {
-		result, err := platformUsersFromSources(accounts, nil, policy, nil)
+		result, err := platformUsersFromSources(ctx, accounts, nil, policy, nil)
 		require.NoError(t, err)
 		require.Len(t, result.Sources, 2)
 		assert.Equal(t, platformUserSourceServiceAccounts, result.Sources[0].Source, "service accounts come first in trust order")
@@ -201,7 +205,7 @@ func TestPlatformUsersFromSources(t *testing.T) {
 	})
 
 	t.Run("service accounts refused", func(t *testing.T) {
-		result, err := platformUsersFromSources(nil, refused, policy, nil)
+		result, err := platformUsersFromSources(ctx, nil, refused, policy, nil)
 		require.NoError(t, err)
 		require.Len(t, result.Sources, 2)
 		sa := result.Source(platformUserSourceServiceAccounts)
@@ -212,27 +216,88 @@ func TestPlatformUsersFromSources(t *testing.T) {
 	})
 
 	t.Run("policy refused", func(t *testing.T) {
-		result, err := platformUsersFromSources(accounts, nil, nil, refused)
+		result, err := platformUsersFromSources(ctx, accounts, nil, nil, refused)
 		require.NoError(t, err)
 		assert.NotEmpty(t, result.Source(platformUserSourceIamPolicy).Refused)
 		assert.Len(t, result.Source(platformUserSourceServiceAccounts).Users, 3)
-		assert.Contains(t, result.Reconcile().CompletenessReason, platformUserSourceIamPolicy+" refused")
+		assert.Contains(t, result.Reconcile().CompletenessReason, platformUserSourceIamPolicy)
 	})
 
-	t.Run("both refused is a permission error", func(t *testing.T) {
-		result, err := platformUsersFromSources(nil, refused, nil, refused)
-		assert.Nil(t, result)
+	t.Run("both refused is a result, not an error", func(t *testing.T) {
+		result, err := platformUsersFromSources(ctx, nil, refused, nil, refused)
+		require.NoError(t, err)
+		require.Len(t, result.Sources, 2)
+		assert.False(t, result.Answered())
+		reconciled := result.Reconcile()
+		assert.NotEmpty(t, reconciled.Refused)
+		assert.Empty(t, reconciled.Users)
+	})
+
+	t.Run("one failed, the other answered, is a result", func(t *testing.T) {
+		result, err := platformUsersFromSources(ctx, nil, unavailable, policy, nil)
+		require.NoError(t, err)
+		assert.NotEmpty(t, result.Source(platformUserSourceServiceAccounts).Failed)
+		assert.Empty(t, result.Source(platformUserSourceServiceAccounts).Refused)
+		assert.Len(t, result.Source(platformUserSourceIamPolicy).Users, 3)
+
+		result, err = platformUsersFromSources(ctx, accounts, nil, nil, unavailable)
+		require.NoError(t, err)
+		assert.NotEmpty(t, result.Source(platformUserSourceIamPolicy).Failed)
+	})
+
+	t.Run("both failed is an error", func(t *testing.T) {
+		result, err := platformUsersFromSources(ctx, nil, unavailable, nil, unavailable)
 		require.Error(t, err)
-		assert.True(t, (&BigQueryScrapper{}).IsPermissionError(err))
+		assert.Nil(t, result)
+		assert.ErrorIs(t, err, unavailable)
 	})
 
-	t.Run("an error that is not a refusal fails the call", func(t *testing.T) {
-		unavailable := &googleapi.Error{Code: 503, Message: "backend unavailable"}
-		_, err := platformUsersFromSources(nil, unavailable, policy, nil)
-		require.ErrorIs(t, err, unavailable)
-		_, err = platformUsersFromSources(accounts, nil, nil, unavailable)
-		require.ErrorIs(t, err, unavailable)
+	t.Run("one refused, one failed is an error", func(t *testing.T) {
+		_, err := platformUsersFromSources(ctx, nil, refused, nil, unavailable)
+		require.Error(t, err, "nothing answered and something failed outright")
 	})
+
+	t.Run("a done context is an error", func(t *testing.T) {
+		done, cancel := context.WithCancel(ctx)
+		cancel()
+		_, err := platformUsersFromSources(done, accounts, nil, policy, nil)
+		require.ErrorIs(t, err, context.Canceled)
+	})
+}
+
+func TestPlatformUserSourceError(t *testing.T) {
+	assert.Nil(t, platformUserSourceError(platformUserSourceIamPolicy, nil))
+
+	disabled := &googleapi.Error{
+		Code:    403,
+		Message: "Cloud Resource Manager API has not been used in project 123 before or it is disabled.",
+		Details: []interface{}{map[string]interface{}{
+			"@type":  "type.googleapis.com/google.rpc.ErrorInfo",
+			"reason": "SERVICE_DISABLED",
+			"metadata": map[string]interface{}{
+				"service":       "cloudresourcemanager.googleapis.com",
+				"activationUrl": "https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com/overview?project=123",
+			},
+		}},
+	}
+	src := platformUserSourceError(platformUserSourceIamPolicy, errors.Wrap(disabled, "reading the IAM policy"))
+	assert.Empty(t, src.Refused, "a disabled API is not a grant the role lacks")
+	assert.Empty(t, src.Failed)
+	assert.Contains(t, src.Unavailable, "cloudresourcemanager.googleapis.com is not enabled")
+	assert.Contains(t, src.Unavailable, "https://console.developers.google.com/apis/api/cloudresourcemanager.googleapis.com")
+	assert.Equal(t, scrapper.PlatformUserSourceAPI, src.Kind)
+
+	src = platformUserSourceError(platformUserSourceServiceAccounts,
+		&googleapi.Error{Code: 403, Message: "Permission 'iam.serviceAccounts.list' denied"})
+	assert.NotEmpty(t, src.Refused)
+	assert.Empty(t, src.Unavailable)
+
+	src = platformUserSourceError(platformUserSourceServiceAccounts, &googleapi.Error{Code: 500, Message: "internal"})
+	assert.NotEmpty(t, src.Failed)
+	assert.Empty(t, src.Refused)
+
+	src = platformUserSourceError(platformUserSourceServiceAccounts, context.DeadlineExceeded)
+	assert.NotEmpty(t, src.Failed)
 }
 
 func find(users *scrapper.PlatformUserListing, login string) *scrapper.PlatformUser {
