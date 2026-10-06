@@ -69,6 +69,7 @@ func (e *ClickhouseScrapper) IsPermissionError(err error) bool {
 func (e *ClickhouseScrapper) Capabilities() scrapper.Capabilities {
 	return scrapper.Capabilities{
 		EstimateQuery: scrapper.EstimateQueryCapability{Supported: true, ReportsRows: true},
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
 	}
 }
 
