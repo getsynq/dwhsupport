@@ -219,3 +219,22 @@ func Exec(ctx context.Context, db *sqlx.DB, sql string) error {
 	_, err := db.ExecContext(ctx, sql)
 	return err
 }
+
+// Ping checks that db answers. Without a query context it is the driver's own
+// ping. With one it runs SELECT 1 carrying the query-context comment instead,
+// because some drivers ping with SQL of their own (gosnowflake and athenadriver
+// send SELECT 1, go-mssqldb select 1), which reaches the warehouse's query
+// history without our marker.
+func Ping(ctx context.Context, db *sqlx.DB) error {
+	if querycontext.GetQueryContext(ctx) == nil {
+		return db.PingContext(ctx)
+	}
+	rows, err := db.QueryContext(ctx, querycontext.AppendSQLComment(ctx, "SELECT 1"))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+	}
+	return rows.Err()
+}

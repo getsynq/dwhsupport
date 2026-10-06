@@ -130,12 +130,23 @@ func NewBigqueryExecutorFromClient(client *bigquery.Client, conf *BigQueryConf) 
 	return &BigQueryExecutor{client: client, conf: conf}
 }
 
-func (e *BigQueryExecutor) Exec(ctx context.Context, sql string) error {
-	sql = querycontext.AppendSQLComment(ctx, sql)
-	query := e.client.Query(sql)
+// NewQuery builds a query job for sql that carries the query context of ctx:
+// the SQL comment, which INFORMATION_SCHEMA.JOBS keeps in the query text, and
+// the job labels. args become positional parameters. Every job we start is
+// built here, so query-history readers can tell our own traffic apart.
+func (e *BigQueryExecutor) NewQuery(ctx context.Context, sql string, args ...any) *bigquery.Query {
+	query := e.client.Query(querycontext.AppendSQLComment(ctx, sql))
 	if qc := querycontext.GetQueryContext(ctx); qc != nil {
 		query.Labels = queryContextToBigQueryLabels(qc)
 	}
+	for _, arg := range args {
+		query.Parameters = append(query.Parameters, bigquery.QueryParameter{Value: arg})
+	}
+	return query
+}
+
+func (e *BigQueryExecutor) Exec(ctx context.Context, sql string) error {
+	query := e.NewQuery(ctx, sql)
 	job, err := query.Run(ctx)
 	if err != nil {
 		return err
@@ -154,15 +165,7 @@ func (e *BigQueryExecutor) QueryRowsIterator(
 	sql string,
 	args ...interface{},
 ) (*bigquery.RowIterator, error) {
-	sql = querycontext.AppendSQLComment(ctx, sql)
-	query := e.client.Query(sql)
-	if qc := querycontext.GetQueryContext(ctx); qc != nil {
-		query.Labels = queryContextToBigQueryLabels(qc)
-	}
-	for _, arg := range args {
-		query.Parameters = append(query.Parameters, bigquery.QueryParameter{Value: arg})
-	}
-
+	query := e.NewQuery(ctx, sql, args...)
 	job, err := query.Run(ctx)
 	if err != nil {
 		return nil, err

@@ -215,7 +215,10 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 
 	db := openSnowflakeDb(c)
 
-	if err := db.PingContext(ctx); err != nil {
+	// The connection check is a statement in the account's query history like
+	// any other, so it carries the query tag and the comment too.
+	pingCtx := withQueryTag(ctx)
+	if err := stdsql.Ping(pingCtx, db); err != nil {
 		// sql.OpenDB starts a connection-opener goroutine that outlives a failed ping,
 		// so an abandoned pool has to be closed explicitly. Without this, every failed
 		// connect leaks one goroutine for the lifetime of the process — and a permanently
@@ -234,7 +237,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 
 		c.Database = ""
 		db = openSnowflakeDb(c)
-		if retryErr := db.PingContext(ctx); retryErr != nil {
+		if retryErr := stdsql.Ping(pingCtx, db); retryErr != nil {
 			_ = db.Close()
 			// Keep the original cause: the retry can fail for an unrelated reason (a tight
 			// caller deadline, a transient fault) which would otherwise bury the only
@@ -254,7 +257,11 @@ func openSnowflakeDb(c *gosnowflake.Config) *sqlx.DB {
 // enrichCtx adds Snowflake-specific context enrichment: query tag from QueryContext
 // and query ID channel for stats collection.
 func (e *SnowflakeExecutor) enrichCtx(ctx context.Context) context.Context {
-	ctx = EnrichSnowflakeContext(ctx, e.db.DB)
+	return withQueryTag(EnrichSnowflakeContext(ctx, e.db.DB))
+}
+
+// withQueryTag sets the query context of ctx as the Snowflake query tag.
+func withQueryTag(ctx context.Context) context.Context {
 	if qc := querycontext.GetQueryContext(ctx); qc != nil {
 		if tag := qc.FormatAsJSON(); tag != "" {
 			ctx = gosnowflake.WithQueryTag(ctx, tag)

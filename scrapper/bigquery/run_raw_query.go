@@ -21,7 +21,7 @@ import (
 func (e *BigQueryScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
 	collector, ctx := querystats.Start(ctx)
 
-	query := e.executor.GetBigQueryClient().Query(sql)
+	query := e.executor.NewQuery(ctx, sql)
 	job, err := query.Run(ctx)
 	if err != nil {
 		collector.Finish()

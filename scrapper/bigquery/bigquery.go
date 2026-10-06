@@ -246,7 +246,7 @@ func collectTableIDs(ctx context.Context, datasetID string, it *bigquery.TableIt
 }
 
 func (e *BigQueryScrapper) queryRows(ctx context.Context, q string, args ...interface{}) (*bigquery.RowIterator, error) {
-	query := e.executor.GetBigQueryClient().Query(q)
+	query := e.executor.NewQuery(ctx, q, args...)
 	job, err := query.Run(ctx)
 	if err != nil {
 		return nil, err

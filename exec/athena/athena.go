@@ -175,7 +175,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	if err != nil {
 		return nil, fmt.Errorf("athena: open driver: %w", err)
 	}
-	if err := db.PingContext(ctx); err != nil {
+	if err := stdsql.Ping(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, exec.NewAuthError(fmt.Errorf("athena: ping: %w", err))
 	}
