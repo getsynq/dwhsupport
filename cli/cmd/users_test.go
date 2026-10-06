@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -21,14 +23,15 @@ func captureErrOut(t *testing.T) *bytes.Buffer {
 func TestReportPlatformUsers(t *testing.T) {
 	t.Run("a complete listing names no grant", func(t *testing.T) {
 		buf := captureErrOut(t)
-		users := &scrapper.PlatformUsers{
+		users := &scrapper.PlatformUserListing{
+			Source:       "p.view",
 			Completeness: scrapper.PlatformUsersComplete,
 			Users:        []*scrapper.PlatformUser{{Login: "A"}},
 		}
 		users.Skip(scrapper.PlatformUserFactEmail, "the platform keeps no email")
 		reportPlatformUsers(users.Finish(), "GRANT X")
 
-		want := "users: complete\nskipped email: the platform keeps no email\n"
+		want := "p.view: complete\np.view: skipped email: the platform keeps no email\n"
 		if buf.String() != want {
 			t.Fatalf("got %q, want %q", buf.String(), want)
 		}
@@ -36,12 +39,31 @@ func TestReportPlatformUsers(t *testing.T) {
 
 	t.Run("an incomplete listing says why and names the grant", func(t *testing.T) {
 		buf := captureErrOut(t)
-		reportPlatformUsers((&scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}).Finish(), "GRANT X")
+		reportPlatformUsers(scrapper.NewPlatformUsers().Reconcile(), "GRANT X")
 
-		for _, want := range []string{"users: empty (", "grant for the full listing: GRANT X\n"} {
+		for _, want := range []string{"reconciled: empty (", "reconciled: grant for the full listing: GRANT X\n"} {
 			if !strings.Contains(buf.String(), want) {
 				t.Errorf("%q does not contain %q", buf.String(), want)
 			}
 		}
 	})
+
+	t.Run("a refused source says so and nothing else", func(t *testing.T) {
+		buf := captureErrOut(t)
+		reportPlatformUsers(scrapper.RefusedPlatformUserSource("p.api", scrapper.PlatformUserSourceAPI, errors.New("403")), "GRANT X")
+
+		if want := "p.api: refused (403)\n"; buf.String() != want {
+			t.Fatalf("got %q, want %q", buf.String(), want)
+		}
+	})
+}
+
+func TestSourcedPlatformUserJSON(t *testing.T) {
+	data, err := json.Marshal(sourcedPlatformUser{Source: "p.view", PlatformUser: &scrapper.PlatformUser{Login: "A", Roles: []string{"R"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"source":"p.view","login":"A","roles":["R"]}`; string(data) != want {
+		t.Fatalf("got %s, want %s", data, want)
+	}
 }

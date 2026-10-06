@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var flagUsersBySource bool
+
 var usersCmd = &cobra.Command{
 	Use:     "users",
 	Aliases: []string{"platform-users", "logins"},
@@ -16,39 +18,66 @@ var usersCmd = &cobra.Command{
 	Long: `List the platform's users with every fact the platform states: type,
 email, display name, disabled, created, last login, default role and roles.
 
-How complete the listing is, which facts could not be read and why, go to
+A platform may have several sources of users (a catalog view and a command, the
+warehouse and its API). By default they are reconciled into one list; with
+--by-source each source's own rows are printed, with a source column.
+
+How complete each listing is, which facts could not be read and why, go to
 stderr. A dialect without a user listing reports so and prints nothing; a role
-that may not read the listing fails with the platform's permission error.`,
+that may not read any source fails with the platform's permission error.`,
 	Example: "  dwhctl users --config conn.yaml\n" +
-		"  dwhctl users -c conn.yaml -o json --wide",
+		"  dwhctl users -c conn.yaml -o json --wide\n" +
+		"  dwhctl users -c conn.yaml --by-source",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withScrapper(cmd, func(ctx context.Context, s scrapper.Scrapper) error {
 			if !s.Capabilities().PlatformUsers.Supported {
 				return emitListErr("users", platformUserColumns, []*scrapper.PlatformUser(nil), scrapper.ErrUnsupported)
 			}
-			users, err := s.QueryPlatformUsers(ctx)
+			result, err := s.QueryPlatformUsers(ctx)
 			if err != nil {
 				return emitListErr("users", platformUserColumns, []*scrapper.PlatformUser(nil), err)
 			}
-			reportPlatformUsers(users, s.Capabilities().PlatformUsers.Grant)
-			return emitList("users", users.Users, platformUserColumns)
+			grant := s.Capabilities().PlatformUsers.Grant
+			if flagUsersBySource {
+				var rows []sourcedPlatformUser
+				for _, src := range result.Sources {
+					reportPlatformUsers(src, grant)
+					for _, u := range src.Users {
+						rows = append(rows, sourcedPlatformUser{Source: src.Source, PlatformUser: u})
+					}
+				}
+				return emitList("users", rows, sourcedPlatformUserColumns)
+			}
+			reconciled := result.Reconcile()
+			reportPlatformUsers(reconciled, grant)
+			return emitList("users", reconciled.Users, platformUserColumns)
 		})
 	},
 }
 
-// reportPlatformUsers writes what the listing says about itself to stderr, so
+// sourcedPlatformUser is a user as one source listed it.
+type sourcedPlatformUser struct {
+	Source string `json:"source"`
+	*scrapper.PlatformUser
+}
+
+// reportPlatformUsers writes what a listing says about itself to stderr, so
 // stdout stays the list of users alone.
-func reportPlatformUsers(users *scrapper.PlatformUsers, grant string) {
-	line := "users: " + string(users.Completeness)
+func reportPlatformUsers(users *scrapper.PlatformUserListing, grant string) {
+	if users.Refused != "" {
+		fmt.Fprintf(output.ErrOut, "%s: refused (%s)\n", users.Source, users.Refused)
+		return
+	}
+	line := users.Source + ": " + string(users.Completeness)
 	if users.CompletenessReason != "" {
 		line += " (" + users.CompletenessReason + ")"
 	}
 	fmt.Fprintln(output.ErrOut, line)
 	for _, f := range users.SkippedFacts {
-		fmt.Fprintf(output.ErrOut, "skipped %s: %s\n", f.Fact, f.Reason)
+		fmt.Fprintf(output.ErrOut, "%s: skipped %s: %s\n", users.Source, f.Fact, f.Reason)
 	}
 	if users.Completeness != scrapper.PlatformUsersComplete {
-		fmt.Fprintf(output.ErrOut, "grant for the full listing: %s\n", grant)
+		fmt.Fprintf(output.ErrOut, "%s: grant for the full listing: %s\n", users.Source, grant)
 	}
 }
 
@@ -66,6 +95,9 @@ var platformUserColumns = output.Columns{
 	{Header: "comment", Path: ".comment", Default: false},
 }
 
+var sourcedPlatformUserColumns = append(output.Columns{{Header: "source", Path: ".source", Default: true}}, platformUserColumns...)
+
 func init() {
+	usersCmd.Flags().BoolVar(&flagUsersBySource, "by-source", false, "print each source's own users instead of the reconciled list")
 	rootCmd.AddCommand(usersCmd)
 }
