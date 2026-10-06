@@ -75,6 +75,10 @@ func (m *mockScrapper) QueryShape(ctx context.Context, sql string) ([]*scrapper.
 func (m *mockScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.RawQueryRowIterator, error) {
 	return nil, nil
 }
+func (m *mockScrapper) QueryPlatformUsers(context.Context) (*scrapper.PlatformUsers, error) {
+	return nil, nil
+}
+
 func (m *mockScrapper) EstimateQuery(ctx context.Context, sql string) (*scrapper.QueryEstimate, error) {
 	return nil, nil
 }

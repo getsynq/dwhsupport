@@ -158,6 +158,15 @@ func (s *SanitizingScrapper) EstimateQuery(ctx context.Context, sql string) (*sc
 	return s.inner.EstimateQuery(ctx, sql)
 }
 
+func (s *SanitizingScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+	users, err := s.inner.QueryPlatformUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	users.Sanitize()
+	return users, nil
+}
+
 type sanitizingRawQueryRows struct {
 	inner scrapper.RawQueryRowIterator
 }

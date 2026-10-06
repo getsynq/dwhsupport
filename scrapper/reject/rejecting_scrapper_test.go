@@ -22,6 +22,7 @@ type stubScrapper struct {
 	segments    []*scrapper.SegmentRow
 	customMet   []*scrapper.CustomMetricsRow
 	shape       []*scrapper.QueryShapeColumn
+	users       *scrapper.PlatformUsers
 }
 
 func (s *stubScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
@@ -72,6 +73,10 @@ func (s *stubScrapper) QueryShape(context.Context, string) ([]*scrapper.QuerySha
 func (s *stubScrapper) RunRawQuery(context.Context, string) (scrapper.RawQueryRowIterator, error) {
 	return nil, nil
 }
+func (s *stubScrapper) QueryPlatformUsers(context.Context) (*scrapper.PlatformUsers, error) {
+	return s.users, nil
+}
+
 func (s *stubScrapper) EstimateQuery(context.Context, string) (*scrapper.QueryEstimate, error) {
 	return nil, nil
 }
@@ -179,4 +184,25 @@ func TestRejectingScrapper_SimpleRowTypes(t *testing.T) {
 	shape, err := ss.QueryShape(ctx, "sql")
 	require.NoError(t, err)
 	assert.Len(t, shape, 1)
+}
+
+func TestRejectingScrapper_QueryPlatformUsers(t *testing.T) {
+	inner := &stubScrapper{users: &scrapper.PlatformUsers{
+		Completeness: scrapper.PlatformUsersComplete,
+		Users: []*scrapper.PlatformUser{
+			{Login: "GOOD", Email: "bad\x00email"},
+			{Login: "BAD\x00LOGIN"},
+			{Login: "bad\xffutf8"},
+		},
+	}}
+	users, err := NewRejectingScrapper(inner).QueryPlatformUsers(context.Background())
+	require.NoError(t, err)
+	require.Len(t, users.Users, 1)
+	assert.Equal(t, "GOOD", users.Users[0].Login)
+	assert.Equal(t, "bad\x00email", users.Users[0].Email, "a fact that is not the login is left to sanitize")
+	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
+
+	users, err = NewRejectingScrapper(&stubScrapper{}).QueryPlatformUsers(context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, users)
 }

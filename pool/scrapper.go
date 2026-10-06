@@ -207,6 +207,15 @@ func (s *scrapperWrapper[K]) EstimateQuery(ctx context.Context, sql string) (*sc
 	return s.lease.Value().EstimateQuery(ctx, sql)
 }
 
+func (s *scrapperWrapper[K]) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lease == nil || s.lease.Released() {
+		return nil, nil
+	}
+	return s.lease.Value().QueryPlatformUsers(ctx)
+}
+
 func (s *scrapperWrapper[K]) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

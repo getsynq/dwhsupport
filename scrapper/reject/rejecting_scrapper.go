@@ -167,6 +167,17 @@ func (s *RejectingScrapper) EstimateQuery(ctx context.Context, sql string) (*scr
 	return s.inner.EstimateQuery(ctx, sql)
 }
 
+// QueryPlatformUsers drops users whose login is not a valid string; the
+// listing's other fields are not identities and are left to sanitize.
+func (s *RejectingScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+	users, err := s.inner.QueryPlatformUsers(ctx)
+	if err != nil || users == nil {
+		return users, err
+	}
+	users.Users = filterValid(users.Users, s.DialectType(), "QueryPlatformUsers")
+	return users, nil
+}
+
 func (s *RejectingScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	rows, err := s.inner.QueryTableConstraints(ctx)
 	if err != nil {

@@ -71,6 +71,12 @@ func (s *ScopedScrapper) RunRawQuery(ctx context.Context, sql string) (scrapper.
 	return s.inner.RunRawQuery(ctx, sql)
 }
 
+// QueryPlatformUsers passes through: a scope selects databases, schemas and
+// tables, and a login belongs to none of them.
+func (s *ScopedScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+	return s.inner.QueryPlatformUsers(ctx)
+}
+
 func (s *ScopedScrapper) EstimateQuery(ctx context.Context, sql string) (*scrapper.QueryEstimate, error) {
 	return s.inner.EstimateQuery(ctx, sql)
 }
