@@ -124,6 +124,12 @@ func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExec
 	return &BigQueryExecutor{client: client, conf: conf}, nil
 }
 
+// NewBigqueryExecutorFromClient wraps a client the caller has already built,
+// without the connection check NewBigqueryExecutor makes.
+func NewBigqueryExecutorFromClient(client *bigquery.Client, conf *BigQueryConf) *BigQueryExecutor {
+	return &BigQueryExecutor{client: client, conf: conf}
+}
+
 func (e *BigQueryExecutor) Exec(ctx context.Context, sql string) error {
 	sql = querycontext.AppendSQLComment(ctx, sql)
 	query := e.client.Query(sql)
