@@ -117,3 +117,29 @@ func (s *BigQueryQueryLogsSuite) TestNormalizedQueryHashIsTheShape() {
 	s.NotEqual(hash(base), hash(otherColumn), "a different column name is another shape")
 	s.NotEqual(logs[base].QueryID, logs[otherLiteral].QueryID, "each job keeps its own id")
 }
+
+// The statements of a multi-statement query run as child jobs of the script, which session_info
+// does not cover, so parent_job_id groups them. A statement run on its own is in no session.
+func (s *BigQueryQueryLogsSuite) TestSessionIDGroupsTheStatementsOfAScript() {
+	from := time.Now().UTC().Add(-time.Minute)
+	marker := fmt.Sprintf("qlog_session_%d", time.Now().UnixNano())
+	table := "`" + s.scrapper.conf.ProjectId + "." + datasetA() + ".products`"
+
+	first := fmt.Sprintf("SELECT COUNT(*) AS %s_first FROM %s", marker, table)
+	second := fmt.Sprintf("SELECT COUNT(*) AS %s_second FROM %s", marker, table)
+	alone := fmt.Sprintf("SELECT COUNT(*) AS %s_alone FROM %s", marker, table)
+	s.run(first + ";\n" + second + ";")
+	s.run(alone)
+
+	// The script job itself is listed too, holding both statements.
+	logs := s.logsBySQL(from, marker, 4)
+	s.Require().Contains(logs, first)
+	s.Require().Contains(logs, second)
+	s.Require().Contains(logs, alone)
+
+	s.Require().NotNil(logs[first].SessionID)
+	s.Require().NotNil(logs[second].SessionID)
+	s.Equal(*logs[first].SessionID, *logs[second].SessionID, "both statements ran in one script")
+	s.NotEqual(logs[first].QueryID, *logs[first].SessionID, "the session is the script, not the statement")
+	s.Nil(logs[alone].SessionID)
+}

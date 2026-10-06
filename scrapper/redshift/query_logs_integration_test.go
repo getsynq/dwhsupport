@@ -190,3 +190,40 @@ func (s *RedshiftQueryLogsSuite) TestQueryLogsCarryTheStatementAsItRan() {
 		s.True(longLog.IsTruncated)
 	})
 }
+
+// Statements run one after another on one connection share its session_id; another connection open
+// at the same time is another session.
+func (s *RedshiftQueryLogsSuite) TestSessionIDIsTheConnection() {
+	ctx := context.Background()
+	from := time.Now().Add(-time.Minute)
+	marker := fmt.Sprintf("qlog_session_%d", time.Now().UnixNano())
+
+	one, err := s.scrapper.Executor().GetDb().Connx(ctx)
+	s.Require().NoError(err)
+	defer one.Close()
+	other, err := s.scrapper.Executor().GetDb().Connx(ctx)
+	s.Require().NoError(err)
+	defer other.Close()
+
+	first := fmt.Sprintf("select 1 as %s_first", marker)
+	second := fmt.Sprintf("select 2 as %s_second", marker)
+	elsewhere := fmt.Sprintf("select 3 as %s_elsewhere", marker)
+	for _, run := range []struct {
+		conn      *sqlx.Conn
+		statement string
+	}{{one, first}, {one, second}, {other, elsewhere}} {
+		_, err := run.conn.ExecContext(ctx, run.statement)
+		s.Require().NoError(err)
+	}
+
+	bySQL := map[string]*querylogs.QueryLog{}
+	for _, log := range s.logsContaining(from, marker, 3) {
+		bySQL[log.SQL] = log
+	}
+	for _, statement := range []string{first, second, elsewhere} {
+		s.Require().Contains(bySQL, statement)
+		s.Require().NotNil(bySQL[statement].SessionID, statement)
+	}
+	s.Equal(*bySQL[first].SessionID, *bySQL[second].SessionID)
+	s.NotEqual(*bySQL[first].SessionID, *bySQL[elsewhere].SessionID)
+}

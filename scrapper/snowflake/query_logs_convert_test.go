@@ -37,3 +37,23 @@ func metadataId(v *structpb.Value) string {
 	}
 	return v.GetStringValue()
 }
+
+func TestConvertSnowflakeRowSessionID(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	t.Run("above 2^53, exact", func(t *testing.T) {
+		row := &SnowflakeQueryLogSchema{QueryID: "q1", ExecutionStatus: "SUCCESS", SessionID: 32791298003718697}
+		log, err := convertSnowflakeRowToQueryLog(row, obfuscator, "snowflake", "account")
+		require.NoError(t, err)
+		require.NotNil(t, log.SessionID)
+		require.Equal(t, "32791298003718697", *log.SessionID)
+	})
+
+	t.Run("a view configured as AccountUsageDb without SESSION_ID", func(t *testing.T) {
+		row := &SnowflakeQueryLogSchema{QueryID: "q1", ExecutionStatus: "SUCCESS"}
+		log, err := convertSnowflakeRowToQueryLog(row, obfuscator, "snowflake", "account")
+		require.NoError(t, err)
+		require.Nil(t, log.SessionID)
+	})
+}

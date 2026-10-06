@@ -246,6 +246,7 @@ func convertDatabricksQueryInfoToQueryLog(
 		"executed_as_user_id":   querylogs.IntValue(queryInfo.ExecutedAsUserId),
 		"executed_as_user_name": querylogs.StringValue(queryInfo.ExecutedAsUserName),
 		"lookup_key":            querylogs.StringValue(queryInfo.LookupKey),
+		"session_id":            querylogs.StringValue(queryInfo.SessionId),
 		"plans_state":           querylogs.StringValue(queryInfo.PlansState.String()),
 		"rows_produced":         querylogs.IntValue(queryInfo.RowsProduced),
 		"spark_ui_url":          querylogs.StringValue(queryInfo.SparkUiUrl),
@@ -345,6 +346,12 @@ func convertDatabricksQueryInfoToQueryLog(
 	}
 	// Databricks doesn't provide database/schema in QueryHistory API
 
+	// The Spark session (Spark Connect, DBSQL or SDP) the query ran on.
+	var sessionID *string
+	if queryInfo.SessionId != "" {
+		sessionID = &queryInfo.SessionId
+	}
+
 	return &querylogs.QueryLog{
 		CreatedAt:                finishedAt,  // Use QueryEndTimeMs as CreatedAt (when query finished/logged)
 		StartedAt:                &startedAt,  // When query execution started
@@ -352,6 +359,7 @@ func convertDatabricksQueryInfoToQueryLog(
 		QueryID:                  queryInfo.QueryId,
 		SQL:                      queryText,
 		NormalizedQueryHash:      nil, // Databricks doesn't provide normalized query hash
+		SessionID:                sessionID,
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                queryInfo.StatementType.String(),

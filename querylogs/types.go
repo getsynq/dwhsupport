@@ -55,6 +55,15 @@ type QueryLog struct {
 	// For platforms without native support, this field is nil
 	NormalizedQueryHash *string
 
+	// SessionID is the platform's id for the unit of work the statement ran in, so statements run one
+	// after another on one connection, or in one script, can be grouped.
+	// Available for: Snowflake (SESSION_ID), Redshift (session_id, the session's process id, which Redshift
+	// reuses once the session ends, so it identifies a session only together with the statement times),
+	// Databricks (QueryInfo.SessionId, the Spark session), BigQuery (session_info.session_id for a job run
+	// in a session, else parent_job_id, the script a statement of a multi-statement query ran in)
+	// For platforms without one, and for a statement that ran in none, this field is nil
+	SessionID *string
+
 	// SqlDialect is the SQL dialect from Scrapper.DialectType() (snowflake, bigquery, databricks, etc.)
 	SqlDialect string
 

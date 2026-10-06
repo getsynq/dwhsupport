@@ -33,8 +33,11 @@ func TestFetchQueryLogsThroughTheWorkspaceApi(t *testing.T) {
 			UserName:         userName,
 		}
 	}
+	const sparkSession = "01f0a2b3-c4d5-1e6f-8a9b-0c1d2e3f4a5b"
+	readable := query("readable", "SELECT * FROM main.sales.orders", "analyst@example.com")
+	readable.SessionId = sparkSession
 	history := []servicesql.QueryInfo{
-		query("readable", "SELECT * FROM main.sales.orders", "analyst@example.com"),
+		readable,
 		query("redacted-human", "<REDACTED>", "analyst@example.com"),
 		query("redacted-etl", "<REDACTED>", etlApplicationId),
 		query("redacted-etl-again", "<REDACTED>", etlApplicationId),
@@ -73,6 +76,9 @@ func TestFetchQueryLogsThroughTheWorkspaceApi(t *testing.T) {
 
 		require.Equal(t, "SELECT * FROM main.sales.orders", logs["readable"].SQL)
 		require.False(t, logs["readable"].IsTextRedacted())
+		require.NotNil(t, logs["readable"].SessionID)
+		require.Equal(t, sparkSession, *logs["readable"].SessionID)
+		require.Nil(t, logs["redacted-human"].SessionID)
 
 		for _, id := range []string{"redacted-human", "redacted-etl", "redacted-etl-again"} {
 			require.Empty(t, logs[id].SQL, id)
