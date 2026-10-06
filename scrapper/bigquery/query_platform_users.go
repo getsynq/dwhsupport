@@ -2,10 +2,10 @@ package bigquery
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
-	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
 	"google.golang.org/api/cloudresourcemanager/v1"
@@ -13,33 +13,80 @@ import (
 	"google.golang.org/api/option"
 )
 
-// platformUsersGrant is what lets a role read the project's IAM policy
-// (resourcemanager.projects.getIamPolicy) and the details of the project's
-// service accounts (iam.serviceAccounts.list). roles/iam.securityReviewer holds
-// both; roles/browser holds only the first.
-const platformUsersGrant = "roles/iam.securityReviewer on the project " +
-	"(resourcemanager.projects.getIamPolicy to list the users, iam.serviceAccounts.list for service account details)"
+// Sources of BigQuery platform users, in trust order. Both are Google APIs:
+// BigQuery has no SQL view of who may use it.
+const (
+	// platformUserSourceServiceAccounts is the IAM API's list of the
+	// project's own service accounts. It is first because it states whether
+	// an account is disabled, while the policy states that only for a member
+	// it has already deleted: an address bound only as deleted and then
+	// recreated is a live login, and this source says so.
+	platformUserSourceServiceAccounts = "bigquery.service_accounts"
+	// platformUserSourceIamPolicy is the project's IAM policy: the users and
+	// service accounts bound to the project, with their roles.
+	platformUserSourceIamPolicy = "bigquery.iam_policy"
+)
 
-// platformUsersCompletenessReason says what a project IAM policy leaves out.
+// platformUsersGrant is what lets a role read both sources:
+// resourcemanager.projects.getIamPolicy for the policy and
+// iam.serviceAccounts.list for the service accounts. roles/iam.securityReviewer
+// holds both.
+const platformUsersGrant = "roles/iam.securityReviewer on the project " +
+	"(resourcemanager.projects.getIamPolicy for the bound users and their roles, iam.serviceAccounts.list for the project's service accounts)"
+
+// iamPolicyCompletenessReason says what a project IAM policy leaves out.
 // BigQuery has no list of its users: anyone Google authenticates may run a
 // job once some policy lets them. The project policy is the one place that
 // names principals, and it names only those bound to the project directly.
-const platformUsersCompletenessReason = "the listing holds the users and service accounts bound directly in the project's IAM policy; " +
-	"principals that reach BigQuery through a Google group, a folder or organization binding, or a dataset-level grant are not listed"
+const iamPolicyCompletenessReason = "the policy names the users and service accounts bound directly to the project; " +
+	"principals that reach BigQuery through a Google group, a folder or organization binding, or a dataset-level grant are not in it"
 
-// QueryPlatformUsers lists the users and service accounts bound in the
-// project's IAM policy, each with the roles bound to it there. Service accounts
-// of the project itself also get their display name, description, disabled
-// state and unique id from the IAM API, when the role may list them.
+// serviceAccountsCompletenessReason: the service account list is every
+// service account of the project, but people and other projects' service
+// accounts are logins of this BigQuery too, and it holds none of them.
+const serviceAccountsCompletenessReason = "the list holds every service account of the project, " +
+	"and no people or service accounts of other projects"
+
+// QueryPlatformUsers reads two sources, kept apart:
 //
-// A refused getIamPolicy is a permission error. A refused service account
-// listing only skips the facts it would have added.
+//   - bigquery.service_accounts, every service account of the project, bound or
+//     not (an unbound one can still be granted access on a dataset), with its
+//     unique id, display name, description and disabled state;
+//   - bigquery.iam_policy, the users and service accounts bound in the
+//     project's IAM policy, with the roles bound to each.
+//
+// Neither fills in the other's facts; Reconcile does that. A source the role
+// may not read is a refused source. When both refuse, the call returns the
+// permission error instead. Any other error fails the call.
 func (e *BigQueryScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
 	httpClient, err := dwhexecbigquery.NewHTTPClient(ctx, &e.conf.BigQueryConf, cloudresourcemanager.CloudPlatformReadOnlyScope)
 	if err != nil {
 		return nil, err
 	}
 
+	accounts, accountsErr := e.listServiceAccounts(ctx, httpClient)
+	policy, policyErr := e.getIamPolicy(ctx, httpClient)
+	return platformUsersFromSources(accounts, accountsErr, policy, policyErr)
+}
+
+func (e *BigQueryScrapper) listServiceAccounts(ctx context.Context, httpClient *http.Client) ([]*iam.ServiceAccount, error) {
+	iamService, err := iam.NewService(ctx, option.WithHTTPClient(httpClient))
+	if err != nil {
+		return nil, err
+	}
+	var accounts []*iam.ServiceAccount
+	err = iamService.Projects.ServiceAccounts.List("projects/"+e.conf.ProjectId).
+		Pages(ctx, func(page *iam.ListServiceAccountsResponse) error {
+			accounts = append(accounts, page.Accounts...)
+			return nil
+		})
+	if err != nil {
+		return nil, errors.Wrapf(err, "listing the service accounts of project %s", e.conf.ProjectId)
+	}
+	return accounts, nil
+}
+
+func (e *BigQueryScrapper) getIamPolicy(ctx context.Context, httpClient *http.Client) (*cloudresourcemanager.Policy, error) {
 	crm, err := cloudresourcemanager.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
@@ -52,34 +99,78 @@ func (e *BigQueryScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 	if err != nil {
 		return nil, errors.Wrapf(err, "reading the IAM policy of project %s", e.conf.ProjectId)
 	}
+	return policy, nil
+}
 
-	users := platformUsersFromPolicy(policy)
+// platformUsersFromSources builds the result from what each source answered.
+// A permission error makes that source refused; any other error fails the
+// call, since a source that is merely unreachable would otherwise read like
+// one the customer has to grant.
+func platformUsersFromSources(
+	accounts []*iam.ServiceAccount, accountsErr error,
+	policy *cloudresourcemanager.Policy, policyErr error,
+) (*scrapper.PlatformUsers, error) {
+	var sources []*scrapper.PlatformUserListing
+	var refusal error
 
-	iamService, err := iam.NewService(ctx, option.WithHTTPClient(httpClient))
-	if err != nil {
-		return nil, err
+	switch {
+	case accountsErr == nil:
+		sources = append(sources, platformUsersFromServiceAccounts(accounts))
+	case dwhexecbigquery.IsPermissionError(accountsErr):
+		refusal = accountsErr
+		sources = append(sources, scrapper.RefusedPlatformUserSource(platformUserSourceServiceAccounts, scrapper.PlatformUserSourceAPI, accountsErr))
+	default:
+		return nil, accountsErr
 	}
-	var accounts []*iam.ServiceAccount
-	err = iamService.Projects.ServiceAccounts.List("projects/"+e.conf.ProjectId).
-		Pages(ctx, func(page *iam.ListServiceAccountsResponse) error {
-			accounts = append(accounts, page.Accounts...)
-			return nil
-		})
-	if err != nil {
-		logging.GetLogger(ctx).WithError(err).Warn("failed to list bigquery project service accounts, continuing without their details")
-		reason := "listing the project's service accounts failed: " + err.Error()
-		if dwhexecbigquery.IsPermissionError(err) {
-			reason = "the role may not list the project's service accounts (iam.serviceAccounts.list, in roles/iam.securityReviewer)"
+
+	switch {
+	case policyErr == nil:
+		sources = append(sources, platformUsersFromPolicy(policy))
+	case dwhexecbigquery.IsPermissionError(policyErr):
+		refusal = policyErr
+		sources = append(sources, scrapper.RefusedPlatformUserSource(platformUserSourceIamPolicy, scrapper.PlatformUserSourceAPI, policyErr))
+	default:
+		return nil, policyErr
+	}
+
+	result := scrapper.NewPlatformUsers(sources...)
+	if result.AllRefused() {
+		return nil, refusal
+	}
+	return result, nil
+}
+
+// platformUsersFromServiceAccounts lists every service account of the
+// project. Its email is the login jobs report as user_email.
+func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.PlatformUserListing {
+	users := &scrapper.PlatformUserListing{
+		Source:             platformUserSourceServiceAccounts,
+		Kind:               scrapper.PlatformUserSourceAPI,
+		Completeness:       scrapper.PlatformUsersUnknown,
+		CompletenessReason: serviceAccountsCompletenessReason,
+	}
+	notInIam := "IAM does not record it"
+	users.Skip(scrapper.PlatformUserFactCreatedAt, notInIam)
+	users.Skip(scrapper.PlatformUserFactLastLoginAt, notInIam)
+	users.Skip(scrapper.PlatformUserFactDefaultRole, "BigQuery has no default role")
+	users.Skip(scrapper.PlatformUserFactRoles, "roles are bound in IAM policies, see "+platformUserSourceIamPolicy)
+
+	for _, a := range accounts {
+		if a == nil || a.Email == "" {
+			continue
 		}
-		users.Skip(scrapper.PlatformUserFactPlatformId, reason)
-		users.Skip(scrapper.PlatformUserFactDisplayName, reason)
-		users.Skip(scrapper.PlatformUserFactComment, reason)
-		users.Skip(scrapper.PlatformUserFactDisabled, reason)
-	} else {
-		addServiceAccountDetails(users, accounts)
+		disabled := a.Disabled
+		users.Users = append(users.Users, &scrapper.PlatformUser{
+			Login:       a.Email,
+			Email:       a.Email,
+			Type:        scrapper.PlatformUserTypeBigQueryServiceAccount,
+			PlatformId:  a.UniqueId,
+			DisplayName: a.DisplayName,
+			Comment:     a.Description,
+			Disabled:    &disabled,
+		})
 	}
-
-	return users.Finish(), nil
+	return users
 }
 
 // platformUsersFromPolicy maps the members of a project IAM policy to platform
@@ -99,15 +190,22 @@ func (e *BigQueryScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 //
 // A conditional binding counts like any other: the role is bound, under a
 // condition the listing does not evaluate.
-func platformUsersFromPolicy(policy *cloudresourcemanager.Policy) *scrapper.PlatformUsers {
-	users := &scrapper.PlatformUsers{
+func platformUsersFromPolicy(policy *cloudresourcemanager.Policy) *scrapper.PlatformUserListing {
+	users := &scrapper.PlatformUserListing{
+		Source:             platformUserSourceIamPolicy,
+		Kind:               scrapper.PlatformUserSourceAPI,
 		Completeness:       scrapper.PlatformUsersUnknown,
-		CompletenessReason: platformUsersCompletenessReason,
+		CompletenessReason: iamPolicyCompletenessReason,
 	}
 	notInIam := "IAM does not record it"
 	users.Skip(scrapper.PlatformUserFactCreatedAt, notInIam)
 	users.Skip(scrapper.PlatformUserFactLastLoginAt, notInIam)
 	users.Skip(scrapper.PlatformUserFactDefaultRole, "BigQuery has no default role")
+	accountFacts := "a policy names members only, see " + platformUserSourceServiceAccounts
+	users.Skip(scrapper.PlatformUserFactPlatformId, accountFacts)
+	users.Skip(scrapper.PlatformUserFactDisplayName, accountFacts)
+	users.Skip(scrapper.PlatformUserFactComment, accountFacts)
+	users.Skip(scrapper.PlatformUserFactDisabled, "a policy states it only for a member it has deleted, see "+platformUserSourceServiceAccounts)
 
 	live := map[string]*scrapper.PlatformUser{}
 	deleted := map[string]*scrapper.PlatformUser{}
@@ -179,30 +277,4 @@ func parseIamMember(member string) (userType, address string, isDeleted, ok bool
 		return scrapper.PlatformUserTypeBigQueryServiceAccount, address, isDeleted, true
 	}
 	return "", "", false, false
-}
-
-// addServiceAccountDetails adds what the IAM API states about the project's
-// own service accounts to the listed ones. A service account of another
-// project bound here keeps only its address and roles.
-func addServiceAccountDetails(users *scrapper.PlatformUsers, accounts []*iam.ServiceAccount) {
-	byEmail := make(map[string]*iam.ServiceAccount, len(accounts))
-	for _, a := range accounts {
-		if a != nil {
-			byEmail[a.Email] = a
-		}
-	}
-	for _, u := range users.Users {
-		if u.Type != scrapper.PlatformUserTypeBigQueryServiceAccount || u.Disabled != nil {
-			continue
-		}
-		a, ok := byEmail[u.Login]
-		if !ok {
-			continue
-		}
-		u.PlatformId = a.UniqueId
-		u.DisplayName = a.DisplayName
-		u.Comment = a.Description
-		disabled := a.Disabled
-		u.Disabled = &disabled
-	}
 }

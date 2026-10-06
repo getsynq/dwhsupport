@@ -345,11 +345,11 @@ type BigQueryPlatformUsersSuite struct {
 	scrappertest.PlatformUsersSuite
 }
 
-// TestBigQueryPlatformUsersSuite lists the project's IAM principals. The test
-// service account is bound in the project policy, so it is the connected login
-// the listing must contain. It holds no resourcemanager.projects.getIamPolicy,
-// so with the dwhtesting key the suite sees the permission error and skips;
-// a key with roles/iam.securityReviewer (or roles/browser) runs it through.
+// TestBigQueryPlatformUsersSuite lists the project's service accounts and IAM
+// policy members. The test service account is both, so it is the connected
+// login the listing must contain. It may read neither source, so with the
+// dwhtesting key the call returns the permission error and the suite skips; a
+// key with roles/iam.securityReviewer runs it through.
 func TestBigQueryPlatformUsersSuite(t *testing.T) {
 	skipIfNoBigQuery(t)
 	suite.Run(t, new(BigQueryPlatformUsersSuite))
