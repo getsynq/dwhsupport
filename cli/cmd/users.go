@@ -64,8 +64,16 @@ type sourcedPlatformUser struct {
 // reportPlatformUsers writes what a listing says about itself to stderr, so
 // stdout stays the list of users alone.
 func reportPlatformUsers(users *scrapper.PlatformUserListing, grant string) {
-	if users.Refused != "" {
+	switch {
+	case users.Refused != "":
 		fmt.Fprintf(output.ErrOut, "%s: refused (%s)\n", users.Source, users.Refused)
+		fmt.Fprintf(output.ErrOut, "%s: grant for the full listing: %s\n", users.Source, grant)
+		return
+	case users.Unavailable != "":
+		fmt.Fprintf(output.ErrOut, "%s: unavailable on this platform (%s)\n", users.Source, users.Unavailable)
+		return
+	case users.Failed != "":
+		fmt.Fprintf(output.ErrOut, "%s: failed (%s)\n", users.Source, users.Failed)
 		return
 	}
 	line := users.Source + ": " + string(users.Completeness)

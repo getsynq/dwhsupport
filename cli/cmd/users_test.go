@@ -48,11 +48,22 @@ func TestReportPlatformUsers(t *testing.T) {
 		}
 	})
 
-	t.Run("a refused source says so and nothing else", func(t *testing.T) {
+	t.Run("a refused source says so and names the grant", func(t *testing.T) {
 		buf := captureErrOut(t)
 		reportPlatformUsers(scrapper.RefusedPlatformUserSource("p.api", scrapper.PlatformUserSourceAPI, errors.New("403")), "GRANT X")
 
-		if want := "p.api: refused (403)\n"; buf.String() != want {
+		if want := "p.api: refused (403)\np.api: grant for the full listing: GRANT X\n"; buf.String() != want {
+			t.Fatalf("got %q, want %q", buf.String(), want)
+		}
+	})
+
+	t.Run("an unavailable or failed source names no grant", func(t *testing.T) {
+		buf := captureErrOut(t)
+		reportPlatformUsers(scrapper.UnavailablePlatformUserSource("p.old", scrapper.PlatformUserSourceSQL, errors.New("no such view")), "GRANT X")
+		reportPlatformUsers(scrapper.PlatformUserSourceError("p.api", scrapper.PlatformUserSourceAPI, errors.New("503"), nil, nil), "GRANT X")
+
+		want := "p.old: unavailable on this platform (no such view)\np.api: failed (503)\n"
+		if buf.String() != want {
 			t.Fatalf("got %q, want %q", buf.String(), want)
 		}
 	})
