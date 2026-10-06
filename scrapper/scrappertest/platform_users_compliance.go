@@ -2,9 +2,10 @@ package scrappertest
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"strings"
+
+	"github.com/pkg/errors"
 
 	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -183,7 +184,7 @@ func OnlyPlatformUserSource(result *scrapper.PlatformUsers, err error) (*scrappe
 		return nil, err
 	}
 	if len(result.Sources) != 1 {
-		return nil, fmt.Errorf("expected one source of users, got %d", len(result.Sources))
+		return nil, errors.Errorf("expected one source of users, got %d", len(result.Sources))
 	}
 	return result.Sources[0], nil
 }

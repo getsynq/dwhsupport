@@ -3,12 +3,12 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"strings"
 	"testing"
 
 	"github.com/getsynq/dwhsupport/cli/internal/output"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
 )
 
 func captureErrOut(t *testing.T) *bytes.Buffer {
