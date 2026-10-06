@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -335,6 +336,15 @@ func convertSnowflakeRowToQueryLog(
 		status = strings.ToUpper(row.ExecutionStatus)
 	}
 
+	// Session and transaction ids run past 2^53, which a float64 (and so a number in the metadata
+	// struct) cannot hold exactly, so they are written as decimal strings.
+	sessionID := strconv.FormatInt(row.SessionID, 10)
+	// SESSION_ID is 0 only when a view configured as AccountUsageDb lacks the column.
+	var session *string
+	if row.SessionID != 0 {
+		session = &sessionID
+	}
+
 	// Build metadata with all Snowflake-specific fields
 	// Include ALL available fields, even those mapped to higher-level QueryLog fields
 	metadata := map[string]*structpb.Value{
@@ -352,7 +362,7 @@ func convertSnowflakeRowToQueryLog(
 		// Snowflake-specific fields
 		"database_id":                                 querylogs.IntPtrValue(row.DatabaseID),
 		"schema_id":                                   querylogs.IntPtrValue(row.SchemaID),
-		"session_id":                                  querylogs.IntValue(row.SessionID),
+		"session_id":                                  querylogs.StringValue(sessionID),
 		"warehouse_id":                                querylogs.IntPtrValue(row.WarehouseID),
 		"warehouse_size":                              querylogs.StringPtrValue(row.WarehouseSize),
 		"warehouse_type":                              querylogs.StringPtrValue(row.WarehouseType),
@@ -404,7 +414,7 @@ func convertSnowflakeRowToQueryLog(
 		"query_acceleration_partitions_scanned":       querylogs.IntValue(row.QueryAccelerationPartitionsScanned),
 		"query_acceleration_upper_limit_scale_factor": querylogs.IntValue(row.QueryAccelerationUpperLimitScaleFactor),
 		"child_queries_wait_time":                     querylogs.IntValue(row.ChildQueriesWaitTime),
-		"transaction_id":                              querylogs.IntValue(row.TransactionID),
+		"transaction_id":                              querylogs.StringValue(strconv.FormatInt(row.TransactionID, 10)),
 		"role_type":                                   querylogs.StringPtrValue(row.RoleType),
 		"query_hash":                                  querylogs.StringPtrValue(row.QueryHash),
 		"query_hash_version":                          querylogs.IntPtrValue(row.QueryHashVersion),
@@ -451,6 +461,7 @@ func convertSnowflakeRowToQueryLog(
 		QueryID:                  row.QueryID,
 		SQL:                      queryText,
 		NormalizedQueryHash:      row.QueryParameterizedHash, // Native Snowflake parameterized query hash
+		SessionID:                session,
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.QueryType,

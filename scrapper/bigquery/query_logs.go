@@ -62,12 +62,15 @@ type BigQueryQueryLogSchema struct {
 	QueryHashes *struct {
 		NormalizedLiterals bigquery.NullString `bigquery:"normalized_literals"`
 	} `bigquery:"query_hashes"`
+	// SessionId is read from session_info (see queryLogColumnExpressions).
+	SessionId bigquery.NullString `bigquery:"session_id"`
 }
 
 // queryLogColumnExpressions selects the columns of BigQueryQueryLogSchema that are not top-level
 // columns of INFORMATION_SCHEMA.JOBS.
 var queryLogColumnExpressions = map[string]string{
 	"query_hashes": "query_info.query_hashes AS query_hashes",
+	"session_id":   "session_info.session_id AS session_id",
 }
 
 type bigqueryQueryLogIterator struct {
@@ -258,6 +261,7 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		"total_bytes_billed":    querylogs.IntValue(row.TotalBytesBilled.Int64),
 		"transaction_id":        querylogs.StringValue(row.TransactionId.StringVal),
 		"parent_job_id":         querylogs.StringValue(row.ParentJobId.StringVal),
+		"session_id":            querylogs.StringValue(row.SessionId.StringVal),
 		"transferred_bytes":     querylogs.IntValue(row.TransferredBytes.Int64),
 	}
 
@@ -319,6 +323,16 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		normalizedQueryHash = &hash
 	}
 
+	// A job run in a session belongs to that session. A statement of a multi-statement query runs as a
+	// child job of the script, so the script job groups its statements. A job in neither has none.
+	var sessionID *string
+	switch {
+	case row.SessionId.Valid && row.SessionId.StringVal != "":
+		sessionID = &row.SessionId.StringVal
+	case row.ParentJobId.Valid && row.ParentJobId.StringVal != "":
+		sessionID = &row.ParentJobId.StringVal
+	}
+
 	// Timing information
 	startedAt := row.StartTime
 	finishedAt := row.EndTime
@@ -330,6 +344,7 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		QueryID:                  row.JobId.StringVal,
 		SQL:                      queryText,
 		NormalizedQueryHash:      normalizedQueryHash,
+		SessionID:                sessionID,
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                row.StatementType.StringVal,

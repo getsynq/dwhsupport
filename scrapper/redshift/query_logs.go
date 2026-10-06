@@ -420,6 +420,13 @@ func convertRedshiftRowToQueryLog(
 		normalizedQueryHash = trimmed
 	}
 
+	// session_id is the session's process id, which Redshift hands out again once the session ends.
+	var sessionID *string
+	if row.SessionId != nil {
+		id := strconv.FormatInt(*row.SessionId, 10)
+		sessionID = &id
+	}
+
 	return &querylogs.QueryLog{
 		CreatedAt:                createdAt,
 		StartedAt:                row.StartTime, // When query execution started
@@ -427,6 +434,7 @@ func convertRedshiftRowToQueryLog(
 		QueryID:                  strconv.FormatInt(row.QueryId, 10),
 		SQL:                      queryText,
 		NormalizedQueryHash:      normalizedQueryHash,
+		SessionID:                sessionID,
 		SqlDialect:               sqlDialect,
 		DwhContext:               dwhContext,
 		QueryType:                queryType,

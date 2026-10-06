@@ -200,6 +200,8 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 ## Special Patterns
 
 - **Query Logs**: `querylogs/` defines `QueryLogsProvider` interface with `FetchQueryLogs` returning a `QueryLogIterator`. Implementations use `querylogs.NewSqlxRowsIterator[T]` with a warehouse-specific schema struct and converter function. See `scrapper/snowflake/query_logs.go` for the canonical pattern; Redshift has its own iterator because one statement spans several rows.
+  - `QueryLog.SessionID` is the unit of work a statement ran in (where each platform takes it from is on the field). BigQuery has no session for most jobs, so a statement of a multi-statement query falls back to its script job, `parent_job_id`. Redshift reuses a session id once the session ends.
+  - **An id that can pass 2^53 goes into metadata as a string**, never through `querylogs.IntValue`: metadata is a `structpb.Struct`, whose numbers are float64, so Snowflake's `session_id` and `transaction_id` came back with their low bits gone.
 - **Scrapper Configs**: All scrapper configs must be proper structs embedding their executor config (not type aliases). Each scrapper should have an `Executor()` accessor method. Example: `type MSSQLScrapperConf struct { dwhexecmssql.MSSQLConf }`.
 - **Lazy Loading**: `lazy/lazy.go` provides lazy initialization pattern
 - **SSH Tunneling**: `sshtunnel/ssh_tunnel.go` supports SSH tunnel connections
