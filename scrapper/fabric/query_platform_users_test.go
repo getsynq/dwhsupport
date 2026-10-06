@@ -1,6 +1,7 @@
 package fabric
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strings"
@@ -162,4 +163,28 @@ func TestBuildPlatformUsersBothRefused(t *testing.T) {
 	_, err = buildPlatformUsers(nil, errors.New("timeout"), nil, errors.New("The SELECT permission was denied"), testTenant, "wh")
 	require.Error(t, err)
 	assert.True(t, dwhexecfabric.IsPermissionError(err), "the database's refusal when the API only failed")
+}
+
+// A source that failed for a reason no grant fixes must not read as refused:
+// a caller would tell the customer to grant a workspace role that would not
+// help.
+func TestBuildPlatformUsersFailureIsNotRefusal(t *testing.T) {
+	unavailableAPI := errors.WithStack(&dwhexecfabric.APIError{StatusCode: http.StatusServiceUnavailable, ErrorCode: "ServiceUnavailable"})
+	result, err := buildPlatformUsers(nil, unavailableAPI, dbUsers(), nil, testTenant, "wh")
+	require.NoError(t, err)
+	api := result.Source(sourceWorkspaceRoleAssignments)
+	assert.Empty(t, api.Refused, "a 503 is not a missing grant")
+	assert.Contains(t, api.Failed, "ServiceUnavailable")
+
+	result, err = buildPlatformUsers(nil, context.DeadlineExceeded, dbUsers(), nil, testTenant, "wh")
+	require.NoError(t, err)
+	api = result.Source(sourceWorkspaceRoleAssignments)
+	assert.Empty(t, api.Refused, "a timeout is not a missing grant")
+	assert.NotEmpty(t, api.Failed)
+
+	result, err = buildPlatformUsers(roleAssignments()[:2], nil, nil, errors.New("read tcp: connection reset by peer"), testTenant, "wh")
+	require.NoError(t, err)
+	db := result.Source(sourceDatabasePrincipals)
+	assert.Empty(t, db.Refused, "a dropped connection is not a missing grant")
+	assert.Contains(t, db.Failed, "connection reset")
 }

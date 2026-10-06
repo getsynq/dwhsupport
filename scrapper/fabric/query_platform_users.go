@@ -170,7 +170,7 @@ func buildPlatformUsers(
 	}
 
 	result := scrapper.NewPlatformUsers(apiSource, dbSource)
-	if result.AllRefused() {
+	if !result.Answered() {
 		if dwhexecfabric.IsPermissionError(apiErr) || !dwhexecfabric.IsPermissionError(dbErr) {
 			return nil, errors.Wrapf(apiErr, "failed to read %s", sourceWorkspaceRoleAssignments)
 		}
