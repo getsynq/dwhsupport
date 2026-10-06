@@ -2,6 +2,7 @@ package bigquery
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -335,5 +336,48 @@ func (s *BigQueryScrapperSuite) TestFetchTableChangeHistory() {
 		s.NotZero(event.Timestamp)
 		s.NotEmpty(event.Version, "BigQuery events should have a job_id as version")
 		s.NotEmpty(event.Operation)
+	}
+}
+
+// --- PlatformUsersSuite ---
+
+type BigQueryPlatformUsersSuite struct {
+	scrappertest.PlatformUsersSuite
+}
+
+// TestBigQueryPlatformUsersSuite lists the project's IAM principals. The test
+// service account is bound in the project policy, so it is the connected login
+// the listing must contain. It holds no resourcemanager.projects.getIamPolicy,
+// so with the dwhtesting key the suite sees the permission error and skips;
+// a key with roles/iam.securityReviewer (or roles/browser) runs it through.
+func TestBigQueryPlatformUsersSuite(t *testing.T) {
+	skipIfNoBigQuery(t)
+	suite.Run(t, new(BigQueryPlatformUsersSuite))
+}
+
+func (s *BigQueryPlatformUsersSuite) SetupSuite() {
+	sc, err := newBigQueryScrapperFromEnv(context.Background())
+	if err != nil {
+		s.T().Skipf("Could not connect to BigQuery: %v", err)
+	}
+	s.Scrapper = sc
+
+	credentials, err := os.ReadFile(os.Getenv("BIGQUERY_CREDENTIALS_FILE"))
+	s.Require().NoError(err)
+	var key struct {
+		ClientEmail string `json:"client_email"`
+	}
+	s.Require().NoError(json.Unmarshal(credentials, &key))
+	s.ConnectedLogin = key.ClientEmail
+	s.ExpectFacts = []scrapper.PlatformUserFact{
+		scrapper.PlatformUserFactType,
+		scrapper.PlatformUserFactEmail,
+		scrapper.PlatformUserFactRoles,
+	}
+}
+
+func (s *BigQueryPlatformUsersSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
 	}
 }

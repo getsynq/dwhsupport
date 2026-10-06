@@ -66,6 +66,7 @@ func (e *BigQueryScrapper) Capabilities() scrapper.Capabilities {
 			ReportsBytes: true,
 			CanBeExact:   true,
 		},
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
 	}
 }
 
