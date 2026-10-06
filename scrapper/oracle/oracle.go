@@ -49,7 +49,11 @@ func (e *OracleScrapper) IsPermissionError(err error) bool {
 	return dwhexecoracle.IsPermissionError(err)
 }
 
-func (e *OracleScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *OracleScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
+	}
+}
 
 func (e *OracleScrapper) DialectType() string {
 	return "oracle"
