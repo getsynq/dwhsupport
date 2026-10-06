@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
+	gosnowflake "github.com/snowflakedb/gosnowflake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -126,3 +128,15 @@ func TestDisplayName(t *testing.T) {
 }
 
 func boolPtr(b bool) *bool { return &b }
+
+func TestPlatformUserSourceErrorClassification(t *testing.T) {
+	sc := &SnowflakeScrapper{}
+	classify := func(err error) *scrapper.PlatformUserListing {
+		return scrapper.PlatformUserSourceError("s", scrapper.PlatformUserSourceSQL, err, sc.IsPermissionError, isUnavailable)
+	}
+
+	assert.NotEmpty(t, classify(&gosnowflake.SnowflakeError{Number: 904, Message: "invalid identifier 'TYPE'"}).Unavailable,
+		"a column this account lacks is no grant's business")
+	assert.NotEmpty(t, classify(&gosnowflake.SnowflakeError{Number: 2003, Message: "Object does not exist or not authorized."}).Refused)
+	assert.NotEmpty(t, classify(errors.New("i/o timeout")).Failed)
+}

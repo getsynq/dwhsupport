@@ -170,12 +170,14 @@ type Scrapper interface {
 	EstimateQuery(ctx context.Context, sql string) (*QueryEstimate, error)
 	QueryTableConstraints(ctx context.Context) ([]*TableConstraintRow, error)
 	// QueryPlatformUsers lists the platform's users (logins) with every fact
-	// the platform states about them. It returns ErrUnsupported when
-	// Capabilities().PlatformUsers is not supported, and a permission error
-	// (IsPermissionError) when the platform has a listing the connecting role
-	// may not read. A fact the role may not read never fails the call: it is
-	// left empty and recorded in PlatformUsers.SkippedFacts. Users are not
-	// scoped: scope.WithScope selects tables, not logins.
+	// the platform states about them, one listing per source. It returns
+	// ErrUnsupported when Capabilities().PlatformUsers is not supported.
+	// Otherwise a source the role may not read, that this version lacks, or
+	// that failed is a state of the result (PlatformUserListing.Refused,
+	// Unavailable, Failed), and a fact that cannot be read is skipped with the
+	// reason: the call fails only on a real failure of the connection (see
+	// CollectPlatformUsers). Users are not scoped: scope.WithScope selects
+	// tables, not logins.
 	QueryPlatformUsers(ctx context.Context) (*PlatformUsers, error)
 	// This will close underlying execer, such scrapper can't be used anymore
 	Close() error

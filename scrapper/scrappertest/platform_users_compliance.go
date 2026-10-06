@@ -17,8 +17,8 @@ import (
 // contain, whatever else the role may see.
 //
 // A platform without a user listing must say so through its capability and
-// return ErrUnsupported; one with a listing must return it, never an empty
-// "complete" one.
+// return ErrUnsupported; one with a listing returns a result even when the
+// test role may read none of its sources, with each source saying why.
 type PlatformUsersSuite struct {
 	suite.Suite
 	Scrapper scrapper.Scrapper
@@ -46,10 +46,7 @@ func (s *PlatformUsersSuite) TestPlatformUsers_CapabilityMatchesCall() {
 		return
 	}
 	s.NotEmpty(capability.Grant, "a supported capability names the grant that lets a role see every user")
-	if s.Scrapper.IsPermissionError(err) {
-		s.T().Skipf("the test role may not list users: %v", err)
-	}
-	s.Require().NoError(err)
+	s.Require().NoError(err, "a source the role may not read is a state of the result, not an error")
 	s.Require().NotNil(users)
 }
 
@@ -76,7 +73,6 @@ func (s *PlatformUsersSuite) TestPlatformUsers_Sources() {
 	result := s.listing()
 
 	s.Require().NotEmpty(result.Sources)
-	s.False(result.AllRefused(), "a result whose every source refused is a permission error, not a result")
 	names := map[string]bool{}
 	for _, src := range result.Sources {
 		s.NotEmpty(src.Source)
@@ -85,8 +81,16 @@ func (s *PlatformUsersSuite) TestPlatformUsers_Sources() {
 		names[src.Source] = true
 		s.Containsf([]scrapper.PlatformUserSourceKind{scrapper.PlatformUserSourceSQL, scrapper.PlatformUserSourceAPI}, src.Kind,
 			"source %q has kind %q", src.Source, src.Kind)
-		if src.Refused != "" {
-			s.Emptyf(src.Users, "refused source %q lists users", src.Source)
+		if !src.Answered() {
+			states := 0
+			for _, state := range []string{src.Refused, src.Unavailable, src.Failed} {
+				if state != "" {
+					states++
+				}
+			}
+			s.Equalf(1, states, "source %q is in more than one state", src.Source)
+			s.Emptyf(src.Users, "source %q did not answer but lists users", src.Source)
+			s.Emptyf(src.Completeness, "source %q did not answer but claims a completeness", src.Source)
 			continue
 		}
 		s.checkShape(src)
@@ -128,11 +132,11 @@ func (s *PlatformUsersSuite) listing() *scrapper.PlatformUsers {
 		s.T().Skip("platform has no user listing")
 	}
 	users, err := s.Scrapper.QueryPlatformUsers(s.ctx())
-	if s.Scrapper.IsPermissionError(err) {
-		s.T().Skipf("the test role may not list users: %v", err)
-	}
 	s.Require().NoError(err)
 	s.Require().NotNil(users)
+	if !users.Answered() {
+		s.T().Skipf("no source of users answered the test role: %s", users.Reconcile().CompletenessReason)
+	}
 	return users
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
+	gosnowflake "github.com/snowflakedb/gosnowflake"
 )
 
 // platformUsersGrant is what lets a role read ACCOUNT_USAGE.USERS and
@@ -100,33 +101,33 @@ const (
 // ACCOUNT_USAGE.USERS, with the roles from ACCOUNT_USAGE.GRANTS_TO_USERS, has
 // every fact but lags behind by up to two hours. SHOW USERS is current, so it
 // names a user created since, but hides the details of the users the role
-// does not own. Either may be refused; both refused is the permission error.
+// does not own. A source that cannot be read is recorded as refused,
+// unavailable or failed, and the other one still answers.
 //
 // Login is the user's NAME, which is what QUERY_HISTORY.USER_NAME reports, not
 // its LOGIN_NAME.
 func (e *SnowflakeScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	accountUsage, accountUsageErr := e.queryAccountUsageUsers(ctx)
-	if accountUsageErr != nil {
-		if !e.IsPermissionError(accountUsageErr) {
-			return nil, accountUsageErr
-		}
-		logging.GetLogger(ctx).WithError(accountUsageErr).Info("cannot read ACCOUNT_USAGE.USERS, listing users with SHOW USERS only")
-		accountUsage = scrapper.RefusedPlatformUserSource(accountUsageUsersSource, scrapper.PlatformUserSourceSQL, accountUsageErr)
+	accountUsage, err := e.queryAccountUsageUsers(ctx)
+	if err != nil {
+		logging.GetLogger(ctx).WithError(err).Info("cannot read ACCOUNT_USAGE.USERS, listing users with SHOW USERS only")
+		accountUsage = scrapper.PlatformUserSourceError(accountUsageUsersSource, scrapper.PlatformUserSourceSQL, err,
+			e.IsPermissionError, isUnavailable)
 	}
 
-	show, showErr := e.queryShowUsers(ctx)
-	if showErr != nil {
-		if !e.IsPermissionError(showErr) {
-			return nil, showErr
-		}
-		show = scrapper.RefusedPlatformUserSource(showUsersSource, scrapper.PlatformUserSourceSQL, showErr)
+	show, err := e.queryShowUsers(ctx)
+	if err != nil {
+		show = scrapper.PlatformUserSourceError(showUsersSource, scrapper.PlatformUserSourceSQL, err, e.IsPermissionError, isUnavailable)
 	}
 
-	result := scrapper.NewPlatformUsers(accountUsage, show)
-	if result.AllRefused() {
-		return nil, errors.Wrapf(showErr, "SHOW USERS refused, as was ACCOUNT_USAGE.USERS (%v)", accountUsageErr)
-	}
-	return result, nil
+	return scrapper.CollectPlatformUsers(ctx, accountUsage, show)
+}
+
+// isUnavailable reports an error naming a column or object this account does
+// not have (000904 invalid identifier). Snowflake answers a missing object and
+// a refused one with the same 002003, which IsPermissionError takes.
+func isUnavailable(err error) bool {
+	var sfErr *gosnowflake.SnowflakeError
+	return errors.As(err, &sfErr) && sfErr.Number == 904
 }
 
 func (e *SnowflakeScrapper) queryAccountUsageUsers(ctx context.Context) (*scrapper.PlatformUserListing, error) {
@@ -162,13 +163,15 @@ func (e *SnowflakeScrapper) queryAccountUsageUsers(ctx context.Context) (*scrapp
 	}
 
 	roles, err := e.queryAccountUsageUserRoles(ctx)
-	if err != nil {
-		if !e.IsPermissionError(err) {
-			return nil, err
-		}
-		users.Skip(scrapper.PlatformUserFactRoles, "ACCOUNT_USAGE.GRANTS_TO_USERS was refused: "+err.Error())
-	} else {
+	switch {
+	case err == nil:
 		users.AssignRoles(roles)
+	case ctx.Err() != nil:
+		return nil, ctx.Err()
+	case e.IsPermissionError(err):
+		users.Skip(scrapper.PlatformUserFactRoles, "ACCOUNT_USAGE.GRANTS_TO_USERS was refused: "+err.Error())
+	default:
+		users.Skip(scrapper.PlatformUserFactRoles, "reading ACCOUNT_USAGE.GRANTS_TO_USERS failed: "+err.Error())
 	}
 	return users, nil
 }

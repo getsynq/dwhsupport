@@ -1,9 +1,12 @@
 package scrapper
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
 // PlatformUsersCapability says whether a platform can list its users, and what
@@ -148,10 +151,21 @@ type PlatformUserListing struct {
 	// Kind says whether the source is SQL or an API. Empty on a reconciled
 	// listing.
 	Kind PlatformUserSourceKind `json:"kind,omitempty"`
-	// Refused is set when the source refused the connecting role, with the
-	// platform's error. Such a listing holds no users and its completeness
-	// means nothing.
+	// Refused is set, with the platform's error, when the source refused the
+	// connecting role: a grant would let it answer.
 	Refused string `json:"refused,omitempty"`
+	// Unavailable is set when this platform's version or edition has no such
+	// source (a view, a column or an API it lacks): no grant fixes it.
+	Unavailable string `json:"unavailable,omitempty"`
+	// Failed is set when reading the source failed for any other reason (a
+	// timeout, a 5xx, a dropped connection): a later attempt may answer.
+	//
+	// A listing with any of Refused, Unavailable or Failed set holds no users
+	// and claims no completeness; see Answered.
+	Failed string `json:"failed,omitempty"`
+	// err is the error behind Refused, Unavailable or Failed, kept for
+	// CollectPlatformUsers.
+	err error
 	// Users sorted by Login, one per login.
 	Users []*PlatformUser `json:"users"`
 	// Completeness says how much of the platform's users the listing holds.
@@ -178,8 +192,8 @@ const PlatformUsersReconciledSource = "reconciled"
 //
 // A platform reads every source that can add a user or a fact. A fallback
 // that only repeats a subset of another source (Oracle ALL_USERS next to
-// DBA_USERS) is read when that source refused, and the refusal is kept as a
-// source of its own, so a caller sees what was missed and why.
+// DBA_USERS) is read when that source did not answer, and the source that did
+// not answer is kept with the reason, so a caller sees what was missed and why.
 type PlatformUsers struct {
 	// Sources in the order the platform trusts them, most trusted first:
 	// Reconcile takes a fact from the first source that has it.
@@ -199,9 +213,64 @@ func NewPlatformUsers(sources ...*PlatformUserListing) *PlatformUsers {
 	return result
 }
 
+// CollectPlatformUsers is how QueryPlatformUsers returns. A source that did
+// not answer is a state of the result, not an error of the call: the call
+// fails only when the context is done, or when no source answered and at
+// least one of them failed outright, which is a real failure of the
+// connection (a wrong password, an unreachable host) rather than something the
+// platform or a grant decides. Every source refused or unavailable is a
+// result, whose Reconcile says so.
+func CollectPlatformUsers(ctx context.Context, sources ...*PlatformUserListing) (*PlatformUsers, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	result := NewPlatformUsers(sources...)
+	if result.Answered() {
+		return result, nil
+	}
+	for _, src := range result.Sources {
+		if src.Failed != "" {
+			return nil, errors.Wrapf(src.err, "no source of users answered, %s failed", src.Source)
+		}
+	}
+	return result, nil
+}
+
+// PlatformUserSourceError records a source that could not be read, in the
+// state its error calls for: refused when isPermission says the role was
+// refused, unavailable when isUnavailable says the platform has no such
+// source, failed otherwise. Either classifier may be nil.
+func PlatformUserSourceError(
+	source string,
+	kind PlatformUserSourceKind,
+	err error,
+	isPermission, isUnavailable func(error) bool,
+) *PlatformUserListing {
+	switch {
+	case isPermission != nil && isPermission(err):
+		return RefusedPlatformUserSource(source, kind, err)
+	case isUnavailable != nil && isUnavailable(err):
+		return UnavailablePlatformUserSource(source, kind, err)
+	default:
+		return &PlatformUserListing{Source: source, Kind: kind, Failed: err.Error(), err: err}
+	}
+}
+
 // RefusedPlatformUserSource records a source that refused the connecting role.
 func RefusedPlatformUserSource(source string, kind PlatformUserSourceKind, err error) *PlatformUserListing {
-	return &PlatformUserListing{Source: source, Kind: kind, Refused: err.Error()}
+	return &PlatformUserListing{Source: source, Kind: kind, Refused: err.Error(), err: err}
+}
+
+// UnavailablePlatformUserSource records a source this platform's version or
+// edition does not have.
+func UnavailablePlatformUserSource(source string, kind PlatformUserSourceKind, err error) *PlatformUserListing {
+	return &PlatformUserListing{Source: source, Kind: kind, Unavailable: err.Error(), err: err}
+}
+
+// Answered reports whether the source was read: it is not refused,
+// unavailable or failed.
+func (p *PlatformUserListing) Answered() bool {
+	return p.Refused == "" && p.Unavailable == "" && p.Failed == ""
 }
 
 // Source returns the listing of the named source, or nil.
@@ -217,15 +286,17 @@ func (p *PlatformUsers) Source(name string) *PlatformUserListing {
 	return nil
 }
 
-// AllRefused reports whether no source could be read. QueryPlatformUsers
-// returns a permission error then instead of a result.
-func (p *PlatformUsers) AllRefused() bool {
+// Answered reports whether any source was read.
+func (p *PlatformUsers) Answered() bool {
+	if p == nil {
+		return false
+	}
 	for _, src := range p.Sources {
-		if src.Refused == "" {
-			return false
+		if src.Answered() {
+			return true
 		}
 	}
-	return true
+	return false
 }
 
 // Reconcile merges the sources into one listing. It is the default reading,
@@ -237,8 +308,11 @@ func (p *PlatformUsers) AllRefused() bool {
 //   - the listing is as complete as its most complete source, since a
 //     complete source saw every user: complete, else limited, else unknown;
 //   - a fact is skipped only when every source that answered skipped it;
-//   - a refused source adds its refusal to the reason of a listing that is
-//     not complete.
+//   - a source that did not answer adds why to the reason of a listing that is
+//     not complete;
+//   - when no source answered, the reconciled listing did not either: it is
+//     refused if any source refused (a grant would help), else unavailable if
+//     any was, else failed, with every source's reason.
 func (p *PlatformUsers) Reconcile() *PlatformUserListing {
 	result := &PlatformUserListing{Source: PlatformUsersReconciledSource}
 	if p == nil {
@@ -246,13 +320,33 @@ func (p *PlatformUsers) Reconcile() *PlatformUserListing {
 	}
 
 	answered := make([]*PlatformUserListing, 0, len(p.Sources))
-	var refusals []string
+	var refused, unavailable, failed, notAnswered []string
 	for _, src := range p.Sources {
-		if src.Refused != "" {
-			refusals = append(refusals, src.Source+" refused: "+src.Refused)
-			continue
+		switch {
+		case src.Refused != "":
+			refused = append(refused, src.Source+": "+src.Refused)
+			notAnswered = append(notAnswered, src.Source+" refused: "+src.Refused)
+		case src.Unavailable != "":
+			unavailable = append(unavailable, src.Source+": "+src.Unavailable)
+			notAnswered = append(notAnswered, src.Source+" unavailable: "+src.Unavailable)
+		case src.Failed != "":
+			failed = append(failed, src.Source+": "+src.Failed)
+			notAnswered = append(notAnswered, src.Source+" failed: "+src.Failed)
+		default:
+			answered = append(answered, src)
 		}
-		answered = append(answered, src)
+	}
+	if len(answered) == 0 && len(notAnswered) > 0 {
+		switch {
+		case len(refused) > 0:
+			result.Refused = strings.Join(refused, "; ")
+		case len(unavailable) > 0:
+			result.Unavailable = strings.Join(unavailable, "; ")
+		default:
+			result.Failed = strings.Join(failed, "; ")
+		}
+		result.CompletenessReason = strings.Join(notAnswered, "; ")
+		return result.Finish()
 	}
 
 	byLogin := map[string]*PlatformUser{}
@@ -268,7 +362,7 @@ func (p *PlatformUsers) Reconcile() *PlatformUserListing {
 		}
 	}
 
-	result.Completeness, result.CompletenessReason = reconcileCompleteness(answered, refusals)
+	result.Completeness, result.CompletenessReason = reconcileCompleteness(answered, notAnswered)
 
 	for _, fact := range allPlatformUserFacts {
 		var reasons []string
@@ -287,7 +381,7 @@ func (p *PlatformUsers) Reconcile() *PlatformUserListing {
 	return result.Finish()
 }
 
-func reconcileCompleteness(answered []*PlatformUserListing, refusals []string) (PlatformUsersCompleteness, string) {
+func reconcileCompleteness(answered []*PlatformUserListing, notAnswered []string) (PlatformUsersCompleteness, string) {
 	for _, want := range []PlatformUsersCompleteness{PlatformUsersComplete, PlatformUsersLimited, PlatformUsersUnknown} {
 		var reasons []string
 		found := false
@@ -306,10 +400,10 @@ func reconcileCompleteness(answered []*PlatformUserListing, refusals []string) (
 		if want == PlatformUsersComplete {
 			return want, ""
 		}
-		return want, strings.Join(append(reasons, refusals...), "; ")
+		return want, strings.Join(append(reasons, notAnswered...), "; ")
 	}
-	// Every source that answered was empty, or none answered.
-	return PlatformUsersEmpty, strings.Join(refusals, "; ")
+	// Every source that answered was empty, or there was no source at all.
+	return PlatformUsersEmpty, strings.Join(notAnswered, "; ")
 }
 
 var allPlatformUserFacts = []PlatformUserFact{
@@ -381,7 +475,7 @@ func (p *PlatformUserListing) Finish() *PlatformUserListing {
 	p.Users = users
 	slices.SortFunc(p.SkippedFacts, func(a, b SkippedPlatformUserFact) int { return strings.Compare(string(a.Fact), string(b.Fact)) })
 
-	if p.Refused != "" {
+	if !p.Answered() {
 		p.Completeness = ""
 		return p
 	}
@@ -469,6 +563,8 @@ func (p *PlatformUserListing) Sanitize() {
 		u.Sanitize()
 	}
 	p.Refused = SanitizeString(p.Refused)
+	p.Unavailable = SanitizeString(p.Unavailable)
+	p.Failed = SanitizeString(p.Failed)
 	p.CompletenessReason = SanitizeString(p.CompletenessReason)
 	for i := range p.SkippedFacts {
 		p.SkippedFacts[i].Reason = SanitizeString(p.SkippedFacts[i].Reason)

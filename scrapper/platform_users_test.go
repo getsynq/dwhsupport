@@ -1,6 +1,7 @@
 package scrapper
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -228,9 +229,82 @@ func TestNewPlatformUsers(t *testing.T) {
 	assert.Equal(t, "denied", result.Sources[1].Refused)
 	assert.Same(t, refused, result.Source("p.refused"))
 	assert.Nil(t, result.Source("p.missing"))
-	assert.False(t, result.AllRefused())
-	assert.True(t, NewPlatformUsers(refused).AllRefused())
-	assert.True(t, NewPlatformUsers().AllRefused(), "no source answered")
+	assert.True(t, result.Answered())
+	assert.False(t, NewPlatformUsers(refused).Answered())
+	assert.False(t, NewPlatformUsers().Answered(), "no source answered")
+	var nilResult *PlatformUsers
+	assert.False(t, nilResult.Answered())
+}
+
+func TestPlatformUserSourceError(t *testing.T) {
+	isPermission := func(err error) bool { return err.Error() == "denied" }
+	isUnavailable := func(err error) bool { return err.Error() == "no such view" }
+
+	refused := PlatformUserSourceError("p.a", PlatformUserSourceSQL, errorString("denied"), isPermission, isUnavailable)
+	assert.Equal(t, "denied", refused.Refused)
+	assert.False(t, refused.Answered())
+
+	unavailable := PlatformUserSourceError("p.a", PlatformUserSourceSQL, errorString("no such view"), isPermission, isUnavailable)
+	assert.Equal(t, "no such view", unavailable.Unavailable)
+	assert.Empty(t, unavailable.Refused)
+
+	failed := PlatformUserSourceError("p.a", PlatformUserSourceAPI, errorString("503"), isPermission, isUnavailable)
+	assert.Equal(t, "503", failed.Failed)
+	assert.Empty(t, failed.Refused, "a transient failure is not a missing grant")
+
+	noClassifiers := PlatformUserSourceError("p.a", PlatformUserSourceAPI, errorString("denied"), nil, nil)
+	assert.Equal(t, "denied", noClassifiers.Failed)
+}
+
+func TestCollectPlatformUsers(t *testing.T) {
+	ctx := context.Background()
+	listed := func() *PlatformUserListing {
+		return &PlatformUserListing{Source: "p.listed", Kind: PlatformUserSourceSQL, Users: []*PlatformUser{{Login: "A"}}}
+	}
+	failed := PlatformUserSourceError("p.api", PlatformUserSourceAPI, errorString("503"), nil, nil)
+	refused := RefusedPlatformUserSource("p.view", PlatformUserSourceSQL, errorString("denied"))
+	unavailable := UnavailablePlatformUserSource("p.old", PlatformUserSourceSQL, errorString("no such view"))
+
+	t.Run("a source that did not answer is a state of the result", func(t *testing.T) {
+		result, err := CollectPlatformUsers(ctx, failed, listed(), refused, unavailable)
+		require.NoError(t, err)
+		require.Len(t, result.Sources, 4)
+		got := result.Reconcile()
+		require.Len(t, got.Users, 1)
+		assert.Contains(t, got.CompletenessReason, "p.api failed: 503")
+		assert.Contains(t, got.CompletenessReason, "p.view refused: denied")
+		assert.Contains(t, got.CompletenessReason, "p.old unavailable: no such view")
+	})
+
+	t.Run("every source refused or unavailable is a result, reconciled as refused", func(t *testing.T) {
+		result, err := CollectPlatformUsers(ctx, unavailable, refused)
+		require.NoError(t, err)
+		got := result.Reconcile()
+		assert.Equal(t, "p.view: denied", got.Refused)
+		assert.Empty(t, got.Unavailable)
+		assert.Empty(t, got.Completeness)
+		assert.Empty(t, got.Users)
+		assert.Contains(t, got.CompletenessReason, "p.old unavailable")
+	})
+
+	t.Run("every source unavailable reconciles as unavailable", func(t *testing.T) {
+		result, err := CollectPlatformUsers(ctx, unavailable)
+		require.NoError(t, err)
+		assert.Equal(t, "p.old: no such view", result.Reconcile().Unavailable)
+	})
+
+	t.Run("nothing answered and a source failed is a real failure", func(t *testing.T) {
+		_, err := CollectPlatformUsers(ctx, refused, failed)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "503")
+	})
+
+	t.Run("a done context fails the call", func(t *testing.T) {
+		cancelled, cancel := context.WithCancel(ctx)
+		cancel()
+		_, err := CollectPlatformUsers(cancelled, listed())
+		assert.ErrorIs(t, err, context.Canceled)
+	})
 }
 
 func TestPlatformUsersSanitizeEverySource(t *testing.T) {
