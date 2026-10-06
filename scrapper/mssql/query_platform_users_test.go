@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	mssql "github.com/microsoft/go-mssqldb"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -70,4 +72,24 @@ func TestRolesByLogin(t *testing.T) {
 		"sa":     {"sysadmin", "synq_test.db_owner"},
 		"reader": {"synq_test.db_datareader"},
 	}, roles)
+}
+
+func TestSourceErrorClassification(t *testing.T) {
+	refused := sourceError(errors.WithStack(mssql.Error{Number: 229, Message: "The SELECT permission was denied on the object 'server_principals'"}))
+	assert.NotEmpty(t, refused.Refused)
+
+	for _, n := range []int32{207, 208} {
+		unavailable := sourceError(errors.WithStack(mssql.Error{Number: n, Message: "Invalid name"}))
+		assert.NotEmptyf(t, unavailable.Unavailable, "error %d", n)
+	}
+
+	failed := sourceError(errors.New("read tcp: connection reset by peer"))
+	assert.NotEmpty(t, failed.Failed)
+	assert.Empty(t, failed.Refused)
+}
+
+func TestFactSkipReason(t *testing.T) {
+	assert.Contains(t, factSkipReason(mssql.Error{Number: 229, Message: "The SELECT permission was denied"}), "may not read role memberships; grant")
+	assert.Contains(t, factSkipReason(mssql.Error{Number: 208, Message: "Invalid object name"}), "has no such role membership view")
+	assert.Contains(t, factSkipReason(errors.New("i/o timeout")), "reading role memberships failed")
 }

@@ -8,7 +8,6 @@ import (
 
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/pkg/errors"
 )
 
 //go:embed query_platform_users.sql
@@ -49,36 +48,58 @@ type platformUsersVisibilityRow struct {
 
 // QueryPlatformUsers lists the server's logins (query history and sessions
 // report the login name), plus the database's users that authenticate without
-// a login. The catalog views are readable by everyone, so the listing is never
-// refused; without VIEW ANY DEFINITION it shows only the connecting login and
-// sa, and says so.
+// a login. The catalog views are readable by everyone, so the listing is
+// practically never refused; without VIEW ANY DEFINITION it shows only the
+// connecting login and sa, and says so. Should the listing itself fail, it is
+// refused, unavailable (a catalog view or column this version or edition
+// lacks) or failed as its error says; the visibility check and the role
+// memberships are best effort.
 func (e *MSSQLScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
 	rows, err := selectRows[platformUserRow](ctx, e.executor, queryPlatformUsersSql)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to list sys.server_principals")
+		return scrapper.CollectPlatformUsers(ctx, sourceError(err))
 	}
 	result := &scrapper.PlatformUserListing{
-		Source: "mssql.sys.server_principals",
+		Source: sourceServerPrincipals,
 		Kind:   scrapper.PlatformUserSourceSQL,
 		Users:  platformUsersFromRows(rows),
 	}
 	skipFactsNotOnPlatform(result)
 
 	visibility, err := selectRows[platformUsersVisibilityRow](ctx, e.executor, platformUsersVisibilitySql)
-	if err != nil || len(visibility) != 1 {
+	switch {
+	case err != nil && ctx.Err() != nil:
+		return nil, ctx.Err()
+	case err != nil:
+		result.Completeness = scrapper.PlatformUsersUnknown
+		result.CompletenessReason = "could not tell whether the login may see every other login: " + err.Error()
+	case len(visibility) != 1:
 		result.Completeness = scrapper.PlatformUsersUnknown
 		result.CompletenessReason = "could not tell whether the login may see every other login"
-	} else {
+	default:
 		setCompleteness(result, visibility[0])
 	}
 
 	roles, err := selectRows[platformUserRoleRow](ctx, e.executor, queryPlatformUserRolesSql)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(err))
 	} else {
 		result.AssignRoles(rolesByLogin(roles))
 	}
-	return scrapper.NewPlatformUsers(result), nil
+	return scrapper.CollectPlatformUsers(ctx, result)
+}
+
+// sourceServerPrincipals names the one source of QueryPlatformUsers.
+const sourceServerPrincipals = "mssql.sys.server_principals"
+
+// sourceError records the listing that could not be read in the state its
+// error calls for.
+func sourceError(err error) *scrapper.PlatformUserListing {
+	return scrapper.PlatformUserSourceError(sourceServerPrincipals, scrapper.PlatformUserSourceSQL, err,
+		dwhexecmssql.IsPermissionError, dwhexecmssql.IsUnavailableError)
 }
 
 func setCompleteness(result *scrapper.PlatformUserListing, v *platformUsersVisibilityRow) {
@@ -145,10 +166,14 @@ func skipFactsNotOnPlatform(result *scrapper.PlatformUserListing) {
 }
 
 func factSkipReason(err error) string {
-	if dwhexecmssql.IsPermissionError(err) {
+	switch {
+	case dwhexecmssql.IsPermissionError(err):
 		return "the login may not read role memberships; grant " + platformUsersGrant
+	case dwhexecmssql.IsUnavailableError(err):
+		return "this SQL Server version or edition has no such role membership view: " + err.Error()
+	default:
+		return "reading role memberships failed: " + err.Error()
 	}
-	return "reading role memberships failed: " + err.Error()
 }
 
 func selectRows[T any](ctx context.Context, executor *dwhexecmssql.MSSQLExecutor, query string) ([]*T, error) {
