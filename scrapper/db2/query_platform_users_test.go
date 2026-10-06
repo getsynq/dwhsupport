@@ -43,8 +43,13 @@ func (s *Db2PlatformUsersSuite) db2() *Db2Scrapper {
 }
 
 func (s *Db2PlatformUsersSuite) TestDb2ListsGranteesWithRoles() {
-	users, err := s.db2().QueryPlatformUsers(s.T().Context())
+	result, err := s.db2().QueryPlatformUsers(s.T().Context())
 	s.Require().NoError(err)
+	s.Require().Len(result.Sources, 1, "the admin view was read, so the SYSCAT union, a subset of it, is not")
+	users := result.Source("db2.sysibmadm.authorizationids")
+	s.Require().NotNil(users)
+	s.Equal(scrapper.PlatformUserSourceSQL, users.Kind)
+	s.Empty(users.Refused)
 
 	s.Equal(scrapper.PlatformUsersUnknown, users.Completeness, "Db2 keeps no list of its users")
 	s.NotEmpty(users.CompletenessReason)
@@ -65,29 +70,71 @@ func (s *Db2PlatformUsersSuite) TestDb2ListsGranteesWithRoles() {
 	}
 }
 
-// TestDb2CatalogFallbackListsTheSameUsers reads the SYSCAT union a role falls
-// back to when SYSIBMADM.AUTHORIZATIONIDS is refused, and checks it lists what
-// the admin view does.
-func (s *Db2PlatformUsersSuite) TestDb2CatalogFallbackListsTheSameUsers() {
+// refusedQuery is a read the test role may not run: MON_GET_CONNECTION needs
+// EXECUTE, which PUBLIC does not hold, so Db2 answers SQLCODE -551. A view that
+// does not exist would not do, since Db2 answers that with -204, not a refusal.
+const refusedQuery = `SELECT TRIM(system_auth_id) AS authid FROM TABLE(MON_GET_CONNECTION(NULL, -2))`
+
+// TestDb2FallsBackToTheCatalog refuses the admin view's source and checks that
+// the SYSCAT union is read in its place and lists what the admin view does.
+func (s *Db2PlatformUsersSuite) TestDb2FallsBackToTheCatalog() {
 	sc := s.db2()
+	refusedView := authIdSource{
+		source: authIdSources[0].source,
+		object: "MON_GET_CONNECTION",
+		query:  refusedQuery,
+	}
+	_, err := sc.selectAuthIds(s.T().Context(), refusedView)
+	if !sc.IsPermissionError(err) {
+		s.T().Skipf("the test role may run MON_GET_CONNECTION, so it cannot stand in for a refusal: %v", err)
+	}
+
+	result, err := sc.queryPlatformUsers(s.T().Context(), []authIdSource{refusedView, authIdSources[1]})
+	s.Require().NoError(err, "a refused admin view falls back rather than failing")
+	s.False(result.AllRefused())
+	s.Require().Len(result.Sources, 2)
+	s.Equal("db2.sysibmadm.authorizationids", result.Sources[0].Source)
+	s.NotEmpty(result.Sources[0].Refused)
+	s.Empty(result.Sources[0].Users)
+	fallback := result.Sources[1]
+	s.Equal("db2.syscat_auth", fallback.Source)
+	s.Empty(fallback.Refused)
+
 	full, err := sc.QueryPlatformUsers(s.T().Context())
 	s.Require().NoError(err)
-	fallback, err := sc.queryPlatformUsers(s.T().Context(), authIdSources[1:])
-	s.Require().NoError(err)
+	s.Equal(logins(full.Source("db2.sysibmadm.authorizationids")), logins(fallback))
+}
 
-	logins := func(users *scrapper.PlatformUsers) []string {
-		var out []string
-		for _, u := range users.Users {
-			out = append(out, u.Login)
-		}
-		return out
+func (s *Db2PlatformUsersSuite) TestDb2EverySourceRefusedIsAPermissionError() {
+	sc := s.db2()
+	refused := authIdSource{source: "db2.refused", object: "MON_GET_CONNECTION", query: refusedQuery}
+	_, err := sc.selectAuthIds(s.T().Context(), refused)
+	if !sc.IsPermissionError(err) {
+		s.T().Skipf("the test role may run MON_GET_CONNECTION: %v", err)
 	}
-	s.Equal(logins(full), logins(fallback))
+	result, err := sc.queryPlatformUsers(s.T().Context(), []authIdSource{refused, refused})
+	s.Nil(result)
+	s.True(sc.IsPermissionError(err), "a refused listing is a permission error, not an empty list: %v", err)
 }
 
 func (s *Db2PlatformUsersSuite) TestDb2ListsTheSessionUserEvenWithoutAGrant() {
-	users, err := s.db2().queryPlatformUsers(s.T().Context(), nil)
+	nobody := authIdSource{
+		source: "db2.nobody",
+		object: "SYSIBMADM.AUTHORIZATIONIDS",
+		query:  `SELECT TRIM(authid) AS authid FROM SYSIBMADM.AUTHORIZATIONIDS WHERE 1 = 0`,
+	}
+	result, err := s.db2().queryPlatformUsers(s.T().Context(), []authIdSource{nobody})
 	s.Require().NoError(err)
+	users := result.Source("db2.nobody")
+	s.Require().NotNil(users)
 	s.Require().Len(users.Users, 1)
 	s.Equal(s.ConnectedLogin, users.Users[0].Login)
+}
+
+func logins(users *scrapper.PlatformUserListing) []string {
+	var out []string
+	for _, u := range users.Users {
+		out = append(out, u.Login)
+	}
+	return out
 }
