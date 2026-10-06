@@ -58,11 +58,11 @@ func (s *FabricPlatformUsersSuite) TearDownSuite() {
 	}
 }
 
-// TestFabricPlatformUsers_WorkspaceRoleDecidesTheSource checks the listing
-// against what the test service principal may do. With the Member or Admin
-// workspace role the role assignments are listed in full; without it (the
-// dwhtesting principal is a Contributor) the API refuses and the listing falls
-// back to the database's users, limited, naming the role that is missing.
+// TestFabricPlatformUsers_WorkspaceRoleDecidesTheSource checks both sources
+// against what the test service principal may do. The database source always
+// answers. With the Member or Admin workspace role the API source lists the
+// role assignments; without it (the dwhtesting principal is a Contributor) it
+// is a refused source and the reconciled listing is limited.
 func TestFabricPlatformUsers_WorkspaceRoleDecidesTheSource(t *testing.T) {
 	if os.Getenv("CI") != "" || testenv.EnvOrDefault("FABRIC_HOST", "") == "" || testenv.EnvOrDefault("FABRIC_CLIENT_ID", "") == "" {
 		t.Skip("FABRIC_HOST / FABRIC_CLIENT_ID not set")
@@ -78,25 +78,40 @@ func TestFabricPlatformUsers_WorkspaceRoleDecidesTheSource(t *testing.T) {
 	require.NoError(t, err)
 	_, apiErr := sc.listRoleAssignments(ctx, identity.WorkspaceID)
 
-	users, err := sc.QueryPlatformUsers(ctx)
+	result, err := sc.QueryPlatformUsers(ctx)
 	require.NoError(t, err)
+	require.Len(t, result.Sources, 2, "both sources are always read")
+	api, db := result.Sources[0], result.Sources[1]
+	assert.Equal(t, sourceWorkspaceRoleAssignments, api.Source)
+	assert.Equal(t, sourceDatabasePrincipals, db.Source)
+	require.Empty(t, db.Refused, "the test principal may read its database")
+
 	me := fabricConnectedLogin(t)
-	var mine *scrapper.PlatformUser
-	for _, u := range users.Users {
-		if strings.EqualFold(u.Login, me) {
-			mine = u
+	find := func(src *scrapper.PlatformUserListing) *scrapper.PlatformUser {
+		for _, u := range src.Users {
+			if strings.EqualFold(u.Login, me) {
+				return u
+			}
 		}
+		return nil
 	}
-	require.NotNil(t, mine, "the connected service principal is listed under the login query history reports")
+	mine := find(db)
+	require.NotNil(t, mine, "the database source names the connected principal by the login query history reports")
+	assert.Equal(t, "EXTERNAL_USER", mine.Type)
+	assert.Equal(t, scrapper.PlatformUsersLimited, db.Completeness)
 
 	if apiErr == nil {
-		assert.Equal(t, "ServicePrincipal", mine.Type)
-		assert.NotEmpty(t, mine.Roles, "a workspace role")
+		require.Empty(t, api.Refused)
+		fromAPI := find(api)
+		require.NotNil(t, fromAPI)
+		assert.Equal(t, "ServicePrincipal", fromAPI.Type)
+		assert.NotEmpty(t, fromAPI.Roles, "a workspace role")
 		return
 	}
 	require.True(t, sc.IsPermissionError(apiErr), "the API refused rather than failed: %v", apiErr)
-	assert.Equal(t, scrapper.PlatformUsersLimited, users.Completeness)
-	assert.Contains(t, users.CompletenessReason, "InsufficientWorkspaceRole")
-	assert.Contains(t, users.CompletenessReason, "Member or Admin")
-	assert.Equal(t, "EXTERNAL_USER", mine.Type)
+	assert.Contains(t, api.Refused, "InsufficientWorkspaceRole")
+	assert.Empty(t, api.Users)
+	reconciled := result.Reconcile()
+	assert.Equal(t, scrapper.PlatformUsersLimited, reconciled.Completeness)
+	assert.Contains(t, reconciled.CompletenessReason, sourceWorkspaceRoleAssignments+" refused")
 }

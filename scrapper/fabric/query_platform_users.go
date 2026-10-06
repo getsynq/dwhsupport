@@ -73,16 +73,30 @@ type databaseUsers struct {
 	RolesErr error
 }
 
-// QueryPlatformUsers lists the workspace's users from its role assignments
-// (Fabric REST API): Entra users by user principal name and service
-// principals as <application id>@<tenant id>, which is how query history
-// (queryinsights login_name) names them. Database roles of the connected
-// database are added where the identity was added to it.
+// Sources of QueryPlatformUsers, the workspace API first: it names every
+// member of the workspace by the login query history reports, while the
+// database knows only the identities added to it.
+const (
+	sourceWorkspaceRoleAssignments = "fabric.workspace_role_assignments"
+	sourceDatabasePrincipals       = "fabric.sys.database_principals"
+)
+
+// QueryPlatformUsers reads two sources, each reported on its own:
 //
-// Listing the role assignments needs the Member or Admin workspace role. When
-// the API refuses, or the connection holds only a SQL access token, the
-// listing falls back to the connected database's users, which hold only the
-// identities added to it explicitly, and says it is limited.
+//   - fabric.workspace_role_assignments (Fabric REST API): Entra users by user
+//     principal name and service principals as <application id>@<tenant id>,
+//     which is how query history (queryinsights login_name) names them, with
+//     their workspace role. It needs the Member or Admin workspace role, and a
+//     credential that can call the API (not a pre-acquired SQL token);
+//     otherwise it is a refused source.
+//   - fabric.sys.database_principals: the identities added to the connected
+//     database, with their database roles. A user of it carries the login the
+//     API source gives the same identity (matched by the GUID its SID
+//     encodes), so the two reconcile; without the API only the connection's
+//     own login is known, the others keep their database name.
+//
+// When both are refused the API's permission error is returned first, since
+// its grant is the one that lists every user.
 func (e *FabricScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
 	identity, err := dwhexecfabric.ParseHostIdentity(e.conf.Host)
 	tenantID := e.conf.TenantID
@@ -132,10 +146,7 @@ func (e *FabricScrapper) queryDatabaseUsers(ctx context.Context) (*databaseUsers
 	return result, nil
 }
 
-// buildPlatformUsers assembles the listing from the role assignments when the
-// API answered, and from the database's users otherwise. Only when both are
-// refused is the listing an error, the API's permission error first since its
-// grant is the one that completes the listing.
+// buildPlatformUsers reports each source on its own, a failed one as refused.
 func buildPlatformUsers(
 	assignments []*dwhexecfabric.WorkspaceRoleAssignment,
 	apiErr error,
@@ -144,22 +155,36 @@ func buildPlatformUsers(
 	tenantID string,
 	databaseName string,
 ) (*scrapper.PlatformUsers, error) {
-	if apiErr == nil {
-		result := platformUsersFromAssignments(assignments, tenantID)
-		addDatabaseRoles(result, assignments, db, dbErr)
-		return result.Finish(), nil
+	var apiSource, dbSource *scrapper.PlatformUserListing
+	loginsByGUID := map[string]string{}
+	if apiErr != nil {
+		apiSource = scrapper.RefusedPlatformUserSource(sourceWorkspaceRoleAssignments, scrapper.PlatformUserSourceAPI, apiErr)
+	} else {
+		apiSource = platformUsersFromAssignments(assignments, tenantID)
+		loginsByGUID = loginsByIdentityGUID(assignments, tenantID)
 	}
 	if dbErr != nil {
-		if dwhexecfabric.IsPermissionError(apiErr) {
-			return nil, errors.Wrap(apiErr, "failed to list the workspace role assignments")
-		}
-		return nil, errors.Wrap(dbErr, "failed to list the database users")
+		dbSource = scrapper.RefusedPlatformUserSource(sourceDatabasePrincipals, scrapper.PlatformUserSourceSQL, dbErr)
+	} else {
+		dbSource = platformUsersFromDatabase(db, loginsByGUID, databaseName)
 	}
-	return platformUsersFromDatabase(db, apiErr, databaseName).Finish(), nil
+
+	result := scrapper.NewPlatformUsers(apiSource, dbSource)
+	if result.AllRefused() {
+		if dwhexecfabric.IsPermissionError(apiErr) || !dwhexecfabric.IsPermissionError(dbErr) {
+			return nil, errors.Wrapf(apiErr, "failed to read %s", sourceWorkspaceRoleAssignments)
+		}
+		return nil, errors.Wrapf(dbErr, "failed to read %s", sourceDatabasePrincipals)
+	}
+	return result, nil
 }
 
-func platformUsersFromAssignments(assignments []*dwhexecfabric.WorkspaceRoleAssignment, tenantID string) *scrapper.PlatformUsers {
-	result := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+func platformUsersFromAssignments(assignments []*dwhexecfabric.WorkspaceRoleAssignment, tenantID string) *scrapper.PlatformUserListing {
+	result := &scrapper.PlatformUserListing{
+		Source:       sourceWorkspaceRoleAssignments,
+		Kind:         scrapper.PlatformUserSourceAPI,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 	for _, f := range []scrapper.PlatformUserFact{
 		scrapper.PlatformUserFactComment,
 		scrapper.PlatformUserFactDisabled,
@@ -223,47 +248,33 @@ func servicePrincipalLogin(appID, tenantID string) string {
 	return login
 }
 
-// addDatabaseRoles adds the connected database's roles to the users that were
-// added to it. A user's SID is the GUID of its Entra object id, a service
-// principal's the GUID of its application id.
-func addDatabaseRoles(result *scrapper.PlatformUsers, assignments []*dwhexecfabric.WorkspaceRoleAssignment, db *databaseUsers, dbErr error) {
-	switch {
-	case dbErr != nil:
-		result.Skip(scrapper.PlatformUserFactRoles, "only workspace roles are listed: reading the database's users failed: "+dbErr.Error())
-		return
-	case db.RolesErr != nil:
-		result.Skip(scrapper.PlatformUserFactRoles, "only workspace roles are listed: reading database role memberships failed: "+db.RolesErr.Error())
-		return
-	}
-	byKey := map[string]*scrapper.PlatformUser{}
-	for _, u := range result.Users {
-		byKey[strings.ToLower(u.PlatformId)] = u
-	}
+// loginsByIdentityGUID maps the GUID a database user's SID encodes to the
+// login the API gives the same identity: a user's SID is its Entra object id,
+// a service principal's its application id.
+func loginsByIdentityGUID(assignments []*dwhexecfabric.WorkspaceRoleAssignment, tenantID string) map[string]string {
+	logins := map[string]string{}
 	for _, a := range assignments {
-		if d := a.Principal.ServicePrincipalDetails; d != nil && d.AadAppID != "" {
-			if u, ok := byKey[strings.ToLower(a.Principal.ID)]; ok {
-				byKey[strings.ToLower(d.AadAppID)] = u
-			}
+		u := userFromPrincipal(a.Principal, tenantID)
+		if u == nil {
+			continue
+		}
+		switch a.Principal.Type {
+		case principalTypeUser:
+			logins[strings.ToLower(a.Principal.ID)] = u.Login
+		case principalTypeServicePrincipal:
+			logins[strings.ToLower(a.Principal.ServicePrincipalDetails.AadAppID)] = u.Login
 		}
 	}
-	for guid, roles := range db.RolesBySid {
-		if u, ok := byKey[guid]; ok {
-			u.Roles = append(u.Roles, roles...)
-		}
-	}
+	return logins
 }
 
-func platformUsersFromDatabase(db *databaseUsers, apiErr error, databaseName string) *scrapper.PlatformUsers {
-	reason := "the workspace role assignments could not be read"
-	if errors.Is(apiErr, dwhexecfabric.ErrNoAPICredential) {
-		reason = "the connection uses a pre-acquired SQL access token, which cannot call the Fabric API to list the workspace role assignments"
-	} else if apiErr != nil {
-		reason += " (" + apiErr.Error() + ")"
-	}
-	result := &scrapper.PlatformUsers{
+func platformUsersFromDatabase(db *databaseUsers, loginsByGUID map[string]string, databaseName string) *scrapper.PlatformUserListing {
+	result := &scrapper.PlatformUserListing{
+		Source:       sourceDatabasePrincipals,
+		Kind:         scrapper.PlatformUserSourceSQL,
 		Completeness: scrapper.PlatformUsersLimited,
-		CompletenessReason: reason + "; listed instead are the users of database " + databaseName +
-			", which holds only the identities added to it explicitly; grant " + platformUsersGrant,
+		CompletenessReason: "database " + databaseName + " holds only the identities added to it explicitly; " +
+			"workspace members reach it through their workspace role without being listed here",
 	}
 	for _, f := range []scrapper.PlatformUserFact{
 		scrapper.PlatformUserFactPlatformId,
@@ -286,12 +297,15 @@ func platformUsersFromDatabase(db *databaseUsers, apiErr error, databaseName str
 			// A group is not a login; its members sign in as themselves.
 			continue
 		}
-		login := d.Name
-		if d.OwnLogin.Valid && d.OwnLogin.String != "" {
-			login = d.OwnLogin.String
+		u := &scrapper.PlatformUser{Login: d.Name, Type: d.Type.String}
+		guid, hasGUID := sidGUID(d.Sid)
+		switch {
+		case hasGUID && loginsByGUID[guid] != "":
+			u.Login = loginsByGUID[guid]
+		case d.OwnLogin.Valid && d.OwnLogin.String != "":
+			u.Login = d.OwnLogin.String
 		}
-		u := &scrapper.PlatformUser{Login: login, Type: d.Type.String}
-		if guid, ok := sidGUID(d.Sid); ok {
+		if hasGUID {
 			u.Roles = db.RolesBySid[guid]
 		}
 		result.Users = append(result.Users, u)
