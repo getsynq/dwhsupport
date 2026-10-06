@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
+	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -89,4 +90,39 @@ func newIntegrationScrapper(t *testing.T, ctx context.Context) *DatabricksScrapp
 		t.Skipf("Could not connect to Databricks: %v", err)
 	}
 	return sc
+}
+
+// DatabricksPlatformUsersSuite lists the real workspace's users and service principals
+// through SCIM.
+type DatabricksPlatformUsersSuite struct {
+	scrappertest.PlatformUsersSuite
+}
+
+func TestDatabricksPlatformUsersSuite(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping Databricks compliance tests in CI")
+	}
+	suite.Run(t, new(DatabricksPlatformUsersSuite))
+}
+
+func (s *DatabricksPlatformUsersSuite) SetupSuite() {
+	sc := newIntegrationScrapper(s.T(), context.Background())
+	s.Scrapper = sc
+	// The SCIM userName of whoever the integration authenticates as: a user's email, or
+	// a service principal's application id, which is also its Login in the listing.
+	me, err := sc.client.CurrentUser.Me(context.Background())
+	s.Require().NoError(err)
+	s.ConnectedLogin = me.UserName
+	s.ExpectFacts = []scrapper.PlatformUserFact{
+		scrapper.PlatformUserFactPlatformId,
+		scrapper.PlatformUserFactType,
+		scrapper.PlatformUserFactDisabled,
+		scrapper.PlatformUserFactRoles,
+	}
+}
+
+func (s *DatabricksPlatformUsersSuite) TearDownSuite() {
+	if s.Scrapper != nil {
+		_ = s.Scrapper.Close()
+	}
 }

@@ -137,6 +137,12 @@ type fakeWorkspace struct {
 	// application id against; denyServicePrincipals refuses that listing instead.
 	servicePrincipals     []serviceiam.ServicePrincipal
 	denyServicePrincipals bool
+	// users is what the SCIM user listing serves; denyUsers refuses it instead.
+	users     []serviceiam.User
+	denyUsers bool
+	// scimPageSizes records the count of every unfiltered SCIM listing request, so a test
+	// can tell the listing asked for pages rather than everything at once.
+	scimPageSizes []string
 	// lookedUpPrincipals records the application id of every service principal lookup.
 	lookedUpPrincipals []string
 
@@ -301,6 +307,15 @@ func (f *fakeWorkspace) tryStart(t *testing.T, conf *DatabricksScrapperConf) (*D
 			f.writeApiError(t, w, http.StatusForbidden, "PERMISSION_DENIED", "Only workspace admins can list service principals.")
 			return
 		}
+		index, err := strconv.ParseInt(startIndex, 10, 64)
+		require.NoError(t, err)
+		if filter == "" {
+			page := scimPage(t, f, r, f.servicePrincipals)
+			f.writeJson(t, w, http.StatusOK, "", serviceiam.ListServicePrincipalResponse{
+				Resources: page, StartIndex: index, TotalResults: int64(len(f.servicePrincipals)),
+			}, "")
+			return
+		}
 		matching := []serviceiam.ServicePrincipal{}
 		if startIndex == "1" {
 			for _, principal := range f.servicePrincipals {
@@ -309,10 +324,20 @@ func (f *fakeWorkspace) tryStart(t *testing.T, conf *DatabricksScrapperConf) (*D
 				}
 			}
 		}
-		index, err := strconv.ParseInt(startIndex, 10, 64)
-		require.NoError(t, err)
 		f.writeJson(t, w, http.StatusOK, "", serviceiam.ListServicePrincipalResponse{
 			Resources: matching, StartIndex: index, TotalResults: int64(len(matching)),
+		}, "")
+	})
+	mux.HandleFunc("/api/2.0/preview/scim/v2/Users", func(w http.ResponseWriter, r *http.Request) {
+		if f.denyUsers {
+			f.writeApiError(t, w, http.StatusForbidden, "PERMISSION_DENIED", "Only workspace admins can list users.")
+			return
+		}
+		index, err := strconv.ParseInt(r.URL.Query().Get("startIndex"), 10, 64)
+		require.NoError(t, err)
+		page := scimPage(t, f, r, f.users)
+		f.writeJson(t, w, http.StatusOK, "", serviceiam.ListUsersResponse{
+			Resources: page, StartIndex: index, TotalResults: int64(len(f.users)),
 		}, "")
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -503,4 +528,21 @@ func (f *fakeWorkspace) writeJson(t *testing.T, w http.ResponseWriter, status in
 	if err := json.NewEncoder(w).Encode(body); err != nil {
 		t.Errorf("failed to encode fake Databricks response: %v", err)
 	}
+}
+
+// scimPage serves the page of a SCIM listing that startIndex (1-based) and count name, the
+// way SCIM pages: an index past the end answers an empty page, which is what ends the SDK's
+// listing. pageSize, when positive, caps a page below what was asked, as a server may.
+func scimPage[T any](t *testing.T, f *fakeWorkspace, r *http.Request, all []T) []T {
+	t.Helper()
+	start, err := strconv.Atoi(r.URL.Query().Get("startIndex"))
+	require.NoError(t, err)
+	count, err := strconv.Atoi(r.URL.Query().Get("count"))
+	require.NoError(t, err)
+	f.record(&f.scimPageSizes, r.URL.Query().Get("count"))
+	if f.pageSize > 0 {
+		count = min(count, f.pageSize)
+	}
+	from := min(start-1, len(all))
+	return all[from:min(from+count, len(all))]
 }
