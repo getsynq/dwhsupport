@@ -95,8 +95,8 @@ func (s *RedshiftPlatformUsersSuite) TestPlatformUsers_SeesEveryUser() {
 func (s *RedshiftPlatformUsersSuite) TestPlatformUsers_WithoutAccessSystemTable() {
 	ctx := context.Background()
 	users := &scrapper.PlatformUserListing{Users: []*scrapper.PlatformUser{{Login: s.ConnectedLogin}}}
-	s.redshift.addPlatformUserRoles(ctx, users, false)
-	s.redshift.addPlatformUserLastLogins(ctx, users, false)
+	s.Require().NoError(s.redshift.addPlatformUserRoles(ctx, users, false, nil))
+	s.Require().NoError(s.redshift.addPlatformUserLastLogins(ctx, users, false, nil))
 
 	s.True(users.IsSkipped(scrapper.PlatformUserFactRoles))
 	s.True(users.IsSkipped(scrapper.PlatformUserFactLastLoginAt))
