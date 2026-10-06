@@ -130,9 +130,13 @@ func (s *OraclePlatformUsersSuite) TestOracleListsMaintainedUsersAndRoles() {
 // is what a role without SELECT_CATALOG_ROLE gets.
 func (s *OraclePlatformUsersSuite) TestOracleFallsBackToAllUsers() {
 	sc := s.oracle()
-	result, err := sc.queryPlatformUsers(s.T().Context(), platformUserViews{users: "DBA_USERS_REFUSED", roleGrant: "DBA_ROLE_PRIVS_REFUSED"})
+	result, err := listOraclePlatformUsers(
+		s.T().Context(),
+		sc.executor,
+		platformUserViews{users: "DBA_USERS_REFUSED", roleGrant: "DBA_ROLE_PRIVS_REFUSED"},
+	)
 	s.Require().NoError(err, "a refused DBA_USERS falls back rather than failing")
-	s.False(result.AllRefused())
+	s.True(result.Answered())
 
 	s.Require().Len(result.Sources, 2)
 	refused := result.Sources[0]
