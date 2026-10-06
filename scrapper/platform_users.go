@@ -119,8 +119,8 @@ type PlatformUser struct {
 	Roles []string
 }
 
-// SkippedPlatformUserFact says that a fact is empty for every user of a
-// listing, and why: the platform does not have it, or our role may not read it.
+// SkippedPlatformUserFact says that a fact could not be read, and why: the
+// platform does not have it, or our role may not read it.
 type SkippedPlatformUserFact struct {
 	Fact   PlatformUserFact
 	Reason string
@@ -135,9 +135,10 @@ type PlatformUsers struct {
 	// CompletenessReason explains a limited, empty or unknown listing, and
 	// names the grant that would complete it where one would.
 	CompletenessReason string
-	// SkippedFacts lists the facts the listing could not read for anyone,
-	// with the reason. A fact that is only missing for some users (a user
-	// without an email) is not listed.
+	// SkippedFacts lists the facts the listing could not read, with the
+	// reason: refused or absent for every user, or hidden for the users the
+	// role may not see the details of (Snowflake SHOW USERS). A fact a user
+	// simply does not have (a user without an email) is not listed.
 	SkippedFacts []SkippedPlatformUserFact
 }
 
