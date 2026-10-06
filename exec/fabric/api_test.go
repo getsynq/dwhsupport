@@ -86,7 +86,7 @@ func TestAPICredential(t *testing.T) {
 	_, err = (&FabricConf{ClientID: "c", ClientSecret: "s", Host: "not-a-fabric-host"}).apiCredential()
 	assert.Error(t, err, "no tenant configured and none in the host")
 
-	cred, err := (&FabricConf{ClientID: "c", ClientSecret: "s", TenantID: "8863585d-cb0b-4ecf-9ce3-318e3295156a"}).apiCredential()
+	cred, err := (&FabricConf{ClientID: "c", ClientSecret: "s", TenantID: "00000000-aaaa-4bbb-8ccc-000000000001"}).apiCredential()
 	require.NoError(t, err)
 	assert.NotNil(t, cred)
 }

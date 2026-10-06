@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	testTenant  = "8863585d-cb0b-4ecf-9ce3-318e3295156a"
-	testAppID   = "51da975c-167d-4049-911e-7192342601e5"
-	testAppSid  = "0x5C97DA517D164940911E7192342601E5"
+	testTenant  = "00000000-aaaa-4bbb-8ccc-000000000001"
+	testAppID   = "1b2c3d4e-5f60-4718-9293-a4b5c6d7e8f9"
+	testAppSid  = "0x4E3D2C1B605F18479293A4B5C6D7E8F9"
 	testUserOID = "11111111-2222-3333-4444-555555555555"
 	testUserSid = "0x11111111222233334444555555555555"
 )
@@ -56,7 +56,7 @@ func roleAssignments() []*dwhexecfabric.WorkspaceRoleAssignment {
 func dbUsers() *databaseUsers {
 	return &databaseUsers{
 		Users: []*databaseUserRow{
-			{Name: "coalesce-quality-fabric-scraper", Sid: testAppSid, Type: sql.NullString{Valid: true, String: "EXTERNAL_USER"},
+			{Name: "my-fabric-scraper", Sid: testAppSid, Type: sql.NullString{Valid: true, String: "EXTERNAL_USER"},
 				OwnLogin: sql.NullString{Valid: true, String: testAppID + "@" + testTenant}},
 			{Name: "Jane Doe", Sid: testUserSid, Type: sql.NullString{Valid: true, String: "EXTERNAL_USER"}},
 			{Name: "Analysts", Sid: "0x01", Type: sql.NullString{Valid: true, String: "EXTERNAL_GROUP"}},
