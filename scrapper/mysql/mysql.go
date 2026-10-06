@@ -47,7 +47,11 @@ func (e *MySQLScrapper) IsPermissionError(err error) bool {
 	return dwhexecmysql.IsPermissionError(err)
 }
 
-func (e *MySQLScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *MySQLScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
+	}
+}
 
 func (e *MySQLScrapper) DialectType() string {
 	return "mysql"
