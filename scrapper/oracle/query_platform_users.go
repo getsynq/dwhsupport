@@ -61,28 +61,32 @@ type oracleRoleGrantRow struct {
 	GrantedRole string `db:"GRANTED_ROLE"`
 }
 
+// Source names of the Oracle user listings.
+const (
+	oracleDbaUsersSource = "oracle.dba_users"
+	oracleAllUsersSource = "oracle.all_users"
+)
+
 // QueryPlatformUsers lists the database users from DBA_USERS. Login is
 // USERNAME, the name V$SQL reports as PARSING_SCHEMA_NAME in query logs; Type
 // is AUTHENTICATION_TYPE (PASSWORD, EXTERNAL, GLOBAL, NONE). Oracle-maintained
 // users (SYS, SYSTEM, ...) are listed too: they are logins, and SYSTEM in
-// particular runs queries.
+// particular runs queries. Roles come from DBA_ROLE_PRIVS.
 //
-// A role without the dictionary grant falls back to ALL_USERS, which every
-// session may read and which lists every user, but only with its name, id and
-// creation time.
+// ALL_USERS lists the same users with only their name, id and creation time,
+// so it is read only when DBA_USERS is refused, and the refusal is reported as
+// a source of its own.
 func (e *OracleScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
 	return e.queryPlatformUsers(ctx, defaultPlatformUserViews)
 }
 
 func (e *OracleScrapper) queryPlatformUsers(ctx context.Context, views platformUserViews) (*scrapper.PlatformUsers, error) {
-	result := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
-	result.Skip(scrapper.PlatformUserFactEmail, "Oracle keeps no email for a database user")
-	result.Skip(scrapper.PlatformUserFactDisplayName, "Oracle keeps no display name for a database user")
-	result.Skip(scrapper.PlatformUserFactComment, "Oracle keeps no comment on a database user")
-	result.Skip(
-		scrapper.PlatformUserFactDefaultRole,
-		"Oracle enables every default role of a user at once, so there is no single default role; see roles",
-	)
+	listing := &scrapper.PlatformUserListing{
+		Source:       oracleDbaUsersSource,
+		Kind:         scrapper.PlatformUserSourceSQL,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
+	var refused *scrapper.PlatformUserListing
 
 	rows, err := e.selectOracleUsers(ctx, fmt.Sprintf(dbaUsersSql, views.users), views.users)
 	if err != nil {
@@ -90,18 +94,28 @@ func (e *OracleScrapper) queryPlatformUsers(ctx context.Context, views platformU
 			return nil, err
 		}
 		logging.GetLogger(ctx).WithError(err).Warnf("cannot read %s, listing users from ALL_USERS", views.users)
+		refused = scrapper.RefusedPlatformUserSource(oracleDbaUsersSource, scrapper.PlatformUserSourceSQL, err)
+		listing.Source = oracleAllUsersSource
 		rows, err = e.selectOracleUsers(ctx, allUsersSql, "ALL_USERS")
 		if err != nil {
+			// Every session may read ALL_USERS; failing here leaves no source.
 			return nil, err
 		}
-		reason := views.users + " was refused (" + platformUsersGrant + "), ALL_USERS has no such column"
-		result.Skip(scrapper.PlatformUserFactType, reason)
-		result.Skip(scrapper.PlatformUserFactDisabled, reason)
-		result.Skip(scrapper.PlatformUserFactLastLoginAt, reason)
+		reason := "ALL_USERS has no such column; DBA_USERS has it (" + platformUsersGrant + ")"
+		listing.Skip(scrapper.PlatformUserFactType, reason)
+		listing.Skip(scrapper.PlatformUserFactDisabled, reason)
+		listing.Skip(scrapper.PlatformUserFactLastLoginAt, reason)
 	}
+	listing.Skip(scrapper.PlatformUserFactEmail, "Oracle keeps no email for a database user")
+	listing.Skip(scrapper.PlatformUserFactDisplayName, "Oracle keeps no display name for a database user")
+	listing.Skip(scrapper.PlatformUserFactComment, "Oracle keeps no comment on a database user")
+	listing.Skip(
+		scrapper.PlatformUserFactDefaultRole,
+		"Oracle enables every default role of a user at once, so there is no single default role; see roles",
+	)
 
 	for _, row := range rows {
-		result.Users = append(result.Users, row.toPlatformUser())
+		listing.Users = append(listing.Users, row.toPlatformUser())
 	}
 
 	grants, err := e.selectRoleGrants(ctx, views.roleGrant)
@@ -111,15 +125,15 @@ func (e *OracleScrapper) queryPlatformUsers(ctx context.Context, views platformU
 		for _, g := range grants {
 			rolesByLogin[g.Grantee] = append(rolesByLogin[g.Grantee], g.GrantedRole)
 		}
-		result.AssignRoles(rolesByLogin)
+		listing.AssignRoles(rolesByLogin)
 	case e.IsPermissionError(err):
-		result.Skip(scrapper.PlatformUserFactRoles, views.roleGrant+" was refused ("+platformUsersGrant+")")
+		listing.Skip(scrapper.PlatformUserFactRoles, "DBA_ROLE_PRIVS was refused ("+platformUsersGrant+")")
 	default:
 		logging.GetLogger(ctx).WithError(err).Warnf("cannot read %s, listing users without roles", views.roleGrant)
-		result.Skip(scrapper.PlatformUserFactRoles, "reading "+views.roleGrant+" failed: "+err.Error())
+		listing.Skip(scrapper.PlatformUserFactRoles, "reading DBA_ROLE_PRIVS failed: "+err.Error())
 	}
 
-	return result.Finish(), nil
+	return scrapper.NewPlatformUsers(refused, listing), nil
 }
 
 func (e *OracleScrapper) selectOracleUsers(ctx context.Context, query, source string) ([]*oracleUserRow, error) {

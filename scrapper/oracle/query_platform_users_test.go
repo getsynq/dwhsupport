@@ -101,8 +101,13 @@ func (s *OraclePlatformUsersSuite) oracle() *OracleScrapper {
 }
 
 func (s *OraclePlatformUsersSuite) TestOracleListsMaintainedUsersAndRoles() {
-	users, err := s.oracle().QueryPlatformUsers(s.T().Context())
+	result, err := s.oracle().QueryPlatformUsers(s.T().Context())
 	s.Require().NoError(err)
+	s.Require().Len(result.Sources, 1, "DBA_USERS was read, so ALL_USERS, a subset of it, is not")
+	users := result.Source(oracleDbaUsersSource)
+	s.Require().NotNil(users)
+	s.Equal(scrapper.PlatformUserSourceSQL, users.Kind)
+	s.Empty(users.Refused)
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness)
 
 	byLogin := map[string]*scrapper.PlatformUser{}
@@ -125,9 +130,19 @@ func (s *OraclePlatformUsersSuite) TestOracleListsMaintainedUsersAndRoles() {
 // is what a role without SELECT_CATALOG_ROLE gets.
 func (s *OraclePlatformUsersSuite) TestOracleFallsBackToAllUsers() {
 	sc := s.oracle()
-	users, err := sc.queryPlatformUsers(s.T().Context(), platformUserViews{users: "DBA_USERS_REFUSED", roleGrant: "DBA_ROLE_PRIVS_REFUSED"})
+	result, err := sc.queryPlatformUsers(s.T().Context(), platformUserViews{users: "DBA_USERS_REFUSED", roleGrant: "DBA_ROLE_PRIVS_REFUSED"})
 	s.Require().NoError(err, "a refused DBA_USERS falls back rather than failing")
+	s.False(result.AllRefused())
 
+	s.Require().Len(result.Sources, 2)
+	refused := result.Sources[0]
+	s.Equal(oracleDbaUsersSource, refused.Source)
+	s.Contains(refused.Refused, "ORA-00942")
+	s.Empty(refused.Users)
+
+	users := result.Sources[1]
+	s.Equal(oracleAllUsersSource, users.Source)
+	s.Empty(users.Refused)
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness, "ALL_USERS lists every user")
 	for _, fact := range []scrapper.PlatformUserFact{
 		scrapper.PlatformUserFactType, scrapper.PlatformUserFactDisabled,
@@ -138,11 +153,15 @@ func (s *OraclePlatformUsersSuite) TestOracleFallsBackToAllUsers() {
 
 	full, err := sc.QueryPlatformUsers(s.T().Context())
 	s.Require().NoError(err)
-	s.Equal(len(full.Users), len(users.Users), "ALL_USERS and DBA_USERS list the same users")
+	s.Equal(len(full.Source(oracleDbaUsersSource).Users), len(users.Users), "ALL_USERS and DBA_USERS list the same users")
 	for _, u := range users.Users {
 		s.Nil(u.Disabled)
 		s.Nil(u.Roles)
 		s.NotEmpty(u.PlatformId)
 		s.NotNil(u.CreatedAt)
 	}
+
+	reconciled := result.Reconcile()
+	s.Len(reconciled.Users, len(users.Users))
+	s.Equal(scrapper.PlatformUsersComplete, reconciled.Completeness, "ALL_USERS alone still saw every user")
 }
