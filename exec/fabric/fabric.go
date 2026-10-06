@@ -19,6 +19,7 @@ import (
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/exec/querier"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	"github.com/pkg/errors"
 )
 
 // FabricConf configures a connection to a Microsoft Fabric Warehouse or Lakehouse
@@ -239,7 +240,12 @@ func NewQuerier[T any](conn *FabricExecutor) querier.Querier[T] {
 
 // IsPermissionError reports whether err indicates the connection's identity
 // lacks privileges. Fabric surfaces the same SQL Server permission messages as
-// MSSQL, so it delegates to the single source of truth.
+// MSSQL, so it delegates to the single source of truth. A Fabric REST API
+// refusal (APIError 401/403) is one too.
 func IsPermissionError(err error) bool {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.IsPermissionError()
+	}
 	return dwhexecmssql.IsPermissionError(err)
 }
