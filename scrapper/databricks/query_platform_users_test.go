@@ -128,35 +128,83 @@ func TestQueryPlatformUsersRefusedServicePrincipalsLimitTheListing(t *testing.T)
 	}
 }
 
-func TestQueryPlatformUsersRefusedUsersIsAPermissionError(t *testing.T) {
+func TestQueryPlatformUsersRefusedUsersIsARefusedSource(t *testing.T) {
 	fake := platformUsersWorkspace()
 	fake.denyUsers = true
 
-	s := fake.start(t)
-	users, err := scrappertest.OnlyPlatformUserSource(s.QueryPlatformUsers(context.Background()))
-	require.Error(t, err)
-	assert.Nil(t, users)
-	assert.True(t, s.IsPermissionError(err), "a refused listing is a permission error, not an empty listing: %v", err)
+	result, err := fake.start(t).QueryPlatformUsers(context.Background())
+	require.NoError(t, err, "a missing grant is a state of the result, never a failed fetch")
+	users, err := scrappertest.OnlyPlatformUserSource(result, nil)
+	require.NoError(t, err)
+	assert.Equal(t, platformUsersSource, users.Source)
+	assert.Contains(t, users.Refused, "Only workspace admins can list users")
+	assert.Empty(t, users.Unavailable)
+	assert.Empty(t, users.Failed)
+	assert.Empty(t, users.Users)
+	assert.Empty(t, users.Completeness, "a source that did not answer claims no completeness")
 }
 
-func TestQueryPlatformUsersRateLimitFailsTheListing(t *testing.T) {
-	for _, endpoint := range []string{"/Users", "/ServicePrincipals"} {
-		t.Run(endpoint, func(t *testing.T) {
+// refuseScim answers one SCIM endpoint with the given refusal and serves the rest.
+func refuseScim(endpoint string, refused *refusedRequest) func(r *http.Request) *refusedRequest {
+	return func(r *http.Request) *refusedRequest {
+		if strings.HasSuffix(r.URL.Path, "/scim/v2"+endpoint) {
+			return refused
+		}
+		return nil
+	}
+}
+
+func TestQueryPlatformUsersAbsentUserListingIsAnUnavailableSource(t *testing.T) {
+	for name, refused := range map[string]*refusedRequest{
+		"404":              {status: http.StatusNotFound, errorCode: "ENDPOINT_NOT_FOUND", message: "No API found for 'GET /preview/scim/v2/Users'"},
+		"FEATURE_DISABLED": {status: http.StatusBadRequest, errorCode: "FEATURE_DISABLED", message: "SCIM is not enabled for this workspace"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			fake := platformUsersWorkspace()
+			fake.refuse = refuseScim("/Users", refused)
+
+			users, err := scrappertest.OnlyPlatformUserSource(fake.start(t).QueryPlatformUsers(context.Background()))
+			require.NoError(t, err)
+			assert.Contains(t, users.Unavailable, refused.message)
+			assert.Empty(t, users.Refused)
+			assert.Empty(t, users.Failed)
+		})
+	}
+}
+
+func TestQueryPlatformUsersRateLimitedUsersFailsTheCall(t *testing.T) {
+	fake := platformUsersWorkspace()
+	fake.pacing = &fastPacing
+	fake.refuse = refuseScim("/Users", rateLimited())
+
+	s := fake.start(t)
+	result, err := s.QueryPlatformUsers(context.Background())
+	require.Error(t, err, "nothing answered and the one source failed: that is a failure of the call")
+	assert.Nil(t, result)
+	assert.True(t, dwhexecdatabricks.IsRateLimitError(err), "%v", err)
+	assert.False(t, s.IsPermissionError(err), "a rate limit is not a missing grant: %v", err)
+}
+
+func TestQueryPlatformUsersServicePrincipalsNotAnsweringLimitTheListing(t *testing.T) {
+	for name, refused := range map[string]*refusedRequest{
+		// A rate limit the pacing gave up on: the users already read are kept, and the
+		// listing says it is missing the service principals rather than passing as complete.
+		"rate limited":     rateLimited(),
+		"FEATURE_DISABLED": {status: http.StatusBadRequest, errorCode: "FEATURE_DISABLED", message: "Service principals are not enabled"},
+	} {
+		t.Run(name, func(t *testing.T) {
 			fake := platformUsersWorkspace()
 			fake.pacing = &fastPacing
-			fake.refuse = func(r *http.Request) *refusedRequest {
-				if strings.HasSuffix(r.URL.Path, "/scim/v2"+endpoint) {
-					return rateLimited()
-				}
-				return nil
-			}
+			fake.refuse = refuseScim("/ServicePrincipals", refused)
 
-			s := fake.start(t)
-			users, err := scrappertest.OnlyPlatformUserSource(s.QueryPlatformUsers(context.Background()))
-			require.Error(t, err)
-			assert.Nil(t, users, "a listing cut off by the quota would read as principals that were removed")
-			assert.True(t, dwhexecdatabricks.IsRateLimitError(err), "%v", err)
-			assert.False(t, s.IsPermissionError(err), "a rate limit is not a missing grant: %v", err)
+			users, err := scrappertest.OnlyPlatformUserSource(fake.start(t).QueryPlatformUsers(context.Background()))
+			require.NoError(t, err)
+			assert.Equal(t, scrapper.PlatformUsersLimited, users.Completeness)
+			assert.Contains(t, users.CompletenessReason, "service principal")
+			require.Len(t, users.Users, 2)
+			for _, u := range users.Users {
+				assert.Equal(t, scrapper.PlatformUserTypeDatabricksUser, u.Type)
+			}
 		})
 	}
 }

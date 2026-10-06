@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 
+	"github.com/databricks/databricks-sdk-go/apierr"
 	"github.com/databricks/databricks-sdk-go/listing"
 	"github.com/databricks/databricks-sdk-go/service/iam"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
@@ -16,6 +17,9 @@ import (
 // principal of the workspace through SCIM.
 const platformUsersGrant = "membership of the workspace admins group, which may list users and service principals through SCIM " +
 	"(GET /api/2.0/preview/scim/v2/Users and /ServicePrincipals)"
+
+// platformUsersSource names the SCIM listing in the result.
+const platformUsersSource = "databricks.scim"
 
 // scimPageSize is how many principals one SCIM page asks for. The SDK's own default is
 // 10000, far more than one response should carry.
@@ -36,14 +40,27 @@ const (
 // are the workspace groups the principal is a direct member of. SCIM states neither when a
 // principal was created nor when it last signed in, and Databricks has no default role.
 //
-// A refused user listing is a permission error. A refused service principal listing keeps
-// the users and marks the listing limited, since the service principals are exactly the
-// logins a caller most wants to recognise. A rate-limited request fails the call whatever it
-// was listing: a listing missing whatever the quota cut off would read as principals that
-// were removed.
+// The user listing decides the source: refused (403) or absent on this workspace (404,
+// FEATURE_DISABLED, ENDPOINT_NOT_FOUND) records the source in that state, and anything
+// else, a rate limit the pacing gave up on included, records it failed. A service principal
+// listing that does not answer, for whatever reason, keeps the users and marks the listing
+// limited with the reason: the service principals are exactly the logins a caller most
+// wants to recognise, so a listing without them never claims to be complete.
 func (e *DatabricksScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+	workspaceUsers, err := listAllScim(ctx, e.client.UsersV2.List(ctx, iam.ListUsersRequest{
+		Attributes: scimUserAttributes,
+		Count:      scimPageSize,
+	}))
+	if err != nil {
+		return scrapper.CollectPlatformUsers(ctx, scrapper.PlatformUserSourceError(
+			platformUsersSource, scrapper.PlatformUserSourceAPI,
+			errors.Wrap(err, "failed to list Databricks workspace users"),
+			isScimRefused, isScimUnavailable,
+		))
+	}
+
 	users := &scrapper.PlatformUserListing{
-		Source:       "databricks.scim",
+		Source:       platformUsersSource,
 		Kind:         scrapper.PlatformUserSourceAPI,
 		Completeness: scrapper.PlatformUsersComplete,
 	}
@@ -51,14 +68,6 @@ func (e *DatabricksScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.
 	users.Skip(scrapper.PlatformUserFactLastLoginAt, "Databricks SCIM does not state when a principal last signed in")
 	users.Skip(scrapper.PlatformUserFactDefaultRole, "Databricks has no default role")
 	users.Skip(scrapper.PlatformUserFactComment, "Databricks principals carry no comment")
-
-	workspaceUsers, err := listAllScim(ctx, e.client.UsersV2.List(ctx, iam.ListUsersRequest{
-		Attributes: scimUserAttributes,
-		Count:      scimPageSize,
-	}))
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to list Databricks workspace users")
-	}
 	for _, u := range workspaceUsers {
 		users.Users = append(users.Users, &scrapper.PlatformUser{
 			Login:       u.UserName,
@@ -87,16 +96,44 @@ func (e *DatabricksScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.
 				Roles:       directGroups(p.Groups),
 			})
 		}
-	case dwhexecdatabricks.IsPermissionError(err) && !dwhexecdatabricks.IsRateLimitError(err):
+	case isScimRefused(err):
 		logging.GetLogger(ctx).WithError(err).Warn("Databricks refused the service principal listing, listing users only")
 		users.Completeness = scrapper.PlatformUsersLimited
 		users.CompletenessReason = "the workspace refused the service principal listing, so only users are listed; " +
 			"service principals are listed for " + platformUsersGrant
+	case isScimUnavailable(err):
+		logging.GetLogger(ctx).WithError(err).Warn("Databricks has no service principal listing, listing users only")
+		users.Completeness = scrapper.PlatformUsersLimited
+		users.CompletenessReason = "the workspace has no service principal listing, so only users are listed: " + err.Error()
 	default:
-		return nil, errors.Wrap(err, "failed to list Databricks service principals")
+		logging.GetLogger(ctx).WithError(err).Warn("Databricks service principal listing failed, listing users only")
+		users.Completeness = scrapper.PlatformUsersLimited
+		users.CompletenessReason = "the service principal listing failed, so only users are listed: " + err.Error()
 	}
 
-	return scrapper.NewPlatformUsers(users), nil
+	return scrapper.CollectPlatformUsers(ctx, users)
+}
+
+// isScimRefused reports a SCIM listing the workspace refused the integration's principal.
+// A rate limit is never one, whatever its text says: no grant lifts a quota.
+func isScimRefused(err error) bool {
+	return !dwhexecdatabricks.IsRateLimitError(err) && dwhexecdatabricks.IsPermissionError(err)
+}
+
+// isScimUnavailable reports a SCIM listing this workspace does not serve: the endpoint is
+// absent or disabled on its tier, which no grant changes.
+func isScimUnavailable(err error) bool {
+	if dwhexecdatabricks.IsRateLimitError(err) {
+		return false
+	}
+	if errors.Is(err, apierr.ErrNotFound) || errors.Is(err, apierr.ErrNotImplemented) {
+		return true
+	}
+	var apiErr *apierr.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.ErrorCode == "FEATURE_DISABLED" || apiErr.ErrorCode == "ENDPOINT_NOT_FOUND"
+	}
+	return false
 }
 
 // listAllScim drains a SCIM listing. The SDK's ListAll stops after Count items, which it
