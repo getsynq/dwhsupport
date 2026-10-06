@@ -106,3 +106,21 @@ func TestAttributeComment(t *testing.T) {
 	assert.Equal(t, "", attributeComment(sql.NullString{Valid: true, String: `{"other": 1}`}))
 	assert.Equal(t, "", attributeComment(sql.NullString{Valid: true, String: `nope`}))
 }
+
+// When mysql.role_edges cannot be read, a role (a locked account with no
+// password, as CREATE ROLE makes it) that is granted to someone but is nobody's
+// default must still not be listed as a user.
+func TestRoleEdgesUnreadableKeepsRolesOut(t *testing.T) {
+	accounts := []*account{
+		{User: "reporter_role", Host: "%", Locked: boolPtr(true)},
+		{User: "analyst", Host: "%", Locked: boolPtr(false)},
+	}
+	markMySQLRoles(accounts, nil, nil)
+	users := (&scrapper.PlatformUserListing{Users: foldAccounts(accounts, nil)}).Finish().Users
+
+	logins := []string{}
+	for _, u := range users {
+		logins = append(logins, u.Login)
+	}
+	assert.Equal(t, []string{"analyst"}, logins, "the role leaks into the listing as a disabled user")
+}
