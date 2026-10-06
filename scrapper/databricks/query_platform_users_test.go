@@ -10,6 +10,7 @@ import (
 	serviceiam "github.com/databricks/databricks-sdk-go/service/iam"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +48,7 @@ func platformUsersWorkspace() *fakeWorkspace {
 
 func TestQueryPlatformUsersListsUsersAndServicePrincipals(t *testing.T) {
 	fake := platformUsersWorkspace()
-	users, err := fake.start(t).QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(fake.start(t).QueryPlatformUsers(context.Background()))
 	require.NoError(t, err)
 
 	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
@@ -84,7 +85,7 @@ func TestQueryPlatformUsersMissingActiveIsUnknown(t *testing.T) {
 	fake.users = []serviceiam.User{{Id: "1", UserName: "nobody@example.com"}}
 	fake.servicePrincipals = nil
 
-	users, err := fake.start(t).QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(fake.start(t).QueryPlatformUsers(context.Background()))
 	require.NoError(t, err)
 	require.Len(t, users.Users, 1)
 	assert.Nil(t, users.Users[0].Disabled, "a response that left out active says nothing about whether the user is disabled")
@@ -104,7 +105,7 @@ func TestQueryPlatformUsersPagesThroughEveryPrincipal(t *testing.T) {
 	// than stop at the first short page.
 	fake.pageSize = 300
 
-	users, err := fake.start(t).QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(fake.start(t).QueryPlatformUsers(context.Background()))
 	require.NoError(t, err)
 	assert.Len(t, users.Users, 1210)
 	for _, size := range fake.scimPageSizes {
@@ -116,7 +117,7 @@ func TestQueryPlatformUsersRefusedServicePrincipalsLimitTheListing(t *testing.T)
 	fake := platformUsersWorkspace()
 	fake.denyServicePrincipals = true
 
-	users, err := fake.start(t).QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(fake.start(t).QueryPlatformUsers(context.Background()))
 	require.NoError(t, err)
 	assert.Equal(t, scrapper.PlatformUsersLimited, users.Completeness)
 	assert.Contains(t, users.CompletenessReason, "service principal")
@@ -132,7 +133,7 @@ func TestQueryPlatformUsersRefusedUsersIsAPermissionError(t *testing.T) {
 	fake.denyUsers = true
 
 	s := fake.start(t)
-	users, err := s.QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(s.QueryPlatformUsers(context.Background()))
 	require.Error(t, err)
 	assert.Nil(t, users)
 	assert.True(t, s.IsPermissionError(err), "a refused listing is a permission error, not an empty listing: %v", err)
@@ -151,7 +152,7 @@ func TestQueryPlatformUsersRateLimitFailsTheListing(t *testing.T) {
 			}
 
 			s := fake.start(t)
-			users, err := s.QueryPlatformUsers(context.Background())
+			users, err := scrappertest.OnlyPlatformUserSource(s.QueryPlatformUsers(context.Background()))
 			require.Error(t, err)
 			assert.Nil(t, users, "a listing cut off by the quota would read as principals that were removed")
 			assert.True(t, dwhexecdatabricks.IsRateLimitError(err), "%v", err)
@@ -161,7 +162,7 @@ func TestQueryPlatformUsersRateLimitFailsTheListing(t *testing.T) {
 }
 
 func TestQueryPlatformUsersEmptyWorkspaceIsEmptyNotComplete(t *testing.T) {
-	users, err := newFakeWorkspace().start(t).QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(newFakeWorkspace().start(t).QueryPlatformUsers(context.Background()))
 	require.NoError(t, err)
 	assert.Equal(t, scrapper.PlatformUsersEmpty, users.Completeness)
 }

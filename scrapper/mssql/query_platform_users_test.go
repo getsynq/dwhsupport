@@ -27,7 +27,7 @@ func TestSetCompleteness(t *testing.T) {
 		{name: "azure sql database", v: platformUsersVisibilityRow{ViewAnyDefinition: null, AlterAnyLogin: null}, want: scrapper.PlatformUsersUnknown, hasReason: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			result := &scrapper.PlatformUsers{}
+			result := &scrapper.PlatformUserListing{}
 			setCompleteness(result, &tc.v)
 			assert.Equal(t, tc.want, result.Completeness)
 			assert.Equal(t, tc.hasReason, result.CompletenessReason != "")

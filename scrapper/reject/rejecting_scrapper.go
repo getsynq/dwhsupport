@@ -174,7 +174,9 @@ func (s *RejectingScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.P
 	if err != nil || users == nil {
 		return users, err
 	}
-	users.Users = filterValid(users.Users, s.DialectType(), "QueryPlatformUsers")
+	for _, src := range users.Sources {
+		src.Users = filterValid(src.Users, s.DialectType(), "QueryPlatformUsers")
+	}
 	return users, nil
 }
 

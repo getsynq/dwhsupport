@@ -42,6 +42,8 @@ func TestPlatformUsersFromShowUsers(t *testing.T) {
 
 		assert.Equal(t, scrapper.PlatformUsersUnknown, users.Completeness)
 		assert.Contains(t, users.CompletenessReason, "IMPORTED PRIVILEGES")
+		assert.Equal(t, showUsersSource, users.Source)
+		assert.Equal(t, scrapper.PlatformUserSourceSQL, users.Kind)
 		assert.True(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
 		assert.True(t, users.IsSkipped(scrapper.PlatformUserFactPlatformId))
 		assert.False(t, users.IsSkipped(scrapper.PlatformUserFactEmail))

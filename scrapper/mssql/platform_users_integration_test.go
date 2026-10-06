@@ -101,7 +101,7 @@ func TestMSSQLPlatformUsers_LoginsRolesAndVisibility(t *testing.T) {
 		}
 	})
 
-	users, err := sa.QueryPlatformUsers(ctx)
+	users, err := scrappertest.OnlyPlatformUserSource(sa.QueryPlatformUsers(ctx))
 	require.NoError(t, err)
 	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
 	byLogin := map[string]*scrapper.PlatformUser{}
@@ -134,7 +134,7 @@ func TestMSSQLPlatformUsers_LoginsRolesAndVisibility(t *testing.T) {
 	require.NoError(t, err)
 	defer noPriv.Close()
 
-	limited, err := noPriv.QueryPlatformUsers(ctx)
+	limited, err := scrappertest.OnlyPlatformUserSource(noPriv.QueryPlatformUsers(ctx))
 	require.NoError(t, err, "the catalog views are readable by every login")
 	assert.Equal(t, scrapper.PlatformUsersLimited, limited.Completeness)
 	assert.Contains(t, limited.CompletenessReason, "VIEW ANY DEFINITION")

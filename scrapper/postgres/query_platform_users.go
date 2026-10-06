@@ -82,7 +82,11 @@ func (e *PostgresScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 		return nil, err
 	}
 
-	users := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+	users := &scrapper.PlatformUserListing{
+		Source:       "postgres.pg_roles",
+		Kind:         scrapper.PlatformUserSourceSQL,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 	for _, row := range listed {
 		users.Users = append(users.Users, row.toPlatformUser())
 	}
@@ -98,7 +102,7 @@ func (e *PostgresScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 	}
 
 	collector.SetRowsProduced(int64(len(users.Users)))
-	return users.Finish(), nil
+	return scrapper.NewPlatformUsers(users), nil
 }
 
 func (e *PostgresScrapper) queryPlatformUserRoles(ctx context.Context) (map[string][]string, error) {

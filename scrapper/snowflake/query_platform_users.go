@@ -90,31 +90,46 @@ type showUsersRow struct {
 	DefaultRole      sql.NullString `db:"default_role"`
 }
 
-// QueryPlatformUsers lists the account's users from ACCOUNT_USAGE.USERS, with
-// the roles granted to each from ACCOUNT_USAGE.GRANTS_TO_USERS. A role that may
-// not read ACCOUNT_USAGE gets SHOW USERS instead, which names every user but
-// hides the details of the users the role does not own.
+// Sources of Snowflake users, in trust order.
+const (
+	accountUsageUsersSource = "snowflake.account_usage.users"
+	showUsersSource         = "snowflake.show_users"
+)
+
+// QueryPlatformUsers reads two sources and keeps them apart.
+// ACCOUNT_USAGE.USERS, with the roles from ACCOUNT_USAGE.GRANTS_TO_USERS, has
+// every fact but lags behind by up to two hours. SHOW USERS is current, so it
+// names a user created since, but hides the details of the users the role
+// does not own. Either may be refused; both refused is the permission error.
 //
 // Login is the user's NAME, which is what QUERY_HISTORY.USER_NAME reports, not
 // its LOGIN_NAME.
 func (e *SnowflakeScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	users, err := e.queryAccountUsageUsers(ctx)
-	if err == nil {
-		return users.Finish(), nil
+	accountUsage, accountUsageErr := e.queryAccountUsageUsers(ctx)
+	if accountUsageErr != nil {
+		if !e.IsPermissionError(accountUsageErr) {
+			return nil, accountUsageErr
+		}
+		logging.GetLogger(ctx).WithError(accountUsageErr).Info("cannot read ACCOUNT_USAGE.USERS, listing users with SHOW USERS only")
+		accountUsage = scrapper.RefusedPlatformUserSource(accountUsageUsersSource, scrapper.PlatformUserSourceSQL, accountUsageErr)
 	}
-	if !e.IsPermissionError(err) {
-		return nil, err
-	}
-	logging.GetLogger(ctx).WithError(err).Info("cannot read ACCOUNT_USAGE.USERS, listing users with SHOW USERS")
 
-	users, showErr := e.queryShowUsers(ctx)
+	show, showErr := e.queryShowUsers(ctx)
 	if showErr != nil {
-		return nil, errors.Wrapf(showErr, "SHOW USERS failed after ACCOUNT_USAGE.USERS was refused (%v)", err)
+		if !e.IsPermissionError(showErr) {
+			return nil, showErr
+		}
+		show = scrapper.RefusedPlatformUserSource(showUsersSource, scrapper.PlatformUserSourceSQL, showErr)
 	}
-	return users.Finish(), nil
+
+	result := scrapper.NewPlatformUsers(accountUsage, show)
+	if result.AllRefused() {
+		return nil, errors.Wrapf(showErr, "SHOW USERS refused, as was ACCOUNT_USAGE.USERS (%v)", accountUsageErr)
+	}
+	return result, nil
 }
 
-func (e *SnowflakeScrapper) queryAccountUsageUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+func (e *SnowflakeScrapper) queryAccountUsageUsers(ctx context.Context) (*scrapper.PlatformUserListing, error) {
 	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf(accountUsageUsersQuery, e.accountUsageDb()))
 	if err != nil {
 		return nil, err
@@ -126,7 +141,11 @@ func (e *SnowflakeScrapper) queryAccountUsageUsers(ctx context.Context) (*scrapp
 	}
 
 	now := time.Now()
-	users := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+	users := &scrapper.PlatformUserListing{
+		Source:       accountUsageUsersSource,
+		Kind:         scrapper.PlatformUserSourceSQL,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 	for _, r := range userRows {
 		users.Users = append(users.Users, &scrapper.PlatformUser{
 			Login:       r.Name,
@@ -171,7 +190,7 @@ func (e *SnowflakeScrapper) queryAccountUsageUserRoles(ctx context.Context) (map
 	return roles, nil
 }
 
-func (e *SnowflakeScrapper) queryShowUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+func (e *SnowflakeScrapper) queryShowUsers(ctx context.Context) (*scrapper.PlatformUserListing, error) {
 	var all []*showUsersRow
 	after := ""
 	for {
@@ -206,11 +225,13 @@ func (e *SnowflakeScrapper) showUsersPage(ctx context.Context, query string) ([]
 // column, which no visible user has, and so do all its other details. Those
 // facts are recorded as skipped when any user hides them, since the caller
 // cannot tell a hidden email from a missing one otherwise.
-func platformUsersFromShowUsers(rows []*showUsersRow, now time.Time) *scrapper.PlatformUsers {
-	users := &scrapper.PlatformUsers{
+func platformUsersFromShowUsers(rows []*showUsersRow, now time.Time) *scrapper.PlatformUserListing {
+	users := &scrapper.PlatformUserListing{
+		Source:       showUsersSource,
+		Kind:         scrapper.PlatformUserSourceSQL,
 		Completeness: scrapper.PlatformUsersUnknown,
-		CompletenessReason: "listed with SHOW USERS because ACCOUNT_USAGE.USERS was refused; grant " + platformUsersGrant +
-			" to read the account's own record of every user",
+		CompletenessReason: "Snowflake does not say whether SHOW USERS names every user to a role without MANAGE GRANTS; " +
+			"ACCOUNT_USAGE.USERS is the account's own record of every user, read with " + platformUsersGrant,
 	}
 	hidden := 0
 	for _, r := range rows {
@@ -231,7 +252,7 @@ func platformUsersFromShowUsers(rows []*showUsersRow, now time.Time) *scrapper.P
 	}
 
 	users.Skip(scrapper.PlatformUserFactPlatformId, "SHOW USERS does not return USER_ID")
-	users.Skip(scrapper.PlatformUserFactRoles, "roles are read from ACCOUNT_USAGE.GRANTS_TO_USERS, which was refused")
+	users.Skip(scrapper.PlatformUserFactRoles, "SHOW USERS does not return the roles granted to a user")
 	if hidden > 0 {
 		reason := fmt.Sprintf("SHOW USERS hides it for the %d of %d users the role does not own; grant MANAGE GRANTS, or %s",
 			hidden, len(rows), platformUsersGrant)

@@ -198,7 +198,7 @@ func (s *PostgresPlatformUsersSuite) TearDownSuite() {
 // the built-in pg_monitor, is never listed as a user, and that the facts
 // Postgres does not keep are reported as skipped.
 func (s *PostgresPlatformUsersSuite) TestPlatformUsers_ListsLoginRolesOnly() {
-	users, err := s.Scrapper.QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(s.Scrapper.QueryPlatformUsers(context.Background()))
 	s.Require().NoError(err)
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness)
 	for _, u := range users.Users {

@@ -187,20 +187,27 @@ func TestRejectingScrapper_SimpleRowTypes(t *testing.T) {
 }
 
 func TestRejectingScrapper_QueryPlatformUsers(t *testing.T) {
-	inner := &stubScrapper{users: &scrapper.PlatformUsers{
-		Completeness: scrapper.PlatformUsersComplete,
-		Users: []*scrapper.PlatformUser{
-			{Login: "GOOD", Email: "bad\x00email"},
-			{Login: "BAD\x00LOGIN"},
-			{Login: "bad\xffutf8"},
+	inner := &stubScrapper{users: &scrapper.PlatformUsers{Sources: []*scrapper.PlatformUserListing{
+		{
+			Source:       "stub.a",
+			Completeness: scrapper.PlatformUsersComplete,
+			Users: []*scrapper.PlatformUser{
+				{Login: "GOOD", Email: "bad\x00email"},
+				{Login: "BAD\x00LOGIN"},
+				{Login: "bad\xffutf8"},
+			},
 		},
-	}}
+		{Source: "stub.b", Users: []*scrapper.PlatformUser{{Login: "B\x00"}, {Login: "B"}}},
+	}}}
 	users, err := NewRejectingScrapper(inner).QueryPlatformUsers(context.Background())
 	require.NoError(t, err)
-	require.Len(t, users.Users, 1)
-	assert.Equal(t, "GOOD", users.Users[0].Login)
-	assert.Equal(t, "bad\x00email", users.Users[0].Email, "a fact that is not the login is left to sanitize")
-	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
+	a, b := users.Sources[0], users.Sources[1]
+	require.Len(t, a.Users, 1)
+	assert.Equal(t, "GOOD", a.Users[0].Login)
+	assert.Equal(t, "bad\x00email", a.Users[0].Email, "a fact that is not the login is left to sanitize")
+	assert.Equal(t, scrapper.PlatformUsersComplete, a.Completeness)
+	require.Len(t, b.Users, 1, "every source is filtered")
+	assert.Equal(t, "B", b.Users[0].Login)
 
 	users, err = NewRejectingScrapper(&stubScrapper{}).QueryPlatformUsers(context.Background())
 	require.NoError(t, err)

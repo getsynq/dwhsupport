@@ -86,7 +86,7 @@ func (s *ClickHousePlatformUsersSuite) throwawayUser(name string, ddlSuffix stri
 	return sc
 }
 
-func (s *ClickHousePlatformUsersSuite) findUser(users *scrapper.PlatformUsers, login string) *scrapper.PlatformUser {
+func (s *ClickHousePlatformUsersSuite) findUser(users *scrapper.PlatformUserListing, login string) *scrapper.PlatformUser {
 	for _, u := range users.Users {
 		if u.Login == login {
 			return u
@@ -110,7 +110,7 @@ func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_RolesDefaultRoleAndExpi
 	expired := "pu_expired_" + s.suffix
 	s.createUser(expired, "VALID UNTIL '2001-01-01 00:00:00'")
 
-	users, err := s.admin.QueryPlatformUsers(ctx)
+	users, err := scrappertest.OnlyPlatformUserSource(s.admin.QueryPlatformUsers(ctx))
 	s.Require().NoError(err)
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness)
 	s.False(users.IsSkipped(scrapper.PlatformUserFactRoles))
@@ -137,7 +137,7 @@ func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_RolesDefaultRoleAndExpi
 func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_NoGrantIsAPermissionError() {
 	sc := s.throwawayUser("pu_nogrant_"+s.suffix, "")
 
-	users, err := sc.QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(sc.QueryPlatformUsers(context.Background()))
 	s.Require().Error(err)
 	s.Nil(users)
 	s.True(sc.IsPermissionError(err), "a refused system.users must be a permission error, got %v", err)
@@ -147,7 +147,7 @@ func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_RefusedRolesAreSkipped(
 	login := "pu_noroles_" + s.suffix
 	sc := s.throwawayUser(login, "", "GRANT SELECT ON system.users TO %s", "GRANT READ ON REMOTE TO %s")
 
-	users, err := sc.QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(sc.QueryPlatformUsers(context.Background()))
 	s.Require().NoError(err)
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness)
 	s.NotNil(s.findUser(users, login))

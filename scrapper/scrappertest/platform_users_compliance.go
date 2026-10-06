@@ -2,6 +2,7 @@ package scrappertest
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -53,7 +54,7 @@ func (s *PlatformUsersSuite) TestPlatformUsers_CapabilityMatchesCall() {
 }
 
 func (s *PlatformUsersSuite) TestPlatformUsers_ListsTheConnectedLogin() {
-	users := s.listing()
+	users := s.listing().Reconcile()
 
 	s.NotEqual(scrapper.PlatformUsersEmpty, users.Completeness, "the role we connect as is a user, so the listing cannot be empty")
 	s.NotEmpty(users.Completeness)
@@ -71,9 +72,33 @@ func (s *PlatformUsersSuite) TestPlatformUsers_ListsTheConnectedLogin() {
 	}
 }
 
-func (s *PlatformUsersSuite) TestPlatformUsers_Shape() {
-	users := s.listing()
+func (s *PlatformUsersSuite) TestPlatformUsers_Sources() {
+	result := s.listing()
 
+	s.Require().NotEmpty(result.Sources)
+	s.False(result.AllRefused(), "a result whose every source refused is a permission error, not a result")
+	names := map[string]bool{}
+	for _, src := range result.Sources {
+		s.NotEmpty(src.Source)
+		s.NotEqual(scrapper.PlatformUsersReconciledSource, src.Source)
+		s.Falsef(names[src.Source], "source %q listed twice", src.Source)
+		names[src.Source] = true
+		s.Containsf([]scrapper.PlatformUserSourceKind{scrapper.PlatformUserSourceSQL, scrapper.PlatformUserSourceAPI}, src.Kind,
+			"source %q has kind %q", src.Source, src.Kind)
+		if src.Refused != "" {
+			s.Emptyf(src.Users, "refused source %q lists users", src.Source)
+			continue
+		}
+		s.checkShape(src)
+	}
+}
+
+func (s *PlatformUsersSuite) TestPlatformUsers_Shape() {
+	s.checkShape(s.listing().Reconcile())
+}
+
+func (s *PlatformUsersSuite) checkShape(users *scrapper.PlatformUserListing) {
+	s.NotEmptyf(users.Completeness, "%s has no completeness", users.Source)
 	s.True(slices.IsSortedFunc(users.Users, func(a, b *scrapper.PlatformUser) int { return strings.Compare(a.Login, b.Login) }),
 		"users are sorted by login")
 	seen := map[string]bool{}
@@ -115,7 +140,7 @@ func (s *PlatformUsersSuite) ctx() context.Context {
 	return querycontext.WithQueryContext(context.Background(), complianceQueryContext)
 }
 
-func (s *PlatformUsersSuite) find(users *scrapper.PlatformUsers, login string) *scrapper.PlatformUser {
+func (s *PlatformUsersSuite) find(users *scrapper.PlatformUserListing, login string) *scrapper.PlatformUser {
 	for _, u := range users.Users {
 		if u.Login == login || (s.MatchLoginFold && strings.EqualFold(u.Login, login)) {
 			return u
@@ -148,4 +173,17 @@ func hasFact(u *scrapper.PlatformUser, fact scrapper.PlatformUserFact) bool {
 		return len(u.Roles) > 0
 	}
 	return false
+}
+
+// OnlyPlatformUserSource unwraps the result of a platform that reads a single
+// source of users, for tests that assert on that listing. It passes an error
+// through, and fails when the result holds any other number of sources.
+func OnlyPlatformUserSource(result *scrapper.PlatformUsers, err error) (*scrapper.PlatformUserListing, error) {
+	if err != nil || result == nil {
+		return nil, err
+	}
+	if len(result.Sources) != 1 {
+		return nil, fmt.Errorf("expected one source of users, got %d", len(result.Sources))
+	}
+	return result.Sources[0], nil
 }

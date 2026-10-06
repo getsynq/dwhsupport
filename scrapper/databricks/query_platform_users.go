@@ -42,7 +42,11 @@ const (
 // was listing: a listing missing whatever the quota cut off would read as principals that
 // were removed.
 func (e *DatabricksScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	users := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+	users := &scrapper.PlatformUserListing{
+		Source:       "databricks.scim",
+		Kind:         scrapper.PlatformUserSourceAPI,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 	users.Skip(scrapper.PlatformUserFactCreatedAt, "Databricks SCIM does not state when a principal was created")
 	users.Skip(scrapper.PlatformUserFactLastLoginAt, "Databricks SCIM does not state when a principal last signed in")
 	users.Skip(scrapper.PlatformUserFactDefaultRole, "Databricks has no default role")
@@ -92,7 +96,7 @@ func (e *DatabricksScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.
 		return nil, errors.Wrap(err, "failed to list Databricks service principals")
 	}
 
-	return users.Finish(), nil
+	return scrapper.NewPlatformUsers(users), nil
 }
 
 // listAllScim drains a SCIM listing. The SDK's ListAll stops after Count items, which it

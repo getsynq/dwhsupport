@@ -126,12 +126,36 @@ type SkippedPlatformUserFact struct {
 	Reason string           `json:"reason"`
 }
 
-// PlatformUsers is the result of QueryPlatformUsers.
-type PlatformUsers struct {
+// PlatformUserSourceKind says how a source of platform users was read.
+type PlatformUserSourceKind string
+
+const (
+	// PlatformUserSourceSQL is a catalog view or command read over the
+	// warehouse connection.
+	PlatformUserSourceSQL PlatformUserSourceKind = "sql"
+	// PlatformUserSourceAPI is the platform's REST API (Databricks SCIM, Google
+	// IAM, Fabric).
+	PlatformUserSourceAPI PlatformUserSourceKind = "api"
+)
+
+// PlatformUserListing is what one source said about the platform's users, or,
+// from PlatformUsers.Reconcile, what all of them said together.
+type PlatformUserListing struct {
+	// Source names where the listing was read, as <platform>.<source>
+	// ("snowflake.account_usage.users", "bigquery.iam_policy"). A reconciled
+	// listing has PlatformUsersReconciledSource.
+	Source string `json:"source"`
+	// Kind says whether the source is SQL or an API. Empty on a reconciled
+	// listing.
+	Kind PlatformUserSourceKind `json:"kind,omitempty"`
+	// Refused is set when the source refused the connecting role, with the
+	// platform's error. Such a listing holds no users and its completeness
+	// means nothing.
+	Refused string `json:"refused,omitempty"`
 	// Users sorted by Login, one per login.
 	Users []*PlatformUser `json:"users"`
 	// Completeness says how much of the platform's users the listing holds.
-	Completeness PlatformUsersCompleteness `json:"completeness"`
+	Completeness PlatformUsersCompleteness `json:"completeness,omitempty"`
 	// CompletenessReason explains a limited, empty or unknown listing, and
 	// names the grant that would complete it where one would.
 	CompletenessReason string `json:"completeness_reason,omitempty"`
@@ -143,9 +167,176 @@ type PlatformUsers struct {
 	SkippedFacts []SkippedPlatformUserFact `json:"skipped_facts,omitempty"`
 }
 
+// PlatformUsersReconciledSource is the Source of a listing Reconcile made.
+const PlatformUsersReconciledSource = "reconciled"
+
+// PlatformUsers is the result of QueryPlatformUsers: what each source the
+// platform has said, kept apart so a caller can weigh one against another
+// (the warehouse's own view against the platform's API, a complete source
+// against a fresher one). Reconcile merges them for a caller that wants one
+// list.
+//
+// A platform reads every source that can add a user or a fact. A fallback
+// that only repeats a subset of another source (Oracle ALL_USERS next to
+// DBA_USERS) is read when that source refused, and the refusal is kept as a
+// source of its own, so a caller sees what was missed and why.
+type PlatformUsers struct {
+	// Sources in the order the platform trusts them, most trusted first:
+	// Reconcile takes a fact from the first source that has it.
+	Sources []*PlatformUserListing `json:"sources"`
+}
+
+// NewPlatformUsers finishes each source (see PlatformUserListing.Finish) and
+// returns them as one result.
+func NewPlatformUsers(sources ...*PlatformUserListing) *PlatformUsers {
+	result := &PlatformUsers{}
+	for _, src := range sources {
+		if src == nil {
+			continue
+		}
+		result.Sources = append(result.Sources, src.Finish())
+	}
+	return result
+}
+
+// RefusedPlatformUserSource records a source that refused the connecting role.
+func RefusedPlatformUserSource(source string, kind PlatformUserSourceKind, err error) *PlatformUserListing {
+	return &PlatformUserListing{Source: source, Kind: kind, Refused: err.Error()}
+}
+
+// Source returns the listing of the named source, or nil.
+func (p *PlatformUsers) Source(name string) *PlatformUserListing {
+	if p == nil {
+		return nil
+	}
+	for _, src := range p.Sources {
+		if src.Source == name {
+			return src
+		}
+	}
+	return nil
+}
+
+// AllRefused reports whether no source could be read. QueryPlatformUsers
+// returns a permission error then instead of a result.
+func (p *PlatformUsers) AllRefused() bool {
+	for _, src := range p.Sources {
+		if src.Refused == "" {
+			return false
+		}
+	}
+	return true
+}
+
+// Reconcile merges the sources into one listing. It is the default reading,
+// for a caller that has no reason to weigh the sources itself:
+//
+//   - a user is listed when any source lists it;
+//   - each fact is taken from the first source, in trust order, that has it,
+//     and roles are united across sources;
+//   - the listing is as complete as its most complete source, since a
+//     complete source saw every user: complete, else limited, else unknown;
+//   - a fact is skipped only when every source that answered skipped it;
+//   - a refused source adds its refusal to the reason of a listing that is
+//     not complete.
+func (p *PlatformUsers) Reconcile() *PlatformUserListing {
+	result := &PlatformUserListing{Source: PlatformUsersReconciledSource}
+	if p == nil {
+		return result.Finish()
+	}
+
+	answered := make([]*PlatformUserListing, 0, len(p.Sources))
+	var refusals []string
+	for _, src := range p.Sources {
+		if src.Refused != "" {
+			refusals = append(refusals, src.Source+" refused: "+src.Refused)
+			continue
+		}
+		answered = append(answered, src)
+	}
+
+	byLogin := map[string]*PlatformUser{}
+	for _, src := range answered {
+		for _, u := range src.Users {
+			if seen, ok := byLogin[u.Login]; ok {
+				seen.merge(u)
+				continue
+			}
+			c := u.clone()
+			byLogin[u.Login] = c
+			result.Users = append(result.Users, c)
+		}
+	}
+
+	result.Completeness, result.CompletenessReason = reconcileCompleteness(answered, refusals)
+
+	for _, fact := range allPlatformUserFacts {
+		var reasons []string
+		for _, src := range answered {
+			reason, skipped := src.skipReason(fact)
+			if !skipped {
+				reasons = nil
+				break
+			}
+			reasons = append(reasons, src.Source+": "+reason)
+		}
+		if len(reasons) > 0 {
+			result.Skip(fact, strings.Join(reasons, "; "))
+		}
+	}
+	return result.Finish()
+}
+
+func reconcileCompleteness(answered []*PlatformUserListing, refusals []string) (PlatformUsersCompleteness, string) {
+	for _, want := range []PlatformUsersCompleteness{PlatformUsersComplete, PlatformUsersLimited, PlatformUsersUnknown} {
+		var reasons []string
+		found := false
+		for _, src := range answered {
+			if src.Completeness != want {
+				continue
+			}
+			found = true
+			if src.CompletenessReason != "" {
+				reasons = append(reasons, src.Source+": "+src.CompletenessReason)
+			}
+		}
+		if !found {
+			continue
+		}
+		if want == PlatformUsersComplete {
+			return want, ""
+		}
+		return want, strings.Join(append(reasons, refusals...), "; ")
+	}
+	// Every source that answered was empty, or none answered.
+	return PlatformUsersEmpty, strings.Join(refusals, "; ")
+}
+
+var allPlatformUserFacts = []PlatformUserFact{
+	PlatformUserFactPlatformId,
+	PlatformUserFactType,
+	PlatformUserFactEmail,
+	PlatformUserFactDisplayName,
+	PlatformUserFactComment,
+	PlatformUserFactDisabled,
+	PlatformUserFactCreatedAt,
+	PlatformUserFactLastLoginAt,
+	PlatformUserFactDefaultRole,
+	PlatformUserFactRoles,
+}
+
+func (p *PlatformUserListing) skipReason(fact PlatformUserFact) (string, bool) {
+	for _, s := range p.SkippedFacts {
+		if s.Fact == fact {
+			return s.Reason, true
+		}
+	}
+	return "", false
+}
+
 // Skip records that fact could not be read in full. A fact skipped twice
 // keeps its first reason.
-func (p *PlatformUsers) Skip(fact PlatformUserFact, reason string) {
+func (p *PlatformUserListing) Skip(fact PlatformUserFact, reason string) {
 	for _, s := range p.SkippedFacts {
 		if s.Fact == fact {
 			return
@@ -155,7 +346,7 @@ func (p *PlatformUsers) Skip(fact PlatformUserFact, reason string) {
 }
 
 // IsSkipped reports whether fact was recorded as skipped.
-func (p *PlatformUsers) IsSkipped(fact PlatformUserFact) bool {
+func (p *PlatformUserListing) IsSkipped(fact PlatformUserFact) bool {
 	for _, s := range p.SkippedFacts {
 		if s.Fact == fact {
 			return true
@@ -169,7 +360,7 @@ func (p *PlatformUsers) IsSkipped(fact PlatformUserFact) bool {
 // fact wins, roles are united), roles are sorted and deduplicated, users are
 // sorted by login, and an empty listing is marked PlatformUsersEmpty whatever
 // completeness was claimed. Every implementation returns through it.
-func (p *PlatformUsers) Finish() *PlatformUsers {
+func (p *PlatformUserListing) Finish() *PlatformUserListing {
 	byLogin := make(map[string]*PlatformUser, len(p.Users))
 	users := make([]*PlatformUser, 0, len(p.Users))
 	for _, u := range p.Users {
@@ -190,6 +381,10 @@ func (p *PlatformUsers) Finish() *PlatformUsers {
 	p.Users = users
 	slices.SortFunc(p.SkippedFacts, func(a, b SkippedPlatformUserFact) int { return strings.Compare(string(a.Fact), string(b.Fact)) })
 
+	if p.Refused != "" {
+		p.Completeness = ""
+		return p
+	}
 	if len(p.Users) == 0 {
 		p.Completeness = PlatformUsersEmpty
 		if p.CompletenessReason == "" {
@@ -226,6 +421,12 @@ func (u *PlatformUser) merge(o *PlatformUser) {
 	u.Roles = append(u.Roles, o.Roles...)
 }
 
+func (u *PlatformUser) clone() *PlatformUser {
+	c := *u
+	c.Roles = slices.Clone(u.Roles)
+	return &c
+}
+
 func sortedUnique(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, v := range values {
@@ -243,20 +444,31 @@ func sortedUnique(values []string) []string {
 // AssignRoles adds roles to the users they belong to, keyed by login. Roles of
 // a login that is not in the listing are dropped: a grant to a user we did not
 // list does not add a user.
-func (p *PlatformUsers) AssignRoles(rolesByLogin map[string][]string) {
+func (p *PlatformUserListing) AssignRoles(rolesByLogin map[string][]string) {
 	for _, u := range p.Users {
 		u.Roles = append(u.Roles, rolesByLogin[u.Login]...)
 	}
 }
 
-// Sanitize cleans every string of the listing (see SanitizeString).
+// Sanitize cleans every string of every source (see SanitizeString).
 func (p *PlatformUsers) Sanitize() {
+	if p == nil {
+		return
+	}
+	for _, src := range p.Sources {
+		src.Sanitize()
+	}
+}
+
+// Sanitize cleans every string of the listing (see SanitizeString).
+func (p *PlatformUserListing) Sanitize() {
 	if p == nil {
 		return
 	}
 	for _, u := range p.Users {
 		u.Sanitize()
 	}
+	p.Refused = SanitizeString(p.Refused)
 	p.CompletenessReason = SanitizeString(p.CompletenessReason)
 	for i := range p.SkippedFacts {
 		p.SkippedFacts[i].Reason = SanitizeString(p.SkippedFacts[i].Reason)

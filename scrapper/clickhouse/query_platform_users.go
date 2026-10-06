@@ -105,7 +105,11 @@ func isClickhouseErrCode(err error, code int32) bool {
 // The listing is complete: system.users is either refused or lists every user,
 // there is no partial view of it.
 func (e *ClickhouseScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	result := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+	result := &scrapper.PlatformUserListing{
+		Source:       "clickhouse.system.users",
+		Kind:         scrapper.PlatformUserSourceSQL,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 
 	rows, err := e.readPlatformUsers(ctx, platformUsersSql)
 	if isClickhouseErrCode(err, chErrUnknownIdentifier) {
@@ -137,7 +141,7 @@ func (e *ClickhouseScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.
 	e.addPlatformUserRoles(ctx, result)
 	e.addPlatformUserLastLogin(ctx, result)
 
-	return result.Finish(), nil
+	return scrapper.NewPlatformUsers(result), nil
 }
 
 func (e *ClickhouseScrapper) readPlatformUsers(ctx context.Context, sql string) ([]*platformUserRow, error) {
@@ -152,7 +156,7 @@ func (e *ClickhouseScrapper) readPlatformUsers(ctx context.Context, sql string) 
 // addPlatformUserRoles adds each user's directly granted roles, and the default
 // role when exactly one of them is a default: DefaultRole is one role, and
 // ClickHouse may start a session with several.
-func (e *ClickhouseScrapper) addPlatformUserRoles(ctx context.Context, result *scrapper.PlatformUsers) {
+func (e *ClickhouseScrapper) addPlatformUserRoles(ctx context.Context, result *scrapper.PlatformUserListing) {
 	grants, err := e.readRoleGrants(ctx)
 	if err != nil {
 		reason := skipReason(e, err, "SELECT ON system.role_grants")
@@ -190,7 +194,7 @@ func (e *ClickhouseScrapper) readRoleGrants(ctx context.Context) ([]*platformUse
 	return scrapper.ScanAll[platformUserRoleRow](ctx, rows, "system.role_grants")
 }
 
-func (e *ClickhouseScrapper) addPlatformUserLastLogin(ctx context.Context, result *scrapper.PlatformUsers) {
+func (e *ClickhouseScrapper) addPlatformUserLastLogin(ctx context.Context, result *scrapper.PlatformUserListing) {
 	logins, err := e.readLastLogins(ctx)
 	if err != nil {
 		var reason string

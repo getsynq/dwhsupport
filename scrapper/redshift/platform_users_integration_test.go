@@ -79,7 +79,7 @@ func (s *RedshiftPlatformUsersSuite) TearDownSuite() {
 // TestPlatformUsers_SeesEveryUser checks that the listing holds users other
 // than the connected one, which PG_USER shows to every user.
 func (s *RedshiftPlatformUsersSuite) TestPlatformUsers_SeesEveryUser() {
-	users, err := s.Scrapper.QueryPlatformUsers(context.Background())
+	users, err := scrappertest.OnlyPlatformUserSource(s.Scrapper.QueryPlatformUsers(context.Background()))
 	s.Require().NoError(err)
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness)
 	s.Greater(len(users.Users), 1)
@@ -94,7 +94,7 @@ func (s *RedshiftPlatformUsersSuite) TestPlatformUsers_SeesEveryUser() {
 // and group membership is still read.
 func (s *RedshiftPlatformUsersSuite) TestPlatformUsers_WithoutAccessSystemTable() {
 	ctx := context.Background()
-	users := &scrapper.PlatformUsers{Users: []*scrapper.PlatformUser{{Login: s.ConnectedLogin}}}
+	users := &scrapper.PlatformUserListing{Users: []*scrapper.PlatformUser{{Login: s.ConnectedLogin}}}
 	s.redshift.addPlatformUserRoles(ctx, users, false)
 	s.redshift.addPlatformUserLastLogins(ctx, users, false)
 

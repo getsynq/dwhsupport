@@ -57,7 +57,11 @@ func (e *MSSQLScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Platf
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to list sys.server_principals")
 	}
-	result := &scrapper.PlatformUsers{Users: platformUsersFromRows(rows)}
+	result := &scrapper.PlatformUserListing{
+		Source: "mssql.sys.server_principals",
+		Kind:   scrapper.PlatformUserSourceSQL,
+		Users:  platformUsersFromRows(rows),
+	}
 	skipFactsNotOnPlatform(result)
 
 	visibility, err := selectRows[platformUsersVisibilityRow](ctx, e.executor, platformUsersVisibilitySql)
@@ -74,10 +78,10 @@ func (e *MSSQLScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Platf
 	} else {
 		result.AssignRoles(rolesByLogin(roles))
 	}
-	return result.Finish(), nil
+	return scrapper.NewPlatformUsers(result), nil
 }
 
-func setCompleteness(result *scrapper.PlatformUsers, v *platformUsersVisibilityRow) {
+func setCompleteness(result *scrapper.PlatformUserListing, v *platformUsersVisibilityRow) {
 	switch {
 	case v.ViewAnyDefinition.Int64 == 1 || v.AlterAnyLogin.Int64 == 1:
 		result.Completeness = scrapper.PlatformUsersComplete
@@ -134,7 +138,7 @@ var factsNotOnPlatform = []scrapper.PlatformUserFact{
 	scrapper.PlatformUserFactDefaultRole,
 }
 
-func skipFactsNotOnPlatform(result *scrapper.PlatformUsers) {
+func skipFactsNotOnPlatform(result *scrapper.PlatformUserListing) {
 	for _, f := range factsNotOnPlatform {
 		result.Skip(f, "SQL Server does not record it for a login")
 	}

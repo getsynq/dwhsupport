@@ -103,7 +103,11 @@ func (e *RedshiftScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 	if err != nil {
 		return nil, err
 	}
-	users := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+	users := &scrapper.PlatformUserListing{
+		Source:       "redshift.pg_user",
+		Kind:         scrapper.PlatformUserSourceSQL,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 	for _, row := range listed {
 		disabled := row.Disabled
 		users.Users = append(users.Users, &scrapper.PlatformUser{Login: row.Login, PlatformId: row.PlatformId, Disabled: &disabled})
@@ -120,7 +124,7 @@ func (e *RedshiftScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 	e.addPlatformUserLastLogins(ctx, users, canReadOthers)
 
 	collector.SetRowsProduced(int64(len(users.Users)))
-	return users.Finish(), nil
+	return scrapper.NewPlatformUsers(users), nil
 }
 
 func (e *RedshiftScrapper) canReadOthers(ctx context.Context) (bool, error) {
@@ -139,7 +143,7 @@ func (e *RedshiftScrapper) canReadOthers(ctx context.Context) (bool, error) {
 // sees in full. Without that privilege the role grants are not read at all,
 // so that no user's roles depend on whether it happens to be the connecting
 // one, and the fact is reported skipped.
-func (e *RedshiftScrapper) addPlatformUserRoles(ctx context.Context, users *scrapper.PlatformUsers, canReadOthers bool) {
+func (e *RedshiftScrapper) addPlatformUserRoles(ctx context.Context, users *scrapper.PlatformUserListing, canReadOthers bool) {
 	groups, err := scanQuery[platformUserRoleRow](ctx, e, platformUserGroupsSQL, "pg_group")
 	if err != nil {
 		logging.GetLogger(ctx).WithError(err).Warn("failed to read redshift group membership")
@@ -162,7 +166,7 @@ func (e *RedshiftScrapper) addPlatformUserRoles(ctx context.Context, users *scra
 	users.AssignRoles(rolesByLogin(grants))
 }
 
-func (e *RedshiftScrapper) addPlatformUserLastLogins(ctx context.Context, users *scrapper.PlatformUsers, canReadOthers bool) {
+func (e *RedshiftScrapper) addPlatformUserLastLogins(ctx context.Context, users *scrapper.PlatformUserListing, canReadOthers bool) {
 	if !canReadOthers {
 		users.Skip(scrapper.PlatformUserFactLastLoginAt, "SYS_CONNECTION_LOG shows other users' connections only with ACCESS SYSTEM TABLE")
 		return

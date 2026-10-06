@@ -174,15 +174,16 @@ func TestSanitizingScrapper_PropagatesErrors(t *testing.T) {
 }
 
 func TestSanitizingScrapper_QueryPlatformUsers(t *testing.T) {
-	inner := &stubScrapper{users: &scrapper.PlatformUsers{
+	inner := &stubScrapper{users: &scrapper.PlatformUsers{Sources: []*scrapper.PlatformUserListing{{
 		CompletenessReason: "grant\x00 MANAGE GRANTS",
 		Users:              []*scrapper.PlatformUser{{Login: "A", Email: "a\x00@example.com", Roles: []string{"R\xff"}}},
-	}}
+	}}}}
 	users, err := NewSanitizingScrapper(inner).QueryPlatformUsers(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, "grant MANAGE GRANTS", users.CompletenessReason)
-	assert.Equal(t, "a@example.com", users.Users[0].Email)
-	assert.Equal(t, []string{"R"}, users.Users[0].Roles)
+	src := users.Sources[0]
+	assert.Equal(t, "grant MANAGE GRANTS", src.CompletenessReason)
+	assert.Equal(t, "a@example.com", src.Users[0].Email)
+	assert.Equal(t, []string{"R"}, src.Users[0].Roles)
 
 	users, err = NewSanitizingScrapper(&stubScrapper{}).QueryPlatformUsers(context.Background())
 	require.NoError(t, err)
