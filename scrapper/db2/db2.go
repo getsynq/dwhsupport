@@ -42,7 +42,11 @@ func (e *Db2Scrapper) IsPermissionError(err error) bool {
 	return dwhexecdb2.IsPermissionError(err)
 }
 
-func (e *Db2Scrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *Db2Scrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
+	}
+}
 
 func (e *Db2Scrapper) DialectType() string {
 	return "db2"
