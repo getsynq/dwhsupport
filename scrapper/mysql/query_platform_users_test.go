@@ -28,7 +28,7 @@ func TestFoldAccounts(t *testing.T) {
 		{FromUser: "admin_role", FromHost: "%", ToUser: "analyst", ToHost: "localhost"},
 	}
 
-	users := (&scrapper.PlatformUsers{Users: foldAccounts(accounts, edges)}).Finish().Users
+	users := (&scrapper.PlatformUserListing{Users: foldAccounts(accounts, edges)}).Finish().Users
 	require.Len(t, users, 3, "a role and a reserved account are not logins, hosts of one user fold")
 
 	analyst, loader, retired := users[0], users[1], users[2]

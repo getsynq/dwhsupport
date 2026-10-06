@@ -94,14 +94,36 @@ func TestMySQLPlatformUsers_WithoutMysqlSchema(t *testing.T) {
 	}
 	require.True(t, sc.IsPermissionError(err), "reading mysql.user without the grant is a permission error: %v", err)
 
-	users, err := sc.QueryPlatformUsers(ctx)
+	result, err := sc.QueryPlatformUsers(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, scrapper.PlatformUsersLimited, users.Completeness)
-	assert.Contains(t, users.CompletenessReason, "mysql.user")
-	require.Len(t, users.Users, 1)
-	assert.Equal(t, testenv.EnvOrDefault("MYSQL_USER", "synq"), users.Users[0].Login)
-	assert.True(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
-	assert.True(t, users.IsSkipped(scrapper.PlatformUserFactDisabled))
+	assertRefusedThenLimited(t, result, sourceMySQLUser, sourceMySQLUserAttributes, testenv.EnvOrDefault("MYSQL_USER", "synq"))
+}
+
+// assertRefusedThenLimited checks the shape of a listing by a login that may
+// not read the mysql schema: the mysql schema source refused, then the
+// information_schema source holding only the login itself.
+func assertRefusedThenLimited(t *testing.T, result *scrapper.PlatformUsers, mainSource, fallbackSource, login string) {
+	t.Helper()
+	require.Len(t, result.Sources, 2)
+	refused := result.Sources[0]
+	assert.Equal(t, mainSource, refused.Source)
+	assert.NotEmpty(t, refused.Refused)
+	assert.Empty(t, refused.Users)
+
+	limited := result.Sources[1]
+	assert.Equal(t, fallbackSource, limited.Source)
+	assert.Equal(t, scrapper.PlatformUserSourceSQL, limited.Kind)
+	assert.Empty(t, limited.Refused)
+	assert.Equal(t, scrapper.PlatformUsersLimited, limited.Completeness)
+	assert.Contains(t, limited.CompletenessReason, "mysql")
+	require.Len(t, limited.Users, 1)
+	assert.Equal(t, login, limited.Users[0].Login)
+	assert.True(t, limited.IsSkipped(scrapper.PlatformUserFactRoles))
+	assert.True(t, limited.IsSkipped(scrapper.PlatformUserFactDisabled))
+
+	reconciled := result.Reconcile()
+	assert.Equal(t, scrapper.PlatformUsersLimited, reconciled.Completeness)
+	assert.Contains(t, reconciled.CompletenessReason, mainSource+" refused")
 }
 
 // TestMariaDBPlatformUsers_RolesLocksAndLimitedLogin creates a role, a user
@@ -116,7 +138,8 @@ func TestMariaDBPlatformUsers_RolesLocksAndLimitedLogin(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to MariaDB: %v", err)
 	}
-	testRolesLocksAndLimitedLogin(t, sc, "MARIADB", "SET DEFAULT ROLE pu_reporter FOR 'pu_analyst'@'%'", "")
+	testRolesLocksAndLimitedLogin(t, sc, "MARIADB", sourceMariaDBGlobalPriv, sourceMariaDBUserPrivileges,
+		"SET DEFAULT ROLE pu_reporter FOR 'pu_analyst'@'%'", "")
 }
 
 // TestMySQLPlatformUsers_RolesLocksAndLimitedLogin is the MySQL run of the
@@ -130,10 +153,11 @@ func TestMySQLPlatformUsers_RolesLocksAndLimitedLogin(t *testing.T) {
 	if err != nil {
 		t.Skipf("Could not connect to MySQL: %v", err)
 	}
-	testRolesLocksAndLimitedLogin(t, sc, "MYSQL", "SET DEFAULT ROLE pu_reporter TO 'pu_analyst'@'%'", " COMMENT 'runs the nightly load'")
+	testRolesLocksAndLimitedLogin(t, sc, "MYSQL", sourceMySQLUser, sourceMySQLUserAttributes,
+		"SET DEFAULT ROLE pu_reporter TO 'pu_analyst'@'%'", " COMMENT 'runs the nightly load'")
 }
 
-func testRolesLocksAndLimitedLogin(t *testing.T, sc *MySQLScrapper, envPrefix, setDefaultRole, comment string) {
+func testRolesLocksAndLimitedLogin(t *testing.T, sc *MySQLScrapper, envPrefix, mainSource, fallbackSource, setDefaultRole, comment string) {
 	ctx := context.Background()
 	defer sc.Close()
 	db := sc.executor.GetDb()
@@ -159,8 +183,11 @@ func testRolesLocksAndLimitedLogin(t *testing.T, sc *MySQLScrapper, envPrefix, s
 		_, _ = db.ExecContext(context.Background(), "DROP ROLE IF EXISTS pu_reporter")
 	})
 
-	users, err := sc.QueryPlatformUsers(ctx)
+	result, err := sc.QueryPlatformUsers(ctx)
 	require.NoError(t, err)
+	require.Len(t, result.Sources, 1, "information_schema only repeats the mysql schema, so it is not read when that answered")
+	users := result.Sources[0]
+	assert.Equal(t, mainSource, users.Source)
 	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
 	assert.False(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
 	assert.False(t, users.IsSkipped(scrapper.PlatformUserFactDefaultRole))
@@ -193,8 +220,5 @@ func testRolesLocksAndLimitedLogin(t *testing.T, sc *MySQLScrapper, envPrefix, s
 
 	limited, err := noPriv.QueryPlatformUsers(ctx)
 	require.NoError(t, err, "a login that may not read the mysql schema still lists itself")
-	assert.Equal(t, scrapper.PlatformUsersLimited, limited.Completeness)
-	require.Len(t, limited.Users, 1)
-	assert.Equal(t, "pu_nopriv", limited.Users[0].Login)
-	assert.True(t, limited.IsSkipped(scrapper.PlatformUserFactRoles))
+	assertRefusedThenLimited(t, limited, mainSource, fallbackSource, "pu_nopriv")
 }

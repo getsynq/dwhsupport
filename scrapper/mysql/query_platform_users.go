@@ -127,22 +127,54 @@ type account struct {
 	DefaultRoles []string
 }
 
+// Sources of QueryPlatformUsers, named <platform>.<schema>.<table>.
+const (
+	sourceMySQLUser             = "mysql.mysql.user"
+	sourceMySQLUserAttributes   = "mysql.information_schema.user_attributes"
+	sourceMariaDBGlobalPriv     = "mariadb.mysql.global_priv"
+	sourceMariaDBUser           = "mariadb.mysql.user"
+	sourceMariaDBUserPrivileges = "mariadb.information_schema.user_privileges"
+)
+
 // QueryPlatformUsers lists the server's accounts, one per user name.
 //
-// The full listing reads the mysql schema. Without SELECT on it, the listing
-// falls back to information_schema, which shows only the connecting account:
-// that is a limited listing, not a permission error. Only when the fallback is
-// refused too is the mysql schema's permission error returned. Roles and
-// default roles are best effort.
+// The listing reads the mysql schema. Without SELECT on it, that source is
+// reported refused and information_schema is read instead, which shows only
+// the connecting account and so is a limited source. information_schema only
+// repeats a subset of the mysql schema, so it is read only then. When both are
+// refused the mysql schema's permission error is returned. Roles and default
+// roles are best effort.
 func (e *MySQLScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
+	main, fallback, fallbackSource := e.queryMySQLUsers, e.queryMySQLUserAttributes, sourceMySQLUserAttributes
 	if e.isMariaDB {
-		return e.queryMariaDBUsers(ctx)
+		main, fallback, fallbackSource = e.queryMariaDBUsers, e.queryGrantees, sourceMariaDBUserPrivileges
 	}
-	return e.queryMySQLUsers(ctx)
+
+	listing, source, err := main(ctx)
+	if err == nil {
+		return scrapper.NewPlatformUsers(listing), nil
+	}
+	if !dwhexecmysql.IsPermissionError(err) {
+		return nil, errors.Wrapf(err, "failed to read %s", source)
+	}
+	refused := scrapper.RefusedPlatformUserSource(source, scrapper.PlatformUserSourceSQL, err)
+
+	limited, fallbackErr := fallback(ctx)
+	if fallbackErr != nil {
+		if !dwhexecmysql.IsPermissionError(fallbackErr) {
+			return nil, errors.Wrapf(fallbackErr, "failed to read %s", fallbackSource)
+		}
+		return nil, errors.Wrapf(err, "failed to read %s", source)
+	}
+	return scrapper.NewPlatformUsers(refused, limited), nil
 }
 
-func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	result := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.PlatformUserListing, string, error) {
+	result := &scrapper.PlatformUserListing{
+		Source:       sourceMySQLUser,
+		Kind:         scrapper.PlatformUserSourceSQL,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 	skipFactsNotOnPlatform(result)
 
 	rows, err := selectRows[mysqlAccountRow](ctx, e.executor, mysqlUsersSql)
@@ -151,15 +183,7 @@ func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.Platform
 		rows, err = selectRows[mysqlAccountRow](ctx, e.executor, mysqlUsersNoCommentSql)
 	}
 	if err != nil {
-		if !dwhexecmysql.IsPermissionError(err) {
-			return nil, errors.Wrap(err, "failed to list mysql.user")
-		}
-		limited, fallbackErr := e.queryMySQLUserAttributes(ctx)
-		if fallbackErr != nil {
-			logging.GetLogger(ctx).WithError(fallbackErr).Warn("information_schema.USER_ATTRIBUTES fallback failed")
-			return nil, errors.Wrap(err, "failed to list mysql.user")
-		}
-		return limited, nil
+		return nil, sourceMySQLUser, err
 	}
 
 	accounts := make([]*account, 0, len(rows))
@@ -183,7 +207,7 @@ func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.Platform
 	markMySQLRoles(accounts, edges, defaults)
 
 	result.Users = foldAccounts(accounts, edges)
-	return result.Finish(), nil
+	return result, sourceMySQLUser, nil
 }
 
 // markMySQLRoles flags the accounts that are roles and records default roles.
@@ -209,7 +233,7 @@ func markMySQLRoles(accounts []*account, edges, defaults []*roleEdgeRow) {
 	}
 }
 
-func (e *MySQLScrapper) queryMySQLUserAttributes(ctx context.Context) (*scrapper.PlatformUsers, error) {
+func (e *MySQLScrapper) queryMySQLUserAttributes(ctx context.Context) (*scrapper.PlatformUserListing, error) {
 	rows, err := selectRows[mysqlUserAttributesRow](ctx, e.executor, mysqlUserAttributesSql)
 	if err != nil {
 		return nil, err
@@ -218,34 +242,31 @@ func (e *MySQLScrapper) queryMySQLUserAttributes(ctx context.Context) (*scrapper
 	for _, r := range rows {
 		accounts = append(accounts, &account{User: r.User, Host: r.Host, Comment: attributeComment(r.Attribute)})
 	}
-	result := limitedListing("information_schema.USER_ATTRIBUTES")
+	result := limitedListing(sourceMySQLUserAttributes, "information_schema.USER_ATTRIBUTES")
 	result.Skip(scrapper.PlatformUserFactDisabled, "reading the account lock needs SELECT on mysql.user")
 	result.Skip(scrapper.PlatformUserFactRoles, "reading role grants needs SELECT on mysql.role_edges")
 	result.Skip(scrapper.PlatformUserFactDefaultRole, "reading default roles needs SELECT on mysql.default_roles")
 	result.Users = foldAccounts(accounts, nil)
-	return result.Finish(), nil
+	return result, nil
 }
 
-func (e *MySQLScrapper) queryMariaDBUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
-	result := &scrapper.PlatformUsers{Completeness: scrapper.PlatformUsersComplete}
+func (e *MySQLScrapper) queryMariaDBUsers(ctx context.Context) (*scrapper.PlatformUserListing, string, error) {
+	result := &scrapper.PlatformUserListing{
+		Source:       sourceMariaDBGlobalPriv,
+		Kind:         scrapper.PlatformUserSourceSQL,
+		Completeness: scrapper.PlatformUsersComplete,
+	}
 	skipFactsNotOnPlatform(result)
 	result.Skip(scrapper.PlatformUserFactComment, "MariaDB keeps no account comment")
 
 	accounts, err := e.queryMariaDBGlobalPriv(ctx)
 	if mysqlErrorNumber(err) == errNoSuchTable {
+		result.Source = sourceMariaDBUser
 		result.Skip(scrapper.PlatformUserFactDisabled, "this MariaDB version has no account locking (added in 10.4)")
 		accounts, err = e.queryMariaDBUserTable(ctx)
 	}
 	if err != nil {
-		if !dwhexecmysql.IsPermissionError(err) {
-			return nil, errors.Wrap(err, "failed to list MariaDB accounts")
-		}
-		limited, fallbackErr := e.queryGrantees(ctx)
-		if fallbackErr != nil {
-			logging.GetLogger(ctx).WithError(fallbackErr).Warn("information_schema.USER_PRIVILEGES fallback failed")
-			return nil, errors.Wrap(err, "failed to list MariaDB accounts")
-		}
-		return limited, nil
+		return nil, result.Source, err
 	}
 
 	edges, err := selectRows[roleEdgeRow](ctx, e.executor, mariadbRolesMappingSql)
@@ -253,7 +274,7 @@ func (e *MySQLScrapper) queryMariaDBUsers(ctx context.Context) (*scrapper.Platfo
 		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(err, "mysql.roles_mapping"))
 	}
 	result.Users = foldAccounts(accounts, edges)
-	return result.Finish(), nil
+	return result, result.Source, nil
 }
 
 // mariadbPriv is the part of a mysql.global_priv document the listing reads.
@@ -306,7 +327,7 @@ func (e *MySQLScrapper) queryMariaDBUserTable(ctx context.Context) ([]*account, 
 	return accounts, nil
 }
 
-func (e *MySQLScrapper) queryGrantees(ctx context.Context) (*scrapper.PlatformUsers, error) {
+func (e *MySQLScrapper) queryGrantees(ctx context.Context) (*scrapper.PlatformUserListing, error) {
 	rows, err := selectRows[granteeRow](ctx, e.executor, userPrivilegesSql)
 	if err != nil {
 		return nil, err
@@ -317,17 +338,19 @@ func (e *MySQLScrapper) queryGrantees(ctx context.Context) (*scrapper.PlatformUs
 			accounts = append(accounts, &account{User: user, Host: host})
 		}
 	}
-	result := limitedListing("information_schema.USER_PRIVILEGES")
+	result := limitedListing(sourceMariaDBUserPrivileges, "information_schema.USER_PRIVILEGES")
 	result.Skip(scrapper.PlatformUserFactComment, "MariaDB keeps no account comment")
 	result.Skip(scrapper.PlatformUserFactDisabled, "reading the account lock needs SELECT on mysql.global_priv")
 	result.Skip(scrapper.PlatformUserFactRoles, "reading role grants needs SELECT on mysql.roles_mapping")
 	result.Skip(scrapper.PlatformUserFactDefaultRole, "reading default roles needs SELECT on mysql.global_priv")
 	result.Users = foldAccounts(accounts, nil)
-	return result.Finish(), nil
+	return result, nil
 }
 
-func limitedListing(view string) *scrapper.PlatformUsers {
-	result := &scrapper.PlatformUsers{
+func limitedListing(source, view string) *scrapper.PlatformUserListing {
+	result := &scrapper.PlatformUserListing{
+		Source:       source,
+		Kind:         scrapper.PlatformUserSourceSQL,
 		Completeness: scrapper.PlatformUsersLimited,
 		CompletenessReason: "the role may not read the mysql schema, so " + view +
 			" shows only the accounts it may see, usually only its own; grant " + platformUsersGrant,
@@ -415,7 +438,7 @@ func accountKey(user, host string) string {
 	return user + "\x00" + host
 }
 
-func skipFactsNotOnPlatform(result *scrapper.PlatformUsers) {
+func skipFactsNotOnPlatform(result *scrapper.PlatformUserListing) {
 	for _, f := range mysqlFactsNotOnPlatform {
 		result.Skip(f, "MySQL and MariaDB do not record it")
 	}
