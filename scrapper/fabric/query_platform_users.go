@@ -87,23 +87,25 @@ const (
 //     principal name and service principals as <application id>@<tenant id>,
 //     which is how query history (queryinsights login_name) names them, with
 //     their workspace role. It needs the Member or Admin workspace role, and a
-//     credential that can call the API (not a pre-acquired SQL token);
-//     otherwise it is a refused source.
+//     credential that can call the API (not a pre-acquired SQL token).
 //   - fabric.sys.database_principals: the identities added to the connected
 //     database, with their database roles. A user of it carries the login the
 //     API source gives the same identity (matched by the GUID its SID
 //     encodes), so the two reconcile; without the API only the connection's
 //     own login is known, the others keep their database name.
 //
-// When both are refused the API's permission error is returned first, since
-// its grant is the one that lists every user.
+// A source that could not be read is reported refused when a grant would let
+// it answer, unavailable when the connection's configuration cannot reach it
+// (a pre-acquired SQL token, a host that names no workspace, a credential that
+// cannot be built) or the SQL surface lacks the view, and failed otherwise (a
+// 5xx, a timeout, a dropped connection).
 func (e *FabricScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
 	identity, err := dwhexecfabric.ParseHostIdentity(e.conf.Host)
 	tenantID := e.conf.TenantID
 	var assignments []*dwhexecfabric.WorkspaceRoleAssignment
 	var apiErr error
 	if err != nil {
-		apiErr = err
+		apiErr = &apiUnavailableError{err: errors.Wrap(err, "the host names no Fabric workspace")}
 	} else {
 		if tenantID == "" {
 			tenantID = identity.TenantID
@@ -112,13 +114,26 @@ func (e *FabricScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Plat
 	}
 
 	db, dbErr := e.queryDatabaseUsers(ctx)
-	return buildPlatformUsers(assignments, apiErr, db, dbErr, tenantID, e.databaseName())
+	return buildPlatformUsers(ctx, assignments, apiErr, db, dbErr, tenantID, e.databaseName())
+}
+
+// apiUnavailableError is why the connection's configuration cannot call the
+// Fabric API at all. No grant fixes it, so the API source is unavailable, not
+// refused.
+type apiUnavailableError struct{ err error }
+
+func (e *apiUnavailableError) Error() string { return e.err.Error() }
+func (e *apiUnavailableError) Unwrap() error { return e.err }
+
+func isAPIUnavailable(err error) bool {
+	var unavailable *apiUnavailableError
+	return errors.As(err, &unavailable) || errors.Is(err, dwhexecfabric.ErrNoAPICredential)
 }
 
 func (e *FabricScrapper) listRoleAssignments(ctx context.Context, workspaceID string) ([]*dwhexecfabric.WorkspaceRoleAssignment, error) {
 	client, err := dwhexecfabric.NewAPIClient(&e.conf.FabricConf)
 	if err != nil {
-		return nil, err
+		return nil, &apiUnavailableError{err: err}
 	}
 	return client.ListWorkspaceRoleAssignments(ctx, workspaceID)
 }
@@ -135,6 +150,9 @@ func (e *FabricScrapper) queryDatabaseUsers(ctx context.Context) (*databaseUsers
 	result := &databaseUsers{Users: users, RolesBySid: map[string][]string{}}
 	roles, err := selectRows[databaseRoleRow](ctx, e.executor, databaseRolesSql)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		result.RolesErr = err
 		return result, nil
 	}
@@ -146,8 +164,10 @@ func (e *FabricScrapper) queryDatabaseUsers(ctx context.Context) (*databaseUsers
 	return result, nil
 }
 
-// buildPlatformUsers reports each source on its own, a failed one as refused.
+// buildPlatformUsers reports each source on its own; one that could not be
+// read is refused, unavailable or failed as its error says.
 func buildPlatformUsers(
+	ctx context.Context,
 	assignments []*dwhexecfabric.WorkspaceRoleAssignment,
 	apiErr error,
 	db *databaseUsers,
@@ -158,25 +178,19 @@ func buildPlatformUsers(
 	var apiSource, dbSource *scrapper.PlatformUserListing
 	loginsByGUID := map[string]string{}
 	if apiErr != nil {
-		apiSource = scrapper.RefusedPlatformUserSource(sourceWorkspaceRoleAssignments, scrapper.PlatformUserSourceAPI, apiErr)
+		apiSource = scrapper.PlatformUserSourceError(sourceWorkspaceRoleAssignments, scrapper.PlatformUserSourceAPI, apiErr,
+			dwhexecfabric.IsPermissionError, isAPIUnavailable)
 	} else {
 		apiSource = platformUsersFromAssignments(assignments, tenantID)
 		loginsByGUID = loginsByIdentityGUID(assignments, tenantID)
 	}
 	if dbErr != nil {
-		dbSource = scrapper.RefusedPlatformUserSource(sourceDatabasePrincipals, scrapper.PlatformUserSourceSQL, dbErr)
+		dbSource = scrapper.PlatformUserSourceError(sourceDatabasePrincipals, scrapper.PlatformUserSourceSQL, dbErr,
+			dwhexecfabric.IsPermissionError, dwhexecfabric.IsUnavailableError)
 	} else {
 		dbSource = platformUsersFromDatabase(db, loginsByGUID, databaseName)
 	}
-
-	result := scrapper.NewPlatformUsers(apiSource, dbSource)
-	if !result.Answered() {
-		if dwhexecfabric.IsPermissionError(apiErr) || !dwhexecfabric.IsPermissionError(dbErr) {
-			return nil, errors.Wrapf(apiErr, "failed to read %s", sourceWorkspaceRoleAssignments)
-		}
-		return nil, errors.Wrapf(dbErr, "failed to read %s", sourceDatabasePrincipals)
-	}
-	return result, nil
+	return scrapper.CollectPlatformUsers(ctx, apiSource, dbSource)
 }
 
 func platformUsersFromAssignments(assignments []*dwhexecfabric.WorkspaceRoleAssignment, tenantID string) *scrapper.PlatformUserListing {
@@ -289,7 +303,7 @@ func platformUsersFromDatabase(db *databaseUsers, loginsByGUID map[string]string
 		result.Skip(f, "a Fabric database user does not state it")
 	}
 	if db.RolesErr != nil {
-		result.Skip(scrapper.PlatformUserFactRoles, "reading database role memberships failed: "+db.RolesErr.Error())
+		result.Skip(scrapper.PlatformUserFactRoles, rolesSkipReason(db.RolesErr))
 	}
 
 	for _, d := range db.Users {
@@ -311,6 +325,18 @@ func platformUsersFromDatabase(db *databaseUsers, loginsByGUID map[string]string
 		result.Users = append(result.Users, u)
 	}
 	return result
+}
+
+// rolesSkipReason says why database role memberships could not be read.
+func rolesSkipReason(err error) string {
+	switch {
+	case dwhexecfabric.IsPermissionError(err):
+		return "the identity may not read database role memberships (VIEW DEFINITION on the database): " + err.Error()
+	case dwhexecfabric.IsUnavailableError(err):
+		return "this Fabric SQL surface has no sys.database_role_members: " + err.Error()
+	default:
+		return "reading database role memberships failed: " + err.Error()
+	}
 }
 
 // sidGUID reads the GUID an Entra identity's SID encodes, from the 0x-prefixed

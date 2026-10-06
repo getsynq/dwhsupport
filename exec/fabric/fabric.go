@@ -19,6 +19,7 @@ import (
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/exec/querier"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/pkg/errors"
 )
 
@@ -236,6 +237,18 @@ func (e *FabricExecutor) Conf() *FabricConf { return e.conf }
 // only on the fabric package.
 func NewQuerier[T any](conn *FabricExecutor) querier.Querier[T] {
 	return stdsql.NewQuerier[T](conn.GetDb())
+}
+
+// IsUnavailableError reports whether err says the Fabric SQL surface has no
+// such object, column or function: what SQL Server reports for a missing one
+// (dwhexecmssql.IsUnavailableError), and Fabric's own "... is not supported"
+// for the parts of T-SQL it leaves out (ORIGINAL_LOGIN, for one).
+func IsUnavailableError(err error) bool {
+	if dwhexecmssql.IsUnavailableError(err) {
+		return true
+	}
+	var sqlErr mssql.Error
+	return errors.As(err, &sqlErr) && strings.Contains(sqlErr.Message, "is not supported")
 }
 
 // IsPermissionError reports whether err indicates the connection's identity
