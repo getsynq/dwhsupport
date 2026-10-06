@@ -5,10 +5,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/pkg/errors"
-
 	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/suite"
 )
 
