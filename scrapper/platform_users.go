@@ -17,11 +17,11 @@ import (
 type PlatformUsersCapability struct {
 	// Supported is true when QueryPlatformUsers may return a listing rather
 	// than ErrUnsupported.
-	Supported bool
+	Supported bool `json:"supported"`
 	// Grant names, in the platform's own terms, what lets the connecting role
 	// read every user and every fact, so a caller can quote it in a
 	// recommendation ("grant X to see all your users").
-	Grant string
+	Grant string `json:"grant,omitempty"`
 }
 
 // PlatformUserFact names one fact of a PlatformUser, so a listing can say which
@@ -88,61 +88,62 @@ type PlatformUser struct {
 	// Login is the name the platform authenticates, as the platform shows it.
 	// It is the same string query history reports as the user who ran a
 	// statement, so the two can be joined.
-	Login string
+	Login string `json:"login"`
 	// PlatformId is the platform's own stable id for the user, where it has
 	// one that survives a rename (Snowflake USER_ID, Databricks SCIM id,
 	// Postgres oid).
-	PlatformId string
+	PlatformId string `json:"platform_id,omitempty"`
 	// Type is the kind of login as the platform states it; see the
 	// PlatformUserType* constants for the platforms that have one.
-	Type string
+	Type string `json:"type,omitempty"`
 	// Email the platform holds for the user.
-	Email string
+	Email string `json:"email,omitempty"`
 	// DisplayName is the user's name for humans, where it differs from Login.
-	DisplayName string
+	DisplayName string `json:"display_name,omitempty"`
 	// Comment is the free-text description an administrator left on the user.
 	// It often says what a service login is for.
-	Comment string
+	Comment string `json:"comment,omitempty"`
 	// Disabled is true when the login exists but cannot sign in (disabled,
 	// locked or expired, as the platform reports it). Nil when unknown.
-	Disabled *bool
+	Disabled *bool `json:"disabled,omitempty"`
 	// CreatedAt is when the user was created. Nil when unknown.
-	CreatedAt *time.Time
+	CreatedAt *time.Time `json:"created_at,omitempty"`
 	// LastLoginAt is the user's last successful sign-in. Nil when unknown or
 	// never.
-	LastLoginAt *time.Time
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
 	// DefaultRole is the role a session starts with.
-	DefaultRole string
+	DefaultRole string `json:"default_role,omitempty"`
 	// Roles are the roles or groups granted to the user directly, sorted and
 	// without duplicates. Roles say a lot about what a login is for
 	// (LOADER, TRANSFORMER, REPORTER).
-	Roles []string
+	Roles []string `json:"roles,omitempty"`
 }
 
 // SkippedPlatformUserFact says that a fact could not be read, and why: the
 // platform does not have it, or our role may not read it.
 type SkippedPlatformUserFact struct {
-	Fact   PlatformUserFact
-	Reason string
+	Fact   PlatformUserFact `json:"fact"`
+	Reason string           `json:"reason"`
 }
 
 // PlatformUsers is the result of QueryPlatformUsers.
 type PlatformUsers struct {
 	// Users sorted by Login, one per login.
-	Users []*PlatformUser
+	Users []*PlatformUser `json:"users"`
 	// Completeness says how much of the platform's users the listing holds.
-	Completeness PlatformUsersCompleteness
+	Completeness PlatformUsersCompleteness `json:"completeness"`
 	// CompletenessReason explains a limited, empty or unknown listing, and
 	// names the grant that would complete it where one would.
-	CompletenessReason string
-	// SkippedFacts lists the facts the listing could not read, with the
-	// reason: refused or absent for every user, or hidden for the users the
-	// role may not see the details of (Snowflake SHOW USERS). A fact a user
-	// simply does not have (a user without an email) is not listed.
-	SkippedFacts []SkippedPlatformUserFact
+	CompletenessReason string `json:"completeness_reason,omitempty"`
+	// SkippedFacts lists the facts the listing could not read in full, with
+	// the reason: absent on the platform, refused for every user, hidden for
+	// the users the role may not see the details of (Snowflake SHOW USERS), or
+	// read only in part (Redshift group roles without its RBAC roles). A fact
+	// a user simply does not have (a user without an email) is not listed.
+	SkippedFacts []SkippedPlatformUserFact `json:"skipped_facts,omitempty"`
 }
 
-// Skip records that fact could not be read for any user. A fact skipped twice
+// Skip records that fact could not be read in full. A fact skipped twice
 // keeps its first reason.
 func (p *PlatformUsers) Skip(fact PlatformUserFact, reason string) {
 	for _, s := range p.SkippedFacts {
