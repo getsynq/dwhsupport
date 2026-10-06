@@ -2,6 +2,7 @@ package bigquery
 
 import (
 	"context"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -57,15 +58,15 @@ type BigQueryExecutor struct {
 	client *bigquery.Client
 }
 
-func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExecutor, error) {
-
+// NewHTTPClient returns an HTTP client authenticated the way conf says
+// (AccessToken > CredentialsJson > CredentialsFile) for the given OAuth scopes,
+// with conf's per-request timeout. The BigQuery client and the scrapper's
+// Resource Manager and IAM calls all go through it, so they act as the same
+// identity.
+func NewHTTPClient(ctx context.Context, conf *BigQueryConf, scopes ...string) (*http.Client, error) {
 	var options []option.ClientOption
 	options = append(options, option.WithUserAgent("synq-bq-client-v1.0.0"))
-	// bigquery.NewClient normally injects this scope before building its
-	// transport, but option.WithHTTPClient (below) overrides the transport — so
-	// we must apply the scope ourselves or credential-based auth fails with
-	// "invalid_scope" when fetching a token.
-	options = append(options, option.WithScopes(bigquery.Scope))
+	options = append(options, option.WithScopes(scopes...))
 	if conf.AccessToken != "" {
 		tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: conf.AccessToken})
 		options = append(options, option.WithTokenSource(tokenSource))
@@ -88,6 +89,18 @@ func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExec
 		return nil, err
 	}
 	httpClient.Timeout = httpTimeout
+	return httpClient, nil
+}
+
+func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExecutor, error) {
+	// bigquery.NewClient normally injects this scope before building its
+	// transport, but option.WithHTTPClient (below) overrides the transport — so
+	// we must apply the scope ourselves or credential-based auth fails with
+	// "invalid_scope" when fetching a token.
+	httpClient, err := NewHTTPClient(ctx, conf, bigquery.Scope)
+	if err != nil {
+		return nil, err
+	}
 
 	client, err := bigquery.NewClient(
 		ctx,

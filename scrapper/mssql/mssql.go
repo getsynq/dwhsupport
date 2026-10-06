@@ -39,7 +39,11 @@ func (e *MSSQLScrapper) IsPermissionError(err error) bool {
 	return dwhexecmssql.IsPermissionError(err)
 }
 
-func (e *MSSQLScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *MSSQLScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
+	}
+}
 
 func (e *MSSQLScrapper) DialectType() string {
 	return "mssql"

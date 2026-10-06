@@ -131,7 +131,11 @@ func (e *FabricScrapper) IsPermissionError(err error) bool {
 	return dwhexecfabric.IsPermissionError(err)
 }
 
-func (e *FabricScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *FabricScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
+	}
+}
 
 func (e *FabricScrapper) DialectType() string {
 	return "fabric"

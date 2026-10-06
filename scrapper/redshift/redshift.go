@@ -42,7 +42,11 @@ func (e *RedshiftScrapper) IsPermissionError(err error) bool {
 	return dwhexecredshift.IsPermissionError(err)
 }
 
-func (e *RedshiftScrapper) Capabilities() scrapper.Capabilities { return scrapper.Capabilities{} }
+func (e *RedshiftScrapper) Capabilities() scrapper.Capabilities {
+	return scrapper.Capabilities{
+		PlatformUsers: scrapper.PlatformUsersCapability{Supported: true, Grant: platformUsersGrant},
+	}
+}
 
 func (e *RedshiftScrapper) DialectType() string {
 	return "redshift"

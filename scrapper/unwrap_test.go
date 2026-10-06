@@ -55,6 +55,9 @@ func (stubLeaf) RunRawQuery(context.Context, string) (scrapper.RawQueryRowIterat
 func (stubLeaf) EstimateQuery(context.Context, string) (*scrapper.QueryEstimate, error) {
 	return nil, nil
 }
+func (stubLeaf) QueryPlatformUsers(context.Context) (*scrapper.PlatformUsers, error) {
+	return nil, nil
+}
 func (stubLeaf) QueryTableConstraints(context.Context) ([]*scrapper.TableConstraintRow, error) {
 	return nil, nil
 }

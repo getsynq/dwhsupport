@@ -510,6 +510,7 @@ ones listed.
 | `sql-definitions` | SQL of views / materialized views (`--wide` to include the SQL text). |
 | `constraints` | Keys, indexes, partitioning, clustering. |
 | `table-metrics` | Metadata metrics: row count, size in bytes, freshness. |
+| `users` | The platform's users (logins): type, email, disabled, roles (`--wide` for default role, display name, created, last login, id, comment). Sources (catalog views, the platform's API) are reconciled into one list; `--by-source` prints each source's own rows. How complete each listing is and which facts were skipped go to stderr, with the grant that completes it. |
 | `query` | Run an arbitrary `SELECT` and stream rows. |
 | `shape` | Column shape (name/type/position) of a `SELECT` without running it. |
 | `estimate` | Pre-execution scan estimate (bytes / rows) without running the query. |

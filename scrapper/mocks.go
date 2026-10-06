@@ -355,6 +355,45 @@ func (c *MockScrapperQueryDatabasesCall) DoAndReturn(f func(context.Context) ([]
 	return c
 }
 
+// QueryPlatformUsers mocks base method.
+func (m *MockScrapper) QueryPlatformUsers(ctx context.Context) (*PlatformUsers, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryPlatformUsers", ctx)
+	ret0, _ := ret[0].(*PlatformUsers)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryPlatformUsers indicates an expected call of QueryPlatformUsers.
+func (mr *MockScrapperMockRecorder) QueryPlatformUsers(ctx any) *MockScrapperQueryPlatformUsersCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryPlatformUsers", reflect.TypeOf((*MockScrapper)(nil).QueryPlatformUsers), ctx)
+	return &MockScrapperQueryPlatformUsersCall{Call: call}
+}
+
+// MockScrapperQueryPlatformUsersCall wrap *gomock.Call
+type MockScrapperQueryPlatformUsersCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockScrapperQueryPlatformUsersCall) Return(arg0 *PlatformUsers, arg1 error) *MockScrapperQueryPlatformUsersCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockScrapperQueryPlatformUsersCall) Do(f func(context.Context) (*PlatformUsers, error)) *MockScrapperQueryPlatformUsersCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockScrapperQueryPlatformUsersCall) DoAndReturn(f func(context.Context) (*PlatformUsers, error)) *MockScrapperQueryPlatformUsersCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // QuerySchemas mocks base method.
 func (m *MockScrapper) QuerySchemas(ctx context.Context) ([]*SchemaRow, error) {
 	m.ctrl.T.Helper()

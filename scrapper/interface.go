@@ -61,6 +61,10 @@ type Capabilities struct {
 	// this before calling EstimateQuery so they can pick an appropriate UI
 	// ("this will scan ~X bytes" vs "~Y rows") or skip the call entirely.
 	EstimateQuery EstimateQueryCapability
+	// PlatformUsers describes QueryPlatformUsers support. Its zero value means
+	// the platform has no user listing and QueryPlatformUsers returns
+	// ErrUnsupported, so a caller never calls it.
+	PlatformUsers PlatformUsersCapability
 }
 
 // EstimateQueryCapability advertises what a dialect's EstimateQuery
@@ -165,6 +169,16 @@ type Scrapper interface {
 	// which dimensions (bytes vs rows) a given dialect can populate.
 	EstimateQuery(ctx context.Context, sql string) (*QueryEstimate, error)
 	QueryTableConstraints(ctx context.Context) ([]*TableConstraintRow, error)
+	// QueryPlatformUsers lists the platform's users (logins) with every fact
+	// the platform states about them, one listing per source. It returns
+	// ErrUnsupported when Capabilities().PlatformUsers is not supported.
+	// Otherwise a source the role may not read, that this version lacks, or
+	// that failed is a state of the result (PlatformUserListing.Refused,
+	// Unavailable, Failed), and a fact that cannot be read is skipped with the
+	// reason: the call fails only on a real failure of the connection (see
+	// CollectPlatformUsers). Users are not scoped: scope.WithScope selects
+	// tables, not logins.
+	QueryPlatformUsers(ctx context.Context) (*PlatformUsers, error)
 	// This will close underlying execer, such scrapper can't be used anymore
 	Close() error
 }

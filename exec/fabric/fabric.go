@@ -19,6 +19,8 @@ import (
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/exec/querier"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	mssql "github.com/microsoft/go-mssqldb"
+	"github.com/pkg/errors"
 )
 
 // FabricConf configures a connection to a Microsoft Fabric Warehouse or Lakehouse
@@ -237,9 +239,26 @@ func NewQuerier[T any](conn *FabricExecutor) querier.Querier[T] {
 	return stdsql.NewQuerier[T](conn.GetDb())
 }
 
+// IsUnavailableError reports whether err says the Fabric SQL surface has no
+// such object, column or function: what SQL Server reports for a missing one
+// (dwhexecmssql.IsUnavailableError), and Fabric's own "... is not supported"
+// for the parts of T-SQL it leaves out (ORIGINAL_LOGIN, for one).
+func IsUnavailableError(err error) bool {
+	if dwhexecmssql.IsUnavailableError(err) {
+		return true
+	}
+	var sqlErr mssql.Error
+	return errors.As(err, &sqlErr) && strings.Contains(sqlErr.Message, "is not supported")
+}
+
 // IsPermissionError reports whether err indicates the connection's identity
 // lacks privileges. Fabric surfaces the same SQL Server permission messages as
-// MSSQL, so it delegates to the single source of truth.
+// MSSQL, so it delegates to the single source of truth. A Fabric REST API
+// refusal (APIError 401/403) is one too.
 func IsPermissionError(err error) bool {
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.IsPermissionError()
+	}
 	return dwhexecmssql.IsPermissionError(err)
 }
