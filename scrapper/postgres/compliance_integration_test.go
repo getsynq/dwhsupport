@@ -210,5 +210,10 @@ func (s *PostgresPlatformUsersSuite) TestPlatformUsers_ListsLoginRolesOnly() {
 	} {
 		s.Truef(users.IsSkipped(fact), "%s is not kept by Postgres and must be skipped", fact)
 	}
-	s.False(users.IsSkipped(scrapper.PlatformUserFactRoles))
+	// The fact queries run on a real server: none of them may be skipped.
+	for _, fact := range []scrapper.PlatformUserFact{
+		scrapper.PlatformUserFactRoles, scrapper.PlatformUserFactComment, scrapper.PlatformUserFactDefaultRole,
+	} {
+		s.Falsef(users.IsSkipped(fact), "%s was skipped: %v", fact, users.SkippedFacts)
+	}
 }
