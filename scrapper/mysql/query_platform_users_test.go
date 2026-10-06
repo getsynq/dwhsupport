@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/go-sql-driver/mysql"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -57,6 +59,7 @@ func TestMarkMySQLRoles(t *testing.T) {
 			{FromUser: "reporter", FromHost: "%", ToUser: "analyst", ToHost: "%"},
 			{FromUser: "granted_but_unlocked", FromHost: "%", ToUser: "analyst", ToHost: "%"},
 		},
+		true,
 		[]*roleEdgeRow{{FromUser: "reporter", FromHost: "%", ToUser: "analyst", ToHost: "%"}},
 	)
 	assert.True(t, accounts[0].IsRole)
@@ -109,18 +112,49 @@ func TestAttributeComment(t *testing.T) {
 
 // When mysql.role_edges cannot be read, a role (a locked account with no
 // password, as CREATE ROLE makes it) that is granted to someone but is nobody's
-// default must still not be listed as a user.
+// default must still not be listed as a user. A locked account with a password
+// is a disabled user and stays.
 func TestRoleEdgesUnreadableKeepsRolesOut(t *testing.T) {
 	accounts := []*account{
-		{User: "reporter_role", Host: "%", Locked: boolPtr(true)},
+		{User: "reporter_role", Host: "%", Locked: boolPtr(true), NoPassword: true},
 		{User: "analyst", Host: "%", Locked: boolPtr(false)},
+		{User: "retired", Host: "%", Locked: boolPtr(true)},
+		{User: "no_password_yet", Host: "%", Locked: boolPtr(false), NoPassword: true},
 	}
-	markMySQLRoles(accounts, nil, nil)
+	markMySQLRoles(accounts, nil, false, nil)
 	users := (&scrapper.PlatformUserListing{Users: foldAccounts(accounts, nil)}).Finish().Users
 
 	logins := []string{}
 	for _, u := range users {
 		logins = append(logins, u.Login)
 	}
-	assert.Equal(t, []string{"analyst"}, logins, "the role leaks into the listing as a disabled user")
+	assert.Equal(t, []string{"analyst", "no_password_yet", "retired"}, logins, "the role leaks into the listing as a disabled user")
+}
+
+// With mysql.role_edges read, a locked passwordless account nobody holds is
+// a disabled user, not a role: the grants are the signal then.
+func TestRoleEdgesReadUsesTheGrants(t *testing.T) {
+	accounts := []*account{{User: "unused", Host: "%", Locked: boolPtr(true), NoPassword: true}}
+	markMySQLRoles(accounts, nil, true, nil)
+	assert.False(t, accounts[0].IsRole)
+}
+
+func TestSourceErrorClassification(t *testing.T) {
+	refused := sourceError(sourceMySQLUser, &mysql.MySQLError{Number: 1142, Message: "SELECT command denied"})
+	assert.NotEmpty(t, refused.Refused)
+
+	for _, n := range []uint16{1146, 1054, 1109} {
+		unavailable := sourceError(sourceMySQLUserAttributes, errors.Wrap(&mysql.MySQLError{Number: n}, "query"))
+		assert.NotEmptyf(t, unavailable.Unavailable, "error %d", n)
+	}
+
+	failed := sourceError(sourceMySQLUser, errors.New("invalid connection"))
+	assert.NotEmpty(t, failed.Failed)
+	assert.Empty(t, failed.Refused)
+}
+
+func TestFactSkipReason(t *testing.T) {
+	assert.Contains(t, factSkipReason(&mysql.MySQLError{Number: 1142}, "mysql.role_edges"), "may not read mysql.role_edges; grant")
+	assert.Contains(t, factSkipReason(&mysql.MySQLError{Number: 1146}, "mysql.role_edges"), "does not exist on this server version")
+	assert.Contains(t, factSkipReason(errors.New("bad connection"), "mysql.role_edges"), "reading mysql.role_edges failed")
 }

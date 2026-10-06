@@ -22,6 +22,8 @@ const platformUsersGrant = "SELECT on mysql.user, mysql.role_edges and mysql.def
 const (
 	errUnknownColumn = 1054 // ER_BAD_FIELD_ERROR: a column this server version lacks
 	errNoSuchTable   = 1146 // ER_NO_SUCH_TABLE: a table this server version lacks
+	// ER_UNKNOWN_TABLE: "Unknown table 'USER_ATTRIBUTES' in information_schema"
+	errUnknownInformationSchemaTable = 1109
 )
 
 // reservedAccounts are the accounts the server creates for its own use. They
@@ -44,13 +46,15 @@ var mysqlFactsNotOnPlatform = []scrapper.PlatformUserFact{
 }
 
 // mysqlUsersSql reads the accounts. User_attributes (MySQL 8.0.21+) holds
-// what CREATE USER ... COMMENT stored.
-const mysqlUsersSql = `SELECT user, host, account_locked,
+// what CREATE USER ... COMMENT stored. no_password tells a role apart when
+// mysql.role_edges cannot be read (see markMySQLRoles); the hash itself is
+// never read.
+const mysqlUsersSql = `SELECT user, host, account_locked, authentication_string = '' AS no_password,
 	JSON_UNQUOTE(JSON_EXTRACT(User_attributes, '$.metadata.comment')) AS comment
 FROM mysql.user`
 
 // mysqlUsersNoCommentSql is mysqlUsersSql for servers without User_attributes.
-const mysqlUsersNoCommentSql = `SELECT user, host, account_locked FROM mysql.user`
+const mysqlUsersNoCommentSql = `SELECT user, host, account_locked, authentication_string = '' AS no_password FROM mysql.user`
 
 // mysqlUserAttributesSql is the listing without SELECT on mysql.user: the view
 // shows every account to a role that may read mysql.user or holds CREATE
@@ -81,6 +85,7 @@ type mysqlAccountRow struct {
 	User          string         `db:"user"`
 	Host          string         `db:"host"`
 	AccountLocked sql.NullString `db:"account_locked"`
+	NoPassword    sql.NullBool   `db:"no_password"`
 	Comment       sql.NullString `db:"comment"`
 }
 
@@ -122,6 +127,7 @@ type account struct {
 	User         string
 	Host         string
 	Locked       *bool
+	NoPassword   bool
 	Comment      string
 	IsRole       bool
 	DefaultRoles []string
@@ -138,12 +144,14 @@ const (
 
 // QueryPlatformUsers lists the server's accounts, one per user name.
 //
-// The listing reads the mysql schema. Without SELECT on it, that source is
-// reported refused and information_schema is read instead, which shows only
-// the connecting account and so is a limited source. information_schema only
-// repeats a subset of the mysql schema, so it is read only then. When both are
-// refused the mysql schema's permission error is returned. Roles and default
-// roles are best effort.
+// The listing reads the mysql schema. When the role may not read it, that
+// source is reported refused and information_schema is read instead, which
+// shows only the connecting account and so is a limited source.
+// information_schema only repeats a subset of the mysql schema, so it is read
+// only then. A source that could not be read is refused, unavailable (a table
+// or column this server version lacks) or failed, as its error says; the call
+// itself fails only as CollectPlatformUsers decides. Roles and default roles
+// are best effort.
 func (e *MySQLScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.PlatformUsers, error) {
 	main, fallback, fallbackSource := e.queryMySQLUsers, e.queryMySQLUserAttributes, sourceMySQLUserAttributes
 	if e.isMariaDB {
@@ -152,21 +160,35 @@ func (e *MySQLScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Platf
 
 	listing, source, err := main(ctx)
 	if err == nil {
-		return scrapper.NewPlatformUsers(listing), nil
+		return scrapper.CollectPlatformUsers(ctx, listing)
 	}
-	if !dwhexecmysql.IsPermissionError(err) {
-		return nil, errors.Wrapf(err, "failed to read %s", source)
+	notAnswered := sourceError(source, err)
+	if notAnswered.Refused == "" {
+		return scrapper.CollectPlatformUsers(ctx, notAnswered)
 	}
-	refused := scrapper.RefusedPlatformUserSource(source, scrapper.PlatformUserSourceSQL, err)
 
-	limited, fallbackErr := fallback(ctx)
-	if fallbackErr != nil {
-		if !dwhexecmysql.IsPermissionError(fallbackErr) {
-			return nil, errors.Wrapf(fallbackErr, "failed to read %s", fallbackSource)
-		}
-		return nil, errors.Wrapf(err, "failed to read %s", source)
+	limited, err := fallback(ctx)
+	if err != nil {
+		return scrapper.CollectPlatformUsers(ctx, notAnswered, sourceError(fallbackSource, err))
 	}
-	return scrapper.NewPlatformUsers(refused, limited), nil
+	return scrapper.CollectPlatformUsers(ctx, notAnswered, limited)
+}
+
+// sourceError records a source that could not be read in the state its error
+// calls for.
+func sourceError(source string, err error) *scrapper.PlatformUserListing {
+	return scrapper.PlatformUserSourceError(source, scrapper.PlatformUserSourceSQL, err, dwhexecmysql.IsPermissionError, isUnavailableError)
+}
+
+// isUnavailableError reports whether err says this server version has no such
+// table or column (mysql.role_edges before MySQL 8.0, User_attributes before
+// 8.0.21, information_schema.USER_ATTRIBUTES on MariaDB).
+func isUnavailableError(err error) bool {
+	switch mysqlErrorNumber(err) {
+	case errNoSuchTable, errUnknownColumn, errUnknownInformationSchemaTable:
+		return true
+	}
+	return false
 }
 
 func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.PlatformUserListing, string, error) {
@@ -189,31 +211,46 @@ func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.Platform
 	accounts := make([]*account, 0, len(rows))
 	for _, r := range rows {
 		accounts = append(accounts, &account{
-			User:    r.User,
-			Host:    r.Host,
-			Locked:  yesNo(r.AccountLocked),
-			Comment: r.Comment.String,
+			User:       r.User,
+			Host:       r.Host,
+			Locked:     yesNo(r.AccountLocked),
+			NoPassword: r.NoPassword.Valid && r.NoPassword.Bool,
+			Comment:    r.Comment.String,
 		})
 	}
 
-	edges, err := selectRows[roleEdgeRow](ctx, e.executor, mysqlRoleEdgesSql)
-	if err != nil {
-		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(err, "mysql.role_edges"))
+	edges, edgesErr := selectRows[roleEdgeRow](ctx, e.executor, mysqlRoleEdgesSql)
+	if edgesErr != nil {
+		if ctx.Err() != nil {
+			return nil, sourceMySQLUser, ctx.Err()
+		}
+		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(edgesErr, "mysql.role_edges")+
+			"; without it a locked account with no password is taken to be a role and left out, as CREATE ROLE makes one and none can sign in")
 	}
 	defaults, err := selectRows[roleEdgeRow](ctx, e.executor, mysqlDefaultRolesSql)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, sourceMySQLUser, ctx.Err()
+		}
 		result.Skip(scrapper.PlatformUserFactDefaultRole, factSkipReason(err, "mysql.default_roles"))
 	}
-	markMySQLRoles(accounts, edges, defaults)
+	markMySQLRoles(accounts, edges, edgesErr == nil, defaults)
 
 	result.Users = foldAccounts(accounts, edges)
 	return result, sourceMySQLUser, nil
 }
 
 // markMySQLRoles flags the accounts that are roles and records default roles.
-// MySQL keeps a role as a locked account; one that is granted to another
-// account or set as someone's default is a role, not a login.
-func markMySQLRoles(accounts []*account, edges, defaults []*roleEdgeRow) {
+// MySQL keeps a role as a locked account and has no column that says it is
+// one; a locked account that is granted to another account or set as
+// someone's default is a role, not a login.
+//
+// Without mysql.role_edges (edgesRead false) a role granted to someone but
+// nobody's default would look like a disabled user, so a locked account with
+// no password is taken to be a role instead: CREATE ROLE makes exactly that,
+// and such an account cannot sign in, so leaving one out loses no login that
+// could run a query. A locked account with a password stays a disabled user.
+func markMySQLRoles(accounts []*account, edges []*roleEdgeRow, edgesRead bool, defaults []*roleEdgeRow) {
 	granted := map[string]bool{}
 	for _, e := range edges {
 		granted[accountKey(e.FromUser, e.FromHost)] = true
@@ -228,7 +265,8 @@ func markMySQLRoles(accounts []*account, edges, defaults []*roleEdgeRow) {
 	}
 	for _, a := range accounts {
 		key := accountKey(a.User, a.Host)
-		a.IsRole = granted[key] && a.Locked != nil && *a.Locked
+		locked := a.Locked != nil && *a.Locked
+		a.IsRole = locked && (granted[key] || (!edgesRead && a.NoPassword))
 		a.DefaultRoles = defaultsOf[key]
 	}
 }
@@ -271,6 +309,9 @@ func (e *MySQLScrapper) queryMariaDBUsers(ctx context.Context) (*scrapper.Platfo
 
 	edges, err := selectRows[roleEdgeRow](ctx, e.executor, mariadbRolesMappingSql)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, result.Source, ctx.Err()
+		}
 		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(err, "mysql.roles_mapping"))
 	}
 	result.Users = foldAccounts(accounts, edges)
@@ -448,8 +489,8 @@ func factSkipReason(err error, table string) string {
 	if dwhexecmysql.IsPermissionError(err) {
 		return "the role may not read " + table + "; grant " + platformUsersGrant
 	}
-	if mysqlErrorNumber(err) == errNoSuchTable {
-		return table + " does not exist on this server version"
+	if isUnavailableError(err) {
+		return table + " does not exist on this server version: " + err.Error()
 	}
 	return "reading " + table + " failed: " + err.Error()
 }

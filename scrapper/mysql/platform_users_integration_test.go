@@ -222,3 +222,71 @@ func testRolesLocksAndLimitedLogin(t *testing.T, sc *MySQLScrapper, envPrefix, m
 	require.NoError(t, err, "a login that may not read the mysql schema still lists itself")
 	assertRefusedThenLimited(t, limited, mainSource, fallbackSource, "pu_nopriv")
 }
+
+// TestMySQLPlatformUsers_RoleEdgesRefused lists as a login that may read
+// mysql.user and nothing else in the mysql schema: role grants are skipped
+// with the reason, and a granted role is still not listed as a user, while a
+// locked user with a password is. Runs only when MYSQL_USER may create users.
+func TestMySQLPlatformUsers_RoleEdgesRefused(t *testing.T) {
+	if os.Getenv("CI") != "" || testenv.EnvOrDefault("MYSQL_HOST", "") == "" {
+		t.Skip("MYSQL_HOST env var not set")
+	}
+	ctx := context.Background()
+	sc, err := newMySQLScrapperFromEnv(ctx)
+	if err != nil {
+		t.Skipf("Could not connect to MySQL: %v", err)
+	}
+	defer sc.Close()
+	db := sc.executor.GetDb()
+
+	const password = "PlatformUsers1!"
+	drop := []string{
+		"DROP USER IF EXISTS 'pu_holder'@'%', 'pu_retired'@'%', 'pu_useronly'@'%'",
+		"DROP ROLE IF EXISTS pu_granted_role",
+	}
+	setup := append(append([]string{}, drop...),
+		"CREATE ROLE pu_granted_role",
+		"CREATE USER 'pu_holder'@'%' IDENTIFIED BY '"+password+"'",
+		"GRANT pu_granted_role TO 'pu_holder'@'%'",
+		"CREATE USER 'pu_retired'@'%' IDENTIFIED BY '"+password+"' ACCOUNT LOCK",
+		"CREATE USER 'pu_useronly'@'%' IDENTIFIED BY '"+password+"'",
+		"GRANT SELECT ON mysql.user TO 'pu_useronly'@'%'",
+	)
+	for _, stmt := range setup {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			t.Skipf("the test login may not manage users (%s): %v", stmt, err)
+		}
+	}
+	t.Cleanup(func() {
+		for _, stmt := range drop {
+			_, _ = db.ExecContext(context.Background(), stmt)
+		}
+	})
+
+	userOnly, err := NewMySQLScrapper(ctx, &MySQLScrapperConf{MySQLConf: dwhexecmysql.MySQLConf{
+		User:          "pu_useronly",
+		Password:      password,
+		Host:          testenv.EnvOrDefault("MYSQL_HOST", ""),
+		Port:          testenv.EnvOrDefaultInt("MYSQL_PORT", 3306),
+		AllowInsecure: true,
+	}})
+	require.NoError(t, err)
+	defer userOnly.Close()
+
+	result, err := userOnly.QueryPlatformUsers(ctx)
+	require.NoError(t, err)
+	require.Len(t, result.Sources, 1)
+	users := result.Sources[0]
+	assert.Equal(t, sourceMySQLUser, users.Source)
+	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
+	require.True(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
+	assert.True(t, users.IsSkipped(scrapper.PlatformUserFactDefaultRole))
+	byLogin := map[string]*scrapper.PlatformUser{}
+	for _, u := range users.Users {
+		byLogin[u.Login] = u
+	}
+	assert.NotContains(t, byLogin, "pu_granted_role", "a role granted to someone is still not a login")
+	require.Contains(t, byLogin, "pu_retired", "a locked user with a password is a disabled user")
+	assert.Equal(t, boolPtr(true), byLogin["pu_retired"].Disabled)
+	assert.Contains(t, byLogin, "pu_holder")
+}
