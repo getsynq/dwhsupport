@@ -329,7 +329,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	var primaryKeyCols, sortingKeyCols []string
 	var indexNames []string
 	var indexExprs []string
-	var foundPartition bool
+	var partitionCols []string
 	var partitionExpr string
 
 	for _, c := range constraints {
@@ -344,8 +344,8 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 				indexNames = append(indexNames, c.ConstraintName)
 				indexExprs = append(indexExprs, c.ColumnName)
 			case scrapper.ConstraintTypePartitionBy:
-				foundPartition = true
-				partitionExpr = c.ColumnName
+				partitionCols = append(partitionCols, c.ColumnName)
+				partitionExpr = c.ConstraintExpression
 			}
 		}
 	}
@@ -375,7 +375,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	}
 
 	// Partition key
-	s.True(foundPartition, "Should find PARTITION BY constraint")
+	s.Equal([]string{"created_at"}, partitionCols, "PARTITION BY should list the column its expression reads")
 	s.Equal("toYYYYMM(created_at)", partitionExpr, "Partition expression should be toYYYYMM(created_at)")
 }
 
