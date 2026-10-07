@@ -308,3 +308,14 @@ func find(users *scrapper.PlatformUserListing, login string) *scrapper.PlatformU
 	}
 	return nil
 }
+
+// TestPlatformUsersGrantNamesEachRefusedPermission: the two calls are refused
+// as "Permission 'iam.serviceAccounts.list' denied" and a bare 403 on
+// getIamPolicy, and a customer adds what the grant names to the custom role the
+// setup guide created, so it names both permissions rather than only a
+// predefined role.
+func TestPlatformUsersGrantNamesEachRefusedPermission(t *testing.T) {
+	assert.Contains(t, platformUsersGrant, "resourcemanager.projects.getIamPolicy")
+	assert.Contains(t, platformUsersGrant, "iam.serviceAccounts.list")
+	assert.Contains(t, platformUsersGrant, "roles/iam.securityReviewer")
+}

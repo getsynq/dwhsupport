@@ -29,10 +29,13 @@ const (
 
 // platformUsersGrant is what lets a role read both sources:
 // resourcemanager.projects.getIamPolicy for the policy and
-// iam.serviceAccounts.list for the service accounts. roles/iam.securityReviewer
-// holds both.
-const platformUsersGrant = "roles/iam.securityReviewer on the project " +
-	"(resourcemanager.projects.getIamPolicy for the bound users and their roles, iam.serviceAccounts.list for the project's service accounts)"
+// iam.serviceAccounts.list for the service accounts. The setup guide has the
+// integration's service account hold a custom role, so the two permissions
+// are named first, as what to add to it; roles/iam.securityReviewer holds
+// both, and reads every other IAM policy of the project too.
+const platformUsersGrant = "resourcemanager.projects.getIamPolicy (the bound users and their roles) and " +
+	"iam.serviceAccounts.list (the project's service accounts) on the project, added to the role of the integration's service account " +
+	"(or roles/iam.securityReviewer, which holds both)"
 
 // iamPolicyCompletenessReason says what a project IAM policy leaves out.
 // BigQuery has no list of its users: anyone Google authenticates may run a
