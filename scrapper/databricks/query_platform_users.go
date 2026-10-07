@@ -14,9 +14,11 @@ import (
 )
 
 // platformUsersGrant is what lets the integration's principal read every user and service
-// principal of the workspace through SCIM.
+// principal of the workspace through SCIM. A token issued for a set of scopes is refused
+// SCIM ("does not have required scopes: scim") whatever its principal may do, so the scope
+// is named too.
 const platformUsersGrant = "membership of the workspace admins group, which may list users and service principals through SCIM " +
-	"(GET /api/2.0/preview/scim/v2/Users and /ServicePrincipals)"
+	"(GET /api/2.0/preview/scim/v2/Users and /ServicePrincipals), with a token whose scopes include scim when it is limited to scopes"
 
 // platformUsersSource names the SCIM listing in the result.
 const platformUsersSource = "databricks.scim"

@@ -219,4 +219,8 @@ func TestCapabilitiesAdvertisePlatformUsers(t *testing.T) {
 	capability := newFakeWorkspace().start(t).Capabilities().PlatformUsers
 	assert.True(t, capability.Supported)
 	assert.NotEmpty(t, capability.Grant)
+	// A token issued for a set of scopes is refused with "does not have required scopes:
+	// scim" whatever its principal may do, so the grant names the scope as well.
+	assert.Contains(t, capability.Grant, "admins group")
+	assert.Contains(t, capability.Grant, "scopes include scim")
 }
