@@ -289,6 +289,18 @@ func (s *OracleScrapperSuite) TestFetchQueryLogs() {
 
 	s.NotEmpty(logs, "Should return query logs from V$SQL")
 
+	// Oracle folds an unquoted user name to upper case, and that is how its
+	// dictionary names the user who parsed the statement.
+	connectedAs := strings.ToUpper(testenv.EnvOrDefault("ORACLE_USER", "synq"))
+	var ranByUs bool
+	for _, log := range logs {
+		s.NotEmpty(log.DwhContext.User, "User (the parsing user) should be set on %s", log.QueryID)
+		if strings.Contains(log.SQL, "category = 'Electronics'") && log.DwhContext.User == connectedAs {
+			ranByUs = true
+		}
+	}
+	s.True(ranByUs, "the statement this test ran should name %s as its user", connectedAs)
+
 	for _, log := range logs {
 		s.NotEmpty(log.SQL, "SQL should not be empty")
 		s.NotEmpty(log.QueryID, "QueryID (sql_id) should not be empty")
