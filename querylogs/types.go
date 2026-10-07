@@ -145,7 +145,14 @@ type DwhContext struct {
 	// Warehouse identifier (available in Snowflake, Databricks)
 	Warehouse string
 
-	// User who executed the query
+	// User who executed the query, spelled as the platform's history names it
+	// - Snowflake, Redshift, BigQuery, Databricks, Trino, ClickHouse: the executing user
+	// - Fabric: login_name, "<appId>@<tenantId>" for a service principal
+	// - Oracle: the user who parsed the cursor (V$SQL / DBA_HIST_SQLSTAT parsing_user_id),
+	//   which another user with the same privileges may reuse; never the parsing schema
+	// - Empty for: MSSQL (Query Store aggregates per plan and keeps no user), Db2 (the package
+	//   cache keeps no user), Athena (the query execution API names no principal; only
+	//   CloudTrail does)
 	User string
 
 	// Role used to execute the query (available in Snowflake, Postgres, etc.)

@@ -317,6 +317,18 @@ func (s *FabricScrapperSuite) TestFetchQueryLogs() {
 		logs = append(logs, log)
 	}
 
+	connectedAs := fabricConnectedLogin(s.T())
+	var ranByUs bool
+	for _, log := range logs {
+		s.NotEmpty(log.DwhContext.User, "User (login_name) should be set on %s", log.QueryID)
+		if strings.EqualFold(log.DwhContext.User, connectedAs) {
+			ranByUs = true
+		}
+	}
+	if len(logs) > 0 {
+		s.True(ranByUs, "a query this test's service principal ran should name %s as its user", connectedAs)
+	}
+
 	for _, log := range logs {
 		s.Equal("fabric", log.SqlDialect)
 		s.NotEmpty(log.QueryID)

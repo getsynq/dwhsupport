@@ -16,7 +16,8 @@ var queryLogsSql string
 
 // MSSQLQueryLogSchema maps columns from the Query Store runtime stats query.
 // Query Store aggregates execution statistics per plan per time interval,
-// so each row represents a plan's stats during one interval (not a single execution).
+// so each row represents a plan's stats during one interval (not a single execution),
+// summed over every session that ran it: Query Store keeps no user or login.
 type MSSQLQueryLogSchema struct {
 	Database             string     `db:"database"`
 	QueryId              int64      `db:"query_id"`

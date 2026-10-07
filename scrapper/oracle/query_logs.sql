@@ -2,6 +2,7 @@ SELECT
     sql_id,
     sql_fulltext,
     parsing_schema_name,
+    (SELECT u.username FROM ALL_USERS u WHERE u.user_id = V$SQL.parsing_user_id) AS parsing_user_name,
     last_active_time,
     executions,
     elapsed_time,
