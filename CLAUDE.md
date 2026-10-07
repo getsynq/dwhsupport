@@ -348,6 +348,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 
 - **Exclude both `information_schema` AND `INFORMATION_SCHEMA`** (ClickHouse exposes both as aliases) in every catalog query (`query_tables`, `query_catalog`, `query_sql_definitions`, `query_table_metrics`, `query_table_constraints`). Excluding only the lowercase form leaks ~20 uppercase system views.
 - **A refused system table read through `clusterAllReplicas` names the grant as `SHOW COLUMNS ON system.X`**; a direct read names `SELECT ON system.X`. Granting SELECT covers both. `cluster_test.go` scans every source file, tests included, for the literal `clusterAllReplicas(`, so a test asserting rewritten SQL must not spell it.
+- **Our query context travels in the `log_comment` setting, never a SQL comment** (`exec/clickhouse` `QueryRows` says why). `system.query_log` keeps it in its own column, so `FetchQueryLogs` puts it in the metadata as `log_comment`, as written, and a reader looks for our marker there as well as in the SQL.
 - **A ClickHouse database maps to our Schema** — there is no catalog level above it. `SchemaRow.Database`/`TableRow.Database` is the configured host/database label, not a real container.
 
 ## Databricks Gotchas
