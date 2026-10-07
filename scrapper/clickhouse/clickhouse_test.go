@@ -2,12 +2,14 @@ package clickhouse
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
@@ -375,6 +377,50 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	// Partition key
 	s.True(foundPartition, "Should find PARTITION BY constraint")
 	s.Equal("toYYYYMM(created_at)", partitionExpr, "Partition expression should be toYYYYMM(created_at)")
+}
+
+// TestQueryTableConstraints_PartitionKeyNamesItsColumns: a partition key is an
+// expression, so it is listed as the columns it reads, in table order, each row
+// carrying the whole expression as ClickHouse renders it.
+func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints_PartitionKeyNamesItsColumns() {
+	tables := map[string]string{
+		"test_partition_by_column": "PARTITION BY workspace",
+		"test_partition_by_expr":   "PARTITION BY toStartOfInterval(at, INTERVAL 1 day)",
+		"test_partition_by_tuple":  "PARTITION BY (workspace, toDate(at))",
+		"test_partition_by_none":   "PARTITION BY tuple()",
+	}
+	for table, partitionBy := range tables {
+		s.Require().NoError(s.clickhouseScrapper.executor.Exec(s.ctx, "DROP TABLE IF EXISTS "+table))
+		s.Require().NoError(s.clickhouseScrapper.executor.Exec(s.ctx, fmt.Sprintf(
+			"CREATE TABLE %s (id UInt64, at DateTime, workspace String) ENGINE = MergeTree %s ORDER BY id", table, partitionBy,
+		)))
+		s.T().Cleanup(func() { _ = s.clickhouseScrapper.executor.Exec(context.Background(), "DROP TABLE IF EXISTS "+table) })
+	}
+
+	constraints, err := s.clickhouseScrapper.QueryTableConstraints(
+		scope.WithScope(s.ctx, &scope.ScopeFilter{Include: []scope.ScopeRule{{Schema: s.databaseName, Table: "test_partition_by_*"}}}),
+	)
+	s.Require().NoError(err)
+
+	type partitionColumn struct {
+		Column     string
+		Position   int32
+		Expression string
+	}
+	partitions := map[string][]partitionColumn{}
+	for _, c := range constraints {
+		if c.ConstraintType != scrapper.ConstraintTypePartitionBy {
+			continue
+		}
+		s.Equal("partition_key", c.ConstraintName)
+		partitions[c.Table] = append(partitions[c.Table], partitionColumn{c.ColumnName, c.ColumnPosition, c.ConstraintExpression})
+	}
+
+	s.Equal(map[string][]partitionColumn{
+		"test_partition_by_column": {{"workspace", 3, "workspace"}},
+		"test_partition_by_expr":   {{"at", 2, "toStartOfInterval(at, toIntervalDay(1))"}},
+		"test_partition_by_tuple":  {{"at", 2, "(workspace, toDate(at))"}, {"workspace", 3, "(workspace, toDate(at))"}},
+	}, partitions, "PARTITION BY tuple() is one partition, so there is no partition key to list")
 }
 
 // TestQueryCustomMetrics_DirectDB tests QueryCustomMetrics directly with the DB connection
