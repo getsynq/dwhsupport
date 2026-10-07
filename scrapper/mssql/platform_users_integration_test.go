@@ -145,3 +145,63 @@ func TestMSSQLPlatformUsers_LoginsRolesAndVisibility(t *testing.T) {
 	assert.Contains(t, logins, "pu_nopriv")
 	assert.NotContains(t, logins, "pu_reader", "another login is hidden without VIEW ANY DEFINITION")
 }
+
+// TestMSSQLPlatformUsers_DatabaseCollationDiffersFromServer connects to a
+// database whose collation is not the server's. Login names in
+// sys.server_principals carry the server's collation and user names in
+// sys.database_principals the database's, so a statement that puts the two in
+// one column has to say which collation the column takes.
+func TestMSSQLPlatformUsers_DatabaseCollationDiffersFromServer(t *testing.T) {
+	saPassword := os.Getenv("MSSQL_SA_PASSWORD")
+	if os.Getenv("CI") != "" || saPassword == "" {
+		t.Skip("MSSQL_SA_PASSWORD not set")
+	}
+	ctx := context.Background()
+	sa, err := newMSSQLScrapperAs(ctx, "sa", saPassword)
+	if err != nil {
+		t.Skipf("Could not connect to MSSQL as sa: %v", err)
+	}
+	defer sa.Close()
+	db := sa.executor.GetDb()
+
+	var serverCollation string
+	require.NoError(t, db.GetContext(ctx, &serverCollation, "SELECT CAST(SERVERPROPERTY('Collation') AS nvarchar(128))"))
+	dbCollation := "Latin1_General_CS_AS"
+	if serverCollation == dbCollation {
+		dbCollation = "SQL_Latin1_General_CP1_CI_AS"
+	}
+
+	const dbName = "pu_collation"
+	drop := "IF DB_ID('" + dbName + "') IS NOT NULL BEGIN " +
+		"ALTER DATABASE " + dbName + " SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE " + dbName + " END"
+	_, err = db.ExecContext(ctx, drop)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, "CREATE DATABASE "+dbName+" COLLATE "+dbCollation)
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), drop) })
+
+	inDb, err := NewMSSQLScrapper(ctx, &MSSQLScrapperConf{MSSQLConf: dwhexecmssql.MSSQLConf{
+		User:      "sa",
+		Password:  saPassword,
+		Host:      testenv.EnvOrDefault("MSSQL_HOST", "127.0.0.1"),
+		Port:      testenv.EnvOrDefaultInt("MSSQL_PORT", 1433),
+		Database:  dbName,
+		TrustCert: true,
+		Encrypt:   testenv.EnvOrDefault("MSSQL_ENCRYPT", "disable"),
+	}})
+	require.NoError(t, err)
+	defer inDb.Close()
+
+	users, err := scrappertest.OnlyPlatformUserSource(inDb.QueryPlatformUsers(ctx))
+	require.NoError(t, err)
+	require.True(t, users.Answered())
+	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
+	assert.False(t, users.IsSkipped(scrapper.PlatformUserFactRoles), "role memberships are read too: %v", users.SkippedFacts)
+	byLogin := map[string]*scrapper.PlatformUser{}
+	for _, u := range users.Users {
+		byLogin[u.Login] = u
+	}
+	require.Contains(t, byLogin, "sa")
+	assert.Contains(t, byLogin["sa"].Roles, "sysadmin")
+	assert.Contains(t, byLogin["sa"].Roles, dbName+".db_owner", "sa is the owner of the database it created")
+}
