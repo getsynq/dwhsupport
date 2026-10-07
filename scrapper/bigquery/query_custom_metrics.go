@@ -20,8 +20,7 @@ func (e *BigQueryScrapper) QueryCustomMetrics(ctx context.Context, sql string, a
 	defer collector.Finish()
 	var rowCount int64
 
-	// Create a query using the BigQuery executor
-	query := e.executor.GetBigQueryClient().Query(sql)
+	query := e.executor.NewQuery(ctx, sql, args...)
 
 	// Run the query
 	job, err := query.Run(ctx)

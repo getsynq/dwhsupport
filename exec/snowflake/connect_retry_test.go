@@ -48,13 +48,26 @@ func fakeLoginFailure(code int, msg string) string {
 type fakeSnowflake struct {
 	mu        sync.Mutex
 	logins    []string
+	queries   []fakeQueryRequest
 	loginBody func(query string) string
+}
+
+// fakeQueryRequest is the part of a query request that carries our marker.
+type fakeQueryRequest struct {
+	SQLText    string         `json:"sqlText"`
+	Parameters map[string]any `json:"parameters"`
 }
 
 func (f *fakeSnowflake) attempts() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.logins...)
+}
+
+func (f *fakeSnowflake) queryRequests() []fakeQueryRequest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]fakeQueryRequest(nil), f.queries...)
 }
 
 func (f *fakeSnowflake) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -80,6 +93,15 @@ func (f *fakeSnowflake) RoundTrip(req *http.Request) (*http.Response, error) {
 		f.mu.Unlock()
 		return respond(f.loginBody(query))
 	case strings.Contains(req.URL.Path, "query-request"):
+		var q fakeQueryRequest
+		if req.Body != nil {
+			if err := json.NewDecoder(req.Body).Decode(&q); err != nil {
+				return nil, err
+			}
+		}
+		f.mu.Lock()
+		f.queries = append(f.queries, q)
+		f.mu.Unlock()
 		return respond(fakeQueryOK)
 	default:
 		return respond(`{"success":true,"data":{}}`)

@@ -16,7 +16,7 @@ import (
 // The dry-run job must be created with DryRun=true and read via query.Run only —
 // job.Read errors on a dry-run job, so this cannot reuse RunRawQuery/QueryShape.
 func (e *BigQueryScrapper) EstimateQuery(ctx context.Context, sql string) (*scrapper.QueryEstimate, error) {
-	query := e.executor.GetBigQueryClient().Query(sql)
+	query := e.executor.NewQuery(ctx, sql)
 	query.DryRun = true
 	// A dry run reports scan bytes independent of cache; disabling the cache
 	// keeps the estimate stable and avoids a 0-byte "cache hit" result.

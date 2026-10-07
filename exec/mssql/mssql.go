@@ -132,7 +132,7 @@ func NewMSSQLExecutor(ctx context.Context, conf *MSSQLConf) (*MSSQLExecutor, err
 		}
 	}
 
-	if err := db.PingContext(ctx); err != nil {
+	if err := stdsql.Ping(ctx, db); err != nil {
 		db.Close()
 		return nil, exec.NewAuthError(err)
 	}

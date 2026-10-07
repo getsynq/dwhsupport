@@ -36,6 +36,8 @@ The library is organized into three main layers:
    - Executors implement `StdSqlExecutor`: `GetDb()`, `QueryRows()`, `Select()`, `Exec()`, `Close()`
    - `QueryRows`, `Select`, `Exec` automatically apply `querycontext.AppendSQLComment` and warehouse-specific enrichment (Snowflake query tag, ClickHouse log_comment) — **scrappers must use these instead of `GetDb()` for queries**
    - `GetDb()` is only for passing to `stdsql.QueryMany`/`NewQuerier` helpers (which handle enrichment internally)
+   - BigQuery has no `GetDb()`: every job is built by `BigQueryExecutor.NewQuery(ctx, sql, args...)`, which adds the comment and the job labels. Never `GetBigQueryClient().Query(...)`: the query-log fetch, catalog reads, custom metrics, raw queries, shape and estimate all did that once and went out unmarked.
+   - The connection check goes through `stdsql.Ping`, which with a query context on ctx runs a commented `SELECT 1` instead of the driver's ping. gosnowflake and athenadriver ping with `SELECT 1` and go-mssqldb with `select 1;`, all of which land in query history without our marker (Snowflake also takes the query tag from `withQueryTag`). The other drivers ping at the protocol level or with an empty statement, so they keep `PingContext`.
    - Uses `querier.Querier[T]` pattern for type-safe query execution
    - Generic executor functionality in `exec/generic.go` including `QueryMany[T]` for batch processing
 
