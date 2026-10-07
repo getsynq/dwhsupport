@@ -6,8 +6,13 @@
 --
 -- create_date is the server's local time; it is shifted to UTC by the
 -- server's current offset.
+--
+-- A login name has the server's collation and a user name the database's,
+-- which differ whenever the database was created with its own. UNION ALL
+-- refuses to put two collations in one column, so every name takes the
+-- database's.
 SELECT
-    sp.name                                                                  AS login,
+    sp.name COLLATE DATABASE_DEFAULT                                         AS login,
     CONVERT(varchar(200), sp.sid, 1)                                         AS platform_id,
     sp.type_desc                                                             AS type,
     sp.is_disabled                                                           AS disabled,
@@ -17,7 +22,7 @@ WHERE sp.type IN ('S', 'U', 'G', 'E', 'X')
   AND sp.name NOT LIKE '##%##'
 UNION ALL
 SELECT
-    dp.name,
+    dp.name COLLATE DATABASE_DEFAULT,
     CONVERT(varchar(200), dp.sid, 1),
     dp.type_desc,
     NULL,
