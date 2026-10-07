@@ -227,6 +227,13 @@ func convertFabricRowToQueryLog(
 		queryType = *row.StatementType
 	}
 
+	// login_name is who ran the query: a service principal's "<appId>@<tenantId>"
+	// or a user's principal name.
+	user := ""
+	if row.LoginName != nil {
+		user = strings.TrimSpace(*row.LoginName)
+	}
+
 	metadata := map[string]*structpb.Value{
 		"login_name":            querylogs.StringPtrValue(row.LoginName),
 		"submit_time":           querylogs.TimePtrValue(row.SubmitTime),
@@ -244,7 +251,7 @@ func convertFabricRowToQueryLog(
 		QueryID:                  row.QueryID,
 		SQL:                      queryText,
 		SqlDialect:               sqlDialect,
-		DwhContext:               &querylogs.DwhContext{Instance: host, Database: row.Database},
+		DwhContext:               &querylogs.DwhContext{Instance: host, Database: row.Database, User: user},
 		QueryType:                queryType,
 		Status:                   fabricStatusToStatus(row.Status),
 		Metadata:                 querylogs.NewMetadataStruct(metadata),

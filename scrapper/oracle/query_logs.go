@@ -23,6 +23,7 @@ type OracleQueryLogSchema struct {
 	SqlId             string     `db:"SQL_ID"`
 	SqlFulltext       *string    `db:"SQL_FULLTEXT"`
 	ParsingSchemaName *string    `db:"PARSING_SCHEMA_NAME"`
+	ParsingUserName   *string    `db:"PARSING_USER_NAME"`
 	LastActiveTime    *time.Time `db:"LAST_ACTIVE_TIME"`
 	IntervalStart     *time.Time `db:"INTERVAL_START"`
 	Executions        *int64     `db:"EXECUTIONS"`
@@ -153,9 +154,19 @@ func convertOracleRowToQueryLog(
 		schema = strings.TrimSpace(*row.ParsingSchemaName)
 	}
 
+	// The user who parsed the cursor, which is the closest V$SQL and DBA_HIST come
+	// to who ran it: a row sums every execution of a child cursor, and another
+	// user whose privileges resolve the statement the same way reuses it. The
+	// parsing schema is not a user (ALTER SESSION SET CURRENT_SCHEMA changes it).
+	user := ""
+	if row.ParsingUserName != nil {
+		user = strings.TrimSpace(*row.ParsingUserName)
+	}
+
 	metadata := map[string]*structpb.Value{
 		"sql_id":              querylogs.StringValue(row.SqlId),
 		"parsing_schema_name": querylogs.TrimmedStringPtrValue(row.ParsingSchemaName),
+		"parsing_user_name":   querylogs.TrimmedStringPtrValue(row.ParsingUserName),
 		"last_active_time":    querylogs.TimePtrValue(row.LastActiveTime),
 		"interval_start":      querylogs.TimePtrValue(row.IntervalStart),
 		"executions":          querylogs.IntPtrValue(row.Executions),
@@ -183,6 +194,7 @@ func convertOracleRowToQueryLog(
 			Instance: host,
 			Database: serviceName,
 			Schema:   schema,
+			User:     user,
 		},
 		QueryType:                queryType,
 		Status:                   "SUCCESS", // V$SQL only contains successfully parsed/executed SQL

@@ -2,6 +2,7 @@ SELECT
     s.sql_id,
     t.sql_text                              AS sql_fulltext,
     s.parsing_schema_name,
+    (SELECT u.username FROM ALL_USERS u WHERE u.user_id = s.parsing_user_id) AS parsing_user_name,
     sn.end_interval_time                    AS last_active_time,
     sn.begin_interval_time                  AS interval_start,
     s.executions_delta                      AS executions,

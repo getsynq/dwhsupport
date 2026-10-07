@@ -314,6 +314,38 @@ func (s *OracleScrapperSuite) TestFetchQueryLogs() {
 	}
 }
 
+// TestFetchQueryLogsWithDiagnosticsPack reads the AWR history (DBA_HIST_*), which
+// names its user the same way V$SQL does. AWR keeps hourly snapshots, so a row
+// from the last week is what it can check, and an empty window checks only that
+// the query runs.
+func (s *OracleScrapperSuite) TestFetchQueryLogsWithDiagnosticsPack() {
+	conf := *s.scrapper.conf
+	conf.UseDiagnosticsPack = true
+	sc := &OracleScrapper{conf: &conf, executor: s.scrapper.executor}
+
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	s.Require().NoError(err)
+
+	iter, err := sc.FetchQueryLogs(s.ctx, time.Now().Add(-7*24*time.Hour), time.Now().Add(time.Hour), obfuscator)
+	if err != nil && strings.Contains(err.Error(), "ORA-00942") {
+		s.T().Skipf("the test user may not read the AWR views: %v", err)
+	}
+	s.Require().NoError(err)
+	defer iter.Close()
+
+	n := 0
+	for {
+		log, iterErr := iter.Next(s.ctx)
+		if iterErr != nil {
+			s.Require().ErrorIs(iterErr, io.EOF)
+			break
+		}
+		n++
+		s.NotEmpty(log.DwhContext.User, "User (the parsing user) should be set on %s", log.QueryID)
+	}
+	s.T().Logf("fetched %d query logs from AWR", n)
+}
+
 // OracleComplianceSuite runs the standard compliance test suite.
 type OracleComplianceSuite struct {
 	scrappertest.ComplianceSuite

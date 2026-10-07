@@ -23,6 +23,9 @@ import (
 //
 // Athena retains query history for 45 days by default per workgroup; older
 // `from` values silently truncate to that window.
+//
+// A QueryExecution names no IAM principal, so the log carries no user; only
+// CloudTrail's StartQueryExecution event records who ran a query.
 func (e *AthenaScrapper) FetchQueryLogs(
 	ctx context.Context,
 	from, to time.Time,
