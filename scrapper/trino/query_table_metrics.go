@@ -11,18 +11,15 @@ import (
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/rowscan"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/jmoiron/sqlx"
 	"github.com/trinodb/trino-go-client/trino"
 	"golang.org/x/sync/errgroup"
 )
 
-type MetricsStrategy func(ctx context.Context, db *sqlx.DB, tableRow *scrapper.TableRow, tableMetricsRow *scrapper.TableMetricsRow) error
+type MetricsStrategy func(ctx context.Context, tableRow *scrapper.TableRow, tableMetricsRow *scrapper.TableMetricsRow) error
 
 // QueryTableMetrics fetches metrics for each table returned by queryTables, which
 // already applies scope filtering via SQL push-down. No additional scope check needed.
 func (e *TrinoScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-
-	db := e.executor.GetDb()
 
 	var outMu sync.Mutex
 	var tableMetricsRows []*scrapper.TableMetricsRow
@@ -77,7 +74,7 @@ func (e *TrinoScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFe
 
 				if metricsStrategy != nil {
 					g.Go(func() error {
-						if err := metricsStrategy(groupCtx, db, t, tableMetricsRow); err != nil {
+						if err := metricsStrategy(groupCtx, t, tableMetricsRow); err != nil {
 							logging.GetLogger(groupCtx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
 							return nil
 						}
@@ -114,7 +111,6 @@ type trinoShowStatsRow struct {
 
 func (e *TrinoScrapper) showStatsMetricsStrategy(
 	ctx context.Context,
-	db *sqlx.DB,
 	tableRow *scrapper.TableRow,
 	tableMetricsRow *scrapper.TableMetricsRow,
 ) error {
@@ -124,7 +120,7 @@ func (e *TrinoScrapper) showStatsMetricsStrategy(
 
 	fqTable := e.fqn(tableMetricsRow)
 	query := fmt.Sprintf("SHOW STATS FOR %s", fqTable)
-	rows, err := db.QueryxContext(ctx, query)
+	rows, err := e.executor.QueryRows(ctx, query)
 	if err != nil {
 		return err
 	}
@@ -176,13 +172,12 @@ type trinoIcebergSnapshotsRow struct {
 
 func (e *TrinoScrapper) icebergMetricsStrategy(
 	ctx context.Context,
-	db *sqlx.DB,
 	tableRow *scrapper.TableRow,
 	tableMetricsRow *scrapper.TableMetricsRow,
 ) error {
 
 	// Let's reuse SHOW STATS
-	if err := e.showStatsMetricsStrategy(ctx, db, tableRow, tableMetricsRow); err != nil {
+	if err := e.showStatsMetricsStrategy(ctx, tableRow, tableMetricsRow); err != nil {
 		return err
 	}
 
@@ -192,7 +187,7 @@ func (e *TrinoScrapper) icebergMetricsStrategy(
 
 	fqTable := e.fqn(tableMetricsRow, "snapshots")
 	query := fmt.Sprintf("SELECT * FROM %s", fqTable)
-	rows, err := db.QueryxContext(ctx, query)
+	rows, err := e.executor.QueryRows(ctx, query)
 	if err != nil {
 		return err
 	}

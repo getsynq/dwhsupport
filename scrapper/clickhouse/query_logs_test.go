@@ -309,6 +309,42 @@ func TestConvertClickhouseRowToQueryLog_Identity(t *testing.T) {
 	})
 }
 
+// The log_comment a query ran with reaches the metadata as written: a reader
+// decides whether it is a marker, so a comment that is not one passes through too.
+func TestConvertClickhouseRowToQueryLog_LogComment(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name       string
+		logComment string
+		expected   string
+	}{
+		{name: "query context", logComment: `{"app":"synq","workspace":"ws"}`, expected: `{"app":"synq","workspace":"ws"}`},
+		{name: "another application's comment", logComment: "nightly export", expected: "nightly export"},
+		{name: "none", logComment: "", expected: ""},
+		{name: "invalid UTF-8", logComment: "tag\xff", expected: "tag\uFFFD"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			row := &ClickhouseQueryLogSchema{
+				QueryType:                  "QueryFinish",
+				EventTimeMicroseconds:      time.Date(2025, 11, 1, 10, 30, 0, 0, time.UTC),
+				QueryStartTimeMicroseconds: time.Date(2025, 11, 1, 10, 30, 0, 0, time.UTC),
+				Query:                      "SELECT * FROM users",
+				Tables:                     []string{"default.users"},
+				InitialQueryId:             "query-log-comment",
+				LogComment:                 tc.logComment,
+			}
+			log, err := convertClickhouseRowToQueryLog(row, obfuscator, "clickhouse", testQueryLogHost, testQueryLogName)
+			require.NoError(t, err)
+			require.Contains(t, log.Metadata.GetFields(), "log_comment")
+			require.Equal(t, tc.expected, log.Metadata.GetFields()["log_comment"].GetStringValue())
+			// The comment is metadata, never part of the statement.
+			require.Equal(t, "SELECT * FROM users", log.SQL)
+		})
+	}
+}
+
 func containsString(s, substr string) bool {
 	return len(s) >= len(substr) && s[:len(substr)] == substr || len(s) > len(substr) && containsString(s[1:], substr)
 }

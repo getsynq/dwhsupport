@@ -77,6 +77,10 @@ type ClickhouseQueryLogSchema struct {
 	// Script Information
 	ScriptQueryNumber uint32 `db:"script_query_number"`
 	ScriptLineNumber  uint32 `db:"script_line_number"`
+
+	// The log_comment setting the query ran with. dwhsupport's own executor sends
+	// the query context there instead of in a SQL comment.
+	LogComment string `db:"log_comment"`
 }
 
 func (s *ClickhouseScrapper) FetchQueryLogs(
@@ -169,6 +173,7 @@ func (s *ClickhouseScrapper) buildQueryLogsSql(mode querylogs.ObfuscationMode) s
        forwarded_for,
        script_query_number,
        script_line_number,
+       log_comment,
        ` + queryColumn + `,
        normalized_query_hash
 
@@ -284,6 +289,7 @@ func convertClickhouseRowToQueryLog(
 		"forwarded_for":                         querylogs.StringValue(row.ForwardedFor),
 		"script_query_number":                   querylogs.Uint32Value(row.ScriptQueryNumber),
 		"script_line_number":                    querylogs.Uint32Value(row.ScriptLineNumber),
+		"log_comment":                           querylogs.StringValue(row.LogComment),
 		"initial_port":                          querylogs.UInt16Value(row.InitialPort),
 		"initial_address":                       querylogs.IPPtrValue(row.InitialAddress),
 	}
