@@ -269,66 +269,31 @@ func convertDatabricksQueryInfoToQueryLog(
 		metadata["user_display_name"] = querylogs.StringValue(userDisplayName)
 	}
 
-	// Add metrics if available
+	// Every metric the response carries, zeros included: a query served from the result cache reads no
+	// bytes and spends no task time, and that zero is what it cost. The SDK cannot tell a zero from a
+	// metric the response left out, so neither can this map.
 	if queryInfo.Metrics != nil {
-		metrics := map[string]*structpb.Value{}
-		if queryInfo.Metrics.CompilationTimeMs != 0 {
-			metrics["compilation_time_ms"] = querylogs.IntValue(queryInfo.Metrics.CompilationTimeMs)
-		}
-		if queryInfo.Metrics.ExecutionTimeMs != 0 {
-			metrics["execution_time_ms"] = querylogs.IntValue(queryInfo.Metrics.ExecutionTimeMs)
-		}
-		if queryInfo.Metrics.NetworkSentBytes != 0 {
-			metrics["network_sent_bytes"] = querylogs.IntValue(queryInfo.Metrics.NetworkSentBytes)
-		}
-		if queryInfo.Metrics.PhotonTotalTimeMs != 0 {
-			metrics["photon_total_time_ms"] = querylogs.IntValue(queryInfo.Metrics.PhotonTotalTimeMs)
-		}
-		if queryInfo.Metrics.ReadBytes != 0 {
-			metrics["read_bytes"] = querylogs.IntValue(queryInfo.Metrics.ReadBytes)
-		}
-		if queryInfo.Metrics.ReadCacheBytes != 0 {
-			metrics["read_cache_bytes"] = querylogs.IntValue(queryInfo.Metrics.ReadCacheBytes)
-		}
-		if queryInfo.Metrics.ReadFilesCount != 0 {
-			metrics["read_files_count"] = querylogs.IntValue(queryInfo.Metrics.ReadFilesCount)
-		}
-		if queryInfo.Metrics.ReadPartitionsCount != 0 {
-			metrics["read_partitions_count"] = querylogs.IntValue(queryInfo.Metrics.ReadPartitionsCount)
-		}
-		if queryInfo.Metrics.ReadRemoteBytes != 0 {
-			metrics["read_remote_bytes"] = querylogs.IntValue(queryInfo.Metrics.ReadRemoteBytes)
-		}
-		if queryInfo.Metrics.ResultFetchTimeMs != 0 {
-			metrics["result_fetch_time_ms"] = querylogs.IntValue(queryInfo.Metrics.ResultFetchTimeMs)
-		}
-		metrics["result_from_cache"] = querylogs.BoolValue(queryInfo.Metrics.ResultFromCache)
-		if queryInfo.Metrics.RowsProducedCount != 0 {
-			metrics["rows_produced_count"] = querylogs.IntValue(queryInfo.Metrics.RowsProducedCount)
-		}
-		if queryInfo.Metrics.RowsReadCount != 0 {
-			metrics["rows_read_count"] = querylogs.IntValue(queryInfo.Metrics.RowsReadCount)
-		}
-		if queryInfo.Metrics.SpillToDiskBytes != 0 {
-			metrics["spill_to_disk_bytes"] = querylogs.IntValue(queryInfo.Metrics.SpillToDiskBytes)
-		}
-		if queryInfo.Metrics.TaskTotalTimeMs != 0 {
-			metrics["task_total_time_ms"] = querylogs.IntValue(queryInfo.Metrics.TaskTotalTimeMs)
-		}
-		if queryInfo.Metrics.TotalTimeMs != 0 {
-			metrics["total_time_ms"] = querylogs.IntValue(queryInfo.Metrics.TotalTimeMs)
-		}
-		if queryInfo.Metrics.WriteRemoteBytes != 0 {
-			metrics["write_remote_bytes"] = querylogs.IntValue(queryInfo.Metrics.WriteRemoteBytes)
-		}
-		if queryInfo.Metrics.PrunedBytes != 0 {
-			metrics["pruned_bytes"] = querylogs.IntValue(queryInfo.Metrics.PrunedBytes)
-		}
-		if queryInfo.Metrics.PrunedFilesCount != 0 {
-			metrics["pruned_files_count"] = querylogs.IntValue(queryInfo.Metrics.PrunedFilesCount)
-		}
-
-		metadata["metrics"] = querylogs.StructValue(metrics)
+		metadata["metrics"] = querylogs.StructValue(map[string]*structpb.Value{
+			"compilation_time_ms":   querylogs.IntValue(queryInfo.Metrics.CompilationTimeMs),
+			"execution_time_ms":     querylogs.IntValue(queryInfo.Metrics.ExecutionTimeMs),
+			"network_sent_bytes":    querylogs.IntValue(queryInfo.Metrics.NetworkSentBytes),
+			"photon_total_time_ms":  querylogs.IntValue(queryInfo.Metrics.PhotonTotalTimeMs),
+			"read_bytes":            querylogs.IntValue(queryInfo.Metrics.ReadBytes),
+			"read_cache_bytes":      querylogs.IntValue(queryInfo.Metrics.ReadCacheBytes),
+			"read_files_count":      querylogs.IntValue(queryInfo.Metrics.ReadFilesCount),
+			"read_partitions_count": querylogs.IntValue(queryInfo.Metrics.ReadPartitionsCount),
+			"read_remote_bytes":     querylogs.IntValue(queryInfo.Metrics.ReadRemoteBytes),
+			"result_fetch_time_ms":  querylogs.IntValue(queryInfo.Metrics.ResultFetchTimeMs),
+			"result_from_cache":     querylogs.BoolValue(queryInfo.Metrics.ResultFromCache),
+			"rows_produced_count":   querylogs.IntValue(queryInfo.Metrics.RowsProducedCount),
+			"rows_read_count":       querylogs.IntValue(queryInfo.Metrics.RowsReadCount),
+			"spill_to_disk_bytes":   querylogs.IntValue(queryInfo.Metrics.SpillToDiskBytes),
+			"task_total_time_ms":    querylogs.IntValue(queryInfo.Metrics.TaskTotalTimeMs),
+			"total_time_ms":         querylogs.IntValue(queryInfo.Metrics.TotalTimeMs),
+			"write_remote_bytes":    querylogs.IntValue(queryInfo.Metrics.WriteRemoteBytes),
+			"pruned_bytes":          querylogs.IntValue(queryInfo.Metrics.PrunedBytes),
+			"pruned_files_count":    querylogs.IntValue(queryInfo.Metrics.PrunedFilesCount),
+		})
 	}
 
 	// Add channel info if available

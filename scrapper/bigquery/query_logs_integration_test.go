@@ -143,3 +143,36 @@ func (s *BigQueryQueryLogsSuite) TestSessionIDGroupsTheStatementsOfAScript() {
 	s.NotEqual(logs[first].QueryID, *logs[first].SessionID, "the session is the script, not the statement")
 	s.Nil(logs[alone].SessionID)
 }
+
+// A statement carries its own slots, bytes and time. The script job's figures are its child jobs'
+// summed, so it carries none, or adding up the jobs would count each statement twice.
+func (s *BigQueryQueryLogsSuite) TestWeightIsTheStatementsNotTheScripts() {
+	from := time.Now().UTC().Add(-time.Minute)
+	marker := fmt.Sprintf("qlog_weight_%d", time.Now().UnixNano())
+	table := "`" + s.scrapper.conf.ProjectId + "." + datasetA() + ".products`"
+
+	// COUNT(*) alone is answered from table metadata and scans nothing, so each statement reads the rows.
+	first := fmt.Sprintf("SELECT COUNT(DISTINCT TO_JSON_STRING(t)) AS %s_first FROM %s t WHERE RAND() < 2", marker, table)
+	second := fmt.Sprintf("SELECT COUNT(DISTINCT TO_JSON_STRING(t)) AS %s_second FROM %s t WHERE RAND() < 2", marker, table)
+	script := first + ";\n" + second + ";"
+	s.run(script)
+
+	logs := s.logsBySQL(from, marker, 3)
+	s.Require().Contains(logs, script)
+	for _, statement := range []string{first, second} {
+		s.Require().Contains(logs, statement)
+		weight := logs[statement].Weight()
+		s.Require().NotNil(weight.ExecutionMs, statement)
+		s.Require().NotNil(weight.ComputeMs, statement)
+		s.Require().NotNil(weight.BytesScanned, statement)
+		s.Positive(*weight.ComputeMs, "RAND() keeps the result out of the cache, so the statement used slots")
+		s.Positive(*weight.BytesScanned)
+		s.NotEmpty(weight.ComputeId)
+		s.T().Logf("%s: execution=%d compute=%d bytes=%d", weight.ComputeId, *weight.ExecutionMs, *weight.ComputeMs, *weight.BytesScanned)
+	}
+	scriptWeight := logs[script].Weight()
+	s.Nil(scriptWeight.ExecutionMs)
+	s.Nil(scriptWeight.ComputeMs)
+	s.Nil(scriptWeight.BytesScanned)
+	s.Equal(logs[first].Weight().ComputeId, scriptWeight.ComputeId)
+}

@@ -182,7 +182,11 @@ func TestConvertBigQueryRowToQueryLog(t *testing.T) {
 			fields := log.Metadata.GetFields()
 			require.Contains(t, fields, "job_type")
 			require.Contains(t, fields, "statement_type")
-			require.Contains(t, fields, "total_bytes_processed")
+			if tt.row.TotalBytesProcessed.Valid {
+				require.Contains(t, fields, "total_bytes_processed")
+			} else {
+				require.NotContains(t, fields, "total_bytes_processed")
+			}
 
 			// Verify error metadata when present
 			if tt.row.ErrorResult != nil {

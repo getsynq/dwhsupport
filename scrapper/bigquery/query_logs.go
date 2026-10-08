@@ -254,15 +254,15 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		"project_number":        querylogs.IntValue(row.ProjectNumber.Int64),
 		"job_type":              querylogs.StringValue(row.JobType.StringVal),
 		"priority":              querylogs.StringValue(row.Priority.StringVal),
-		"reservation_id":        querylogs.StringValue(row.ReservationId.StringVal),
-		"total_bytes_processed": querylogs.IntValue(row.TotalBytesProcessed.Int64),
-		"total_slot_ms":         querylogs.IntValue(row.TotalSlotMs.Int64),
+		"reservation_id":        nullStringValue(row.ReservationId),
+		"total_bytes_processed": nullInt64Value(row.TotalBytesProcessed),
+		"total_slot_ms":         nullInt64Value(row.TotalSlotMs),
 		"cache_hit":             querylogs.BoolValue(row.CacheHit.Bool),
-		"total_bytes_billed":    querylogs.IntValue(row.TotalBytesBilled.Int64),
+		"total_bytes_billed":    nullInt64Value(row.TotalBytesBilled),
 		"transaction_id":        querylogs.StringValue(row.TransactionId.StringVal),
 		"parent_job_id":         querylogs.StringValue(row.ParentJobId.StringVal),
 		"session_id":            querylogs.StringValue(row.SessionId.StringVal),
-		"transferred_bytes":     querylogs.IntValue(row.TransferredBytes.Int64),
+		"transferred_bytes":     nullInt64Value(row.TransferredBytes),
 	}
 
 	// Add error details if present
@@ -354,4 +354,21 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		HasCompleteNativeLineage: nativeLineage != nil && len(nativeLineage.OutputTables) > 0, // BigQuery provides complete lineage
 		NativeLineage:            nativeLineage,
 	}, nil
+}
+
+// nullInt64Value is a figure the job reported, zero included, and nil for a NULL: a job that reported
+// nothing must not read as one that cost nothing.
+func nullInt64Value(v bigquery.NullInt64) *structpb.Value {
+	if !v.Valid {
+		return nil
+	}
+	return querylogs.IntValue(v.Int64)
+}
+
+// nullStringValue is nil for a NULL or an empty string.
+func nullStringValue(v bigquery.NullString) *structpb.Value {
+	if !v.Valid || v.StringVal == "" {
+		return nil
+	}
+	return querylogs.StringValue(v.StringVal)
 }
