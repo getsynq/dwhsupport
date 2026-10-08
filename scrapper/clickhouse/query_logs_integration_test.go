@@ -46,6 +46,7 @@ func TestClickhouseQueryLogsCarryLogComment(t *testing.T) {
 	defer iter.Close()
 
 	var found []string
+	var weights []querylogs.QueryWeight
 	for {
 		log, err := iter.Next(context.Background())
 		if errors.Is(err, io.EOF) {
@@ -55,8 +56,15 @@ func TestClickhouseQueryLogsCarryLogComment(t *testing.T) {
 		logComment := log.Metadata.GetFields()["log_comment"].GetStringValue()
 		if strings.Contains(logComment, run) {
 			found = append(found, logComment)
+			weights = append(weights, log.Weight())
 		}
 	}
 	require.NotEmpty(t, found, "no query log of this run carries its log_comment")
 	require.JSONEq(t, fmt.Sprintf(`{"app":"synq","run":%q}`, run), found[0])
+
+	// The listing reads system tables, so it took time and read bytes.
+	require.NotNil(t, weights[0].ExecutionMs)
+	require.NotNil(t, weights[0].BytesScanned)
+	require.Positive(t, *weights[0].BytesScanned)
+	require.Nil(t, weights[0].ComputeMs)
 }
