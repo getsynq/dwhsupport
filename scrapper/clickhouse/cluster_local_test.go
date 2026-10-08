@@ -3,11 +3,14 @@ package clickhouse
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/querylogs"
+	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
@@ -208,6 +211,58 @@ func (s *LocalClickHouseClusterSuite) TestSingleNodeNeedsNoRemotePrivilege() {
 	tables, err := singleNode.QueryTables(s.ctx)
 	s.Require().NoError(err)
 	s.NotEmpty(tables)
+}
+
+// asReplicas rewrites every fanned-out system table read so that it answers the
+// way a cluster of n replicas does: the fan-out returns each node's copy of a
+// system table, and on a replicated cluster every copy lists the same objects.
+// The test servers have one replica, so without this a query that forgets to
+// dedupe the copies passes here and repeats every row in production.
+func asReplicas(sql string, n int) string {
+	return systemTableRefPattern.ReplaceAllStringFunc(sql, func(ref string) string {
+		table := systemTableRefPattern.FindStringSubmatch(ref)[1]
+		copies := make([]string, n)
+		for i := range copies {
+			copies[i] = "SELECT * FROM " + table
+		}
+		return "(" + strings.Join(copies, " UNION ALL ") + ")"
+	})
+}
+
+// TestTableConstraintsListEachKeyColumnOnceOnEveryReplicaCount: a partition key
+// came back as [workspace, workspace, workspace] from a three-replica cluster,
+// because only that branch of the query did not dedupe the replicas' copies.
+func (s *LocalClickHouseClusterSuite) TestTableConstraintsListEachKeyColumnOnceOnEveryReplicaCount() {
+	single := s.scrapperFor(ClusterConf{SingleNode: true})
+
+	type key struct{ schema, table, constraintType, constraintName, column string }
+	countRows := func(sql string) map[key]int {
+		rows, err := dwhexecclickhouse.NewQuerier[scrapper.TableConstraintRow](single.executor).QueryMany(s.ctx, sql)
+		s.Require().NoError(err)
+		counts := map[key]int{}
+		for _, row := range rows {
+			counts[key{row.Schema, row.Table, row.ConstraintType, row.ConstraintName, row.ColumnName}]++
+		}
+		return counts
+	}
+
+	oneReplica := countRows(scope.AppendScopeConditions(s.ctx, single.systemTablesSql(queryTableConstraintsSql), "", "schema", "table"))
+	s.Require().NotEmpty(oneReplica)
+	types := map[string]bool{}
+	for k := range oneReplica {
+		types[k.constraintType] = true
+	}
+	for _, constraintType := range []string{
+		scrapper.ConstraintTypePrimaryKey, scrapper.ConstraintTypeSortingKey, scrapper.ConstraintTypeIndex, scrapper.ConstraintTypePartitionBy,
+	} {
+		s.True(types[constraintType], "the fixtures have no %s, so its branch of the query goes unchecked", constraintType)
+	}
+
+	threeReplicas := countRows(scope.AppendScopeConditions(s.ctx, asReplicas(queryTableConstraintsSql, 3), "", "schema", "table"))
+	s.Len(threeReplicas, len(oneReplica), "three replicas list the same constraints as one")
+	for k, n := range threeReplicas {
+		s.Equal(1, n, "%+v is listed once per replica", k)
+	}
 }
 
 func (s *LocalClickHouseClusterSuite) hasCluster(name string) bool {
