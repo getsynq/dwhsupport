@@ -226,6 +226,8 @@ func TestPlatformUsersFromSources(t *testing.T) {
 		assert.NotEmpty(t, result.Source(platformUserSourceIamPolicy).Refused)
 		assert.Len(t, result.Source(platformUserSourceServiceAccounts).Users, 3)
 		assert.Contains(t, result.Reconcile().CompletenessReason, platformUserSourceIamPolicy)
+		// Roles are only in the policy, so a grant on it would state them.
+		scrappertest.AssertSkipped(t, result.Reconcile(), scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused)
 	})
 
 	t.Run("both refused is a result, not an error", func(t *testing.T) {
@@ -249,6 +251,7 @@ func TestPlatformUsersFromSources(t *testing.T) {
 		result, err = platformUsersFromSources(ctx, accounts, nil, nil, unavailable)
 		require.NoError(t, err)
 		assert.NotEmpty(t, result.Source(platformUserSourceIamPolicy).Failed)
+		scrappertest.AssertSkipped(t, result.Reconcile(), scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipFailed)
 	})
 
 	t.Run("both failed is an error", func(t *testing.T) {

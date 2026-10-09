@@ -153,4 +153,13 @@ func TestPlatformUserSourceErrorClassification(t *testing.T) {
 		"a column this account lacks is no grant's business")
 	assert.NotEmpty(t, classify(&gosnowflake.SnowflakeError{Number: 2003, Message: "Object does not exist or not authorized."}).Refused)
 	assert.NotEmpty(t, classify(errors.New("i/o timeout")).Failed)
+
+	// A resource monitor over its quota stops the warehouse, which no grant on
+	// the users views fixes and a later run may get past: failed, not refused.
+	quota := &gosnowflake.SnowflakeError{
+		Number:  90073,
+		Message: "Warehouse 'MY_WH' cannot be resumed because resource monitor 'MY_RM' has exceeded its quota.",
+	}
+	assert.NotEmpty(t, classify(quota).Failed, "refused=%q", classify(quota).Refused)
+	assert.Equal(t, scrapper.PlatformUserSkipFailed, scrapper.PlatformUserSkipKindOf(quota, sc.IsPermissionError, isUnavailable))
 }
