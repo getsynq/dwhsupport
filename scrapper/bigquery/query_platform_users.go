@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
 	"google.golang.org/api/cloudresourcemanager/v1"
+	"google.golang.org/api/googleapi"
 	iam "google.golang.org/api/iam/v1"
 	"google.golang.org/api/option"
 )
@@ -117,13 +118,15 @@ func platformUsersFromSources(
 	accounts []*iam.ServiceAccount, accountsErr error,
 	policy *cloudresourcemanager.Policy, policyErr error,
 ) (*scrapper.PlatformUsers, error) {
+	// Each source skips the facts only the other states the way the other
+	// did not answer, so the errors are classified before either is built.
 	accountsSource := platformUserSourceError(platformUserSourceServiceAccounts, accountsErr)
-	if accountsSource == nil {
-		accountsSource = platformUsersFromServiceAccounts(accounts)
-	}
 	policySource := platformUserSourceError(platformUserSourceIamPolicy, policyErr)
+	if accountsSource == nil {
+		accountsSource = platformUsersFromServiceAccounts(accounts, policySource.DependentSkipKind())
+	}
 	if policySource == nil {
-		policySource = platformUsersFromPolicy(policy)
+		policySource = platformUsersFromPolicy(policy, accountsSource.DependentSkipKind())
 	}
 	return scrapper.CollectPlatformUsers(ctx, accountsSource, policySource)
 }
@@ -136,8 +139,10 @@ func platformUsersFromSources(
 //     it: a project owner has to enable the API, which may be a deliberate
 //     choice, so it reads like a platform without the source rather than a
 //     role without a grant. The reason names the API and where to enable it;
-//   - refused on any other permission error (IsPermissionError);
-//   - failed otherwise (5xx, timeout).
+//   - refused on any other permission error (IsPermissionError), except a
+//     rate limit or quota Google also answers with a 403 (isQuotaError):
+//     no grant lifts it;
+//   - failed otherwise (5xx, timeout, a quota).
 func platformUserSourceError(source string, err error) *scrapper.PlatformUserListing {
 	if err == nil {
 		return nil
@@ -157,12 +162,54 @@ func platformUserSourceError(source string, err error) *scrapper.PlatformUserLis
 		}
 		return scrapper.UnavailablePlatformUserSource(source, scrapper.PlatformUserSourceAPI, reason)
 	}
-	return scrapper.PlatformUserSourceError(source, scrapper.PlatformUserSourceAPI, err, dwhexecbigquery.IsPermissionError, nil)
+	return scrapper.PlatformUserSourceError(source, scrapper.PlatformUserSourceAPI, err, isRefused, nil)
+}
+
+// isRefused reports an error a grant to the credentials would fix.
+func isRefused(err error) bool {
+	return dwhexecbigquery.IsPermissionError(err) && !isQuotaError(err)
+}
+
+// quotaReasons are the reasons Google gives a rate limit or quota, in the
+// legacy error list (rateLimitExceeded, ...) and in google.rpc.ErrorInfo
+// (RATE_LIMIT_EXCEEDED, ...). Some APIs answer them with a 403.
+var quotaReasons = map[string]bool{
+	"rateLimitExceeded":       true,
+	"userRateLimitExceeded":   true,
+	"quotaExceeded":           true,
+	"dailyLimitExceeded":      true,
+	"RATE_LIMIT_EXCEEDED":     true,
+	"RESOURCE_EXHAUSTED":      true,
+	"RESOURCE_QUOTA_EXCEEDED": true,
+}
+
+// isQuotaError reports a Google API error that is a rate limit or quota.
+func isQuotaError(err error) bool {
+	var gerr *googleapi.Error
+	if !errors.As(err, &gerr) {
+		return false
+	}
+	for _, item := range gerr.Errors {
+		if quotaReasons[item.Reason] {
+			return true
+		}
+	}
+	for _, d := range gerr.Details {
+		if m, ok := d.(map[string]interface{}); ok {
+			if reason, _ := m["reason"].(string); quotaReasons[reason] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // platformUsersFromServiceAccounts lists every service account of the
 // project. Its email is the login jobs report as user_email.
-func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.PlatformUserListing {
+//
+// rolesKind is how the roles, which only the IAM policy states, are skipped
+// (see PlatformUserListing.DependentSkipKind).
+func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount, rolesKind scrapper.PlatformUserSkipKind) *scrapper.PlatformUserListing {
 	users := &scrapper.PlatformUserListing{
 		Source:             platformUserSourceServiceAccounts,
 		Kind:               scrapper.PlatformUserSourceAPI,
@@ -170,10 +217,14 @@ func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.
 		CompletenessReason: serviceAccountsCompletenessReason,
 	}
 	notInIam := "IAM does not record it"
-	users.Skip(scrapper.PlatformUserFactCreatedAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactLastLoginAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactDefaultRole, "BigQuery has no default role")
-	users.Skip(scrapper.PlatformUserFactRoles, "roles are bound in IAM policies, see "+platformUserSourceIamPolicy)
+	users.Skip(scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipUnavailable, "BigQuery has no default role")
+	users.Skip(
+		scrapper.PlatformUserFactRoles,
+		rolesKind,
+		"roles are bound in IAM policies, see "+platformUserSourceIamPolicy,
+	)
 
 	for _, a := range accounts {
 		if a == nil || a.Email == "" {
@@ -210,7 +261,10 @@ func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.
 //
 // A conditional binding counts like any other: the role is bound, under a
 // condition the listing does not evaluate.
-func platformUsersFromPolicy(policy *cloudresourcemanager.Policy) *scrapper.PlatformUserListing {
+//
+// accountFactsKind is how the facts only the service account list states are
+// skipped (see PlatformUserListing.DependentSkipKind).
+func platformUsersFromPolicy(policy *cloudresourcemanager.Policy, accountFactsKind scrapper.PlatformUserSkipKind) *scrapper.PlatformUserListing {
 	users := &scrapper.PlatformUserListing{
 		Source:             platformUserSourceIamPolicy,
 		Kind:               scrapper.PlatformUserSourceAPI,
@@ -218,14 +272,18 @@ func platformUsersFromPolicy(policy *cloudresourcemanager.Policy) *scrapper.Plat
 		CompletenessReason: iamPolicyCompletenessReason,
 	}
 	notInIam := "IAM does not record it"
-	users.Skip(scrapper.PlatformUserFactCreatedAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactLastLoginAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactDefaultRole, "BigQuery has no default role")
+	users.Skip(scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipUnavailable, "BigQuery has no default role")
 	accountFacts := "a policy names members only, see " + platformUserSourceServiceAccounts
-	users.Skip(scrapper.PlatformUserFactPlatformId, accountFacts)
-	users.Skip(scrapper.PlatformUserFactDisplayName, accountFacts)
-	users.Skip(scrapper.PlatformUserFactComment, accountFacts)
-	users.Skip(scrapper.PlatformUserFactDisabled, "a policy states it only for a member it has deleted, see "+platformUserSourceServiceAccounts)
+	users.Skip(scrapper.PlatformUserFactPlatformId, accountFactsKind, accountFacts)
+	users.Skip(scrapper.PlatformUserFactDisplayName, accountFactsKind, accountFacts)
+	users.Skip(scrapper.PlatformUserFactComment, accountFactsKind, accountFacts)
+	users.Skip(
+		scrapper.PlatformUserFactDisabled,
+		accountFactsKind,
+		"a policy states it only for a member it has deleted, see "+platformUserSourceServiceAccounts,
+	)
 
 	live := map[string]*scrapper.PlatformUser{}
 	deleted := map[string]*scrapper.PlatformUser{}

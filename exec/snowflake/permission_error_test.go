@@ -38,7 +38,9 @@ func TestIsPermissionError(t *testing.T) {
 	})
 
 	t.Run("warehouse cannot be resumed — resource monitor quota (string, wrapped)", func(t *testing.T) {
-		inner := errors.New("090073 (22000): Warehouse 'WH_DATA_GOVERNANCE' cannot be resumed because resource monitor 'GOVERNANCE_RM' has exceeded its quota.")
+		inner := errors.New(
+			"090073 (22000): Warehouse 'WH_DATA_GOVERNANCE' cannot be resumed because resource monitor 'GOVERNANCE_RM' has exceeded its quota.",
+		)
 		err := errors.Wrap(inner, "failed to fetch query logs")
 		assert.True(t, IsPermissionError(err))
 	})
@@ -51,4 +53,13 @@ func TestIsPermissionError(t *testing.T) {
 	t.Run("generic error", func(t *testing.T) {
 		assert.False(t, IsPermissionError(errors.New("connection reset by peer")))
 	})
+}
+
+func TestIsResourceMonitorQuotaError(t *testing.T) {
+	assert.False(t, IsResourceMonitorQuotaError(nil))
+	assert.True(t, IsResourceMonitorQuotaError(&gosnowflake.SnowflakeError{Number: 90073, Message: "quota"}))
+	assert.True(t, IsResourceMonitorQuotaError(errors.Wrap(
+		errors.New("090073 (22000): Warehouse 'MY_WH' cannot be resumed because resource monitor 'MY_RM' has exceeded its quota."), "query")))
+	assert.False(t, IsResourceMonitorQuotaError(&gosnowflake.SnowflakeError{Number: 3001, Message: "Insufficient privileges"}))
+	assert.False(t, IsResourceMonitorQuotaError(errors.New("Object 'FOO' does not exist or not authorized.")))
 }

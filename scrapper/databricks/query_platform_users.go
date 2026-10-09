@@ -66,10 +66,18 @@ func (e *DatabricksScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.
 		Kind:         scrapper.PlatformUserSourceAPI,
 		Completeness: scrapper.PlatformUsersComplete,
 	}
-	users.Skip(scrapper.PlatformUserFactCreatedAt, "Databricks SCIM does not state when a principal was created")
-	users.Skip(scrapper.PlatformUserFactLastLoginAt, "Databricks SCIM does not state when a principal last signed in")
-	users.Skip(scrapper.PlatformUserFactDefaultRole, "Databricks has no default role")
-	users.Skip(scrapper.PlatformUserFactComment, "Databricks principals carry no comment")
+	users.Skip(
+		scrapper.PlatformUserFactCreatedAt,
+		scrapper.PlatformUserSkipUnavailable,
+		"Databricks SCIM does not state when a principal was created",
+	)
+	users.Skip(
+		scrapper.PlatformUserFactLastLoginAt,
+		scrapper.PlatformUserSkipUnavailable,
+		"Databricks SCIM does not state when a principal last signed in",
+	)
+	users.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipUnavailable, "Databricks has no default role")
+	users.Skip(scrapper.PlatformUserFactComment, scrapper.PlatformUserSkipUnavailable, "Databricks principals carry no comment")
 	for _, u := range workspaceUsers {
 		users.Users = append(users.Users, &scrapper.PlatformUser{
 			Login:       u.UserName,

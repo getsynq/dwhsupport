@@ -88,8 +88,25 @@ func TestSourceErrorClassification(t *testing.T) {
 	assert.Empty(t, failed.Refused)
 }
 
-func TestFactSkipReason(t *testing.T) {
-	assert.Contains(t, factSkipReason(mssql.Error{Number: 229, Message: "The SELECT permission was denied"}), "may not read role memberships; grant")
-	assert.Contains(t, factSkipReason(mssql.Error{Number: 208, Message: "Invalid object name"}), "has no such role membership view")
-	assert.Contains(t, factSkipReason(errors.New("i/o timeout")), "reading role memberships failed")
+func TestFactSkip(t *testing.T) {
+	kind, reason := factSkip(mssql.Error{Number: 229, Message: "The SELECT permission was denied"})
+	assert.Equal(t, scrapper.PlatformUserSkipRefused, kind)
+	assert.Contains(t, reason, "may not read role memberships; grant")
+
+	kind, reason = factSkip(mssql.Error{Number: 208, Message: "Invalid object name"})
+	assert.Equal(t, scrapper.PlatformUserSkipUnavailable, kind)
+	assert.Contains(t, reason, "has no such role membership view")
+
+	kind, reason = factSkip(errors.New("i/o timeout"))
+	assert.Equal(t, scrapper.PlatformUserSkipFailed, kind)
+	assert.Contains(t, reason, "reading role memberships failed")
+}
+
+func TestFactsSQLServerDoesNotKeepAreUnavailable(t *testing.T) {
+	result := &scrapper.PlatformUserListing{}
+	skipFactsNotOnPlatform(result)
+	require.Len(t, result.SkippedFacts, len(factsNotOnPlatform))
+	for _, f := range result.SkippedFacts {
+		assert.Equalf(t, scrapper.PlatformUserSkipUnavailable, f.Kind, "%s", f.Fact)
+	}
 }

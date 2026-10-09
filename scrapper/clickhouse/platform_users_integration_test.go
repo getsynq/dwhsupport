@@ -115,8 +115,10 @@ func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_RolesDefaultRoleAndExpi
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness)
 	s.False(users.IsSkipped(scrapper.PlatformUserFactRoles))
 	for _, f := range users.SkippedFacts {
-		s.NotContainsf(f.Reason, "failed:", "the admin may read everything; %s was skipped for a reason that is not the platform's", f.Fact)
+		s.Equalf(scrapper.PlatformUserSkipUnavailable, f.Kind,
+			"the admin may read everything; %s was skipped for a reason that is not the platform's: %s", f.Fact, f.Reason)
 	}
+	scrappertest.AssertSkipped(s.T(), users, scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable)
 
 	u := s.findUser(users, withRoles)
 	s.Require().NotNil(u)
@@ -172,11 +174,8 @@ func (s *ClickHousePlatformUsersSuite) TestPlatformUsers_RefusedRolesAreSkipped(
 	s.Equal(scrapper.PlatformUsersComplete, users.Completeness)
 	s.NotNil(s.findUser(users, login))
 	s.NotNil(s.findUser(users, os.Getenv("CLICKHOUSE_USER")), "SELECT ON system.users lists every user, not only itself")
-	s.True(users.IsSkipped(scrapper.PlatformUserFactRoles))
-	s.True(users.IsSkipped(scrapper.PlatformUserFactDefaultRole))
-	for _, f := range users.SkippedFacts {
-		if f.Fact == scrapper.PlatformUserFactRoles {
-			s.Contains(f.Reason, "system.role_grants")
-		}
-	}
+	scrappertest.AssertSkipped(s.T(), users, scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused)
+	scrappertest.AssertSkipped(s.T(), users, scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipRefused)
+	skip, _ := users.SkippedFact(scrapper.PlatformUserFactRoles)
+	s.Contains(skip.Reason, "system.role_grants")
 }

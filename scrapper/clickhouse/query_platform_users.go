@@ -236,7 +236,11 @@ func (e *ClickhouseScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.
 			"read on the connected node only: complete for a single-node server, not for a cluster under another name"
 	}
 	if query.noDisabled {
-		result.Skip(scrapper.PlatformUserFactDisabled, "this ClickHouse version has no system.users.valid_until")
+		result.Skip(
+			scrapper.PlatformUserFactDisabled,
+			scrapper.PlatformUserSkipUnavailable,
+			"this ClickHouse version has no system.users.valid_until",
+		)
 	}
 	for _, r := range rows {
 		u := &scrapper.PlatformUser{Login: r.Login, PlatformId: r.PlatformId}
@@ -254,7 +258,7 @@ func (e *ClickhouseScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.
 		scrapper.PlatformUserFactComment,
 		scrapper.PlatformUserFactCreatedAt,
 	} {
-		result.Skip(f, "ClickHouse does not record it for a user")
+		result.Skip(f, scrapper.PlatformUserSkipUnavailable, "ClickHouse does not record it for a user")
 	}
 
 	e.addPlatformUserRoles(ctx, result)
@@ -297,10 +301,10 @@ func (e *ClickhouseScrapper) addPlatformUserRoles(ctx context.Context, result *s
 		return scanErr
 	})
 	if err != nil {
-		reason := e.factSkipReason(err, "SELECT ON system.role_grants")
+		kind, reason := e.factSkip(err, "SELECT ON system.role_grants")
 		logging.GetLogger(ctx).WithError(err).Warn("failed to read clickhouse role grants, listing users without their roles")
-		result.Skip(scrapper.PlatformUserFactRoles, reason)
-		result.Skip(scrapper.PlatformUserFactDefaultRole, reason)
+		result.Skip(scrapper.PlatformUserFactRoles, kind, reason)
+		result.Skip(scrapper.PlatformUserFactDefaultRole, kind, reason)
 		return
 	}
 
@@ -331,13 +335,14 @@ func (e *ClickhouseScrapper) addPlatformUserLastLogin(ctx context.Context, resul
 		return scanErr
 	})
 	if err != nil {
-		reason := e.factSkipReason(err, "SELECT ON system.session_log")
+		kind, reason := e.factSkip(err, "SELECT ON system.session_log")
 		if isClickhouseErrCode(err, chErrUnknownTable) {
+			kind = scrapper.PlatformUserSkipUnavailable
 			reason = "the server keeps no system.session_log (session_log is not configured)"
 		} else {
 			logging.GetLogger(ctx).WithError(err).Warn("failed to read clickhouse session log, listing users without their last login")
 		}
-		result.Skip(scrapper.PlatformUserFactLastLoginAt, reason)
+		result.Skip(scrapper.PlatformUserFactLastLoginAt, kind, reason)
 		return
 	}
 
@@ -353,19 +358,20 @@ func (e *ClickhouseScrapper) addPlatformUserLastLogin(ctx context.Context, resul
 	}
 }
 
-// factSkipReason says why a fact query failed: the grant it needs when it was
-// refused, that this server lacks it, or the error otherwise.
-func (e *ClickhouseScrapper) factSkipReason(err error, grant string) string {
+// factSkip says how a fact query failed and why: the grant it needs when it
+// was refused, that this server lacks it, or the error otherwise.
+func (e *ClickhouseScrapper) factSkip(err error, grant string) (scrapper.PlatformUserSkipKind, string) {
 	msg := err.Error()
 	if i := strings.IndexByte(msg, '\n'); i >= 0 {
 		msg = msg[:i]
 	}
-	switch {
-	case e.IsPermissionError(err):
-		return "refused, needs " + grant
-	case isUnavailableOnThisServer(err):
-		return "unavailable on this ClickHouse version: " + msg
+	kind := scrapper.PlatformUserSkipKindOf(err, e.IsPermissionError, isUnavailableOnThisServer)
+	switch kind {
+	case scrapper.PlatformUserSkipRefused:
+		return kind, "refused, needs " + grant
+	case scrapper.PlatformUserSkipUnavailable:
+		return kind, "unavailable on this ClickHouse version: " + msg
 	default:
-		return "failed: " + msg
+		return kind, "failed: " + msg
 	}
 }

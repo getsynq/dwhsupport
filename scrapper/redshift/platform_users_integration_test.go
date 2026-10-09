@@ -98,8 +98,9 @@ func (s *RedshiftPlatformUsersSuite) TestPlatformUsers_WithoutAccessSystemTable(
 	s.Require().NoError(s.redshift.addPlatformUserRoles(ctx, users, false, nil))
 	s.Require().NoError(s.redshift.addPlatformUserLastLogins(ctx, users, false, nil))
 
-	s.True(users.IsSkipped(scrapper.PlatformUserFactRoles))
-	s.True(users.IsSkipped(scrapper.PlatformUserFactLastLoginAt))
+	// ACCESS SYSTEM TABLE would let both be read.
+	scrappertest.AssertSkipped(s.T(), users, scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused)
+	scrappertest.AssertSkipped(s.T(), users, scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipRefused)
 	s.Nil(users.Users[0].LastLoginAt)
 	for _, role := range users.Users[0].Roles {
 		s.NotEqual("sys:monitor", role, "an RBAC role grant was read without ACCESS SYSTEM TABLE")

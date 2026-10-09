@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -70,7 +71,7 @@ func TestPlatformUsersFromPolicy(t *testing.T) {
 		nil,
 	}}
 
-	users := platformUsersFromPolicy(policy).Finish()
+	users := platformUsersFromPolicy(policy, scrapper.PlatformUserSkipUnavailable).Finish()
 
 	assert.Equal(t, platformUserSourceIamPolicy, users.Source)
 	assert.Equal(t, scrapper.PlatformUserSourceAPI, users.Kind)
@@ -81,7 +82,7 @@ func TestPlatformUsersFromPolicy(t *testing.T) {
 		scrapper.PlatformUserFactPlatformId, scrapper.PlatformUserFactDisplayName, scrapper.PlatformUserFactComment,
 		scrapper.PlatformUserFactDisabled,
 	} {
-		assert.Truef(t, users.IsSkipped(fact), "%s", fact)
+		scrappertest.AssertSkipped(t, users, fact, scrapper.PlatformUserSkipUnavailable)
 	}
 	assert.False(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
 
@@ -115,11 +116,11 @@ func TestPlatformUsersFromPolicy(t *testing.T) {
 }
 
 func TestPlatformUsersFromPolicy_Empty(t *testing.T) {
-	users := platformUsersFromPolicy(&cloudresourcemanager.Policy{}).Finish()
+	users := platformUsersFromPolicy(&cloudresourcemanager.Policy{}, scrapper.PlatformUserSkipUnavailable).Finish()
 	assert.Equal(t, scrapper.PlatformUsersEmpty, users.Completeness)
 	assert.Empty(t, users.Users)
 
-	users = platformUsersFromPolicy(nil).Finish()
+	users = platformUsersFromPolicy(nil, scrapper.PlatformUserSkipUnavailable).Finish()
 	assert.Equal(t, scrapper.PlatformUsersEmpty, users.Completeness)
 }
 
@@ -129,7 +130,7 @@ func TestPlatformUsersFromServiceAccounts(t *testing.T) {
 		{Email: "unbound@my-project.iam.gserviceaccount.com", UniqueId: "1002"},
 		{Email: ""},
 		nil,
-	}).Finish()
+	}, scrapper.PlatformUserSkipUnavailable).Finish()
 
 	assert.Equal(t, platformUserSourceServiceAccounts, users.Source)
 	assert.Equal(t, scrapper.PlatformUserSourceAPI, users.Kind)
@@ -139,7 +140,7 @@ func TestPlatformUsersFromServiceAccounts(t *testing.T) {
 		scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserFactLastLoginAt,
 		scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserFactRoles,
 	} {
-		assert.Truef(t, users.IsSkipped(fact), "%s", fact)
+		scrappertest.AssertSkipped(t, users, fact, scrapper.PlatformUserSkipUnavailable)
 	}
 
 	require.Len(t, users.Users, 2, "an unbound service account is a login too")
@@ -201,7 +202,7 @@ func TestPlatformUsersFromSources(t *testing.T) {
 		assert.Equal(t, scrapper.PlatformUsersUnknown, reconciled.Completeness)
 		assert.False(t, reconciled.IsSkipped(scrapper.PlatformUserFactRoles))
 		assert.False(t, reconciled.IsSkipped(scrapper.PlatformUserFactPlatformId))
-		assert.True(t, reconciled.IsSkipped(scrapper.PlatformUserFactCreatedAt))
+		scrappertest.AssertSkipped(t, reconciled, scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserSkipUnavailable)
 	})
 
 	t.Run("service accounts refused", func(t *testing.T) {
@@ -212,7 +213,11 @@ func TestPlatformUsersFromSources(t *testing.T) {
 		assert.NotEmpty(t, sa.Refused)
 		assert.Empty(t, sa.Users)
 		assert.Len(t, result.Source(platformUserSourceIamPolicy).Users, 3)
-		assert.True(t, result.Reconcile().IsSkipped(scrapper.PlatformUserFactPlatformId))
+		// A grant on the service account list would state them.
+		reconciled := result.Reconcile()
+		scrappertest.AssertSkipped(t, reconciled, scrapper.PlatformUserFactPlatformId, scrapper.PlatformUserSkipRefused)
+		scrappertest.AssertSkipped(t, reconciled, scrapper.PlatformUserFactDisplayName, scrapper.PlatformUserSkipRefused)
+		scrappertest.AssertSkipped(t, reconciled, scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserSkipUnavailable)
 	})
 
 	t.Run("policy refused", func(t *testing.T) {
@@ -221,6 +226,8 @@ func TestPlatformUsersFromSources(t *testing.T) {
 		assert.NotEmpty(t, result.Source(platformUserSourceIamPolicy).Refused)
 		assert.Len(t, result.Source(platformUserSourceServiceAccounts).Users, 3)
 		assert.Contains(t, result.Reconcile().CompletenessReason, platformUserSourceIamPolicy)
+		// Roles are only in the policy, so a grant on it would state them.
+		scrappertest.AssertSkipped(t, result.Reconcile(), scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused)
 	})
 
 	t.Run("both refused is a result, not an error", func(t *testing.T) {
@@ -239,10 +246,12 @@ func TestPlatformUsersFromSources(t *testing.T) {
 		assert.NotEmpty(t, result.Source(platformUserSourceServiceAccounts).Failed)
 		assert.Empty(t, result.Source(platformUserSourceServiceAccounts).Refused)
 		assert.Len(t, result.Source(platformUserSourceIamPolicy).Users, 3)
+		scrappertest.AssertSkipped(t, result.Reconcile(), scrapper.PlatformUserFactPlatformId, scrapper.PlatformUserSkipFailed)
 
 		result, err = platformUsersFromSources(ctx, accounts, nil, nil, unavailable)
 		require.NoError(t, err)
 		assert.NotEmpty(t, result.Source(platformUserSourceIamPolicy).Failed)
+		scrappertest.AssertSkipped(t, result.Reconcile(), scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipFailed)
 	})
 
 	t.Run("both failed is an error", func(t *testing.T) {
@@ -298,6 +307,64 @@ func TestPlatformUserSourceError(t *testing.T) {
 
 	src = platformUserSourceError(platformUserSourceServiceAccounts, context.DeadlineExceeded)
 	assert.NotEmpty(t, src.Failed)
+
+	// Google answers some rate limits and quotas with a 403, which no grant
+	// lifts and a later run may get past.
+	for _, quota := range []*googleapi.Error{
+		{Code: 403, Message: "Rate Limit Exceeded", Errors: []googleapi.ErrorItem{{Reason: "rateLimitExceeded"}}},
+		{Code: 403, Message: "User Rate Limit Exceeded", Errors: []googleapi.ErrorItem{{Reason: "userRateLimitExceeded"}}},
+		{Code: 403, Message: "Quota exceeded", Errors: []googleapi.ErrorItem{{Reason: "quotaExceeded"}}},
+		{Code: 403, Message: "Quota exceeded", Details: []interface{}{map[string]interface{}{
+			"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "RATE_LIMIT_EXCEEDED",
+		}}},
+	} {
+		src = platformUserSourceError(platformUserSourceIamPolicy, errors.Wrap(quota, "reading the IAM policy"))
+		assert.Emptyf(t, src.Refused, "%s is not a missing grant", quota.Message)
+		assert.NotEmptyf(t, src.Failed, "%s", quota.Message)
+	}
+}
+
+// TestAccountFactsSkipKind: the policy source skips the service account facts
+// the way the service account list did not answer, so a disabled IAM API is
+// no grant to recommend.
+func TestAccountFactsSkipKind(t *testing.T) {
+	policy := &cloudresourcemanager.Policy{Bindings: []*cloudresourcemanager.Binding{
+		{Role: "roles/bigquery.user", Members: []string{"user:jdoe@example.com"}},
+	}}
+	disabled := &googleapi.Error{
+		Code: 403,
+		Details: []interface{}{map[string]interface{}{
+			"@type":  "type.googleapis.com/google.rpc.ErrorInfo",
+			"reason": "SERVICE_DISABLED",
+		}},
+	}
+	for _, tc := range []struct {
+		name string
+		err  error
+		want scrapper.PlatformUserSkipKind
+	}{
+		{"answered", nil, scrapper.PlatformUserSkipUnavailable},
+		{"refused", &googleapi.Error{Code: 403, Message: "Permission 'iam.serviceAccounts.list' denied"}, scrapper.PlatformUserSkipRefused},
+		{"api disabled", disabled, scrapper.PlatformUserSkipUnavailable},
+		{"failed", &googleapi.Error{Code: 500, Message: "internal"}, scrapper.PlatformUserSkipFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var accounts []*iam.ServiceAccount
+			if tc.err == nil {
+				accounts = []*iam.ServiceAccount{{Email: "loader@my-project.iam.gserviceaccount.com"}}
+			}
+			result, err := platformUsersFromSources(context.Background(), accounts, tc.err, policy, nil)
+			require.NoError(t, err)
+			policySource := result.Source(platformUserSourceIamPolicy)
+			for _, fact := range []scrapper.PlatformUserFact{
+				scrapper.PlatformUserFactPlatformId, scrapper.PlatformUserFactDisplayName,
+				scrapper.PlatformUserFactComment, scrapper.PlatformUserFactDisabled,
+			} {
+				scrappertest.AssertSkipped(t, policySource, fact, tc.want)
+			}
+			scrappertest.AssertSkipped(t, policySource, scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserSkipUnavailable)
+		})
+	}
 }
 
 func find(users *scrapper.PlatformUserListing, login string) *scrapper.PlatformUser {

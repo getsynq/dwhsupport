@@ -208,7 +208,7 @@ func (s *PostgresPlatformUsersSuite) TestPlatformUsers_ListsLoginRolesOnly() {
 	for _, fact := range []scrapper.PlatformUserFact{
 		scrapper.PlatformUserFactType, scrapper.PlatformUserFactEmail, scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserFactLastLoginAt,
 	} {
-		s.Truef(users.IsSkipped(fact), "%s is not kept by Postgres and must be skipped", fact)
+		scrappertest.AssertSkipped(s.T(), users, fact, scrapper.PlatformUserSkipUnavailable)
 	}
 	// The fact queries run on a real server: none of them may be skipped.
 	for _, fact := range []scrapper.PlatformUserFact{

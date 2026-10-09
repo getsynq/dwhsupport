@@ -201,7 +201,11 @@ func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.Platform
 
 	rows, err := selectRows[mysqlAccountRow](ctx, e.executor, mysqlUsersSql)
 	if mysqlErrorNumber(err) == errUnknownColumn {
-		result.Skip(scrapper.PlatformUserFactComment, "this MySQL version keeps no account comment (added in 8.0.21)")
+		result.Skip(
+			scrapper.PlatformUserFactComment,
+			scrapper.PlatformUserSkipUnavailable,
+			"this MySQL version keeps no account comment (added in 8.0.21)",
+		)
 		rows, err = selectRows[mysqlAccountRow](ctx, e.executor, mysqlUsersNoCommentSql)
 	}
 	if err != nil {
@@ -224,7 +228,8 @@ func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.Platform
 		if ctx.Err() != nil {
 			return nil, sourceMySQLUser, ctx.Err()
 		}
-		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(edgesErr, "mysql.role_edges")+
+		kind, reason := factSkip(edgesErr, "mysql.role_edges")
+		result.Skip(scrapper.PlatformUserFactRoles, kind, reason+
 			"; without it a locked account with no password is taken to be a role and left out, as CREATE ROLE makes one and none can sign in")
 	}
 	defaults, err := selectRows[roleEdgeRow](ctx, e.executor, mysqlDefaultRolesSql)
@@ -232,7 +237,8 @@ func (e *MySQLScrapper) queryMySQLUsers(ctx context.Context) (*scrapper.Platform
 		if ctx.Err() != nil {
 			return nil, sourceMySQLUser, ctx.Err()
 		}
-		result.Skip(scrapper.PlatformUserFactDefaultRole, factSkipReason(err, "mysql.default_roles"))
+		kind, reason := factSkip(err, "mysql.default_roles")
+		result.Skip(scrapper.PlatformUserFactDefaultRole, kind, reason)
 	}
 	markMySQLRoles(accounts, edges, edgesErr == nil, defaults)
 
@@ -281,9 +287,9 @@ func (e *MySQLScrapper) queryMySQLUserAttributes(ctx context.Context) (*scrapper
 		accounts = append(accounts, &account{User: r.User, Host: r.Host, Comment: attributeComment(r.Attribute)})
 	}
 	result := limitedListing(sourceMySQLUserAttributes, "information_schema.USER_ATTRIBUTES")
-	result.Skip(scrapper.PlatformUserFactDisabled, "reading the account lock needs SELECT on mysql.user")
-	result.Skip(scrapper.PlatformUserFactRoles, "reading role grants needs SELECT on mysql.role_edges")
-	result.Skip(scrapper.PlatformUserFactDefaultRole, "reading default roles needs SELECT on mysql.default_roles")
+	result.Skip(scrapper.PlatformUserFactDisabled, scrapper.PlatformUserSkipRefused, "reading the account lock needs SELECT on mysql.user")
+	result.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused, "reading role grants needs SELECT on mysql.role_edges")
+	result.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipRefused, "reading default roles needs SELECT on mysql.default_roles")
 	result.Users = foldAccounts(accounts, nil)
 	return result, nil
 }
@@ -295,12 +301,16 @@ func (e *MySQLScrapper) queryMariaDBUsers(ctx context.Context) (*scrapper.Platfo
 		Completeness: scrapper.PlatformUsersComplete,
 	}
 	skipFactsNotOnPlatform(result)
-	result.Skip(scrapper.PlatformUserFactComment, "MariaDB keeps no account comment")
+	result.Skip(scrapper.PlatformUserFactComment, scrapper.PlatformUserSkipUnavailable, "MariaDB keeps no account comment")
 
 	accounts, err := e.queryMariaDBGlobalPriv(ctx)
 	if mysqlErrorNumber(err) == errNoSuchTable {
 		result.Source = sourceMariaDBUser
-		result.Skip(scrapper.PlatformUserFactDisabled, "this MariaDB version has no account locking (added in 10.4)")
+		result.Skip(
+			scrapper.PlatformUserFactDisabled,
+			scrapper.PlatformUserSkipUnavailable,
+			"this MariaDB version has no account locking (added in 10.4)",
+		)
 		accounts, err = e.queryMariaDBUserTable(ctx)
 	}
 	if err != nil {
@@ -312,7 +322,8 @@ func (e *MySQLScrapper) queryMariaDBUsers(ctx context.Context) (*scrapper.Platfo
 		if ctx.Err() != nil {
 			return nil, result.Source, ctx.Err()
 		}
-		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(err, "mysql.roles_mapping"))
+		kind, reason := factSkip(err, "mysql.roles_mapping")
+		result.Skip(scrapper.PlatformUserFactRoles, kind, reason)
 	}
 	result.Users = foldAccounts(accounts, edges)
 	return result, result.Source, nil
@@ -380,10 +391,10 @@ func (e *MySQLScrapper) queryGrantees(ctx context.Context) (*scrapper.PlatformUs
 		}
 	}
 	result := limitedListing(sourceMariaDBUserPrivileges, "information_schema.USER_PRIVILEGES")
-	result.Skip(scrapper.PlatformUserFactComment, "MariaDB keeps no account comment")
-	result.Skip(scrapper.PlatformUserFactDisabled, "reading the account lock needs SELECT on mysql.global_priv")
-	result.Skip(scrapper.PlatformUserFactRoles, "reading role grants needs SELECT on mysql.roles_mapping")
-	result.Skip(scrapper.PlatformUserFactDefaultRole, "reading default roles needs SELECT on mysql.global_priv")
+	result.Skip(scrapper.PlatformUserFactComment, scrapper.PlatformUserSkipUnavailable, "MariaDB keeps no account comment")
+	result.Skip(scrapper.PlatformUserFactDisabled, scrapper.PlatformUserSkipRefused, "reading the account lock needs SELECT on mysql.global_priv")
+	result.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused, "reading role grants needs SELECT on mysql.roles_mapping")
+	result.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipRefused, "reading default roles needs SELECT on mysql.global_priv")
 	result.Users = foldAccounts(accounts, nil)
 	return result, nil
 }
@@ -481,18 +492,20 @@ func accountKey(user, host string) string {
 
 func skipFactsNotOnPlatform(result *scrapper.PlatformUserListing) {
 	for _, f := range mysqlFactsNotOnPlatform {
-		result.Skip(f, "MySQL and MariaDB do not record it")
+		result.Skip(f, scrapper.PlatformUserSkipUnavailable, "MySQL and MariaDB do not record it")
 	}
 }
 
-func factSkipReason(err error, table string) string {
-	if dwhexecmysql.IsPermissionError(err) {
-		return "the role may not read " + table + "; grant " + platformUsersGrant
+func factSkip(err error, table string) (scrapper.PlatformUserSkipKind, string) {
+	kind := scrapper.PlatformUserSkipKindOf(err, dwhexecmysql.IsPermissionError, isUnavailableError)
+	switch kind {
+	case scrapper.PlatformUserSkipRefused:
+		return kind, "the role may not read " + table + "; grant " + platformUsersGrant
+	case scrapper.PlatformUserSkipUnavailable:
+		return kind, table + " does not exist on this server version: " + err.Error()
+	default:
+		return kind, "reading " + table + " failed: " + err.Error()
 	}
-	if isUnavailableError(err) {
-		return table + " does not exist on this server version: " + err.Error()
-	}
-	return "reading " + table + " failed: " + err.Error()
 }
 
 func mysqlErrorNumber(err error) uint16 {

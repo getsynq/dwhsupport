@@ -130,11 +130,20 @@ func TestPlatformUsersFanOutFallback(t *testing.T) {
 	assert.False(t, ok, "a single-node read has no fan-out to fall back from")
 }
 
-func TestPlatformUsersFactSkipReason(t *testing.T) {
+func TestPlatformUsersFactSkip(t *testing.T) {
 	e := &ClickhouseScrapper{}
-	assert.Equal(t, "refused, needs SELECT ON system.role_grants", e.factSkipReason(errRefusedUsers, "SELECT ON system.role_grants"))
-	assert.Contains(t, e.factSkipReason(errNoColumn, "x"), "unavailable on this ClickHouse version")
-	assert.Equal(t, "failed: connection reset", e.factSkipReason(errors.New("connection reset\nstack"), "x"))
+
+	kind, reason := e.factSkip(errRefusedUsers, "SELECT ON system.role_grants")
+	assert.Equal(t, scrapper.PlatformUserSkipRefused, kind)
+	assert.Equal(t, "refused, needs SELECT ON system.role_grants", reason)
+
+	kind, reason = e.factSkip(errNoColumn, "x")
+	assert.Equal(t, scrapper.PlatformUserSkipUnavailable, kind)
+	assert.Contains(t, reason, "unavailable on this ClickHouse version")
+
+	kind, reason = e.factSkip(errors.New("connection reset\nstack"), "x")
+	assert.Equal(t, scrapper.PlatformUserSkipFailed, kind)
+	assert.Equal(t, "failed: connection reset", reason)
 }
 
 func TestIsClickhouseErrCode(t *testing.T) {

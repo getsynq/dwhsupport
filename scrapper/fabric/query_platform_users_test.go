@@ -9,6 +9,7 @@ import (
 
 	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -90,7 +91,8 @@ func TestBuildPlatformUsersReadsBothSources(t *testing.T) {
 	assert.Equal(t, "jane@example.com", jane.Login)
 	assert.Equal(t, testUserOID, jane.PlatformId)
 	assert.Equal(t, []string{"Admin"}, jane.Roles)
-	assert.True(t, api.IsSkipped(scrapper.PlatformUserFactEmail))
+	scrappertest.AssertSkipped(t, api, scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable)
+	scrappertest.AssertSkipped(t, api, scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable)
 
 	db := result.Sources[1]
 	assert.Equal(t, sourceDatabasePrincipals, db.Source)
@@ -246,11 +248,15 @@ func TestBuildPlatformUsersClassifiesTheDatabase(t *testing.T) {
 func TestBuildPlatformUsersRolesFailingIsSkipped(t *testing.T) {
 	for _, tc := range []struct {
 		name, reason string
+		kind         scrapper.PlatformUserSkipKind
 		err          error
 	}{
-		{"permission", "VIEW DEFINITION", permissionDenied()},
-		{"missing view", "has no sys.database_role_members", errors.WithStack(mssql.Error{Number: 208, Message: "Invalid object name"})},
-		{"other", "failed", errors.New("connection reset")},
+		{"permission", "VIEW DEFINITION", scrapper.PlatformUserSkipRefused, permissionDenied()},
+		{
+			"missing view", "has no sys.database_role_members", scrapper.PlatformUserSkipUnavailable,
+			errors.WithStack(mssql.Error{Number: 208, Message: "Invalid object name"}),
+		},
+		{"other", "failed", scrapper.PlatformUserSkipFailed, errors.New("connection reset")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := dbUsers()
@@ -259,12 +265,10 @@ func TestBuildPlatformUsersRolesFailingIsSkipped(t *testing.T) {
 			require.NoError(t, err)
 			src := result.Source(sourceDatabasePrincipals)
 			require.True(t, src.Answered(), "a fact never fails the listing")
-			require.True(t, src.IsSkipped(scrapper.PlatformUserFactRoles))
-			for _, f := range src.SkippedFacts {
-				if f.Fact == scrapper.PlatformUserFactRoles {
-					assert.Contains(t, f.Reason, tc.reason)
-				}
-			}
+			skip, ok := src.SkippedFact(scrapper.PlatformUserFactRoles)
+			require.True(t, ok)
+			assert.Equal(t, tc.kind, skip.Kind)
+			assert.Contains(t, skip.Reason, tc.reason)
 		})
 	}
 }

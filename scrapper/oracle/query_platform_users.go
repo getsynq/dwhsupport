@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/jmoiron/sqlx"
@@ -98,6 +97,19 @@ func isUnavailable(err error) bool {
 	return strings.Contains(msg, "ORA-00904") || strings.Contains(msg, "ORA-04043")
 }
 
+// isRefused reports an error a grant would fix: ORA-01031 insufficient
+// privileges, or ORA-00942, which Oracle also answers for a view the role may
+// not read. IsPermissionError also takes a bare ORA-00604, which says only that
+// recursive SQL failed (a logon trigger, a full tablespace); the error below it
+// decides, and one that is neither a refusal nor isUnavailable is a failure.
+func isRefused(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "ORA-01031") || strings.Contains(msg, "ORA-00942")
+}
+
 // QueryPlatformUsers lists the database users from DBA_USERS. Login is
 // USERNAME, the name V$SQL reports as PARSING_SCHEMA_NAME in query logs; Type
 // is AUTHENTICATION_TYPE (PASSWORD, EXTERNAL, GLOBAL, NONE). Oracle-maintained
@@ -128,8 +140,8 @@ func listOraclePlatformUsers(ctx context.Context, q rowQuerier, views platformUs
 		rows, err = selectOracleUsers(ctx, q, fmt.Sprintf(dbaUsersBaseSql, views.users), views.users)
 		if err == nil {
 			reason := "this Oracle version's DBA_USERS has no LAST_LOGIN or AUTHENTICATION_TYPE column (both need 12c)"
-			listing.Skip(scrapper.PlatformUserFactType, reason)
-			listing.Skip(scrapper.PlatformUserFactLastLoginAt, reason)
+			listing.Skip(scrapper.PlatformUserFactType, scrapper.PlatformUserSkipUnavailable, reason)
+			listing.Skip(scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable, reason)
 		}
 	}
 	if ctxErr := ctx.Err(); ctxErr != nil {
@@ -139,25 +151,29 @@ func listOraclePlatformUsers(ctx context.Context, q rowQuerier, views platformUs
 	if err != nil {
 		logging.GetLogger(ctx).WithError(err).Warnf("cannot read %s, listing users from ALL_USERS", views.users)
 		notAnswered = scrapper.PlatformUserSourceError(
-			oracleDbaUsersSource, scrapper.PlatformUserSourceSQL, err, dwhexecoracle.IsPermissionError, isUnavailable,
+			oracleDbaUsersSource, scrapper.PlatformUserSourceSQL, err, isRefused, isUnavailable,
 		)
 		listing.Source = oracleAllUsersSource
+		// The facts only DBA_USERS has are skipped the way DBA_USERS did not
+		// answer: refused when a grant would let it.
+		dbaUsersKind := scrapper.PlatformUserSkipKindOf(err, isRefused, isUnavailable)
 		rows, err = selectOracleUsers(ctx, q, allUsersSql, "ALL_USERS")
 		if err != nil {
 			return scrapper.CollectPlatformUsers(ctx, notAnswered, scrapper.PlatformUserSourceError(
-				oracleAllUsersSource, scrapper.PlatformUserSourceSQL, err, dwhexecoracle.IsPermissionError, isUnavailable,
+				oracleAllUsersSource, scrapper.PlatformUserSourceSQL, err, isRefused, isUnavailable,
 			))
 		}
 		reason := "ALL_USERS has no such column; DBA_USERS has it (" + platformUsersGrant + ")"
-		listing.Skip(scrapper.PlatformUserFactType, reason)
-		listing.Skip(scrapper.PlatformUserFactDisabled, reason)
-		listing.Skip(scrapper.PlatformUserFactLastLoginAt, reason)
+		listing.Skip(scrapper.PlatformUserFactType, dbaUsersKind, reason)
+		listing.Skip(scrapper.PlatformUserFactDisabled, dbaUsersKind, reason)
+		listing.Skip(scrapper.PlatformUserFactLastLoginAt, dbaUsersKind, reason)
 	}
-	listing.Skip(scrapper.PlatformUserFactEmail, "Oracle keeps no email for a database user")
-	listing.Skip(scrapper.PlatformUserFactDisplayName, "Oracle keeps no display name for a database user")
-	listing.Skip(scrapper.PlatformUserFactComment, "Oracle keeps no comment on a database user")
+	listing.Skip(scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable, "Oracle keeps no email for a database user")
+	listing.Skip(scrapper.PlatformUserFactDisplayName, scrapper.PlatformUserSkipUnavailable, "Oracle keeps no display name for a database user")
+	listing.Skip(scrapper.PlatformUserFactComment, scrapper.PlatformUserSkipUnavailable, "Oracle keeps no comment on a database user")
 	listing.Skip(
 		scrapper.PlatformUserFactDefaultRole,
+		scrapper.PlatformUserSkipUnavailable,
 		"Oracle enables every default role of a user at once, so there is no single default role; see roles",
 	)
 
@@ -175,13 +191,17 @@ func listOraclePlatformUsers(ctx context.Context, q rowQuerier, views platformUs
 		listing.AssignRoles(rolesByLogin)
 	case ctx.Err() != nil:
 		return nil, ctx.Err()
-	case dwhexecoracle.IsPermissionError(err):
-		listing.Skip(scrapper.PlatformUserFactRoles, "DBA_ROLE_PRIVS was refused ("+platformUsersGrant+")")
+	case isRefused(err):
+		listing.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused, "DBA_ROLE_PRIVS was refused ("+platformUsersGrant+")")
 	case isUnavailable(err):
-		listing.Skip(scrapper.PlatformUserFactRoles, "this Oracle version cannot read DBA_ROLE_PRIVS: "+err.Error())
+		listing.Skip(
+			scrapper.PlatformUserFactRoles,
+			scrapper.PlatformUserSkipUnavailable,
+			"this Oracle version cannot read DBA_ROLE_PRIVS: "+err.Error(),
+		)
 	default:
 		logging.GetLogger(ctx).WithError(err).Warnf("cannot read %s, listing users without roles", views.roleGrant)
-		listing.Skip(scrapper.PlatformUserFactRoles, "reading DBA_ROLE_PRIVS failed: "+err.Error())
+		listing.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipFailed, "reading DBA_ROLE_PRIVS failed: "+err.Error())
 	}
 
 	return scrapper.CollectPlatformUsers(ctx, notAnswered, listing)

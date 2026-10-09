@@ -81,10 +81,16 @@ func reportPlatformUsers(users *scrapper.PlatformUserListing, grant string) {
 		line += " (" + users.CompletenessReason + ")"
 	}
 	fmt.Fprintln(output.ErrOut, line)
+	// The grant is named when the listing is not complete, as before skips had
+	// a kind (completeness has no kind, so it may not be a grant's doing), and
+	// when a fact was refused, which a grant does fix. A fact the platform does
+	// not have, or one that failed, names no grant.
+	needsGrant := users.Completeness != scrapper.PlatformUsersComplete
 	for _, f := range users.SkippedFacts {
-		fmt.Fprintf(output.ErrOut, "%s: skipped %s: %s\n", users.Source, f.Fact, f.Reason)
+		fmt.Fprintf(output.ErrOut, "%s: skipped %s (%s): %s\n", users.Source, f.Fact, f.Kind, f.Reason)
+		needsGrant = needsGrant || f.Kind == scrapper.PlatformUserSkipRefused
 	}
-	if users.Completeness != scrapper.PlatformUsersComplete {
+	if needsGrant {
 		fmt.Fprintf(output.ErrOut, "%s: grant for the full listing: %s\n", users.Source, grant)
 	}
 }

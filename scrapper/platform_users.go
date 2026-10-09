@@ -122,11 +122,47 @@ type PlatformUser struct {
 	Roles []string `json:"roles,omitempty"`
 }
 
-// SkippedPlatformUserFact says that a fact could not be read, and why: the
-// platform does not have it, or our role may not read it.
+// PlatformUserSkipKind says what would let a skipped fact be read, in the same
+// three states a source that did not answer has, so a caller can decide what to
+// recommend without reading the reason.
+type PlatformUserSkipKind string
+
+const (
+	// PlatformUserSkipRefused: the connecting role may not read the fact, for
+	// every user or for some of them. A grant would let it, and the reason
+	// names the grant where the platform has one name for it.
+	PlatformUserSkipRefused PlatformUserSkipKind = "refused"
+	// PlatformUserSkipUnavailable: this platform, version or edition does not
+	// have the fact, or this source does not state it. No grant fixes it.
+	PlatformUserSkipUnavailable PlatformUserSkipKind = "unavailable"
+	// PlatformUserSkipFailed: reading the fact failed for any other reason (a
+	// timeout, a 5xx, a dropped connection), so a later run may read it.
+	PlatformUserSkipFailed PlatformUserSkipKind = "failed"
+)
+
+// PlatformUserSkipKindOf classifies the error a fact query failed with, the
+// way PlatformUserSourceError classifies a source's: refused when isPermission
+// says so, unavailable when isUnavailable does, failed otherwise. Either
+// classifier may be nil.
+func PlatformUserSkipKindOf(err error, isPermission, isUnavailable func(error) bool) PlatformUserSkipKind {
+	switch {
+	case isPermission != nil && isPermission(err):
+		return PlatformUserSkipRefused
+	case isUnavailable != nil && isUnavailable(err):
+		return PlatformUserSkipUnavailable
+	default:
+		return PlatformUserSkipFailed
+	}
+}
+
+// SkippedPlatformUserFact says that a fact could not be read, what kind of
+// skip it is, and why.
 type SkippedPlatformUserFact struct {
-	Fact   PlatformUserFact `json:"fact"`
-	Reason string           `json:"reason"`
+	Fact PlatformUserFact `json:"fact"`
+	// Kind says whether a grant would let the fact be read. Empty only on a
+	// listing stored before skips had a kind, which says nothing either way.
+	Kind   PlatformUserSkipKind `json:"kind,omitempty"`
+	Reason string               `json:"reason"`
 }
 
 // PlatformUserSourceKind says how a source of platform users was read.
@@ -174,10 +210,11 @@ type PlatformUserListing struct {
 	// names the grant that would complete it where one would.
 	CompletenessReason string `json:"completeness_reason,omitempty"`
 	// SkippedFacts lists the facts the listing could not read in full, with
-	// the reason: absent on the platform, refused for every user, hidden for
-	// the users the role may not see the details of (Snowflake SHOW USERS), or
-	// read only in part (Redshift group roles without its RBAC roles). A fact
-	// a user simply does not have (a user without an email) is not listed.
+	// the kind of skip and the reason: absent on the platform, refused for
+	// every user, hidden for the users the role may not see the details of
+	// (Snowflake SHOW USERS), or read only in part (Redshift group roles
+	// without its RBAC roles). A fact a user simply does not have (a user
+	// without an email) is not listed.
 	SkippedFacts []SkippedPlatformUserFact `json:"skipped_facts,omitempty"`
 }
 
@@ -265,6 +302,24 @@ func RefusedPlatformUserSource(source string, kind PlatformUserSourceKind, err e
 // edition does not have.
 func UnavailablePlatformUserSource(source string, kind PlatformUserSourceKind, err error) *PlatformUserListing {
 	return &PlatformUserListing{Source: source, Kind: kind, Unavailable: err.Error(), err: err}
+}
+
+// DependentSkipKind is how another source skips a fact only this source
+// states: the way this source did not answer, so a grant is asked for when it
+// was refused, and unavailable when it answered or this platform lacks it,
+// since the other source never states the fact itself. A nil source counts as
+// unavailable.
+func (p *PlatformUserListing) DependentSkipKind() PlatformUserSkipKind {
+	switch {
+	case p == nil:
+		return PlatformUserSkipUnavailable
+	case p.Refused != "":
+		return PlatformUserSkipRefused
+	case p.Failed != "":
+		return PlatformUserSkipFailed
+	default:
+		return PlatformUserSkipUnavailable
+	}
 }
 
 // Answered reports whether the source was read: it is not refused,
@@ -365,20 +420,36 @@ func (p *PlatformUsers) Reconcile() *PlatformUserListing {
 	result.Completeness, result.CompletenessReason = reconcileCompleteness(answered, notAnswered)
 
 	for _, fact := range allPlatformUserFacts {
+		var skips []SkippedPlatformUserFact
 		var reasons []string
 		for _, src := range answered {
-			reason, skipped := src.skipReason(fact)
+			skip, skipped := src.SkippedFact(fact)
 			if !skipped {
-				reasons = nil
+				skips = nil
 				break
 			}
-			reasons = append(reasons, src.Source+": "+reason)
+			skips = append(skips, skip)
+			reasons = append(reasons, src.Source+": "+skip.Reason)
 		}
-		if len(reasons) > 0 {
-			result.Skip(fact, strings.Join(reasons, "; "))
+		if len(skips) > 0 {
+			result.Skip(fact, reconcileSkipKind(skips), strings.Join(reasons, "; "))
 		}
 	}
 	return result.Finish()
+}
+
+// reconcileSkipKind is the kind of a fact every source skipped: refused when a
+// grant would let any of them read it, else failed when a later run might, and
+// unavailable only when no source has it at all.
+func reconcileSkipKind(skips []SkippedPlatformUserFact) PlatformUserSkipKind {
+	for _, want := range []PlatformUserSkipKind{PlatformUserSkipRefused, PlatformUserSkipFailed, PlatformUserSkipUnavailable} {
+		for _, skip := range skips {
+			if skip.Kind == want {
+				return want
+			}
+		}
+	}
+	return ""
 }
 
 func reconcileCompleteness(answered []*PlatformUserListing, notAnswered []string) (PlatformUsersCompleteness, string) {
@@ -419,24 +490,25 @@ var allPlatformUserFacts = []PlatformUserFact{
 	PlatformUserFactRoles,
 }
 
-func (p *PlatformUserListing) skipReason(fact PlatformUserFact) (string, bool) {
+// SkippedFact returns how fact was skipped, and whether it was.
+func (p *PlatformUserListing) SkippedFact(fact PlatformUserFact) (SkippedPlatformUserFact, bool) {
 	for _, s := range p.SkippedFacts {
 		if s.Fact == fact {
-			return s.Reason, true
+			return s, true
 		}
 	}
-	return "", false
+	return SkippedPlatformUserFact{}, false
 }
 
-// Skip records that fact could not be read in full. A fact skipped twice
-// keeps its first reason.
-func (p *PlatformUserListing) Skip(fact PlatformUserFact, reason string) {
+// Skip records that fact could not be read in full, with the kind of skip and
+// the reason. A fact skipped twice keeps its first kind and reason.
+func (p *PlatformUserListing) Skip(fact PlatformUserFact, kind PlatformUserSkipKind, reason string) {
 	for _, s := range p.SkippedFacts {
 		if s.Fact == fact {
 			return
 		}
 	}
-	p.SkippedFacts = append(p.SkippedFacts, SkippedPlatformUserFact{Fact: fact, Reason: reason})
+	p.SkippedFacts = append(p.SkippedFacts, SkippedPlatformUserFact{Fact: fact, Kind: kind, Reason: reason})
 }
 
 // IsSkipped reports whether fact was recorded as skipped.

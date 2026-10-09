@@ -75,11 +75,15 @@ type platformUserValueRow struct {
 
 // skippedPlatformUserFacts are the facts Postgres does not keep about a role.
 var skippedPlatformUserFacts = []scrapper.SkippedPlatformUserFact{
-	{Fact: scrapper.PlatformUserFactType, Reason: "Postgres has no user type"},
-	{Fact: scrapper.PlatformUserFactEmail, Reason: "Postgres keeps no email for a role"},
-	{Fact: scrapper.PlatformUserFactDisplayName, Reason: "Postgres keeps no display name for a role"},
-	{Fact: scrapper.PlatformUserFactCreatedAt, Reason: "Postgres does not record when a role was created"},
-	{Fact: scrapper.PlatformUserFactLastLoginAt, Reason: "Postgres does not record logins"},
+	{Fact: scrapper.PlatformUserFactType, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Postgres has no user type"},
+	{Fact: scrapper.PlatformUserFactEmail, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Postgres keeps no email for a role"},
+	{Fact: scrapper.PlatformUserFactDisplayName, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Postgres keeps no display name for a role"},
+	{
+		Fact:   scrapper.PlatformUserFactCreatedAt,
+		Kind:   scrapper.PlatformUserSkipUnavailable,
+		Reason: "Postgres does not record when a role was created",
+	},
+	{Fact: scrapper.PlatformUserFactLastLoginAt, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Postgres does not record logins"},
 }
 
 // QueryPlatformUsers lists the roles that can log in. Every role can read
@@ -106,7 +110,7 @@ func (e *PostgresScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 		users.Users = append(users.Users, &scrapper.PlatformUser{Login: row.Login, PlatformId: row.PlatformId, Disabled: &disabled})
 	}
 	for _, skipped := range skippedPlatformUserFacts {
-		users.Skip(skipped.Fact, skipped.Reason)
+		users.Skip(skipped.Fact, skipped.Kind, skipped.Reason)
 	}
 
 	facts := []struct {
@@ -136,7 +140,8 @@ func (e *PostgresScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 				return nil, ctxErr
 			}
 			logging.GetLogger(ctx).WithError(err).Warnf("failed to read postgres %s of users, listing them without it", f.fact)
-			users.Skip(f.fact, platformUserFactSkipReason(f.source, err))
+			kind, reason := platformUserFactSkip(f.source, err)
+			users.Skip(f.fact, kind, reason)
 			continue
 		}
 		for _, u := range users.Users {
@@ -201,15 +206,16 @@ func isUnavailableError(err error) bool {
 	return false
 }
 
-// platformUserFactSkipReason says why a fact query did not answer, in the
+// platformUserFactSkip says how and why a fact query did not answer, in the
 // three states a listing has: refused, unavailable on this server, failed.
-func platformUserFactSkipReason(source string, err error) string {
-	switch {
-	case dwhexecpostgres.IsPermissionError(err):
-		return "reading " + source + " was refused: " + err.Error()
-	case isUnavailableError(err):
-		return source + " is not available on this server: " + err.Error()
+func platformUserFactSkip(source string, err error) (scrapper.PlatformUserSkipKind, string) {
+	kind := scrapper.PlatformUserSkipKindOf(err, dwhexecpostgres.IsPermissionError, isUnavailableError)
+	switch kind {
+	case scrapper.PlatformUserSkipRefused:
+		return kind, "reading " + source + " was refused: " + err.Error()
+	case scrapper.PlatformUserSkipUnavailable:
+		return kind, source + " is not available on this server: " + err.Error()
 	default:
-		return "reading " + source + " failed: " + err.Error()
+		return kind, "reading " + source + " failed: " + err.Error()
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/pkg/errors"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +29,7 @@ func TestPlatformUsersFromShowUsers(t *testing.T) {
 			Disabled:    str("false"),
 			DefaultRole: str("LOADER_ROLE"),
 			CreatedOn:   sql.NullTime{Time: created, Valid: true},
-		}}, now).Finish()
+		}}, now, scrapper.PlatformUserSkipUnavailable).Finish()
 
 		require.Len(t, users.Users, 1)
 		u := users.Users[0]
@@ -46,16 +47,27 @@ func TestPlatformUsersFromShowUsers(t *testing.T) {
 		assert.Contains(t, users.CompletenessReason, "IMPORTED PRIVILEGES")
 		assert.Equal(t, showUsersSource, users.Source)
 		assert.Equal(t, scrapper.PlatformUserSourceSQL, users.Kind)
-		assert.True(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
-		assert.True(t, users.IsSkipped(scrapper.PlatformUserFactPlatformId))
+		for _, fact := range []scrapper.PlatformUserFact{scrapper.PlatformUserFactRoles, scrapper.PlatformUserFactPlatformId} {
+			scrappertest.AssertSkipped(t, users, fact, scrapper.PlatformUserSkipUnavailable)
+		}
 		assert.False(t, users.IsSkipped(scrapper.PlatformUserFactEmail))
+	})
+
+	t.Run("the facts only ACCOUNT_USAGE states are skipped the way it did not answer", func(t *testing.T) {
+		for _, kind := range []scrapper.PlatformUserSkipKind{
+			scrapper.PlatformUserSkipRefused, scrapper.PlatformUserSkipFailed, scrapper.PlatformUserSkipUnavailable,
+		} {
+			users := platformUsersFromShowUsers([]*showUsersRow{{Name: "LOADER", Disabled: str("false")}}, now, kind).Finish()
+			scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactRoles, kind)
+			scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactPlatformId, kind)
+		}
 	})
 
 	t.Run("users the role does not own hide their facts", func(t *testing.T) {
 		users := platformUsersFromShowUsers([]*showUsersRow{
 			{Name: "OWNED", Disabled: str("true"), Email: str("o@example.com")},
 			{Name: "OTHER", CreatedOn: sql.NullTime{Time: created, Valid: true}},
-		}, now).Finish()
+		}, now, scrapper.PlatformUserSkipUnavailable).Finish()
 
 		require.Len(t, users.Users, 2)
 		other, owned := users.Users[0], users.Users[1]
@@ -69,7 +81,9 @@ func TestPlatformUsersFromShowUsers(t *testing.T) {
 			scrapper.PlatformUserFactEmail, scrapper.PlatformUserFactType, scrapper.PlatformUserFactDisabled,
 			scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserFactComment, scrapper.PlatformUserFactDisplayName,
 		} {
-			assert.Truef(t, users.IsSkipped(fact), "%s is hidden for OTHER", fact)
+			skip, ok := users.SkippedFact(fact)
+			assert.Truef(t, ok, "%s is hidden for OTHER", fact)
+			assert.Equalf(t, scrapper.PlatformUserSkipRefused, skip.Kind, "a grant shows %s of OTHER", fact)
 		}
 		for _, f := range users.SkippedFacts {
 			if f.Fact == scrapper.PlatformUserFactEmail {
@@ -80,7 +94,7 @@ func TestPlatformUsersFromShowUsers(t *testing.T) {
 	})
 
 	t.Run("no users is empty, not complete", func(t *testing.T) {
-		users := platformUsersFromShowUsers(nil, now).Finish()
+		users := platformUsersFromShowUsers(nil, now, scrapper.PlatformUserSkipUnavailable).Finish()
 		assert.Equal(t, scrapper.PlatformUsersEmpty, users.Completeness)
 	})
 }
@@ -130,13 +144,55 @@ func TestDisplayName(t *testing.T) {
 func boolPtr(b bool) *bool { return &b }
 
 func TestPlatformUserSourceErrorClassification(t *testing.T) {
-	sc := &SnowflakeScrapper{}
 	classify := func(err error) *scrapper.PlatformUserListing {
-		return scrapper.PlatformUserSourceError("s", scrapper.PlatformUserSourceSQL, err, sc.IsPermissionError, isUnavailable)
+		return scrapper.PlatformUserSourceError("s", scrapper.PlatformUserSourceSQL, err, isRefused, isUnavailable)
 	}
 
 	assert.NotEmpty(t, classify(&gosnowflake.SnowflakeError{Number: 904, Message: "invalid identifier 'TYPE'"}).Unavailable,
 		"a column this account lacks is no grant's business")
 	assert.NotEmpty(t, classify(&gosnowflake.SnowflakeError{Number: 2003, Message: "Object does not exist or not authorized."}).Refused)
 	assert.NotEmpty(t, classify(errors.New("i/o timeout")).Failed)
+
+	// A resource monitor over its quota stops the warehouse, which no grant on
+	// the users views fixes and a later run may get past: failed, not refused.
+	quota := &gosnowflake.SnowflakeError{
+		Number:  90073,
+		Message: "Warehouse 'MY_WH' cannot be resumed because resource monitor 'MY_RM' has exceeded its quota.",
+	}
+	assert.NotEmpty(t, classify(quota).Failed, "refused=%q", classify(quota).Refused)
+	assert.NotEmpty(t, classify(errors.Wrap(errors.New(quota.Message), "query")).Failed, "matched by its message too")
+}
+
+func TestPlatformUsersRolesSkip(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		err    error
+		kind   scrapper.PlatformUserSkipKind
+		reason string
+	}{
+		{
+			"refused", &gosnowflake.SnowflakeError{Number: 2003, Message: "Object does not exist or not authorized."},
+			scrapper.PlatformUserSkipRefused, "was refused",
+		},
+		{
+			"insufficient privileges", &gosnowflake.SnowflakeError{Number: 3001, Message: "Insufficient privileges"},
+			scrapper.PlatformUserSkipRefused, "was refused",
+		},
+		{
+			"resource monitor quota", &gosnowflake.SnowflakeError{Number: 90073, Message: "cannot be resumed because resource monitor"},
+			scrapper.PlatformUserSkipFailed, "failed",
+		},
+		{
+			"missing column", &gosnowflake.SnowflakeError{Number: 904, Message: "invalid identifier 'ROLE'"},
+			scrapper.PlatformUserSkipUnavailable, "cannot read",
+		},
+		{"timeout", errors.New("i/o timeout"), scrapper.PlatformUserSkipFailed, "failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind, reason := rolesSkip(tc.err)
+			assert.Equal(t, tc.kind, kind)
+			assert.Contains(t, reason, "GRANTS_TO_USERS")
+			assert.Contains(t, reason, tc.reason)
+		})
+	}
 }

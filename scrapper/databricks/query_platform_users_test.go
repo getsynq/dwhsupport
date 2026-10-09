@@ -76,7 +76,7 @@ func TestQueryPlatformUsersListsUsersAndServicePrincipals(t *testing.T) {
 		scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserFactLastLoginAt,
 		scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserFactComment,
 	} {
-		assert.Truef(t, users.IsSkipped(fact), "%s is not on SCIM and must say so", fact)
+		scrappertest.AssertSkipped(t, users, fact, scrapper.PlatformUserSkipUnavailable)
 	}
 }
 

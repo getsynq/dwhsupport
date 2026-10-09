@@ -9,6 +9,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	dwhexecdb2 "github.com/getsynq/dwhsupport/exec/db2"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -172,11 +173,12 @@ func TestDb2PlatformUsersFactQueriesFailingNeverFailTheListing(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		err    error
+		kind   scrapper.PlatformUserSkipKind
 		reason string
 	}{
-		{"refused", errRefused, "refused"},
-		{"unavailable", errNoColumn, "this Db2"},
-		{"failed", errDisconnect, "failed"},
+		{"refused", errRefused, scrapper.PlatformUserSkipRefused, "refused"},
+		{"unavailable", errNoColumn, scrapper.PlatformUserSkipUnavailable, "this Db2"},
+		{"failed", errDisconnect, scrapper.PlatformUserSkipFailed, "failed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := listWith(t,
@@ -188,12 +190,12 @@ func TestDb2PlatformUsersFactQueriesFailingNeverFailTheListing(t *testing.T) {
 			users := result.Source("db2.sysibmadm.authorizationids")
 			require.True(t, users.Answered())
 			require.Len(t, users.Users, 1, "a failed SESSION_USER only leaves it out")
-			require.True(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
-			for _, s := range users.SkippedFacts {
-				if s.Fact == scrapper.PlatformUserFactRoles {
-					assert.Contains(t, s.Reason, tc.reason)
-				}
-			}
+			skip, ok := users.SkippedFact(scrapper.PlatformUserFactRoles)
+			require.True(t, ok)
+			assert.Equal(t, tc.kind, skip.Kind)
+			assert.Contains(t, skip.Reason, tc.reason)
+			// Db2 keeps no user record, so no grant adds an email.
+			scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable)
 		})
 	}
 }

@@ -121,6 +121,8 @@ func TestMSSQLPlatformUsers_LoginsRolesAndVisibility(t *testing.T) {
 	require.Contains(t, byLogin, "pu_disabled")
 	require.NotNil(t, byLogin["pu_disabled"].Disabled)
 	assert.True(t, *byLogin["pu_disabled"].Disabled)
+	scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable)
+	scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable)
 
 	noPriv, err := NewMSSQLScrapper(ctx, &MSSQLScrapperConf{MSSQLConf: dwhexecmssql.MSSQLConf{
 		User:      "pu_nopriv",
