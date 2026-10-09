@@ -1,6 +1,8 @@
 package sqldialect
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/gkampitakis/go-snaps/snaps"
@@ -149,4 +151,129 @@ func (s *ConcatSuite) TestConcatWithMultiCharSeparator() {
 
 		snaps.WithConfig(snaps.Dir("ConcatWithMultiCharSeparator"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
 	}
+}
+
+// engineConcatWsArgumentLimits is the most arguments one CONCAT_WS call takes
+// on each engine that has a limit, the separator included, as measured on the
+// engines: Postgres refuses more than 100 arguments in any call, SQL Server and
+// Fabric take at most 254 in a CONCAT_WS, Trino and Athena 127.
+var engineConcatWsArgumentLimits = map[string]int{
+	"postgres": 100,
+	"mssql":    254,
+	"fabric":   254,
+	"trino":    127,
+}
+
+// TestConcatWsStaysWithinEachEngineArgumentLimit renders concatenations around
+// and far past each engine's limit and checks that no CONCAT_WS call in the
+// result passes more arguments than that engine accepts.
+func (s *ConcatSuite) TestConcatWsStaysWithinEachEngineArgumentLimit() {
+	for _, dialect := range DialectsToTest() {
+		limit, ok := engineConcatWsArgumentLimits[dialect.Name]
+		if !ok {
+			continue
+		}
+		s.Run(dialect.Name, func() {
+			for _, n := range []int{limit - 2, limit - 1, limit, limit + 1, 2*limit + 5, 1100, 20000} {
+				sql, err := ConcatWs("|", numberedColumns(n)...).ToSql(dialect.Dialect)
+				s.Require().NoError(err)
+
+				calls := concatWsArgumentCounts(sql)
+				s.Require().NotEmpty(calls, "n=%d", n)
+				for _, args := range calls {
+					s.LessOrEqual(args, limit, "n=%d: a CONCAT_WS call passes %d arguments", n, args)
+					// SQL Server refuses a CONCAT_WS with fewer than three.
+					s.GreaterOrEqual(args, 3, "n=%d: a CONCAT_WS call passes %d arguments", n, args)
+				}
+			}
+		})
+	}
+}
+
+// TestConcatWsWithinTheLimitIsOneCall pins that a concatenation the engine
+// accepts as one call is still rendered as one call, so the SQL of every
+// caller that already worked is unchanged.
+func (s *ConcatSuite) TestConcatWsWithinTheLimitIsOneCall() {
+	for _, dialect := range DialectsToTest() {
+		limit, ok := engineConcatWsArgumentLimits[dialect.Name]
+		if !ok {
+			limit = 1101
+		}
+		sql, err := ConcatWs("|", numberedColumns(limit-1)...).ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		s.LessOrEqual(len(concatWsArgumentCounts(sql)), 1, dialect.Name)
+	}
+}
+
+// TestConcatWsWide shows the shape a concatenation past every limit takes on
+// each engine.
+func (s *ConcatSuite) TestConcatWsWide() {
+	for _, dialect := range DialectsToTest() {
+		sql, err := ConcatWs("|", numberedColumns(300)...).ToSql(dialect.Dialect)
+		s.Require().NoError(err)
+		snaps.WithConfig(snaps.Dir("ConcatWsWide"), snaps.Filename(dialect.Name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
+// TestConcatWsOnRedshiftIsNotAFunctionCall pins that Redshift gets no
+// CONCAT_WS: the engine has none, only a two-argument CONCAT, so a call to it
+// fails with "function concat_ws(...) does not exist" whatever the arguments.
+func (s *ConcatSuite) TestConcatWsOnRedshiftIsNotAFunctionCall() {
+	redshift := NewRedshiftDialect()
+	for _, n := range []int{2, 3, 99, 100, 1100} {
+		sql, err := ConcatWs("|", numberedColumns(n)...).ToSql(redshift)
+		s.Require().NoError(err)
+		s.NotContains(strings.ToLower(sql), "concat", "n=%d", n)
+	}
+}
+
+func numberedColumns(n int) []Expr {
+	exprs := make([]Expr, n)
+	for i := range exprs {
+		exprs[i] = Sql(fmt.Sprintf("c%d", i))
+	}
+	return exprs
+}
+
+// concatWsArgumentCounts returns how many arguments each CONCAT_WS call in sql
+// passes, innermost first. String literals are skipped, so a separator holding
+// a comma or a parenthesis is not miscounted.
+func concatWsArgumentCounts(sql string) []int {
+	type call struct {
+		concat bool
+		args   int
+	}
+	var (
+		open   []call
+		counts []int
+	)
+	for i := 0; i < len(sql); i++ {
+		switch sql[i] {
+		case '\'':
+			for i++; i < len(sql); i++ {
+				if sql[i] != '\'' {
+					continue
+				}
+				if i+1 < len(sql) && sql[i+1] == '\'' {
+					i++
+					continue
+				}
+				break
+			}
+		case '(':
+			name := strings.ToLower(strings.TrimRight(sql[:i], " \t\n"))
+			open = append(open, call{concat: strings.HasSuffix(name, "concat_ws"), args: 1})
+		case ',':
+			if len(open) > 0 {
+				open[len(open)-1].args++
+			}
+		case ')':
+			last := open[len(open)-1]
+			open = open[:len(open)-1]
+			if last.concat {
+				counts = append(counts, last.args)
+			}
+		}
+	}
+	return counts
 }

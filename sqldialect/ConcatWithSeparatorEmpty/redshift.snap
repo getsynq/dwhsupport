@@ -1,4 +1,4 @@
 
 [TestConcatSuite/TestConcatWithSeparatorEmpty - 1]
-concat_ws('|')
+''
 ---

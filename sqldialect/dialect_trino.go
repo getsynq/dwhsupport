@@ -129,11 +129,12 @@ func (d *TrinoDialect) Coalesce(exprs ...Expr) Expr {
 	return Fn("COALESCE", exprs...)
 }
 
+// Trino, and Athena on the same dialect, take at most 127 arguments in a
+// CONCAT_WS.
+const trinoMaxConcatWsArgs = 127
+
 func (d *TrinoDialect) ConcatWithSeparator(separator string, exprs ...Expr) Expr {
-	args := make([]Expr, 0, len(exprs)+1)
-	args = append(args, String(separator))
-	args = append(args, exprs...)
-	return Fn("concat_ws", args...)
+	return concatWsWithinArgumentLimit(trinoMaxConcatWsArgs, separator, exprs, func(args ...Expr) Expr { return Fn("concat_ws", args...) })
 }
 
 func (d *TrinoDialect) AggregationColumnReference(expression Expr, alias string) Expr {

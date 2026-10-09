@@ -131,11 +131,11 @@ func (d *MSSQLDialect) Coalesce(exprs ...Expr) Expr {
 	return Fn("COALESCE", exprs...)
 }
 
+// SQL Server and Fabric take at most 254 arguments in a CONCAT_WS.
+const mssqlMaxConcatWsArgs = 254
+
 func (d *MSSQLDialect) ConcatWithSeparator(separator string, exprs ...Expr) Expr {
-	args := make([]Expr, 0, len(exprs)+1)
-	args = append(args, String(separator))
-	args = append(args, exprs...)
-	return Fn("CONCAT_WS", args...)
+	return concatWsWithinArgumentLimit(mssqlMaxConcatWsArgs, separator, exprs, func(args ...Expr) Expr { return Fn("CONCAT_WS", args...) })
 }
 
 func (d *MSSQLDialect) AggregationColumnReference(expression Expr, alias string) Expr {

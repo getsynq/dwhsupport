@@ -135,11 +135,22 @@ func (d *RedshiftDialect) Coalesce(exprs ...Expr) Expr {
 	return Fn("COALESCE", exprs...)
 }
 
+// ConcatWithSeparator joins with `||`: Redshift has no CONCAT_WS, only a
+// two-argument CONCAT. Unlike CONCAT_WS, `||` makes the whole result NULL when
+// any value is NULL, so COALESCE values that may be NULL first.
 func (d *RedshiftDialect) ConcatWithSeparator(separator string, exprs ...Expr) Expr {
-	args := make([]Expr, 0, len(exprs)+1)
-	args = append(args, String(separator))
-	args = append(args, exprs...)
-	return Fn("concat_ws", args...)
+	if len(exprs) == 0 {
+		return String("")
+	}
+	if len(exprs) == 1 {
+		return exprs[0]
+	}
+	result := exprs[0]
+	sep := String(separator)
+	for i := 1; i < len(exprs); i++ {
+		result = WrapSql("%s || %s || %s", result, sep, exprs[i])
+	}
+	return result
 }
 
 func (d *RedshiftDialect) AggregationColumnReference(expression Expr, alias string) Expr {

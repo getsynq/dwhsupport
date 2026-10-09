@@ -1227,3 +1227,38 @@ func (e *concatWsExpr) ToSql(dialect Dialect) (string, error) {
 }
 
 func (e *concatWsExpr) IsTextExpr() {}
+
+// concatWsWithinArgumentLimit builds a CONCAT_WS over exprs in which no call
+// passes more than maxArgs arguments, the separator included. A concatenation
+// that fits one call is one call. Past that the values are split into
+// consecutive groups that each fit a call, and the groups are concatenated
+// with the same separator, nesting again until the outer call fits.
+//
+// CONCAT_WS skips a NULL argument, so the nested form gives the same text as a
+// flat call only when no argument is NULL: a group of NULLs yields an empty
+// string, and the separator around it stays. Callers that hash the text
+// COALESCE every value first.
+func concatWsWithinArgumentLimit(maxArgs int, separator string, exprs []Expr, call func(args ...Expr) Expr) Expr {
+	withSeparator := func(values []Expr) Expr {
+		args := make([]Expr, 0, len(values)+1)
+		args = append(args, String(separator))
+		args = append(args, values...)
+		return call(args...)
+	}
+	perCall := maxArgs - 1
+	for len(exprs) > perCall {
+		groups := make([]Expr, 0, (len(exprs)+perCall-1)/perCall)
+		for start := 0; start < len(exprs); start += perCall {
+			group := exprs[start:min(start+perCall, len(exprs))]
+			// A group of one is the value itself: SQL Server refuses a
+			// CONCAT_WS with fewer than three arguments.
+			if len(group) == 1 {
+				groups = append(groups, group[0])
+				continue
+			}
+			groups = append(groups, withSeparator(group))
+		}
+		exprs = groups
+	}
+	return withSeparator(exprs)
+}
