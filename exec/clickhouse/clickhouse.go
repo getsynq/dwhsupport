@@ -193,5 +193,7 @@ func (e *ClickhouseExecutor) Exec(ctx context.Context, query string, args ...any
 }
 
 func (e *ClickhouseExecutor) QueryRow(ctx context.Context, sql string, args ...interface{}) *sqlx.Row {
+	// Do not append SQL comment — see QueryRows for explanation.
+	ctx = EnrichClickhouseContext(ctx)
 	return e.db.QueryRowxContext(ctx, sql, args...)
 }
