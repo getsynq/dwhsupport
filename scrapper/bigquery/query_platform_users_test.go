@@ -307,6 +307,21 @@ func TestPlatformUserSourceError(t *testing.T) {
 
 	src = platformUserSourceError(platformUserSourceServiceAccounts, context.DeadlineExceeded)
 	assert.NotEmpty(t, src.Failed)
+
+	// Google answers some rate limits and quotas with a 403, which no grant
+	// lifts and a later run may get past.
+	for _, quota := range []*googleapi.Error{
+		{Code: 403, Message: "Rate Limit Exceeded", Errors: []googleapi.ErrorItem{{Reason: "rateLimitExceeded"}}},
+		{Code: 403, Message: "User Rate Limit Exceeded", Errors: []googleapi.ErrorItem{{Reason: "userRateLimitExceeded"}}},
+		{Code: 403, Message: "Quota exceeded", Errors: []googleapi.ErrorItem{{Reason: "quotaExceeded"}}},
+		{Code: 403, Message: "Quota exceeded", Details: []interface{}{map[string]interface{}{
+			"@type": "type.googleapis.com/google.rpc.ErrorInfo", "reason": "RATE_LIMIT_EXCEEDED",
+		}}},
+	} {
+		src = platformUserSourceError(platformUserSourceIamPolicy, errors.Wrap(quota, "reading the IAM policy"))
+		assert.Emptyf(t, src.Refused, "%s is not a missing grant", quota.Message)
+		assert.NotEmptyf(t, src.Failed, "%s", quota.Message)
+	}
 }
 
 // TestAccountFactsSkipKind: the policy source skips the service account facts

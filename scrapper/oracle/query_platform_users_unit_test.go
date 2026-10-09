@@ -55,12 +55,16 @@ func (c *cannedQuerier) QueryRows(ctx context.Context, query string, _ ...interf
 }
 
 var (
-	errRefused     = errors.New(`ORA-00942: table or view "SYNQ"."DBA_USERS" does not exist`)
-	errNoColumn    = errors.New(`ORA-00904: "LAST_LOGIN": invalid identifier`)
-	errNoObject    = errors.New(`ORA-04043: object DBA_ROLE_PRIVS does not exist`)
-	errDisconnect  = errors.New(`ORA-03113: end-of-file on communication channel`)
-	created        = time.Date(2024, 3, 1, 10, 0, 0, 0, time.UTC)
-	fullDbaColumns = []string{"USERNAME", "USER_ID", "ACCOUNT_STATUS", "AUTHENTICATION_TYPE", "CREATED_UTC", "LAST_LOGIN_UTC"}
+	errRefused    = errors.New(`ORA-00942: table or view "SYNQ"."DBA_USERS" does not exist`)
+	errNoColumn   = errors.New(`ORA-00904: "LAST_LOGIN": invalid identifier`)
+	errNoObject   = errors.New(`ORA-04043: object DBA_ROLE_PRIVS does not exist`)
+	errDisconnect = errors.New(`ORA-03113: end-of-file on communication channel`)
+	// ORA-00604 only says recursive SQL failed; the error below it says why.
+	errRecursiveTrigger = errors.New("ORA-00604: error occurred at recursive SQL level 1\n" +
+		"ORA-04088: error during execution of trigger 'AUDIT.LOGON_TRG'")
+	errRecursiveRefused = errors.New("ORA-00604: error occurred at recursive SQL level 1\nORA-01031: insufficient privileges")
+	created             = time.Date(2024, 3, 1, 10, 0, 0, 0, time.UTC)
+	fullDbaColumns      = []string{"USERNAME", "USER_ID", "ACCOUNT_STATUS", "AUTHENTICATION_TYPE", "CREATED_UTC", "LAST_LOGIN_UTC"}
 )
 
 func dbaUsersFull() cannedAnswer {
@@ -144,6 +148,10 @@ func TestOraclePlatformUsersFallBackToAllUsers(t *testing.T) {
 		{"refused", errRefused, func(l *scrapper.PlatformUserListing) string { return l.Refused }, scrapper.PlatformUserSkipRefused},
 		{"unavailable", errNoObject, func(l *scrapper.PlatformUserListing) string { return l.Unavailable }, scrapper.PlatformUserSkipUnavailable},
 		{"failed", errDisconnect, func(l *scrapper.PlatformUserListing) string { return l.Failed }, scrapper.PlatformUserSkipFailed},
+		{
+			"recursive SQL failing for another reason", errRecursiveTrigger,
+			func(l *scrapper.PlatformUserListing) string { return l.Failed }, scrapper.PlatformUserSkipFailed,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// errNoObject on the full query is retried on the base one, which fails the same way.
@@ -191,8 +199,10 @@ func TestOraclePlatformUsersRoleGrantsFailingNeverFailTheListing(t *testing.T) {
 		reason string
 	}{
 		{"refused", errRefused, scrapper.PlatformUserSkipRefused, "refused"},
+		{"refused below recursive SQL", errRecursiveRefused, scrapper.PlatformUserSkipRefused, "refused"},
 		{"unavailable", errNoObject, scrapper.PlatformUserSkipUnavailable, "this Oracle version"},
 		{"failed", errDisconnect, scrapper.PlatformUserSkipFailed, "failed"},
+		{"recursive SQL failing for another reason", errRecursiveTrigger, scrapper.PlatformUserSkipFailed, "failed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := listWith(t, dbaUsersFull(), failing("DBA_ROLE_PRIVS", tc.err))
