@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/getsynq/dwhsupport/exec/querycontext"
@@ -394,6 +395,40 @@ func (s *SqlDialectExecutionSuite) tryScalar(expr Expr) (any, error) {
 	}
 	s.Failf("column not found", "no probe column in %v", row)
 	return nil, nil
+}
+
+// TestSqlDialectExecution_ConcatWsOverManyArguments concatenates more values
+// than any engine accepts in one function call and reads the text back.
+// Postgres refuses more than 100 arguments in a call, SQL Server 254 in a
+// CONCAT_WS and Trino 127, so a wide concatenation is split into nested calls,
+// and the text has to come back exactly as one flat call would have produced
+// it: callers hash it, and a hash must not change with the number of columns.
+func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_ConcatWsOverManyArguments() {
+	s.skipIfNil()
+	if s.Scrapper.DialectType() == "redshift" {
+		s.T().Skip("Redshift has no CONCAT_WS function")
+	}
+
+	for _, n := range []int{99, 100, 126, 127, 253, 254, 300, 1100} {
+		s.Run(strconv.Itoa(n), func() {
+			values := make([]string, n)
+			exprs := make([]Expr, n)
+			for i := range values {
+				values[i] = strconv.Itoa(i % 10)
+				exprs[i] = String(values[i])
+			}
+			sel := NewSelect().
+				From(SubqueryTable(s.sideQuery(), "_recon_base")).
+				Cols(As(ConcatWs("|", exprs...), Alias("concatenated"))).
+				WithLimit(Limit(Int64(1)))
+
+			rows := s.execute(sel)
+			s.Require().Len(rows, 1)
+			got, ok := scrapper.AsString(s.column(rows[0], "concatenated").Value)
+			s.Require().True(ok)
+			s.Equal(strings.Join(values, "|"), got)
+		})
+	}
 }
 
 // TestSqlDialectExecution_QualifiedIdentNamesTheTable reads the configured
