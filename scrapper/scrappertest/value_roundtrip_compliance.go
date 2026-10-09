@@ -337,8 +337,10 @@ func (s *ValueRoundTripSuite) TestValueRoundTrip_DecimalSize() {
 func (s *ValueRoundTripSuite) assertDecimalSize(want *decimalSize, col *scrapper.QueryShapeColumn, path string) {
 	s.T().Helper()
 	if want == nil {
-		s.Nilf(col.Precision, "%s: precision of native type %q", path, col.NativeType)
-		s.Nilf(col.Scale, "%s: scale of native type %q", path, col.NativeType)
+		if col.Precision != nil || col.Scale != nil {
+			s.Failf("size reported for a column without one", "%s: native type %q reported as (%s, %s)",
+				path, col.NativeType, formatSizePart(col.Precision), formatSizePart(col.Scale))
+		}
 		return
 	}
 	if s.NotNilf(col.Precision, "%s: precision of native type %q", path, col.NativeType) {
@@ -347,6 +349,13 @@ func (s *ValueRoundTripSuite) assertDecimalSize(want *decimalSize, col *scrapper
 	if s.NotNilf(col.Scale, "%s: scale of native type %q", path, col.NativeType) {
 		s.Equalf(want.scale, *col.Scale, "%s: scale of native type %q", path, col.NativeType)
 	}
+}
+
+func formatSizePart(v *int64) string {
+	if v == nil {
+		return "nil"
+	}
+	return strconv.FormatInt(*v, 10)
 }
 
 var oracleNulls = map[scrapper.ValueKind]string{

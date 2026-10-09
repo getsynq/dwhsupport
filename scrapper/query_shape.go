@@ -1,5 +1,11 @@
 package scrapper
 
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
+
 type QueryShapeColumn struct {
 	Name       string `json:"name"`
 	NativeType string `json:"native_type"`
@@ -20,11 +26,59 @@ type QueryShapeColumn struct {
 	Scale     *int64 `json:"scale,omitempty"`
 }
 
-// SetKinds fills each column's Kind from its NativeType for the given
-// dialect (Scrapper.DialectType()) and returns cols.
-func SetKinds(dialect string, cols []*QueryShapeColumn) []*QueryShapeColumn {
-	for _, c := range cols {
-		c.Kind = NativeValueKind(dialect, c.NativeType)
+// maxDecimalPrecision is the widest exact numeric any supported warehouse
+// declares (Postgres NUMERIC). A driver reporting more is describing a column
+// declared without a size.
+const maxDecimalPrecision = 1000
+
+// decimalSizeInType matches a native type name that spells its size:
+// DECIMAL(20,6), Decimal(38, 6), NUMBER(19).
+var decimalSizeInType = regexp.MustCompile(`^\w+\(\s*(\d+)\s*(?:,\s*(-?\d+)\s*)?\)$`)
+
+// SetDecimalSize records an exact numeric column's precision and scale, as
+// sql.ColumnType.DecimalSize reports them, and returns c. Kind must be set
+// first: any other kind is left without a size, since drivers report one for
+// timestamps and floats too, where it means something else.
+//
+// When the driver reports nothing, the size is read from NativeType. A size no
+// column can have is not recorded, which is how the drivers describe a numeric
+// declared without one: lib/pq reports an unconstrained NUMERIC as 65535
+// digits, go-mssqldb an unknown size as math.MaxInt64, and go-ora a NUMBER
+// without precision as (38, 255). A scale above the precision is one of
+// those, though Postgres 15 can declare it: such a column is reported
+// without a size rather than with a wrong one.
+func (c *QueryShapeColumn) SetDecimalSize(precision, scale int64, ok bool) *QueryShapeColumn {
+	if c.Kind != KindNumeric {
+		return c
 	}
-	return cols
+	if !ok {
+		precision, scale, ok = parseDecimalSize(c.NativeType)
+	}
+	if !ok || precision < 1 || precision > maxDecimalPrecision || scale < 0 || scale > precision {
+		return c
+	}
+	c.Precision = &precision
+	c.Scale = &scale
+	return c
+}
+
+// parseDecimalSize reads the size out of a native type name that spells it. A
+// precision without a scale is a scale of 0, as SQL defines it.
+func parseDecimalSize(nativeType string) (int64, int64, bool) {
+	m := decimalSizeInType.FindStringSubmatch(strings.TrimSpace(nativeType))
+	if m == nil {
+		return 0, 0, false
+	}
+	precision, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	if m[2] == "" {
+		return precision, 0, true
+	}
+	scale, err := strconv.ParseInt(m[2], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	return precision, scale, true
 }

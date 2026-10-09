@@ -44,14 +44,5 @@ func QueryShape(ctx context.Context, db RowQuerier, dialect string, sql string) 
 		return nil, err
 	}
 
-	result := make([]*scrapper.QueryShapeColumn, len(columnTypes))
-	for i, ct := range columnTypes {
-		result[i] = &scrapper.QueryShapeColumn{
-			Name:       ct.Name(),
-			NativeType: ct.DatabaseTypeName(),
-			Position:   int32(i + 1),
-		}
-	}
-
-	return scrapper.SetKinds(dialect, result), nil
+	return ShapeColumns(dialect, columnTypes), nil
 }

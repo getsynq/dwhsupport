@@ -22,15 +22,5 @@ func (e *BigQueryScrapper) QueryShape(ctx context.Context, sql string) ([]*scrap
 		return nil, err
 	}
 
-	schema := it.Schema
-	result := make([]*scrapper.QueryShapeColumn, len(schema))
-	for i, field := range schema {
-		result[i] = &scrapper.QueryShapeColumn{
-			Name:       field.Name,
-			NativeType: string(field.Type),
-			Position:   int32(i + 1),
-		}
-	}
-
-	return scrapper.SetKinds(e.DialectType(), result), nil
+	return shapeColumns(e.DialectType(), it.Schema), nil
 }
