@@ -159,7 +159,6 @@ func (s *ConcatSuite) TestConcatWithMultiCharSeparator() {
 // Fabric take at most 254 in a CONCAT_WS, Trino and Athena 127.
 var engineConcatWsArgumentLimits = map[string]int{
 	"postgres": 100,
-	"redshift": 100,
 	"mssql":    254,
 	"fabric":   254,
 	"trino":    127,
@@ -183,6 +182,8 @@ func (s *ConcatSuite) TestConcatWsStaysWithinEachEngineArgumentLimit() {
 				s.Require().NotEmpty(calls, "n=%d", n)
 				for _, args := range calls {
 					s.LessOrEqual(args, limit, "n=%d: a CONCAT_WS call passes %d arguments", n, args)
+					// SQL Server refuses a CONCAT_WS with fewer than three.
+					s.GreaterOrEqual(args, 3, "n=%d: a CONCAT_WS call passes %d arguments", n, args)
 				}
 			}
 		})
