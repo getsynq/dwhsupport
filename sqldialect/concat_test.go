@@ -215,6 +215,18 @@ func (s *ConcatSuite) TestConcatWsWide() {
 	}
 }
 
+// TestConcatWsOnRedshiftIsNotAFunctionCall pins that Redshift gets no
+// CONCAT_WS: the engine has none, only a two-argument CONCAT, so a call to it
+// fails with "function concat_ws(...) does not exist" whatever the arguments.
+func (s *ConcatSuite) TestConcatWsOnRedshiftIsNotAFunctionCall() {
+	redshift := NewRedshiftDialect()
+	for _, n := range []int{2, 3, 99, 100, 1100} {
+		sql, err := ConcatWs("|", numberedColumns(n)...).ToSql(redshift)
+		s.Require().NoError(err)
+		s.NotContains(strings.ToLower(sql), "concat", "n=%d", n)
+	}
+}
+
 func numberedColumns(n int) []Expr {
 	exprs := make([]Expr, n)
 	for i := range exprs {
