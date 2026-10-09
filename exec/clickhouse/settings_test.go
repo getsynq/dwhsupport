@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
 )
@@ -145,6 +146,34 @@ func (s *LocalClickHouseSettingsSuite) TestConfSettingAppliesToUndefaultedName()
 
 	s.Equal("4242", s.settingValue(conf, "max_result_rows"))
 	s.Equal("60", s.settingValue(conf, "max_execution_time"), "unrelated defaults survive")
+}
+
+// Every way of sending a query carries the query context as the log_comment setting, so
+// system.query_log tells our queries apart. QueryRow is what SHOW CREATE goes through.
+func (s *LocalClickHouseSettingsSuite) TestEveryQueryCarriesTheQueryContext() {
+	executor, err := NewClickhouseExecutor(s.ctx, &s.conf)
+	s.Require().NoError(err)
+	defer executor.Close()
+
+	ctx := querycontext.WithQueryContext(s.ctx, querycontext.QueryContext{"app": "synq", "task": "fetch_catalog"})
+	const want = `{"app":"synq","task":"fetch_catalog"}`
+	const sql = "SELECT getSetting('log_comment')"
+
+	var viaQueryRow string
+	s.Require().NoError(executor.QueryRow(ctx, sql).Scan(&viaQueryRow))
+	s.Equal(want, viaQueryRow, "QueryRow")
+
+	var viaSelect []string
+	s.Require().NoError(executor.Select(ctx, &viaSelect, sql))
+	s.Equal([]string{want}, viaSelect, "Select")
+
+	rows, err := executor.QueryRows(ctx, sql)
+	s.Require().NoError(err)
+	defer rows.Close()
+	s.Require().True(rows.Next())
+	var viaQueryRows string
+	s.Require().NoError(rows.Scan(&viaQueryRows))
+	s.Equal(want, viaQueryRows, "QueryRows")
 }
 
 func (s *LocalClickHouseSettingsSuite) TestConfSettingCoercesBoolean() {
