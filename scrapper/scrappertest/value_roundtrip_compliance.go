@@ -260,6 +260,104 @@ func (s *ValueRoundTripSuite) TestValueRoundTrip_Null() {
 	}
 }
 
+// decimalSize is a column's precision and scale as QueryShapeColumn carries them.
+type decimalSize struct{ precision, scale int64 }
+
+// roundTripDecimalSizes is, per dialect, the precision and scale QueryShape and
+// RunRawQuery report for a value of roundTripExprs, by the kind it was made as.
+// A kind not listed is reported without one: a float, a text, a timestamp, and
+// an integer type (only an exact numeric has a scale to report).
+//
+// BigQuery's NUMERIC is always NUMERIC(38, 9). Snowflake has no integer type,
+// a BIGINT is a NUMBER(38, 0), and Oracle's NUMBER(19) is a NUMBER(19, 0).
+// Databricks and Athena are left out: their drivers report neither, and their
+// native type name is a bare DECIMAL.
+var roundTripDecimalSizes = map[string]map[scrapper.ValueKind]decimalSize{
+	"postgres":   {scrapper.KindNumeric: {20, 6}},
+	"redshift":   {scrapper.KindNumeric: {20, 6}},
+	"snowflake":  {scrapper.KindNumeric: {20, 6}, scrapper.KindInteger: {38, 0}},
+	"bigquery":   {scrapper.KindNumeric: {38, 9}},
+	"clickhouse": {scrapper.KindNumeric: {38, 6}},
+	"duckdb":     {scrapper.KindNumeric: {20, 6}},
+	"mysql":      {scrapper.KindNumeric: {20, 6}},
+	"mssql":      {scrapper.KindNumeric: {20, 6}},
+	"fabric":     {scrapper.KindNumeric: {20, 6}},
+	"oracle":     {scrapper.KindNumeric: {20, 6}, scrapper.KindInteger: {19, 0}},
+	"db2":        {scrapper.KindNumeric: {20, 6}},
+	"trino":      {scrapper.KindNumeric: {20, 6}},
+}
+
+// unconstrainedNumericExprs is, per dialect, an exact numeric declared without
+// a precision or scale, which holds any scale. The drivers report a size for it
+// that no column can have (lib/pq 65535 digits, go-ora a precision of 0), which
+// must come back as unknown rather than as a scale to round to.
+var unconstrainedNumericExprs = map[string]string{
+	"postgres": `CAST(1.25 AS NUMERIC)`,
+	"oracle":   `CAST(1.25 AS NUMBER)`,
+}
+
+// TestValueRoundTrip_DecimalSize checks the precision and scale QueryShape and
+// RunRawQuery report for each value. A consumer comparing decimals across
+// warehouses renders them at the column's scale, and a scale that is not
+// reported is rendered at a default that can hide a difference in the digits
+// past it.
+func (s *ValueRoundTripSuite) TestValueRoundTrip_DecimalSize() {
+	if s.Scrapper == nil {
+		s.T().Skip("Scrapper not set")
+	}
+	dialect := s.Scrapper.DialectType()
+	exprs := map[string]string{}
+	want := map[string]*decimalSize{}
+	for kind, expr := range roundTripExprs[dialect] {
+		exprs[string(kind)] = expr
+		if size, ok := roundTripDecimalSizes[dialect][kind]; ok {
+			want[string(kind)] = &size
+		}
+	}
+	if expr, ok := unconstrainedNumericExprs[dialect]; ok {
+		exprs["unconstrained numeric"] = expr
+	}
+
+	for name, expr := range exprs {
+		s.Run(name, func() {
+			_, col := s.rawValue(s.selectValue(expr))
+			s.assertDecimalSize(want[name], col, "RunRawQuery")
+
+			shape, err := s.Scrapper.QueryShape(s.ctx(), s.selectValue(expr))
+			if errors.Is(err, scrapper.ErrUnsupported) {
+				return
+			}
+			s.Require().NoError(err)
+			s.Require().Len(shape, 1)
+			s.assertDecimalSize(want[name], shape[0], "QueryShape")
+		})
+	}
+}
+
+func (s *ValueRoundTripSuite) assertDecimalSize(want *decimalSize, col *scrapper.QueryShapeColumn, path string) {
+	s.T().Helper()
+	if want == nil {
+		if col.Precision != nil || col.Scale != nil {
+			s.Failf("size reported for a column without one", "%s: native type %q reported as (%s, %s)",
+				path, col.NativeType, formatSizePart(col.Precision), formatSizePart(col.Scale))
+		}
+		return
+	}
+	if s.NotNilf(col.Precision, "%s: precision of native type %q", path, col.NativeType) {
+		s.Equalf(want.precision, *col.Precision, "%s: precision of native type %q", path, col.NativeType)
+	}
+	if s.NotNilf(col.Scale, "%s: scale of native type %q", path, col.NativeType) {
+		s.Equalf(want.scale, *col.Scale, "%s: scale of native type %q", path, col.NativeType)
+	}
+}
+
+func formatSizePart(v *int64) string {
+	if v == nil {
+		return "nil"
+	}
+	return strconv.FormatInt(*v, 10)
+}
+
 var oracleNulls = map[scrapper.ValueKind]string{
 	scrapper.KindTimestamp:   "CAST(NULL AS TIMESTAMP(6))",
 	scrapper.KindTimestampTz: "CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE)",

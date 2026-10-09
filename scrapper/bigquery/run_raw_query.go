@@ -35,17 +35,10 @@ func (e *BigQueryScrapper) RunRawQuery(ctx context.Context, sql string) (scrappe
 	}
 	execbigquery.CollectBigQueryStats(ctx, job)
 
-	schema := it.Schema
-	columns := make([]*scrapper.QueryShapeColumn, len(schema))
-	columnNames := make([]string, len(schema))
-	for i, field := range schema {
-		columns[i] = &scrapper.QueryShapeColumn{
-			Name:       field.Name,
-			NativeType: string(field.Type),
-			Position:   int32(i + 1),
-			Kind:       scrapper.NativeValueKind(e.DialectType(), string(field.Type)),
-		}
-		columnNames[i] = field.Name
+	columns := shapeColumns(e.DialectType(), it.Schema)
+	columnNames := make([]string, len(columns))
+	for i, col := range columns {
+		columnNames[i] = col.Name
 	}
 
 	return &bqRawRowsIterator{

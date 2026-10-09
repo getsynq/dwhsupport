@@ -41,16 +41,10 @@ func RunRawQuery(ctx context.Context, db RowQuerier, dialect string, sqlQuery st
 		return nil, err
 	}
 
-	columns := make([]*scrapper.QueryShapeColumn, len(columnTypes))
-	columnNames := make([]string, len(columnTypes))
-	for i, ct := range columnTypes {
-		columns[i] = &scrapper.QueryShapeColumn{
-			Name:       ct.Name(),
-			NativeType: ct.DatabaseTypeName(),
-			Position:   int32(i + 1),
-			Kind:       scrapper.NativeValueKind(dialect, ct.DatabaseTypeName()),
-		}
-		columnNames[i] = ct.Name()
+	columns := ShapeColumns(dialect, columnTypes)
+	columnNames := make([]string, len(columns))
+	for i, col := range columns {
+		columnNames[i] = col.Name
 	}
 
 	return &rawRowsIterator{

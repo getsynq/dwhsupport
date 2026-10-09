@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
 )
 
 func (e *FabricScrapper) QueryShape(ctx context.Context, sql string) ([]*scrapper.QueryShapeColumn, error) {
@@ -23,14 +24,5 @@ func (e *FabricScrapper) QueryShape(ctx context.Context, sql string) ([]*scrappe
 		return nil, err
 	}
 
-	result := make([]*scrapper.QueryShapeColumn, len(columnTypes))
-	for i, ct := range columnTypes {
-		result[i] = &scrapper.QueryShapeColumn{
-			Name:       ct.Name(),
-			NativeType: ct.DatabaseTypeName(),
-			Position:   int32(i + 1),
-		}
-	}
-
-	return scrapper.SetKinds(e.DialectType(), result), nil
+	return scrapperstdsql.ShapeColumns(e.DialectType(), columnTypes), nil
 }
