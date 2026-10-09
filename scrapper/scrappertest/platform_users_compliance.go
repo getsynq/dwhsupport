@@ -8,6 +8,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -121,6 +122,14 @@ func (s *PlatformUsersSuite) checkShape(users *scrapper.PlatformUserListing) {
 	}
 	for _, f := range users.SkippedFacts {
 		s.NotEmptyf(f.Reason, "skipped fact %s has no reason", f.Fact)
+		s.Containsf(
+			[]scrapper.PlatformUserSkipKind{scrapper.PlatformUserSkipRefused, scrapper.PlatformUserSkipUnavailable, scrapper.PlatformUserSkipFailed},
+			f.Kind,
+			"%s: skipped fact %s has kind %q",
+			users.Source,
+			f.Fact,
+			f.Kind,
+		)
 	}
 }
 
@@ -177,6 +186,23 @@ func hasFact(u *scrapper.PlatformUser, fact scrapper.PlatformUserFact) bool {
 		return len(u.Roles) > 0
 	}
 	return false
+}
+
+// AssertSkipped asserts that the listing skipped fact as kind.
+func AssertSkipped(
+	t assert.TestingT,
+	listing *scrapper.PlatformUserListing,
+	fact scrapper.PlatformUserFact,
+	kind scrapper.PlatformUserSkipKind,
+) bool {
+	if h, ok := t.(interface{ Helper() }); ok {
+		h.Helper()
+	}
+	skip, ok := listing.SkippedFact(fact)
+	if !assert.Truef(t, ok, "%s: %s is not skipped", listing.Source, fact) {
+		return false
+	}
+	return assert.Equalf(t, kind, skip.Kind, "%s: %s skipped as %q: %s", listing.Source, fact, skip.Kind, skip.Reason)
 }
 
 // OnlyPlatformUserSource unwraps the result of a platform that reads a single

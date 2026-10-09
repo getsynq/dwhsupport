@@ -85,7 +85,8 @@ func (e *MSSQLScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Platf
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		result.Skip(scrapper.PlatformUserFactRoles, factSkipReason(err))
+		kind, reason := factSkip(err)
+		result.Skip(scrapper.PlatformUserFactRoles, kind, reason)
 	} else {
 		result.AssignRoles(rolesByLogin(roles))
 	}
@@ -161,18 +162,19 @@ var factsNotOnPlatform = []scrapper.PlatformUserFact{
 
 func skipFactsNotOnPlatform(result *scrapper.PlatformUserListing) {
 	for _, f := range factsNotOnPlatform {
-		result.Skip(f, "SQL Server does not record it for a login")
+		result.Skip(f, scrapper.PlatformUserSkipUnavailable, "SQL Server does not record it for a login")
 	}
 }
 
-func factSkipReason(err error) string {
-	switch {
-	case dwhexecmssql.IsPermissionError(err):
-		return "the login may not read role memberships; grant " + platformUsersGrant
-	case dwhexecmssql.IsUnavailableError(err):
-		return "this SQL Server version or edition has no such role membership view: " + err.Error()
+func factSkip(err error) (scrapper.PlatformUserSkipKind, string) {
+	kind := scrapper.PlatformUserSkipKindOf(err, dwhexecmssql.IsPermissionError, dwhexecmssql.IsUnavailableError)
+	switch kind {
+	case scrapper.PlatformUserSkipRefused:
+		return kind, "the login may not read role memberships; grant " + platformUsersGrant
+	case scrapper.PlatformUserSkipUnavailable:
+		return kind, "this SQL Server version or edition has no such role membership view: " + err.Error()
 	default:
-		return "reading role memberships failed: " + err.Error()
+		return kind, "reading role memberships failed: " + err.Error()
 	}
 }
 

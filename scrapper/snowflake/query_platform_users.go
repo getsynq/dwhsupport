@@ -114,7 +114,7 @@ func (e *SnowflakeScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.P
 			e.IsPermissionError, isUnavailable)
 	}
 
-	show, err := e.queryShowUsers(ctx)
+	show, err := e.queryShowUsers(ctx, accountUsage.DependentSkipKind())
 	if err != nil {
 		show = scrapper.PlatformUserSourceError(showUsersSource, scrapper.PlatformUserSourceSQL, err, e.IsPermissionError, isUnavailable)
 	}
@@ -169,9 +169,9 @@ func (e *SnowflakeScrapper) queryAccountUsageUsers(ctx context.Context) (*scrapp
 	case ctx.Err() != nil:
 		return nil, ctx.Err()
 	case e.IsPermissionError(err):
-		users.Skip(scrapper.PlatformUserFactRoles, "ACCOUNT_USAGE.GRANTS_TO_USERS was refused: "+err.Error())
+		users.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused, "ACCOUNT_USAGE.GRANTS_TO_USERS was refused: "+err.Error())
 	default:
-		users.Skip(scrapper.PlatformUserFactRoles, "reading ACCOUNT_USAGE.GRANTS_TO_USERS failed: "+err.Error())
+		users.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipFailed, "reading ACCOUNT_USAGE.GRANTS_TO_USERS failed: "+err.Error())
 	}
 	return users, nil
 }
@@ -193,7 +193,10 @@ func (e *SnowflakeScrapper) queryAccountUsageUserRoles(ctx context.Context) (map
 	return roles, nil
 }
 
-func (e *SnowflakeScrapper) queryShowUsers(ctx context.Context) (*scrapper.PlatformUserListing, error) {
+func (e *SnowflakeScrapper) queryShowUsers(
+	ctx context.Context,
+	accountUsageFactsKind scrapper.PlatformUserSkipKind,
+) (*scrapper.PlatformUserListing, error) {
 	var all []*showUsersRow
 	after := ""
 	for {
@@ -211,7 +214,7 @@ func (e *SnowflakeScrapper) queryShowUsers(ctx context.Context) (*scrapper.Platf
 		}
 		after = page[len(page)-1].Name
 	}
-	return platformUsersFromShowUsers(all, time.Now()), nil
+	return platformUsersFromShowUsers(all, time.Now(), accountUsageFactsKind), nil
 }
 
 func (e *SnowflakeScrapper) showUsersPage(ctx context.Context, query string) ([]*showUsersRow, error) {
@@ -228,7 +231,15 @@ func (e *SnowflakeScrapper) showUsersPage(ctx context.Context, query string) ([]
 // column, which no visible user has, and so do all its other details. Those
 // facts are recorded as skipped when any user hides them, since the caller
 // cannot tell a hidden email from a missing one otherwise.
-func platformUsersFromShowUsers(rows []*showUsersRow, now time.Time) *scrapper.PlatformUserListing {
+//
+// USER_ID and the roles are not in SHOW USERS at all, only in ACCOUNT_USAGE:
+// accountUsageFactsKind skips them the way ACCOUNT_USAGE did not answer (see
+// PlatformUserListing.DependentSkipKind).
+func platformUsersFromShowUsers(
+	rows []*showUsersRow,
+	now time.Time,
+	accountUsageFactsKind scrapper.PlatformUserSkipKind,
+) *scrapper.PlatformUserListing {
 	users := &scrapper.PlatformUserListing{
 		Source:       showUsersSource,
 		Kind:         scrapper.PlatformUserSourceSQL,
@@ -254,8 +265,9 @@ func platformUsersFromShowUsers(rows []*showUsersRow, now time.Time) *scrapper.P
 		})
 	}
 
-	users.Skip(scrapper.PlatformUserFactPlatformId, "SHOW USERS does not return USER_ID")
-	users.Skip(scrapper.PlatformUserFactRoles, "SHOW USERS does not return the roles granted to a user")
+	users.Skip(scrapper.PlatformUserFactPlatformId, accountUsageFactsKind, "SHOW USERS does not return USER_ID; ACCOUNT_USAGE.USERS does")
+	users.Skip(scrapper.PlatformUserFactRoles, accountUsageFactsKind,
+		"SHOW USERS does not return the roles granted to a user; ACCOUNT_USAGE.GRANTS_TO_USERS does")
 	if hidden > 0 {
 		reason := fmt.Sprintf("SHOW USERS hides it for the %d of %d users the role does not own; grant MANAGE GRANTS, or %s",
 			hidden, len(rows), platformUsersGrant)
@@ -267,7 +279,7 @@ func platformUsersFromShowUsers(rows []*showUsersRow, now time.Time) *scrapper.P
 			scrapper.PlatformUserFactDisabled,
 			scrapper.PlatformUserFactDefaultRole,
 		} {
-			users.Skip(fact, reason)
+			users.Skip(fact, scrapper.PlatformUserSkipRefused, reason)
 		}
 	}
 	return users

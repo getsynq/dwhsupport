@@ -10,6 +10,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/jmoiron/sqlx"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -127,9 +128,10 @@ func TestOraclePlatformUsersOlderVersionDropsTheMissingColumns(t *testing.T) {
 	require.True(t, users.Answered())
 	require.Len(t, users.Users, 1)
 	assert.NotNil(t, users.Users[0].Disabled, "ACCOUNT_STATUS is still read")
-	assert.True(t, users.IsSkipped(scrapper.PlatformUserFactLastLoginAt))
-	assert.True(t, users.IsSkipped(scrapper.PlatformUserFactType))
+	scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable)
+	scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactType, scrapper.PlatformUserSkipUnavailable)
 	assert.False(t, users.IsSkipped(scrapper.PlatformUserFactDisabled))
+	scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable)
 }
 
 func TestOraclePlatformUsersFallBackToAllUsers(t *testing.T) {
@@ -137,10 +139,11 @@ func TestOraclePlatformUsersFallBackToAllUsers(t *testing.T) {
 		name  string
 		err   error
 		state func(*scrapper.PlatformUserListing) string
+		kind  scrapper.PlatformUserSkipKind
 	}{
-		{"refused", errRefused, func(l *scrapper.PlatformUserListing) string { return l.Refused }},
-		{"unavailable", errNoObject, func(l *scrapper.PlatformUserListing) string { return l.Unavailable }},
-		{"failed", errDisconnect, func(l *scrapper.PlatformUserListing) string { return l.Failed }},
+		{"refused", errRefused, func(l *scrapper.PlatformUserListing) string { return l.Refused }, scrapper.PlatformUserSkipRefused},
+		{"unavailable", errNoObject, func(l *scrapper.PlatformUserListing) string { return l.Unavailable }, scrapper.PlatformUserSkipUnavailable},
+		{"failed", errDisconnect, func(l *scrapper.PlatformUserListing) string { return l.Failed }, scrapper.PlatformUserSkipFailed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			// errNoObject on the full query is retried on the base one, which fails the same way.
@@ -157,7 +160,13 @@ func TestOraclePlatformUsersFallBackToAllUsers(t *testing.T) {
 			require.True(t, fallback.Answered())
 			assert.Len(t, fallback.Users, 2)
 			assert.Equal(t, scrapper.PlatformUsersComplete, fallback.Completeness)
-			assert.True(t, fallback.IsSkipped(scrapper.PlatformUserFactDisabled))
+			// The facts only DBA_USERS has are skipped the way DBA_USERS was.
+			for _, fact := range []scrapper.PlatformUserFact{
+				scrapper.PlatformUserFactDisabled, scrapper.PlatformUserFactType, scrapper.PlatformUserFactLastLoginAt,
+			} {
+				scrappertest.AssertSkipped(t, fallback, fact, tc.kind)
+			}
+			scrappertest.AssertSkipped(t, fallback, scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable)
 		})
 	}
 }
@@ -178,11 +187,12 @@ func TestOraclePlatformUsersRoleGrantsFailingNeverFailTheListing(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		err    error
+		kind   scrapper.PlatformUserSkipKind
 		reason string
 	}{
-		{"refused", errRefused, "refused"},
-		{"unavailable", errNoObject, "this Oracle version"},
-		{"failed", errDisconnect, "failed"},
+		{"refused", errRefused, scrapper.PlatformUserSkipRefused, "refused"},
+		{"unavailable", errNoObject, scrapper.PlatformUserSkipUnavailable, "this Oracle version"},
+		{"failed", errDisconnect, scrapper.PlatformUserSkipFailed, "failed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := listWith(t, dbaUsersFull(), failing("DBA_ROLE_PRIVS", tc.err))
@@ -190,12 +200,10 @@ func TestOraclePlatformUsersRoleGrantsFailingNeverFailTheListing(t *testing.T) {
 			users := result.Source(oracleDbaUsersSource)
 			require.True(t, users.Answered())
 			assert.Len(t, users.Users, 2)
-			require.True(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
-			for _, s := range users.SkippedFacts {
-				if s.Fact == scrapper.PlatformUserFactRoles {
-					assert.Contains(t, s.Reason, tc.reason)
-				}
-			}
+			skip, ok := users.SkippedFact(scrapper.PlatformUserFactRoles)
+			require.True(t, ok)
+			assert.Equal(t, tc.kind, skip.Kind)
+			assert.Contains(t, skip.Reason, tc.reason)
 		})
 	}
 }

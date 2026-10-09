@@ -123,7 +123,7 @@ func platformUsersFromSources(
 	}
 	policySource := platformUserSourceError(platformUserSourceIamPolicy, policyErr)
 	if policySource == nil {
-		policySource = platformUsersFromPolicy(policy)
+		policySource = platformUsersFromPolicy(policy, accountsSource.DependentSkipKind())
 	}
 	return scrapper.CollectPlatformUsers(ctx, accountsSource, policySource)
 }
@@ -170,10 +170,14 @@ func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.
 		CompletenessReason: serviceAccountsCompletenessReason,
 	}
 	notInIam := "IAM does not record it"
-	users.Skip(scrapper.PlatformUserFactCreatedAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactLastLoginAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactDefaultRole, "BigQuery has no default role")
-	users.Skip(scrapper.PlatformUserFactRoles, "roles are bound in IAM policies, see "+platformUserSourceIamPolicy)
+	users.Skip(scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipUnavailable, "BigQuery has no default role")
+	users.Skip(
+		scrapper.PlatformUserFactRoles,
+		scrapper.PlatformUserSkipUnavailable,
+		"roles are bound in IAM policies, see "+platformUserSourceIamPolicy,
+	)
 
 	for _, a := range accounts {
 		if a == nil || a.Email == "" {
@@ -210,7 +214,10 @@ func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.
 //
 // A conditional binding counts like any other: the role is bound, under a
 // condition the listing does not evaluate.
-func platformUsersFromPolicy(policy *cloudresourcemanager.Policy) *scrapper.PlatformUserListing {
+//
+// accountFactsKind is how the facts only the service account list states are
+// skipped (see PlatformUserListing.DependentSkipKind).
+func platformUsersFromPolicy(policy *cloudresourcemanager.Policy, accountFactsKind scrapper.PlatformUserSkipKind) *scrapper.PlatformUserListing {
 	users := &scrapper.PlatformUserListing{
 		Source:             platformUserSourceIamPolicy,
 		Kind:               scrapper.PlatformUserSourceAPI,
@@ -218,14 +225,18 @@ func platformUsersFromPolicy(policy *cloudresourcemanager.Policy) *scrapper.Plat
 		CompletenessReason: iamPolicyCompletenessReason,
 	}
 	notInIam := "IAM does not record it"
-	users.Skip(scrapper.PlatformUserFactCreatedAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactLastLoginAt, notInIam)
-	users.Skip(scrapper.PlatformUserFactDefaultRole, "BigQuery has no default role")
+	users.Skip(scrapper.PlatformUserFactCreatedAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactLastLoginAt, scrapper.PlatformUserSkipUnavailable, notInIam)
+	users.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipUnavailable, "BigQuery has no default role")
 	accountFacts := "a policy names members only, see " + platformUserSourceServiceAccounts
-	users.Skip(scrapper.PlatformUserFactPlatformId, accountFacts)
-	users.Skip(scrapper.PlatformUserFactDisplayName, accountFacts)
-	users.Skip(scrapper.PlatformUserFactComment, accountFacts)
-	users.Skip(scrapper.PlatformUserFactDisabled, "a policy states it only for a member it has deleted, see "+platformUserSourceServiceAccounts)
+	users.Skip(scrapper.PlatformUserFactPlatformId, accountFactsKind, accountFacts)
+	users.Skip(scrapper.PlatformUserFactDisplayName, accountFactsKind, accountFacts)
+	users.Skip(scrapper.PlatformUserFactComment, accountFactsKind, accountFacts)
+	users.Skip(
+		scrapper.PlatformUserFactDisabled,
+		accountFactsKind,
+		"a policy states it only for a member it has deleted, see "+platformUserSourceServiceAccounts,
+	)
 
 	live := map[string]*scrapper.PlatformUser{}
 	deleted := map[string]*scrapper.PlatformUser{}

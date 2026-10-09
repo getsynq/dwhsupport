@@ -118,8 +118,11 @@ func assertRefusedThenLimited(t *testing.T, result *scrapper.PlatformUsers, main
 	assert.Contains(t, limited.CompletenessReason, "mysql")
 	require.Len(t, limited.Users, 1)
 	assert.Equal(t, login, limited.Users[0].Login)
-	assert.True(t, limited.IsSkipped(scrapper.PlatformUserFactRoles))
-	assert.True(t, limited.IsSkipped(scrapper.PlatformUserFactDisabled))
+	// The facts the mysql schema holds are refused, a grant on it reads them.
+	scrappertest.AssertSkipped(t, limited, scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused)
+	scrappertest.AssertSkipped(t, limited, scrapper.PlatformUserFactDisabled, scrapper.PlatformUserSkipRefused)
+	scrappertest.AssertSkipped(t, limited, scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipRefused)
+	scrappertest.AssertSkipped(t, limited, scrapper.PlatformUserFactEmail, scrapper.PlatformUserSkipUnavailable)
 
 	reconciled := result.Reconcile()
 	assert.Equal(t, scrapper.PlatformUsersLimited, reconciled.Completeness)
@@ -279,8 +282,8 @@ func TestMySQLPlatformUsers_RoleEdgesRefused(t *testing.T) {
 	users := result.Sources[0]
 	assert.Equal(t, sourceMySQLUser, users.Source)
 	assert.Equal(t, scrapper.PlatformUsersComplete, users.Completeness)
-	require.True(t, users.IsSkipped(scrapper.PlatformUserFactRoles))
-	assert.True(t, users.IsSkipped(scrapper.PlatformUserFactDefaultRole))
+	require.True(t, scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused))
+	scrappertest.AssertSkipped(t, users, scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipRefused)
 	byLogin := map[string]*scrapper.PlatformUser{}
 	for _, u := range users.Users {
 		byLogin[u.Login] = u

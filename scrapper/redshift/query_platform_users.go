@@ -89,12 +89,16 @@ type canReadOthersRow struct {
 
 // skippedPlatformUserFacts are the facts Redshift does not keep about a user.
 var skippedPlatformUserFacts = []scrapper.SkippedPlatformUserFact{
-	{Fact: scrapper.PlatformUserFactType, Reason: "Redshift has no user type"},
-	{Fact: scrapper.PlatformUserFactEmail, Reason: "Redshift keeps no email for a user"},
-	{Fact: scrapper.PlatformUserFactDisplayName, Reason: "Redshift keeps no display name for a user"},
-	{Fact: scrapper.PlatformUserFactComment, Reason: "Redshift has no comment on a user"},
-	{Fact: scrapper.PlatformUserFactCreatedAt, Reason: "Redshift does not record when a user was created"},
-	{Fact: scrapper.PlatformUserFactDefaultRole, Reason: "Redshift has no default role"},
+	{Fact: scrapper.PlatformUserFactType, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Redshift has no user type"},
+	{Fact: scrapper.PlatformUserFactEmail, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Redshift keeps no email for a user"},
+	{Fact: scrapper.PlatformUserFactDisplayName, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Redshift keeps no display name for a user"},
+	{Fact: scrapper.PlatformUserFactComment, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Redshift has no comment on a user"},
+	{
+		Fact:   scrapper.PlatformUserFactCreatedAt,
+		Kind:   scrapper.PlatformUserSkipUnavailable,
+		Reason: "Redshift does not record when a user was created",
+	},
+	{Fact: scrapper.PlatformUserFactDefaultRole, Kind: scrapper.PlatformUserSkipUnavailable, Reason: "Redshift has no default role"},
 }
 
 // QueryPlatformUsers lists every Redshift user with its groups, its directly
@@ -121,7 +125,7 @@ func (e *RedshiftScrapper) QueryPlatformUsers(ctx context.Context) (*scrapper.Pl
 		users.Users = append(users.Users, &scrapper.PlatformUser{Login: row.Login, PlatformId: row.PlatformId, Disabled: &disabled})
 	}
 	for _, skipped := range skippedPlatformUserFacts {
-		users.Skip(skipped.Fact, skipped.Reason)
+		users.Skip(skipped.Fact, skipped.Kind, skipped.Reason)
 	}
 
 	canReadOthers, err := e.canReadOthers(ctx)
@@ -162,16 +166,18 @@ func (e *RedshiftScrapper) canReadOthers(ctx context.Context) (bool, error) {
 	return len(privilege) > 0 && privilege[0].CanReadOthers, nil
 }
 
-// whyNotOthers is the reason a fact that only a user reading other users'
-// rows sees in full is not read, or "" when it is to be read.
-func whyNotOthers(canReadOthers bool, checkErr error) string {
+// whyNotOthers says how and why a fact that only a user reading other users'
+// rows sees in full is not read, or "" when it is to be read. When the check
+// itself did not answer, the fact is skipped the way the check was.
+func whyNotOthers(canReadOthers bool, checkErr error) (scrapper.PlatformUserSkipKind, string) {
 	switch {
 	case checkErr != nil:
-		return "could not tell whether the user may read other users' rows (" + platformUserFactSkipReason("has_system_privilege", checkErr) + ")"
+		kind, reason := platformUserFactSkip("has_system_privilege", checkErr)
+		return kind, "could not tell whether the user may read other users' rows (" + reason + ")"
 	case !canReadOthers:
-		return "other users' rows need ACCESS SYSTEM TABLE"
+		return scrapper.PlatformUserSkipRefused, "other users' rows need ACCESS SYSTEM TABLE"
 	}
-	return ""
+	return "", ""
 }
 
 // addPlatformUserRoles adds group membership, which every user can read, and
@@ -192,13 +198,14 @@ func (e *RedshiftScrapper) addPlatformUserRoles(
 			return ctxErr
 		}
 		logging.GetLogger(ctx).WithError(err).Warn("failed to read redshift group membership")
-		users.Skip(scrapper.PlatformUserFactRoles, platformUserFactSkipReason("PG_GROUP", err))
+		kind, reason := platformUserFactSkip("PG_GROUP", err)
+		users.Skip(scrapper.PlatformUserFactRoles, kind, reason)
 		return nil
 	}
 	users.AssignRoles(rolesByLogin(groups))
 
-	if why := whyNotOthers(canReadOthers, checkErr); why != "" {
-		users.Skip(scrapper.PlatformUserFactRoles, "only group membership was read: role grants (SVV_USER_GRANTS) were not, "+why)
+	if kind, why := whyNotOthers(canReadOthers, checkErr); why != "" {
+		users.Skip(scrapper.PlatformUserFactRoles, kind, "only group membership was read: role grants (SVV_USER_GRANTS) were not, "+why)
 		return nil
 	}
 	grants, err := scanQuery[platformUserRoleRow](ctx, e, platformUserRoleGrantsSQL, "svv_user_grants")
@@ -207,7 +214,8 @@ func (e *RedshiftScrapper) addPlatformUserRoles(
 			return ctxErr
 		}
 		logging.GetLogger(ctx).WithError(err).Warn("failed to read redshift role grants")
-		users.Skip(scrapper.PlatformUserFactRoles, "only group membership was read: "+platformUserFactSkipReason("SVV_USER_GRANTS", err))
+		kind, reason := platformUserFactSkip("SVV_USER_GRANTS", err)
+		users.Skip(scrapper.PlatformUserFactRoles, kind, "only group membership was read: "+reason)
 		return nil
 	}
 	users.AssignRoles(rolesByLogin(grants))
@@ -222,8 +230,8 @@ func (e *RedshiftScrapper) addPlatformUserLastLogins(
 	canReadOthers bool,
 	checkErr error,
 ) error {
-	if why := whyNotOthers(canReadOthers, checkErr); why != "" {
-		users.Skip(scrapper.PlatformUserFactLastLoginAt, "SYS_CONNECTION_LOG was not read: "+why)
+	if kind, why := whyNotOthers(canReadOthers, checkErr); why != "" {
+		users.Skip(scrapper.PlatformUserFactLastLoginAt, kind, "SYS_CONNECTION_LOG was not read: "+why)
 		return nil
 	}
 	logins, err := scanQuery[platformUserLastLoginRow](ctx, e, platformUserLastLoginSQL, "sys_connection_log")
@@ -232,7 +240,8 @@ func (e *RedshiftScrapper) addPlatformUserLastLogins(
 			return ctxErr
 		}
 		logging.GetLogger(ctx).WithError(err).Warn("failed to read redshift last logins")
-		users.Skip(scrapper.PlatformUserFactLastLoginAt, platformUserFactSkipReason("SYS_CONNECTION_LOG", err))
+		kind, reason := platformUserFactSkip("SYS_CONNECTION_LOG", err)
+		users.Skip(scrapper.PlatformUserFactLastLoginAt, kind, reason)
 		return nil
 	}
 	lastLogin := make(map[string]time.Time, len(logins))
@@ -274,16 +283,17 @@ func isUnavailableError(err error) bool {
 	return false
 }
 
-// platformUserFactSkipReason says why a fact query did not answer, in the
+// platformUserFactSkip says how and why a fact query did not answer, in the
 // three states a listing has: refused, unavailable on this cluster, failed.
-func platformUserFactSkipReason(source string, err error) string {
-	switch {
-	case dwhexecredshift.IsPermissionError(err):
-		return "reading " + source + " was refused: " + err.Error()
-	case isUnavailableError(err):
-		return source + " is not available on this cluster: " + err.Error()
+func platformUserFactSkip(source string, err error) (scrapper.PlatformUserSkipKind, string) {
+	kind := scrapper.PlatformUserSkipKindOf(err, dwhexecredshift.IsPermissionError, isUnavailableError)
+	switch kind {
+	case scrapper.PlatformUserSkipRefused:
+		return kind, "reading " + source + " was refused: " + err.Error()
+	case scrapper.PlatformUserSkipUnavailable:
+		return kind, source + " is not available on this cluster: " + err.Error()
 	default:
-		return "reading " + source + " failed: " + err.Error()
+		return kind, "reading " + source + " failed: " + err.Error()
 	}
 }
 

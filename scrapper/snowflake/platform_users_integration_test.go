@@ -132,8 +132,10 @@ func TestSnowflakePlatformUsers_RefusedAccountUsageLeavesShowUsers(t *testing.T)
 	reconciled := result.Reconcile()
 	require.Equal(t, scrapper.PlatformUsersUnknown, reconciled.Completeness)
 	require.Contains(t, reconciled.CompletenessReason, accountUsageUsersSource+" refused")
-	require.True(t, reconciled.IsSkipped(scrapper.PlatformUserFactRoles))
-	require.True(t, reconciled.IsSkipped(scrapper.PlatformUserFactPlatformId))
+	// SHOW USERS never states either, and ACCOUNT_USAGE, which does, was
+	// refused: a grant would read them.
+	scrappertest.AssertSkipped(t, reconciled, scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused)
+	scrappertest.AssertSkipped(t, reconciled, scrapper.PlatformUserFactPlatformId, scrapper.PlatformUserSkipRefused)
 }
 
 // A refused source is told apart from a failure by IsPermissionError, so a refused ACCOUNT_USAGE.USERS must

@@ -146,7 +146,7 @@ func authIdListing(ctx context.Context, q rowQuerier, source authIdSource, authI
 		scrapper.PlatformUserFactLastLoginAt,
 		scrapper.PlatformUserFactDefaultRole,
 	} {
-		listing.Skip(fact, db2NoUserRecord)
+		listing.Skip(fact, scrapper.PlatformUserSkipUnavailable, db2NoUserRecord)
 	}
 	for _, authId := range authIds {
 		listing.Users = append(listing.Users, &scrapper.PlatformUser{Login: authId})
@@ -172,12 +172,12 @@ func authIdListing(ctx context.Context, q rowQuerier, source authIdSource, authI
 	case ctx.Err() != nil:
 		return nil, ctx.Err()
 	case dwhexecdb2.IsPermissionError(err):
-		listing.Skip(scrapper.PlatformUserFactRoles, "SYSCAT.ROLEAUTH was refused ("+platformUsersGrant+")")
+		listing.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipRefused, "SYSCAT.ROLEAUTH was refused ("+platformUsersGrant+")")
 	case isUnavailable(err):
-		listing.Skip(scrapper.PlatformUserFactRoles, "this Db2 cannot read SYSCAT.ROLEAUTH: "+err.Error())
+		listing.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipUnavailable, "this Db2 cannot read SYSCAT.ROLEAUTH: "+err.Error())
 	default:
 		logging.GetLogger(ctx).WithError(err).Warn("cannot read SYSCAT.ROLEAUTH, listing users without roles")
-		listing.Skip(scrapper.PlatformUserFactRoles, "reading SYSCAT.ROLEAUTH failed: "+err.Error())
+		listing.Skip(scrapper.PlatformUserFactRoles, scrapper.PlatformUserSkipFailed, "reading SYSCAT.ROLEAUTH failed: "+err.Error())
 	}
 	return listing, nil
 }

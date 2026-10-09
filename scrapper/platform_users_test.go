@@ -2,6 +2,8 @@ package scrapper
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -72,18 +74,69 @@ func TestPlatformUsersFinish(t *testing.T) {
 
 	t.Run("skipped facts are sorted and recorded once", func(t *testing.T) {
 		users := &PlatformUserListing{Users: []*PlatformUser{{Login: "A"}}}
-		users.Skip(PlatformUserFactRoles, "refused")
-		users.Skip(PlatformUserFactEmail, "not on this platform")
-		users.Skip(PlatformUserFactRoles, "second reason")
+		users.Skip(PlatformUserFactRoles, PlatformUserSkipRefused, "refused")
+		users.Skip(PlatformUserFactEmail, PlatformUserSkipUnavailable, "not on this platform")
+		users.Skip(PlatformUserFactRoles, PlatformUserSkipFailed, "second reason")
 		users.Finish()
 
 		assert.Equal(t, []SkippedPlatformUserFact{
-			{Fact: PlatformUserFactEmail, Reason: "not on this platform"},
-			{Fact: PlatformUserFactRoles, Reason: "refused"},
+			{Fact: PlatformUserFactEmail, Kind: PlatformUserSkipUnavailable, Reason: "not on this platform"},
+			{Fact: PlatformUserFactRoles, Kind: PlatformUserSkipRefused, Reason: "refused"},
 		}, users.SkippedFacts)
 		assert.True(t, users.IsSkipped(PlatformUserFactRoles))
 		assert.False(t, users.IsSkipped(PlatformUserFactType))
+
+		skip, ok := users.SkippedFact(PlatformUserFactRoles)
+		assert.True(t, ok)
+		assert.Equal(t, PlatformUserSkipRefused, skip.Kind, "the first kind is kept with the first reason")
+		_, ok = users.SkippedFact(PlatformUserFactType)
+		assert.False(t, ok)
 	})
+}
+
+func TestPlatformUserSkipKindOf(t *testing.T) {
+	refused := errorString("refused")
+	missing := errorString("no such view")
+	isRefused := func(err error) bool { return err == refused }
+	isMissing := func(err error) bool { return err == missing }
+
+	assert.Equal(t, PlatformUserSkipRefused, PlatformUserSkipKindOf(refused, isRefused, isMissing))
+	assert.Equal(t, PlatformUserSkipUnavailable, PlatformUserSkipKindOf(missing, isRefused, isMissing))
+	assert.Equal(t, PlatformUserSkipFailed, PlatformUserSkipKindOf(errorString("i/o timeout"), isRefused, isMissing),
+		"an error neither classifier knows is a failure, never a refusal")
+	assert.Equal(t, PlatformUserSkipFailed, PlatformUserSkipKindOf(refused, nil, nil), "either classifier may be nil")
+
+	both := func(error) bool { return true }
+	assert.Equal(t, PlatformUserSkipRefused, PlatformUserSkipKindOf(refused, both, both), "a refusal wins, as for a source")
+}
+
+func TestPlatformUserListingDependentSkipKind(t *testing.T) {
+	answered := &PlatformUserListing{Source: "p.view", Users: []*PlatformUser{{Login: "A"}}}
+	assert.Equal(t, PlatformUserSkipUnavailable, answered.DependentSkipKind(), "the other source never states it")
+	assert.Equal(t, PlatformUserSkipRefused, RefusedPlatformUserSource("p.view", PlatformUserSourceSQL, errorString("denied")).DependentSkipKind())
+	assert.Equal(
+		t,
+		PlatformUserSkipUnavailable,
+		UnavailablePlatformUserSource("p.view", PlatformUserSourceSQL, errorString("no view")).DependentSkipKind(),
+	)
+	assert.Equal(
+		t,
+		PlatformUserSkipFailed,
+		PlatformUserSourceError("p.view", PlatformUserSourceSQL, errorString("timeout"), nil, nil).DependentSkipKind(),
+	)
+	var none *PlatformUserListing
+	assert.Equal(t, PlatformUserSkipUnavailable, none.DependentSkipKind())
+}
+
+func TestSkippedPlatformUserFactJSON(t *testing.T) {
+	encoded, err := json.Marshal(SkippedPlatformUserFact{Fact: PlatformUserFactRoles, Kind: PlatformUserSkipRefused, Reason: "r"})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"fact":"roles","kind":"refused","reason":"r"}`, string(encoded))
+
+	// A listing stored before skips had a kind decodes with none.
+	var stored SkippedPlatformUserFact
+	require.NoError(t, json.Unmarshal([]byte(`{"fact":"roles","reason":"r"}`), &stored))
+	assert.Equal(t, SkippedPlatformUserFact{Fact: PlatformUserFactRoles, Reason: "r"}, stored)
 }
 
 func TestPlatformUsersAssignRoles(t *testing.T) {
@@ -148,7 +201,7 @@ func TestPlatformUsersReconcile(t *testing.T) {
 		fresh := sql("p.fresh", PlatformUsersUnknown,
 			&PlatformUser{Login: "A", Email: "a@fresh", Disabled: &yes, CreatedAt: &created, Roles: []string{"R2", "R1"}},
 			&PlatformUser{Login: "NEW", Type: "SERVICE"})
-		trusted.Skip(PlatformUserFactCreatedAt, "trusted has no created")
+		trusted.Skip(PlatformUserFactCreatedAt, PlatformUserSkipUnavailable, "trusted has no created")
 
 		got := NewPlatformUsers(trusted, fresh).Reconcile()
 
@@ -177,14 +230,45 @@ func TestPlatformUsersReconcile(t *testing.T) {
 
 	t.Run("a fact is skipped only when every source that answered skipped it", func(t *testing.T) {
 		one := sql("p.one", PlatformUsersComplete, &PlatformUser{Login: "A"})
-		one.Skip(PlatformUserFactEmail, "not here")
-		one.Skip(PlatformUserFactRoles, "refused")
+		one.Skip(PlatformUserFactEmail, PlatformUserSkipUnavailable, "not here")
+		one.Skip(PlatformUserFactRoles, PlatformUserSkipRefused, "refused")
 		two := sql("p.two", PlatformUsersUnknown, &PlatformUser{Login: "A", Roles: []string{"R"}})
-		two.Skip(PlatformUserFactEmail, "not there")
+		two.Skip(PlatformUserFactEmail, PlatformUserSkipUnavailable, "not there")
 
 		got := NewPlatformUsers(one, two, RefusedPlatformUserSource("p.three", PlatformUserSourceAPI, refusal)).Reconcile()
 
-		assert.Equal(t, []SkippedPlatformUserFact{{Fact: PlatformUserFactEmail, Reason: "p.one: not here; p.two: not there"}}, got.SkippedFacts)
+		assert.Equal(t, []SkippedPlatformUserFact{
+			{Fact: PlatformUserFactEmail, Kind: PlatformUserSkipUnavailable, Reason: "p.one: not here; p.two: not there"},
+		}, got.SkippedFacts)
+	})
+
+	t.Run("a fact every source skipped takes the kind a caller can act on", func(t *testing.T) {
+		for _, tc := range []struct {
+			name  string
+			kinds []PlatformUserSkipKind
+			want  PlatformUserSkipKind
+		}{
+			{"a grant to either source reads it", []PlatformUserSkipKind{PlatformUserSkipUnavailable, PlatformUserSkipRefused}, PlatformUserSkipRefused},
+			{"a refusal beats a failure", []PlatformUserSkipKind{PlatformUserSkipFailed, PlatformUserSkipRefused}, PlatformUserSkipRefused},
+			{"a later run may read it", []PlatformUserSkipKind{PlatformUserSkipUnavailable, PlatformUserSkipFailed}, PlatformUserSkipFailed},
+			{"no source has it", []PlatformUserSkipKind{PlatformUserSkipUnavailable, PlatformUserSkipUnavailable}, PlatformUserSkipUnavailable},
+			{"a stored skip without a kind says nothing", []PlatformUserSkipKind{"", PlatformUserSkipUnavailable}, PlatformUserSkipUnavailable},
+			{"no kind at all stays without one", []PlatformUserSkipKind{"", ""}, ""},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				var sources []*PlatformUserListing
+				for i, kind := range tc.kinds {
+					src := sql(fmt.Sprintf("p.%d", i), PlatformUsersComplete, &PlatformUser{Login: "A"})
+					src.Skip(PlatformUserFactLastLoginAt, kind, "why")
+					sources = append(sources, src)
+				}
+				got := NewPlatformUsers(sources...).Reconcile()
+				skip, ok := got.SkippedFact(PlatformUserFactLastLoginAt)
+				require.True(t, ok)
+				assert.Equal(t, tc.want, skip.Kind)
+				assert.Equal(t, "p.0: why; p.1: why", skip.Reason)
+			})
+		}
 	})
 
 	t.Run("completeness is the most complete source's, refusals explain an incomplete one", func(t *testing.T) {

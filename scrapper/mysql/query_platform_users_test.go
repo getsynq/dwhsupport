@@ -153,8 +153,16 @@ func TestSourceErrorClassification(t *testing.T) {
 	assert.Empty(t, failed.Refused)
 }
 
-func TestFactSkipReason(t *testing.T) {
-	assert.Contains(t, factSkipReason(&mysql.MySQLError{Number: 1142}, "mysql.role_edges"), "may not read mysql.role_edges; grant")
-	assert.Contains(t, factSkipReason(&mysql.MySQLError{Number: 1146}, "mysql.role_edges"), "does not exist on this server version")
-	assert.Contains(t, factSkipReason(errors.New("bad connection"), "mysql.role_edges"), "reading mysql.role_edges failed")
+func TestFactSkip(t *testing.T) {
+	kind, reason := factSkip(&mysql.MySQLError{Number: 1142}, "mysql.role_edges")
+	assert.Equal(t, scrapper.PlatformUserSkipRefused, kind)
+	assert.Contains(t, reason, "may not read mysql.role_edges; grant")
+
+	kind, reason = factSkip(&mysql.MySQLError{Number: 1146}, "mysql.role_edges")
+	assert.Equal(t, scrapper.PlatformUserSkipUnavailable, kind)
+	assert.Contains(t, reason, "does not exist on this server version")
+
+	kind, reason = factSkip(errors.New("bad connection"), "mysql.role_edges")
+	assert.Equal(t, scrapper.PlatformUserSkipFailed, kind)
+	assert.Contains(t, reason, "reading mysql.role_edges failed")
 }

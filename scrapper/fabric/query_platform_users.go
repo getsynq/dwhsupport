@@ -206,9 +206,13 @@ func platformUsersFromAssignments(assignments []*dwhexecfabric.WorkspaceRoleAssi
 		scrapper.PlatformUserFactLastLoginAt,
 		scrapper.PlatformUserFactDefaultRole,
 	} {
-		result.Skip(f, "the Fabric API does not state it for a workspace member")
+		result.Skip(f, scrapper.PlatformUserSkipUnavailable, "the Fabric API does not state it for a workspace member")
 	}
-	result.Skip(scrapper.PlatformUserFactEmail, "the Fabric API states a user principal name, which is the login, not an email")
+	result.Skip(
+		scrapper.PlatformUserFactEmail,
+		scrapper.PlatformUserSkipUnavailable,
+		"the Fabric API states a user principal name, which is the login, not an email",
+	)
 
 	var notListed []string
 	for _, a := range assignments {
@@ -300,10 +304,11 @@ func platformUsersFromDatabase(db *databaseUsers, loginsByGUID map[string]string
 		scrapper.PlatformUserFactLastLoginAt,
 		scrapper.PlatformUserFactDefaultRole,
 	} {
-		result.Skip(f, "a Fabric database user does not state it")
+		result.Skip(f, scrapper.PlatformUserSkipUnavailable, "a Fabric database user does not state it")
 	}
 	if db.RolesErr != nil {
-		result.Skip(scrapper.PlatformUserFactRoles, rolesSkipReason(db.RolesErr))
+		kind, reason := rolesSkip(db.RolesErr)
+		result.Skip(scrapper.PlatformUserFactRoles, kind, reason)
 	}
 
 	for _, d := range db.Users {
@@ -327,15 +332,16 @@ func platformUsersFromDatabase(db *databaseUsers, loginsByGUID map[string]string
 	return result
 }
 
-// rolesSkipReason says why database role memberships could not be read.
-func rolesSkipReason(err error) string {
-	switch {
-	case dwhexecfabric.IsPermissionError(err):
-		return "the identity may not read database role memberships (VIEW DEFINITION on the database): " + err.Error()
-	case dwhexecfabric.IsUnavailableError(err):
-		return "this Fabric SQL surface has no sys.database_role_members: " + err.Error()
+// rolesSkip says how and why database role memberships could not be read.
+func rolesSkip(err error) (scrapper.PlatformUserSkipKind, string) {
+	kind := scrapper.PlatformUserSkipKindOf(err, dwhexecfabric.IsPermissionError, dwhexecfabric.IsUnavailableError)
+	switch kind {
+	case scrapper.PlatformUserSkipRefused:
+		return kind, "the identity may not read database role memberships (VIEW DEFINITION on the database): " + err.Error()
+	case scrapper.PlatformUserSkipUnavailable:
+		return kind, "this Fabric SQL surface has no sys.database_role_members: " + err.Error()
 	default:
-		return "reading database role memberships failed: " + err.Error()
+		return kind, "reading database role memberships failed: " + err.Error()
 	}
 }
 

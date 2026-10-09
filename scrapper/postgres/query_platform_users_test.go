@@ -3,6 +3,7 @@ package postgres
 import (
 	"testing"
 
+	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -29,9 +30,22 @@ func TestPlatformUsersSourceError(t *testing.T) {
 	assert.False(t, failed.Answered())
 }
 
-func TestPlatformUserFactSkipReason(t *testing.T) {
-	assert.Contains(t, platformUserFactSkipReason("pg_auth_members", &pq.Error{Code: "42501", Message: "denied"}), "refused")
-	assert.Contains(t, platformUserFactSkipReason("shobj_description", &pq.Error{Code: "42883", Message: "no such function"}),
-		"not available on this server")
-	assert.Contains(t, platformUserFactSkipReason("pg_roles.rolconfig", errors.New("i/o timeout")), "failed")
+func TestPlatformUserFactSkip(t *testing.T) {
+	kind, reason := platformUserFactSkip("pg_auth_members", &pq.Error{Code: "42501", Message: "denied"})
+	assert.Equal(t, scrapper.PlatformUserSkipRefused, kind)
+	assert.Contains(t, reason, "refused")
+
+	kind, reason = platformUserFactSkip("shobj_description", &pq.Error{Code: "42883", Message: "no such function"})
+	assert.Equal(t, scrapper.PlatformUserSkipUnavailable, kind)
+	assert.Contains(t, reason, "not available on this server")
+
+	kind, reason = platformUserFactSkip("pg_roles.rolconfig", errors.New("i/o timeout"))
+	assert.Equal(t, scrapper.PlatformUserSkipFailed, kind)
+	assert.Contains(t, reason, "failed")
+}
+
+func TestPlatformUserFactsPostgresDoesNotKeepAreUnavailable(t *testing.T) {
+	for _, skipped := range skippedPlatformUserFacts {
+		assert.Equalf(t, scrapper.PlatformUserSkipUnavailable, skipped.Kind, "%s", skipped.Fact)
+	}
 }
