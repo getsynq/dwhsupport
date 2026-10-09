@@ -144,9 +144,8 @@ func TestDisplayName(t *testing.T) {
 func boolPtr(b bool) *bool { return &b }
 
 func TestPlatformUserSourceErrorClassification(t *testing.T) {
-	sc := &SnowflakeScrapper{}
 	classify := func(err error) *scrapper.PlatformUserListing {
-		return scrapper.PlatformUserSourceError("s", scrapper.PlatformUserSourceSQL, err, sc.IsPermissionError, isUnavailable)
+		return scrapper.PlatformUserSourceError("s", scrapper.PlatformUserSourceSQL, err, isRefused, isUnavailable)
 	}
 
 	assert.NotEmpty(t, classify(&gosnowflake.SnowflakeError{Number: 904, Message: "invalid identifier 'TYPE'"}).Unavailable,
@@ -161,5 +160,39 @@ func TestPlatformUserSourceErrorClassification(t *testing.T) {
 		Message: "Warehouse 'MY_WH' cannot be resumed because resource monitor 'MY_RM' has exceeded its quota.",
 	}
 	assert.NotEmpty(t, classify(quota).Failed, "refused=%q", classify(quota).Refused)
-	assert.Equal(t, scrapper.PlatformUserSkipFailed, scrapper.PlatformUserSkipKindOf(quota, sc.IsPermissionError, isUnavailable))
+	assert.NotEmpty(t, classify(errors.Wrap(errors.New(quota.Message), "query")).Failed, "matched by its message too")
+}
+
+func TestPlatformUsersRolesSkip(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		err    error
+		kind   scrapper.PlatformUserSkipKind
+		reason string
+	}{
+		{
+			"refused", &gosnowflake.SnowflakeError{Number: 2003, Message: "Object does not exist or not authorized."},
+			scrapper.PlatformUserSkipRefused, "was refused",
+		},
+		{
+			"insufficient privileges", &gosnowflake.SnowflakeError{Number: 3001, Message: "Insufficient privileges"},
+			scrapper.PlatformUserSkipRefused, "was refused",
+		},
+		{
+			"resource monitor quota", &gosnowflake.SnowflakeError{Number: 90073, Message: "cannot be resumed because resource monitor"},
+			scrapper.PlatformUserSkipFailed, "failed",
+		},
+		{
+			"missing column", &gosnowflake.SnowflakeError{Number: 904, Message: "invalid identifier 'ROLE'"},
+			scrapper.PlatformUserSkipUnavailable, "cannot read",
+		},
+		{"timeout", errors.New("i/o timeout"), scrapper.PlatformUserSkipFailed, "failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind, reason := rolesSkip(tc.err)
+			assert.Equal(t, tc.kind, kind)
+			assert.Contains(t, reason, "GRANTS_TO_USERS")
+			assert.Contains(t, reason, tc.reason)
+		})
+	}
 }

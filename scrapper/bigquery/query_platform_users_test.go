@@ -130,7 +130,7 @@ func TestPlatformUsersFromServiceAccounts(t *testing.T) {
 		{Email: "unbound@my-project.iam.gserviceaccount.com", UniqueId: "1002"},
 		{Email: ""},
 		nil,
-	}).Finish()
+	}, scrapper.PlatformUserSkipUnavailable).Finish()
 
 	assert.Equal(t, platformUserSourceServiceAccounts, users.Source)
 	assert.Equal(t, scrapper.PlatformUserSourceAPI, users.Kind)

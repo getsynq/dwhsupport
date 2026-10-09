@@ -117,11 +117,13 @@ func platformUsersFromSources(
 	accounts []*iam.ServiceAccount, accountsErr error,
 	policy *cloudresourcemanager.Policy, policyErr error,
 ) (*scrapper.PlatformUsers, error) {
+	// Each source skips the facts only the other states the way the other
+	// did not answer, so the errors are classified before either is built.
 	accountsSource := platformUserSourceError(platformUserSourceServiceAccounts, accountsErr)
-	if accountsSource == nil {
-		accountsSource = platformUsersFromServiceAccounts(accounts)
-	}
 	policySource := platformUserSourceError(platformUserSourceIamPolicy, policyErr)
+	if accountsSource == nil {
+		accountsSource = platformUsersFromServiceAccounts(accounts, policySource.DependentSkipKind())
+	}
 	if policySource == nil {
 		policySource = platformUsersFromPolicy(policy, accountsSource.DependentSkipKind())
 	}
@@ -162,7 +164,10 @@ func platformUserSourceError(source string, err error) *scrapper.PlatformUserLis
 
 // platformUsersFromServiceAccounts lists every service account of the
 // project. Its email is the login jobs report as user_email.
-func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.PlatformUserListing {
+//
+// rolesKind is how the roles, which only the IAM policy states, are skipped
+// (see PlatformUserListing.DependentSkipKind).
+func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount, rolesKind scrapper.PlatformUserSkipKind) *scrapper.PlatformUserListing {
 	users := &scrapper.PlatformUserListing{
 		Source:             platformUserSourceServiceAccounts,
 		Kind:               scrapper.PlatformUserSourceAPI,
@@ -175,7 +180,7 @@ func platformUsersFromServiceAccounts(accounts []*iam.ServiceAccount) *scrapper.
 	users.Skip(scrapper.PlatformUserFactDefaultRole, scrapper.PlatformUserSkipUnavailable, "BigQuery has no default role")
 	users.Skip(
 		scrapper.PlatformUserFactRoles,
-		scrapper.PlatformUserSkipUnavailable,
+		rolesKind,
 		"roles are bound in IAM policies, see "+platformUserSourceIamPolicy,
 	)
 
