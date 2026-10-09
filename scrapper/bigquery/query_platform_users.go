@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
 	"google.golang.org/api/cloudresourcemanager/v1"
+	"google.golang.org/api/googleapi"
 	iam "google.golang.org/api/iam/v1"
 	"google.golang.org/api/option"
 )
@@ -138,8 +139,10 @@ func platformUsersFromSources(
 //     it: a project owner has to enable the API, which may be a deliberate
 //     choice, so it reads like a platform without the source rather than a
 //     role without a grant. The reason names the API and where to enable it;
-//   - refused on any other permission error (IsPermissionError);
-//   - failed otherwise (5xx, timeout).
+//   - refused on any other permission error (IsPermissionError), except a
+//     rate limit or quota Google also answers with a 403 (isQuotaError):
+//     no grant lifts it;
+//   - failed otherwise (5xx, timeout, a quota).
 func platformUserSourceError(source string, err error) *scrapper.PlatformUserListing {
 	if err == nil {
 		return nil
@@ -159,7 +162,46 @@ func platformUserSourceError(source string, err error) *scrapper.PlatformUserLis
 		}
 		return scrapper.UnavailablePlatformUserSource(source, scrapper.PlatformUserSourceAPI, reason)
 	}
-	return scrapper.PlatformUserSourceError(source, scrapper.PlatformUserSourceAPI, err, dwhexecbigquery.IsPermissionError, nil)
+	return scrapper.PlatformUserSourceError(source, scrapper.PlatformUserSourceAPI, err, isRefused, nil)
+}
+
+// isRefused reports an error a grant to the credentials would fix.
+func isRefused(err error) bool {
+	return dwhexecbigquery.IsPermissionError(err) && !isQuotaError(err)
+}
+
+// quotaReasons are the reasons Google gives a rate limit or quota, in the
+// legacy error list (rateLimitExceeded, ...) and in google.rpc.ErrorInfo
+// (RATE_LIMIT_EXCEEDED, ...). Some APIs answer them with a 403.
+var quotaReasons = map[string]bool{
+	"rateLimitExceeded":       true,
+	"userRateLimitExceeded":   true,
+	"quotaExceeded":           true,
+	"dailyLimitExceeded":      true,
+	"RATE_LIMIT_EXCEEDED":     true,
+	"RESOURCE_EXHAUSTED":      true,
+	"RESOURCE_QUOTA_EXCEEDED": true,
+}
+
+// isQuotaError reports a Google API error that is a rate limit or quota.
+func isQuotaError(err error) bool {
+	var gerr *googleapi.Error
+	if !errors.As(err, &gerr) {
+		return false
+	}
+	for _, item := range gerr.Errors {
+		if quotaReasons[item.Reason] {
+			return true
+		}
+	}
+	for _, d := range gerr.Details {
+		if m, ok := d.(map[string]interface{}); ok {
+			if reason, _ := m["reason"].(string); quotaReasons[reason] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // platformUsersFromServiceAccounts lists every service account of the

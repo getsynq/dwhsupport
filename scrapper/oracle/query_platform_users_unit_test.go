@@ -108,6 +108,13 @@ func TestOracleErrorClassification(t *testing.T) {
 	assert.False(t, isUnavailable(errDisconnect))
 	assert.False(t, dwhexecoracle.IsPermissionError(errDisconnect))
 	assert.False(t, isUnavailable(nil))
+
+	assert.True(t, isRefused(errRefused))
+	assert.True(t, isRefused(errRecursiveRefused), "the error below ORA-00604 decides")
+	assert.False(t, isRefused(errRecursiveTrigger), "a bare ORA-00604 is no grant's business")
+	assert.True(t, dwhexecoracle.IsPermissionError(errRecursiveTrigger), "while the shared classifier still takes it")
+	assert.False(t, isRefused(errNoColumn))
+	assert.False(t, isRefused(nil))
 }
 
 func TestOraclePlatformUsersFromDbaUsers(t *testing.T) {
