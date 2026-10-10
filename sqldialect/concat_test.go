@@ -227,6 +227,22 @@ func (s *ConcatSuite) TestConcatWsOnRedshiftIsNotAFunctionCall() {
 	}
 }
 
+// TestOracleMd5OfLongText pins the SQL of the Oracle digest: a ConcatWs is
+// measured, then hashed as a VARCHAR2 or as a CLOB, and anything else goes to
+// STANDARD_HASH alone.
+func (s *ConcatSuite) TestOracleMd5OfLongText() {
+	oracle := NewOracleDialect()
+	for name, text := range map[string]Expr{
+		"concat_ws":  ConcatWs("|", Sql("col1"), Sql("col2"), Sql("col3")),
+		"single_col": ConcatWs("|", Sql("col1")),
+		"plain_expr": Sql("col1"),
+	} {
+		sql, err := OracleMd5OfLongText(text).ToSql(oracle)
+		s.Require().NoError(err)
+		snaps.WithConfig(snaps.Dir("OracleMd5OfLongText"), snaps.Filename(name)).MatchSnapshot(s.T(), sql)
+	}
+}
+
 func numberedColumns(n int) []Expr {
 	exprs := make([]Expr, n)
 	for i := range exprs {

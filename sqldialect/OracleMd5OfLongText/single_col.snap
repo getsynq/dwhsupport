@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestOracleMd5OfLongText - 1]
+STANDARD_HASH(col1, 'MD5')
+---
