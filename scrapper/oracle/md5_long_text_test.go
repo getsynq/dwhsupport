@@ -15,11 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// md5OfConcatWs is the digest under test: the MD5 of a ConcatWs, as a RAW(16).
-func md5OfConcatWs(text sqldialect.Expr) sqldialect.Expr {
-	return sqldialect.WrapSql("STANDARD_HASH(%s, 'MD5')", text)
-}
-
 // connectAsSys connects as SYS, which owns DBMS_CRYPTO, so the long text
 // digest runs without a grant the test user does not have.
 func connectAsSys(t *testing.T) *sqlx.DB {
@@ -80,8 +75,10 @@ func TestOracleMd5OfConcatWs(t *testing.T) {
 		{"exactly 4000 bytes", []part{rpad("a", 1999), rpad("b", 2000)}},
 		{"4001 bytes", []part{rpad("a", 2000), rpad("b", 2000)}},
 		{"wide row", repeat(str("1.000000"), 900)},
+		{"wide row computed", repeat(part{sqldialect.Sql("TO_CHAR(1, 'FM0.000000')"), "1.000000"}, 900)},
 		{"long values", []part{rpad("x", 3000), rpad("ż", 1500), str("tail")}},
 		{"long values with a NULL", []part{rpad("x", 3000), null, rpad("y", 3000)}},
+		{"long values after a NULL", []part{null, rpad("x", 3000), rpad("y", 3000)}},
 	}
 	dialect := sqldialect.NewOracleDialect()
 	for _, tc := range cases {
@@ -92,7 +89,7 @@ func TestOracleMd5OfConcatWs(t *testing.T) {
 				exprs[i] = p.expr
 				texts[i] = p.text
 			}
-			digest, err := md5OfConcatWs(sqldialect.ConcatWs("|", exprs...)).ToSql(dialect)
+			digest, err := sqldialect.OracleMd5OfLongText(sqldialect.ConcatWs("|", exprs...)).ToSql(dialect)
 			require.NoError(t, err)
 
 			var got string

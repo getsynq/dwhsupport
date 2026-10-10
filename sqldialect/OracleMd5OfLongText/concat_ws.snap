@@ -1,0 +1,4 @@
+
+[TestConcatSuite/TestOracleMd5OfLongText - 1]
+CASE WHEN NVL(LENGTHB(col1), 0) + NVL(LENGTHB(col2), 0) + NVL(LENGTHB(col3), 0) + 2 <= 4000 THEN STANDARD_HASH(col1 || '|' || col2 || '|' || col3, 'MD5') ELSE DBMS_CRYPTO.HASH(col1 || TO_CLOB('|') || col2 || TO_CLOB('|') || col3, 2) END
+---
