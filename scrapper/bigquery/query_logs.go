@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"regexp"
 	"strings"
 	"time"
 
@@ -219,9 +220,10 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		}
 	}
 
-	// Convert destination table (output table)
+	// Convert destination table (output table). The anonymous table holding a result is not one.
 	if row.DestinationTable != nil && row.DestinationTable.ProjectId.Valid && row.DestinationTable.DatasetId.Valid &&
-		row.DestinationTable.TableId.Valid {
+		row.DestinationTable.TableId.Valid &&
+		!IsAnonymousResultTable(row.DestinationTable.DatasetId.StringVal, row.DestinationTable.TableId.StringVal) {
 		outputTables = append(outputTables, scrapper.DwhFqn{
 			DatabaseName: row.DestinationTable.ProjectId.StringVal,
 			SchemaName:   row.DestinationTable.DatasetId.StringVal,
@@ -371,4 +373,16 @@ func nullStringValue(v bigquery.NullString) *structpb.Value {
 		return nil
 	}
 	return querylogs.StringValue(v.StringVal)
+}
+
+// anonymousDatasetPattern is how BigQuery names the hidden dataset of a job's anonymous result
+// table: an underscore and a SHA-1 in hex.
+var anonymousDatasetPattern = regexp.MustCompile(`^_[0-9a-f]{40}$`)
+
+// IsAnonymousResultTable says whether a job's destination table is the anonymous table BigQuery
+// writes a result into when the job names no destination of its own. It expires with the cached
+// result and is never written by anything else, so it is no output of the job. A customer's
+// dataset starting with an underscore, and a script's temporary tables (`_script…`), are tables.
+func IsAnonymousResultTable(datasetId, tableId string) bool {
+	return anonymousDatasetPattern.MatchString(datasetId) && strings.HasPrefix(tableId, "anon")
 }
