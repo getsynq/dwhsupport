@@ -1,6 +1,6 @@
 module github.com/getsynq/dwhsupport
 
-go 1.25.5
+go 1.26.0
 
 require (
 	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20261001100407-d9362a86a617.2
@@ -47,7 +47,7 @@ require (
 	go.uber.org/mock v0.6.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/oauth2 v0.32.0
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.24.0
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da
 	google.golang.org/api v0.247.0
 	google.golang.org/grpc v1.78.0
