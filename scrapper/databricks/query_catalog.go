@@ -44,6 +44,9 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 		}
 
 		tagsLookup, err := e.createTagsLookup(ctx, catalogInfo.Name)
+		if err != nil {
+			return nil, err
+		}
 		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
 		if err != nil {
 			return nil, err
