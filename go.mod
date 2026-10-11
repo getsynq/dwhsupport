@@ -24,7 +24,7 @@ require (
 	github.com/duckdb/duckdb-go/v2 v2.5.5
 	github.com/gkampitakis/go-snaps v0.5.14
 	github.com/go-db2/go-db2 v0.0.0-20260926194529-3326334e97ba
-	github.com/go-sql-driver/mysql v1.9.2
+	github.com/go-sql-driver/mysql v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/influxdata/athenadriver/v2 v2.0.0
 	github.com/invopop/jsonschema v0.13.0
@@ -61,7 +61,7 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.5.2 // indirect
-	filippo.io/edwards25519 v1.1.0 // indirect
+	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
