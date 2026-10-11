@@ -33,7 +33,7 @@ require (
 	github.com/lib/pq v1.10.9
 	github.com/microsoft/go-mssqldb v1.9.7
 	github.com/pkg/errors v0.9.1
-	github.com/samber/lo v1.51.0
+	github.com/samber/lo v1.53.0
 	github.com/sijms/go-ora/v2 v2.9.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/snowflakedb/gosnowflake v1.13.3
