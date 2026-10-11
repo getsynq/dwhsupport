@@ -100,7 +100,8 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 					return e.scrapeError(groupCtx, "table.metadata", dataset.DatasetID, tableId, err)
 				}
 
-				var tableTags []*scrapper.Tag = datasetTags
+				tableTags := make([]*scrapper.Tag, 0, len(datasetTags))
+				tableTags = append(tableTags, datasetTags...)
 				tableTags = append(tableTags, labelsToTags(tableMeta.Labels)...)
 
 				row := &scrapper.TableRow{
@@ -110,6 +111,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 					Table:       tableAlias,
 					TableType:   string(tableMeta.Type),
 					Description: lo.EmptyableToPtr(tableMeta.Description),
+					Tags:        tableTags,
 				}
 
 				if includeConstraints {
