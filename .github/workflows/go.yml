@@ -31,13 +31,31 @@ jobs:
 
   cli:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Dependabot's branch, not the merge commit, so a tidy can be pushed to it.
+          ref: ${{ github.actor == 'dependabot[bot]' && github.head_ref || '' }}
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: 'cli/go.mod'
           cache-dependency-path: 'cli/go.sum'
+      # Dependabot updates one module at a time, and a root bump leaves cli/go.mod
+      # behind, which a readonly build refuses. The checks below run on the tidied tree.
+      - name: Tidy cli after a Dependabot bump
+        if: github.actor == 'dependabot[bot]' && github.event_name == 'pull_request'
+        working-directory: cli
+        run: |
+          go mod tidy
+          if [ -n "$(git status --porcelain go.mod go.sum)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "cli: go mod tidy after the dependency bump" go.mod go.sum
+            git push origin "HEAD:${{ github.head_ref }}"
+          fi
       - name: Build
         working-directory: cli
         run: go build ./...
