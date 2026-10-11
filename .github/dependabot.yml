@@ -1,11 +1,11 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
-
 version: 2
 updates:
-  - package-ecosystem: "gomod" # See documentation for possible values
-    directory: "/" # Location of package manifests
+  # cli/ replaces github.com/getsynq/dwhsupport with ../, so a bump at the root
+  # can move cli's indirect requirements too. The cli job in go.yml tidies
+  # cli/ on Dependabot's pull requests and commits the result.
+  - package-ecosystem: "gomod"
+    directories:
+      - "/"
+      - "/cli"
     schedule:
       interval: "weekly"
