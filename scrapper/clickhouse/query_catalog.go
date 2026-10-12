@@ -18,7 +18,7 @@ func (e *ClickhouseScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 	return dwhexecclickhouse.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors[scrapper.CatalogColumnRow](func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Instance, row.Database = e.rowIdentity()
-			return row, nil
+			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)
 }

@@ -21,7 +21,7 @@ func (e *Db2Scrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColu
 	return dwhexecdb2.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Instance = e.conf.Hostname
-			return row, nil
+			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)
 }

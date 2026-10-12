@@ -24,6 +24,8 @@ var catalogQuery = `
         coalesce((t.table_type = 'MATERIALIZED VIEW' OR t.table_type = 'VIEW'), false) as "is_view",
         c.column_name as "column",
         c.data_type as "type",
+        c.numeric_precision as "numeric_precision",
+        c.numeric_scale as "numeric_scale",
         c.ordinal_position as "position"
 	from
 		%[1]s.information_schema.columns as c
@@ -75,6 +77,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 				}
 				for _, result := range tmpResults {
 					result.Instance = e.conf.Account
+					result.ResolveNumeric(e.DialectType())
 				}
 
 				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
@@ -96,20 +99,23 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 							for _, sourceTableColumn := range sourceTableColumns {
 								tmpResults = append(
 									tmpResults, &scrapper.CatalogColumnRow{
-										Instance:       sourceTableColumn.Instance,
-										Database:       streamRow.DatabaseName,
-										Schema:         streamRow.SchemaName,
-										Table:          streamRow.Name,
-										Column:         sourceTableColumn.Column,
-										Type:           sourceTableColumn.Type,
-										Position:       sourceTableColumn.Position,
-										Comment:        sourceTableColumn.Comment,
-										TableComment:   sourceTableColumn.TableComment,
-										ColumnTags:     sourceTableColumn.ColumnTags,
-										TableTags:      sourceTableColumn.TableTags,
-										IsStructColumn: sourceTableColumn.IsStructColumn,
-										IsArrayColumn:  sourceTableColumn.IsArrayColumn,
-										FieldSchemas:   sourceTableColumn.FieldSchemas,
+										Instance:        sourceTableColumn.Instance,
+										Database:        streamRow.DatabaseName,
+										Schema:          streamRow.SchemaName,
+										Table:           streamRow.Name,
+										Column:          sourceTableColumn.Column,
+										Type:            sourceTableColumn.Type,
+										Position:        sourceTableColumn.Position,
+										Comment:         sourceTableColumn.Comment,
+										TableComment:    sourceTableColumn.TableComment,
+										ColumnTags:      sourceTableColumn.ColumnTags,
+										TableTags:       sourceTableColumn.TableTags,
+										IsStructColumn:  sourceTableColumn.IsStructColumn,
+										IsArrayColumn:   sourceTableColumn.IsArrayColumn,
+										FieldSchemas:    sourceTableColumn.FieldSchemas,
+										Precision:       sourceTableColumn.Precision,
+										Scale:           sourceTableColumn.Scale,
+										NumericCategory: sourceTableColumn.NumericCategory,
 									},
 								)
 							}

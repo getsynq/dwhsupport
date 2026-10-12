@@ -19,7 +19,7 @@ func (e *OracleScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogC
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Database = e.conf.ServiceName
 			row.Instance = e.conf.Host
-			return row, nil
+			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)
 }

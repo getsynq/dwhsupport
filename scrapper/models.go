@@ -67,6 +67,14 @@ type CatalogColumnRow struct {
 	IsStructColumn     bool    `db:"is_struct_column"     json:"is_struct_column"     ch:"is_struct_column"     bigquery:"is_struct_column"`
 	IsArrayColumn      bool    `db:"is_array_column"      json:"is_array_column"      ch:"is_array_column"      bigquery:"is_array_column"`
 	FieldSchemas       []*SchemaColumnField
+	// Precision and Scale are an exact numeric column's declared size, and
+	// NumericCategory what kind of number the column holds, all filled by
+	// ResolveNumeric. Both sizes are nil for every other column, and for a
+	// numeric whose size the warehouse does not report: a nil scale is not a
+	// scale of 0.
+	Precision       *int64          `db:"numeric_precision" json:"precision,omitempty"        ch:"numeric_precision"`
+	Scale           *int64          `db:"numeric_scale"     json:"scale,omitempty"            ch:"numeric_scale"`
+	NumericCategory NumericCategory `                       json:"numeric_category,omitempty"`
 }
 
 type SchemaColumnField struct {

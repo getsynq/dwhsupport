@@ -107,7 +107,8 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 				defer mutex.Unlock()
 
 				for i, field := range tableMeta.Schema {
-					rows = append(rows, &scrapper.CatalogColumnRow{
+					precision, scale, sized := decimalSize(field)
+					row := &scrapper.CatalogColumnRow{
 						Database:       e.conf.ProjectId,
 						Schema:         dataset.DatasetID,
 						Table:          tableAlias,
@@ -121,7 +122,11 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 						IsStructColumn: field.Type == bigquery.RecordFieldType || field.Type == bigquery.JSONFieldType,
 						IsArrayColumn:  field.Repeated,
 						FieldSchemas:   toFieldSchemas(field.Schema),
-					})
+					}
+					if sized {
+						row.Precision, row.Scale = &precision, &scale
+					}
+					rows = append(rows, row.ResolveNumeric(e.DialectType()))
 				}
 
 				return nil

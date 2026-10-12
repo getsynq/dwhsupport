@@ -91,7 +91,7 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 						ColumnTags:   getColumnTags(tagsLookup, tableInfo.CatalogName, tableInfo.SchemaName, tableInfo.Name, columnInfo.Name),
 					}
 
-					res = append(res, catalogRow)
+					res = append(res, catalogRow.ResolveNumeric(e.DialectType()))
 				}
 			}
 		}

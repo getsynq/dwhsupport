@@ -171,6 +171,8 @@ func TestNativeValueKind(t *testing.T) {
 		{"clickhouse", "Decimal(38, 6)", KindNumeric},
 		{"mysql", "DATETIME", KindTimestamp},
 		{"mysql", "UNSIGNED BIGINT", KindInteger},
+		{"mysql", "int unsigned", KindInteger},
+		{"mysql", "decimal(10,2) unsigned zerofill", KindNumeric},
 		{"oracle", "DATE", KindTimestamp},
 		{"oracle", "TimeStampTZ_DTY", KindTimestampTz},
 		{"mssql", "DATETIMEOFFSET", KindTimestampTz},
