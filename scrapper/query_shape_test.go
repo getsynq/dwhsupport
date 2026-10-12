@@ -62,3 +62,28 @@ func TestSetDecimalSize(t *testing.T) {
 		})
 	}
 }
+
+func TestSetFloatLength(t *testing.T) {
+	tests := []struct {
+		name   string
+		kind   ValueKind
+		single bool
+		length int64
+		ok     bool
+		want   bool
+	}{
+		{name: "four bytes is single precision", kind: KindFloat, length: 4, ok: true, want: true},
+		{name: "eight bytes is double precision", kind: KindFloat, single: true, length: 8, ok: true, want: false},
+		{name: "no length keeps the name's answer", kind: KindFloat, single: true, want: true},
+		{name: "another length keeps the name's answer", kind: KindFloat, single: true, length: 24, ok: true, want: true},
+		{name: "a numeric is never single precision", kind: KindNumeric, length: 4, ok: true, want: false},
+		{name: "an integer is never single precision", kind: KindInteger, length: 4, ok: true, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			col := &QueryShapeColumn{Kind: tt.kind, SinglePrecision: tt.single}
+			assert.Same(t, col, col.SetFloatLength(tt.length, tt.ok))
+			assert.Equal(t, tt.want, col.SinglePrecision)
+		})
+	}
+}
