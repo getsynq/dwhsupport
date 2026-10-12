@@ -19,7 +19,7 @@ func (e *AthenaScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogC
 	return stdsql.QueryMany(ctx, db, query,
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Instance = e.executor.Instance()
-			return row, nil
+			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)
 }

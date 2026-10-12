@@ -18,7 +18,7 @@ func (e *MySQLScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogCo
 	return dwhexecmysql.NewQuerier[scrapper.CatalogColumnRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Database = e.conf.Host
-			return row, nil
+			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)
 }

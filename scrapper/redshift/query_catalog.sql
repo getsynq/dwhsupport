@@ -114,6 +114,7 @@ with svv_redshift_columns as ((SELECT current_database()::character varying(128)
                                           THEN 'cardinal_number'::character varying
                                       ELSE svv_redshift_columns.data_type
                                       END::character varying(128) AS data_type,
+                                  svv_redshift_columns.data_type::character varying(128) AS sized_type,
                                   svv_redshift_columns.remarks
                            FROM svv_redshift_columns
                            UNION ALL
@@ -153,6 +154,7 @@ with svv_redshift_columns as ((SELECT current_database()::character varying(128)
                                           THEN 'smallint'::character varying
                                       ELSE ext_columns.external_type
                                       END::character varying(128)                                         AS data_type,
+                                  ext_columns.external_type::character varying(128) AS sized_type,
                                   NULL::"unknown"                                                         AS remarks
                            FROM pg_get_external_columns() ext_columns(es_or_edb_oid integer,
                                                                       redshift_database_name character varying,
@@ -198,6 +200,7 @@ with svv_redshift_columns as ((SELECT current_database()::character varying(128)
                                          THEN 'smallint'::character varying
                                      ELSE ext_columns.external_type
                                      END::character varying(128)                                         AS data_type,
+                                 ext_columns.external_type::character varying(128) AS sized_type,
                                  NULL::"unknown"                                                         AS remarks
                           FROM pg_get_external_database_columns() ext_columns(es_or_edb_oid integer,
                                                                               redshift_database_name character varying,
@@ -243,6 +246,7 @@ with svv_redshift_columns as ((SELECT current_database()::character varying(128)
                                         THEN 'smallint'::character varying
                                     ELSE ext_columns.external_type
                                     END::character varying(128)                               AS data_type,
+                                ext_columns.external_type::character varying(128) AS sized_type,
                                 NULL::"unknown"                                               AS remarks
                          FROM pg_get_all_external_columns() ext_columns(databasename character varying,
                                                                         schemaname character varying,
@@ -257,6 +261,13 @@ select database_name         as database,
        is_view               as is_view,
        column_name           as column,
        data_type             as type,
+       -- data_type folds numeric(18,6) to numeric, so the size is read from the
+       -- type as the catalog spells it: the first number is the precision, the
+       -- second the scale.
+       case when data_type = 'numeric'
+            then nullif(regexp_substr(sized_type, '[0-9]+', 1, 1), '')::integer end as numeric_precision,
+       case when data_type = 'numeric'
+            then nullif(regexp_substr(sized_type, '[0-9]+', 1, 2), '')::integer end as numeric_scale,
        ordinal_position      as position,
        lower(type) = 'super' as is_struct_column,
        lower(type) = 'super' as is_array_column,

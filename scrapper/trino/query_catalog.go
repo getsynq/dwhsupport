@@ -45,7 +45,7 @@ func (e *TrinoScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogCo
 		rows, err := stdsql.QueryMany(ctx, db, query,
 			dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 				row.Instance = e.conf.Host
-				return row, nil
+				return row.ResolveNumeric(e.DialectType()), nil
 			}),
 		)
 		if err != nil {

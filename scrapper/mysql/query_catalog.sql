@@ -17,6 +17,8 @@ with tables as (select null          as "table_database",
                         column_name      as "column_name",
                         ordinal_position as "column_index",
                         data_type        as "column_type",
+                        numeric_precision as "numeric_precision",
+                        numeric_scale    as "numeric_scale",
                         column_comment   as "comment"
 
 
@@ -30,6 +32,8 @@ select ''                         as "database",
        columns.column_name        as "column",
        columns.column_index       as "position",
        columns.column_type        as "type",
+       columns.numeric_precision  as "numeric_precision",
+       columns.numeric_scale      as "numeric_scale",
        columns.comment            as "comment"
 from tables
          join columns using (table_schema, table_name)

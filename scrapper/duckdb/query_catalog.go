@@ -19,7 +19,7 @@ func (e *DuckDBScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogC
 	return stdsql.QueryMany[scrapper.CatalogColumnRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Instance = e.conf.MotherduckAccount
-			return row, nil
+			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)
 }

@@ -20,6 +20,7 @@ func (e *FabricScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogC
 		func(row *scrapper.CatalogColumnRow, db string) {
 			row.Instance = e.conf.Host
 			row.Database = db
+			row.ResolveNumeric(e.DialectType())
 		},
 	)
 }

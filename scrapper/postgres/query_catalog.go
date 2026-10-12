@@ -19,7 +19,7 @@ func (e *PostgresScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
-			return row, nil
+			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)
 }
