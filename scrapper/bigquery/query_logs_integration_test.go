@@ -165,14 +165,17 @@ func (s *BigQueryQueryLogsSuite) TestWeightIsTheStatementsNotTheScripts() {
 		s.Require().NotNil(weight.ExecutionMs, statement)
 		s.Require().NotNil(weight.ComputeMs, statement)
 		s.Require().NotNil(weight.BytesScanned, statement)
+		s.Require().NotNil(weight.BytesBilled, statement)
 		s.Positive(*weight.ComputeMs, "RAND() keeps the result out of the cache, so the statement used slots")
 		s.Positive(*weight.BytesScanned)
 		s.NotEmpty(weight.ComputeId)
-		s.T().Logf("%s: execution=%d compute=%d bytes=%d", weight.ComputeId, *weight.ExecutionMs, *weight.ComputeMs, *weight.BytesScanned)
+		s.T().Logf("%s: execution=%d compute=%d bytes=%d billed=%d",
+			weight.ComputeId, *weight.ExecutionMs, *weight.ComputeMs, *weight.BytesScanned, *weight.BytesBilled)
 	}
 	scriptWeight := logs[script].Weight()
 	s.Nil(scriptWeight.ExecutionMs)
 	s.Nil(scriptWeight.ComputeMs)
 	s.Nil(scriptWeight.BytesScanned)
+	s.Nil(scriptWeight.BytesBilled)
 	s.Equal(logs[first].Weight().ComputeId, scriptWeight.ComputeId)
 }

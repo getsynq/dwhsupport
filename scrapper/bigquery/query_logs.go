@@ -65,13 +65,17 @@ type BigQueryQueryLogSchema struct {
 	} `bigquery:"query_hashes"`
 	// SessionId is read from session_info (see queryLogColumnExpressions).
 	SessionId bigquery.NullString `bigquery:"session_id"`
+	// BiEngineMode is read from bi_engine_statistics (see queryLogColumnExpressions). NULL for a job
+	// BI Engine did not see.
+	BiEngineMode bigquery.NullString `bigquery:"bi_engine_mode"`
 }
 
 // queryLogColumnExpressions selects the columns of BigQueryQueryLogSchema that are not top-level
 // columns of INFORMATION_SCHEMA.JOBS.
 var queryLogColumnExpressions = map[string]string{
-	"query_hashes": "query_info.query_hashes AS query_hashes",
-	"session_id":   "session_info.session_id AS session_id",
+	"query_hashes":   "query_info.query_hashes AS query_hashes",
+	"session_id":     "session_info.session_id AS session_id",
+	"bi_engine_mode": "bi_engine_statistics.bi_engine_mode AS bi_engine_mode",
 }
 
 type bigqueryQueryLogIterator struct {
@@ -265,6 +269,7 @@ func convertBigQueryRowToQueryLog(row *BigQueryQueryLogSchema, obfuscator queryl
 		"parent_job_id":         querylogs.StringValue(row.ParentJobId.StringVal),
 		"session_id":            querylogs.StringValue(row.SessionId.StringVal),
 		"transferred_bytes":     nullInt64Value(row.TransferredBytes),
+		"bi_engine_mode":        nullStringValue(row.BiEngineMode),
 	}
 
 	// Add error details if present

@@ -80,18 +80,33 @@ func TestDecodeQueryWeight(t *testing.T) {
 			metadata: map[string]any{
 				"statement_type": "SELECT", "job_type": "QUERY", "start_time": "2026-10-08T14:58:02.197Z",
 				"end_time": "2026-10-08T14:58:02.887Z", "total_slot_ms": 688, "total_bytes_processed": 109557,
-				"project_id": "my-project", "reservation_id": "admin-project:EU.default",
+				"total_bytes_billed": 10_485_760, "project_id": "my-project", "reservation_id": "admin-project:EU.default",
 			},
-			want: QueryWeight{ExecutionMs: ms(690), ComputeMs: ms(688), BytesScanned: ms(109557), ComputeId: "admin-project:EU.default"},
+			want: QueryWeight{
+				ExecutionMs: ms(690), ComputeMs: ms(688), BytesScanned: ms(109557), BytesBilled: ms(10_485_760),
+				ComputeId: "admin-project:EU.default",
+			},
+		},
+		{
+			name:    "bigquery: a query BI Engine answered from memory reads bytes it does not bill",
+			dialect: "bigquery",
+			metadata: map[string]any{
+				"statement_type": "SELECT", "job_type": "QUERY", "cache_hit": false, "bi_engine_mode": "FULL",
+				"start_time": "2026-10-12T09:06:23.500Z", "end_time": "2026-10-12T09:06:26.543Z", "total_slot_ms": 507773,
+				"total_bytes_processed": 217_216_460_480, "total_bytes_billed": 0, "project_id": "my-project",
+			},
+			want: QueryWeight{
+				ExecutionMs: ms(3043), ComputeMs: ms(507773), BytesScanned: ms(217_216_460_480), BytesBilled: ms(0), ComputeId: "my-project",
+			},
 		},
 		{
 			name:    "bigquery: a cached query on demand",
 			dialect: "bigquery",
 			metadata: map[string]any{
 				"statement_type": "SELECT", "cache_hit": true, "start_time": "2026-10-08T14:58:02Z", "end_time": "2026-10-08T14:58:02.040Z",
-				"total_slot_ms": 0, "total_bytes_processed": 0, "project_id": "my-project",
+				"total_slot_ms": 0, "total_bytes_processed": 0, "total_bytes_billed": 0, "project_id": "my-project",
 			},
-			want: QueryWeight{ExecutionMs: ms(40), ComputeMs: ms(0), BytesScanned: ms(0), ComputeId: "my-project"},
+			want: QueryWeight{ExecutionMs: ms(40), ComputeMs: ms(0), BytesScanned: ms(0), BytesBilled: ms(0), ComputeId: "my-project"},
 		},
 		{
 			name:    "bigquery: a job that reported no figures",
@@ -107,7 +122,8 @@ func TestDecodeQueryWeight(t *testing.T) {
 			dialect: "bigquery",
 			metadata: map[string]any{
 				"statement_type": "SCRIPT", "start_time": "2026-10-08T14:00:00Z", "end_time": "2026-10-08T14:05:00Z",
-				"total_slot_ms": 1_200_000, "total_bytes_processed": 5_000_000, "project_id": "my-project",
+				"total_slot_ms": 1_200_000, "total_bytes_processed": 5_000_000, "total_bytes_billed": 10_485_760,
+				"project_id": "my-project",
 			},
 			want: QueryWeight{ComputeId: "my-project"},
 		},
@@ -201,4 +217,5 @@ func TestQueryWeightIsEmpty(t *testing.T) {
 	require.True(t, QueryWeight{}.IsEmpty())
 	require.False(t, QueryWeight{ExecutionMs: ms(0)}.IsEmpty(), "a zero is a value")
 	require.False(t, QueryWeight{ComputeId: "wh"}.IsEmpty())
+	require.False(t, QueryWeight{BytesBilled: ms(0)}.IsEmpty())
 }

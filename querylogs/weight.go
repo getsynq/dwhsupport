@@ -25,6 +25,12 @@ type QueryWeight struct {
 	// BytesScanned is how many bytes the query read.
 	BytesScanned *int64
 
+	// BytesBilled is how many bytes the platform billed the query for, where it bills by bytes read.
+	// Only BigQuery reports it, and it can sit far from BytesScanned either way: BI Engine bills
+	// nothing for what it reads from memory, and on demand every query is billed a minimum. On a
+	// reservation BigQuery bills slots, so there it is what the query would have cost on demand.
+	BytesBilled *int64
+
 	// ComputeId names the compute the query ran on: the Snowflake warehouse id, the BigQuery
 	// reservation (the project when it ran on none) or the Databricks SQL warehouse. Empty where
 	// the platform has none.
@@ -33,7 +39,7 @@ type QueryWeight struct {
 
 // IsEmpty reports whether the platform reported nothing to weigh the query by.
 func (w QueryWeight) IsEmpty() bool {
-	return w.ExecutionMs == nil && w.ComputeMs == nil && w.BytesScanned == nil && w.ComputeId == ""
+	return w.ExecutionMs == nil && w.ComputeMs == nil && w.BytesScanned == nil && w.BytesBilled == nil && w.ComputeId == ""
 }
 
 // Weight decodes what the query cost from its metadata. See DecodeQueryWeight.
@@ -50,8 +56,9 @@ func (q *QueryLog) Weight() QueryWeight {
 //
 //   - snowflake: EXECUTION_TIME; EXECUTION_TIME × the credits per hour of WAREHOUSE_SIZE ×
 //     QUERY_LOAD_PERCENT, only where Snowflake reported both; BYTES_SCANNED; WAREHOUSE_ID.
-//   - bigquery: end_time − start_time; total_slot_ms; total_bytes_processed; reservation_id, else
-//     project_id. A SCRIPT job gets no figures, since its own are the sum of its child jobs'.
+//   - bigquery: end_time − start_time; total_slot_ms; total_bytes_processed; total_bytes_billed;
+//     reservation_id, else project_id. A SCRIPT job gets no figures, since its own are the sum of
+//     its child jobs'.
 //   - databricks: execution_time_ms; task_total_time_ms; read_bytes; warehouse_id, else
 //     endpoint_id.
 //   - redshift: SYS_QUERY_HISTORY execution_time, which is zero for a statement the leader node
@@ -133,6 +140,7 @@ func bigqueryWeight(fields map[string]*structpb.Value) QueryWeight {
 	}
 	weight.ComputeMs = numberField(fields, "total_slot_ms")
 	weight.BytesScanned = numberField(fields, "total_bytes_processed")
+	weight.BytesBilled = numberField(fields, "total_bytes_billed")
 	start, startErr := time.Parse(time.RFC3339Nano, stringField(fields, "start_time"))
 	end, endErr := time.Parse(time.RFC3339Nano, stringField(fields, "end_time"))
 	if startErr == nil && endErr == nil && !end.Before(start) {
