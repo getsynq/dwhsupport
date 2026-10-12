@@ -43,10 +43,7 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 			continue
 		}
 
-		tagsLookup, err := e.createTagsLookup(ctx, catalogInfo.Name)
-		if err != nil {
-			return nil, err
-		}
+		tagsLookup := e.createTagsLookup(ctx, catalogInfo.Name)
 		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
 		if err != nil {
 			return nil, err
@@ -137,49 +134,47 @@ func tagsStatement(catalog, informationSchemaTable string) (string, error) {
 	return "SELECT * FROM " + name, nil
 }
 
-func (e *DatabricksScrapper) createTagsLookup(ctx context.Context, catalogName string) (map[string][]*Tags, error) {
+// createTagsLookup reads the tags of a catalog's objects, keyed by the object's dotted
+// name. Tags are best-effort: they come from the catalog's information_schema over a
+// SQL warehouse, which can be refused, stopped or unreachable while the Unity Catalog
+// listing works, and missing tags must not cost the catalog read its tables. A source
+// that cannot be read is logged and left out.
+func (e *DatabricksScrapper) createTagsLookup(ctx context.Context, catalogName string) map[string][]*Tags {
 	tagsLookup := make(map[string][]*Tags)
-	if e.conf.FetchTableTags {
-		databricksExecutor, err := e.lazyExecutor.Get()
-		if err != nil {
-			return nil, err
-		}
+	if !e.conf.FetchTableTags {
+		return tagsLookup
+	}
+	log := logging.GetLogger(ctx)
 
-		catalogTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "CATALOG_TAGS")
-		if err != nil {
-			return nil, err
-		}
-		schemaTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "SCHEMA_TAGS")
-		if err != nil {
-			return nil, err
-		}
-		tableTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "TABLE_TAGS")
-		if err != nil {
-			return nil, err
-		}
-		columnTags, err := e.queryTags(ctx, databricksExecutor, catalogName, "COLUMN_TAGS")
-		if err != nil {
-			return nil, err
-		}
+	databricksExecutor, err := e.lazyExecutor.Get()
+	if err != nil {
+		log.WithError(err).Warnf("cannot read the tags of catalog %s, continuing without them", catalogName)
+		return tagsLookup
+	}
 
-		for _, tag := range catalogTags {
-			key := tag.CatalogName
-			tagsLookup[key] = append(tagsLookup[key], tag)
+	sources := []struct {
+		table string
+		key   func(tag *Tags) string
+	}{
+		{"CATALOG_TAGS", func(tag *Tags) string { return tag.CatalogName }},
+		{"SCHEMA_TAGS", func(tag *Tags) string { return fmt.Sprintf("%s.%s", tag.CatalogName, tag.SchemaName) }},
+		{"TABLE_TAGS", func(tag *Tags) string { return fmt.Sprintf("%s.%s.%s", tag.CatalogName, tag.SchemaName, tag.TableName) }},
+		{"COLUMN_TAGS", func(tag *Tags) string {
+			return fmt.Sprintf("%s.%s.%s.%s", tag.CatalogName, tag.SchemaName, tag.TableName, tag.ColumnName)
+		}},
+	}
+	for _, source := range sources {
+		tags, err := e.queryTags(ctx, databricksExecutor, catalogName, source.table)
+		if err != nil {
+			log.WithError(err).Warnf("cannot read %s of catalog %s, continuing without them", source.table, catalogName)
+			continue
 		}
-		for _, tag := range schemaTags {
-			key := fmt.Sprintf("%s.%s", tag.CatalogName, tag.SchemaName)
-			tagsLookup[key] = append(tagsLookup[key], tag)
-		}
-		for _, tag := range tableTags {
-			key := fmt.Sprintf("%s.%s.%s", tag.CatalogName, tag.SchemaName, tag.TableName)
-			tagsLookup[key] = append(tagsLookup[key], tag)
-		}
-		for _, tag := range columnTags {
-			key := fmt.Sprintf("%s.%s.%s.%s", tag.CatalogName, tag.SchemaName, tag.TableName, tag.ColumnName)
+		for _, tag := range tags {
+			key := source.key(tag)
 			tagsLookup[key] = append(tagsLookup[key], tag)
 		}
 	}
-	return tagsLookup, nil
+	return tagsLookup
 }
 
 func getTableTags(lookup map[string][]*Tags, catalogName string, schemaName string, tableName string) []*scrapper.Tag {
