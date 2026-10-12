@@ -6,15 +6,17 @@ import (
 )
 
 // shapeColumns describes a BigQuery result schema as QueryShape and
-// RunRawQuery report it, an exact numeric's precision and scale included.
+// RunRawQuery report it, an exact numeric's precision and scale and a
+// float's single precision included.
 func shapeColumns(dialect string, schema bigquery.Schema) []*scrapper.QueryShapeColumn {
 	cols := make([]*scrapper.QueryShapeColumn, len(schema))
 	for i, field := range schema {
 		col := &scrapper.QueryShapeColumn{
-			Name:       field.Name,
-			NativeType: string(field.Type),
-			Position:   int32(i + 1),
-			Kind:       scrapper.NativeValueKind(dialect, string(field.Type)),
+			Name:            field.Name,
+			NativeType:      string(field.Type),
+			Position:        int32(i + 1),
+			Kind:            scrapper.NativeValueKind(dialect, string(field.Type)),
+			SinglePrecision: scrapper.IsSinglePrecisionFloat(dialect, string(field.Type)),
 		}
 		cols[i] = col.SetDecimalSize(decimalSize(field))
 	}

@@ -24,6 +24,10 @@ type QueryShapeColumn struct {
 	// not a scale of 0.
 	Precision *int64 `json:"precision,omitempty"`
 	Scale     *int64 `json:"scale,omitempty"`
+	// SinglePrecision marks a KindFloat column that holds a single-precision
+	// float (IsSinglePrecisionFloat), about 7 significant digits rather than a
+	// double's 15. Always false for every other kind.
+	SinglePrecision bool `json:"single_precision,omitempty"`
 }
 
 // maxDecimalPrecision is the widest exact numeric any supported warehouse
@@ -59,6 +63,25 @@ func (c *QueryShapeColumn) SetDecimalSize(precision, scale int64, ok bool) *Quer
 	}
 	c.Precision = &precision
 	c.Scale = &scale
+	return c
+}
+
+// SetFloatLength records whether a KindFloat column is single precision, from
+// its storage length in bytes as sql.ColumnType.Length reports it, and returns
+// c. A length of 4 is a single-precision float and 8 a double, whatever the
+// type is called: go-db2 names REAL and DOUBLE both FLOAT, and tells them apart
+// only by length. Any other length, or none, leaves what the native type name
+// said (IsSinglePrecisionFloat).
+func (c *QueryShapeColumn) SetFloatLength(length int64, ok bool) *QueryShapeColumn {
+	if c.Kind != KindFloat || !ok {
+		return c
+	}
+	switch length {
+	case 4:
+		c.SinglePrecision = true
+	case 8:
+		c.SinglePrecision = false
+	}
 	return c
 }
 

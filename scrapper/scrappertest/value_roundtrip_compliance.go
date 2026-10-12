@@ -351,6 +351,69 @@ func (s *ValueRoundTripSuite) assertDecimalSize(want *decimalSize, col *scrapper
 	}
 }
 
+// floatExpr is a float expression and whether it is single precision.
+type floatExpr struct {
+	expr string
+	want bool
+}
+
+// singlePrecisionFloatExprs is, per dialect, the engine's single-precision
+// float, or the type that sounds like one. Snowflake's REAL is a double like
+// every Snowflake float, and BigQuery has no single-precision type.
+var singlePrecisionFloatExprs = map[string]floatExpr{
+	"postgres":   {`CAST(12.5 AS REAL)`, true},
+	"redshift":   {`CAST(12.5 AS REAL)`, true},
+	"snowflake":  {`CAST(12.5 AS REAL)`, false},
+	"databricks": {`CAST(12.5 AS FLOAT)`, true},
+	"clickhouse": {`toFloat32(12.5)`, true},
+	"duckdb":     {`CAST(12.5 AS FLOAT)`, true},
+	"mysql":      {`CAST(12.5 AS FLOAT)`, true},
+	"mssql":      {`CAST(12.5 AS REAL)`, true},
+	"fabric":     {`CAST(12.5 AS REAL)`, true},
+	"oracle":     {`CAST(12.5 AS BINARY_FLOAT)`, true},
+	"db2":        {`CAST(12.5 AS REAL)`, true},
+	"trino":      {`CAST(12.5 AS REAL)`, true},
+	"athena":     {`CAST(12.5 AS REAL)`, true},
+}
+
+// TestValueRoundTrip_FloatPrecision checks that QueryShape and RunRawQuery
+// tell a single-precision float from a double. A consumer comparing floats
+// across warehouses rounds them to the digits the narrower side holds, and a
+// single-precision float read as a double reports digits it never stored.
+func (s *ValueRoundTripSuite) TestValueRoundTrip_FloatPrecision() {
+	if s.Scrapper == nil {
+		s.T().Skip("Scrapper not set")
+	}
+	dialect := s.Scrapper.DialectType()
+	exprs := map[string]floatExpr{}
+	if expr, ok := roundTripExprs[dialect][scrapper.KindFloat]; ok {
+		exprs["double"] = floatExpr{expr, false}
+	}
+	if single, ok := singlePrecisionFloatExprs[dialect]; ok {
+		exprs["single"] = single
+	}
+	if len(exprs) == 0 {
+		s.T().Skipf("%s has no float type", dialect)
+	}
+
+	for name, tt := range exprs {
+		s.Run(name, func() {
+			_, col := s.rawValue(s.selectValue(tt.expr))
+			s.Equalf(scrapper.KindFloat, col.Kind, "RunRawQuery: kind of native type %q", col.NativeType)
+			s.Equalf(tt.want, col.SinglePrecision, "RunRawQuery: single precision of native type %q", col.NativeType)
+
+			shape, err := s.Scrapper.QueryShape(s.ctx(), s.selectValue(tt.expr))
+			if errors.Is(err, scrapper.ErrUnsupported) {
+				return
+			}
+			s.Require().NoError(err)
+			s.Require().Len(shape, 1)
+			s.Equalf(scrapper.KindFloat, shape[0].Kind, "QueryShape: kind of native type %q", shape[0].NativeType)
+			s.Equalf(tt.want, shape[0].SinglePrecision, "QueryShape: single precision of native type %q", shape[0].NativeType)
+		})
+	}
+}
+
 func formatSizePart(v *int64) string {
 	if v == nil {
 		return "nil"

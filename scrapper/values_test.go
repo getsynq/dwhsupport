@@ -187,3 +187,56 @@ func TestNativeValueKind(t *testing.T) {
 		assert.Equalf(t, tt.want, NativeValueKind(tt.dialect, tt.nativeType), "%s %s", tt.dialect, tt.nativeType)
 	}
 }
+
+func TestIsSinglePrecisionFloat(t *testing.T) {
+	tests := []struct {
+		dialect, nativeType string
+		want                bool
+	}{
+		{"postgres", "FLOAT4", true},
+		{"postgres", "REAL", true},
+		{"postgres", "FLOAT8", false},
+		{"postgres", "DOUBLE PRECISION", false},
+		{"redshift", "float4", true},
+		{"mysql", "FLOAT", true},
+		{"mysql", "DOUBLE", false},
+		{"mysql", "REAL", false},
+		{"snowflake", "REAL", false},
+		{"snowflake", "FLOAT4", false},
+		{"snowflake", "FLOAT", false},
+		{"bigquery", "FLOAT", false},
+		{"bigquery", "FLOAT64", false},
+		{"duckdb", "FLOAT", true},
+		{"duckdb", "REAL", true},
+		{"duckdb", "DOUBLE", false},
+		{"clickhouse", "Float32", true},
+		{"clickhouse", "Nullable(Float32)", true},
+		{"clickhouse", "LowCardinality(Nullable(Float32))", true},
+		{"clickhouse", "Float64", false},
+		{"databricks", "FLOAT", true},
+		{"databricks", "DOUBLE", false},
+		{"trino", "real", true},
+		{"trino", "double", false},
+		{"athena", "real", true},
+		{"athena", "float", true},
+		{"athena", "double", false},
+		{"mssql", "REAL", true},
+		{"mssql", "FLOAT", false},
+		{"fabric", "REAL", true},
+		{"oracle", "BINARY_FLOAT", true},
+		{"oracle", "IBFloat", true},
+		{"oracle", "BINARY_DOUBLE", false},
+		{"oracle", "FLOAT", false},
+		{"db2", "REAL", true},
+		{"db2", "FLOAT", false},
+		{"db2", "DOUBLE", false},
+		// Not a float at all.
+		{"postgres", "NUMERIC(20,6)", false},
+		{"postgres", "INT4", false},
+		{"postgres", "TEXT", false},
+		{"postgres", "", false},
+	}
+	for _, tt := range tests {
+		assert.Equalf(t, tt.want, IsSinglePrecisionFloat(tt.dialect, tt.nativeType), "%s %s", tt.dialect, tt.nativeType)
+	}
+}

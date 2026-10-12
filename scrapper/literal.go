@@ -101,6 +101,42 @@ func NativeValueKind(dialect string, nativeType string) ValueKind {
 	return KindUnknown
 }
 
+// IsSinglePrecisionFloat reports whether a column's native type, as a driver
+// reports it, holds a single-precision (32-bit) float on dialect: REAL,
+// FLOAT4, Float32, BINARY_FLOAT. It is false for every type NativeValueKind
+// does not map to KindFloat, so Oracle's FLOAT, which is a NUMBER, is not
+// one.
+//
+// The same name is a different size on different engines. A bare FLOAT is
+// single precision on MySQL, Databricks, DuckDB, ClickHouse and Athena (whose
+// driver reports REAL as float), and double everywhere else. REAL is double on
+// MySQL and on Snowflake, where every float is a double whatever it is called.
+//
+// The name alone cannot tell on Db2, whose driver reports REAL and DOUBLE both
+// as FLOAT: QueryShapeColumn.SetFloatLength decides there.
+func IsSinglePrecisionFloat(dialect string, nativeType string) bool {
+	if NativeValueKind(dialect, nativeType) != KindFloat {
+		return false
+	}
+	t := normalizeNativeType(nativeType)
+	switch dialect {
+	case "snowflake":
+		return false
+	case "mysql":
+		return t == "FLOAT"
+	case "databricks", "duckdb", "clickhouse", "athena":
+		if t == "FLOAT" {
+			return true
+		}
+	}
+	switch t {
+	case "REAL", "FLOAT4", "FLOAT32", "BINARY_FLOAT", "IBFLOAT":
+		return true
+	default:
+		return false
+	}
+}
+
 // normalizeNativeType upper-cases a type name and strips what does not change
 // its kind: parameters in parentheses, and ClickHouse's Nullable(...) and
 // LowCardinality(...) wrappers.
