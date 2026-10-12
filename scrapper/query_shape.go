@@ -36,8 +36,17 @@ type QueryShapeColumn struct {
 const maxDecimalPrecision = 1000
 
 // decimalSizeInType matches a native type name that spells its size:
-// DECIMAL(20,6), Decimal(38, 6), NUMBER(19).
-var decimalSizeInType = regexp.MustCompile(`^\w+\(\s*(\d+)\s*(?:,\s*(-?\d+)\s*)?\)$`)
+// DECIMAL(20,6), Decimal(38, 6), NUMBER(19), and MySQL's decimal(20,6)
+// unsigned.
+var decimalSizeInType = regexp.MustCompile(`(?i)^(\w+)\s*\(\s*(\d+)\s*(?:,\s*(-?\d+)\s*)?\)(?:\s+(?:signed|unsigned|zerofill))*$`)
+
+// sizedDecimalTypes are the exact numeric names whose parameters are a
+// precision and a scale. ClickHouse's Decimal32(S) takes only a scale,
+// Db2's DECFLOAT(34) and Oracle's FLOAT(126) a precision that is not in
+// decimal digits of a fixed-point number, so their parameters are not a size.
+var sizedDecimalTypes = map[string]bool{
+	"DECIMAL": true, "NUMERIC": true, "NUMBER": true, "DEC": true, "FIXED": true, "BIGNUMERIC": true, "BIGDECIMAL": true,
+}
 
 // SetDecimalSize records an exact numeric column's precision and scale, as
 // sql.ColumnType.DecimalSize reports them, and returns c. Kind must be set
@@ -58,7 +67,7 @@ func (c *QueryShapeColumn) SetDecimalSize(precision, scale int64, ok bool) *Quer
 	if !ok {
 		precision, scale, ok = parseDecimalSize(c.NativeType)
 	}
-	if !ok || precision < 1 || precision > maxDecimalPrecision || scale < 0 || scale > precision {
+	if !ok || !validDecimalSize(precision, scale) {
 		return c
 	}
 	c.Precision = &precision
@@ -85,23 +94,48 @@ func (c *QueryShapeColumn) SetFloatLength(length int64, ok bool) *QueryShapeColu
 	return c
 }
 
-// parseDecimalSize reads the size out of a native type name that spells it. A
+// validDecimalSize reports whether a precision and scale are a size an exact
+// numeric column can be declared with. Anything else is how a driver or a
+// catalog describes a numeric declared without one (see SetDecimalSize).
+func validDecimalSize(precision, scale int64) bool {
+	return precision >= 1 && precision <= maxDecimalPrecision && scale >= 0 && scale <= precision
+}
+
+// parseDecimalSize reads the size out of an exact numeric type name that
+// spells it, inside ClickHouse's Nullable(...) and LowCardinality(...) too. A
 // precision without a scale is a scale of 0, as SQL defines it.
 func parseDecimalSize(nativeType string) (int64, int64, bool) {
-	m := decimalSizeInType.FindStringSubmatch(strings.TrimSpace(nativeType))
-	if m == nil {
+	m := decimalSizeInType.FindStringSubmatch(unwrapNullable(nativeType))
+	if m == nil || !sizedDecimalTypes[strings.ToUpper(m[1])] {
 		return 0, 0, false
 	}
-	precision, err := strconv.ParseInt(m[1], 10, 64)
+	precision, err := strconv.ParseInt(m[2], 10, 64)
 	if err != nil {
 		return 0, 0, false
 	}
-	if m[2] == "" {
+	if m[3] == "" {
 		return precision, 0, true
 	}
-	scale, err := strconv.ParseInt(m[2], 10, 64)
+	scale, err := strconv.ParseInt(m[3], 10, 64)
 	if err != nil {
 		return 0, 0, false
 	}
 	return precision, scale, true
+}
+
+// unwrapNullable strips ClickHouse's Nullable(...) and LowCardinality(...)
+// wrappers and surrounding space off a native type name.
+func unwrapNullable(nativeType string) string {
+	t := strings.TrimSpace(nativeType)
+	for {
+		upper := strings.ToUpper(t)
+		switch {
+		case strings.HasPrefix(upper, "NULLABLE(") && strings.HasSuffix(t, ")"):
+			t = strings.TrimSpace(t[len("NULLABLE(") : len(t)-1])
+		case strings.HasPrefix(upper, "LOWCARDINALITY(") && strings.HasSuffix(t, ")"):
+			t = strings.TrimSpace(t[len("LOWCARDINALITY(") : len(t)-1])
+		default:
+			return t
+		}
+	}
 }

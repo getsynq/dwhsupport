@@ -98,6 +98,13 @@ func NativeValueKind(dialect string, nativeType string) ValueKind {
 	if strings.HasPrefix(t, "UNSIGNED ") {
 		return NativeValueKind(dialect, t[len("UNSIGNED "):])
 	}
+	// MySQL's information_schema spells the attributes after the type:
+	// "int unsigned", "decimal(10,2) unsigned zerofill".
+	for _, attribute := range []string{" UNSIGNED", " SIGNED", " ZEROFILL"} {
+		if strings.HasSuffix(t, attribute) {
+			return NativeValueKind(dialect, t[:len(t)-len(attribute)])
+		}
+	}
 	return KindUnknown
 }
 
