@@ -261,6 +261,11 @@ func getDBFields(v interface{}) []string {
 	return fields
 }
 
+// appFileFetchPattern matches a whole statement that fetches or lists a Streamlit app's or a
+// notebook's own files: `GET 'snow://streamlit/"DB"."SCHEMA"."APP"/…' 'file:///…'` or `LS
+// 'snow://notebook/…'`. Snowflake's REGEXP_LIKE matches the whole text and has no \s.
+const appFileFetchPattern = `[ \t\n\r]*(GET|LS|LIST)[ \t\n\r]+'snow://(streamlit|notebook)/.*`
+
 func (s *SnowflakeScrapper) buildQueryLogsSql(ctx context.Context, from time.Time, to time.Time, columnsToSelect []string) (string, error) {
 	cols := make([]sqldialect.Expr, len(columnsToSelect))
 	for i, col := range columnsToSelect {
@@ -306,6 +311,17 @@ func (s *SnowflakeScrapper) buildQueryLogsSql(ctx context.Context, from time.Tim
 			sqldialect.FnCond("REGEXP_LIKE",
 				sqldialect.TextCol("QUERY_TEXT"),
 				sqldialect.String(regexpString),
+				sqldialect.String("is"),
+			),
+		)
+
+		// Condition 3: a Streamlit app or a notebook fetching its own files. That fetch is the only
+		// statement tying the login Snowflake runs the app as to the app, and it names the app's own
+		// database, which the filter usually leaves out while the app's queries read listed ones.
+		dbMatchConditions = append(dbMatchConditions,
+			sqldialect.FnCond("REGEXP_LIKE",
+				sqldialect.TextCol("QUERY_TEXT"),
+				sqldialect.String(appFileFetchPattern),
 				sqldialect.String("is"),
 			),
 		)

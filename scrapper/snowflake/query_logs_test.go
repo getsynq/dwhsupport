@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"context"
+	"regexp"
 	"testing"
 	"time"
 
@@ -209,6 +210,24 @@ func (s *QueryLogsSuite) TestBuildQueryLogsSqlAdmitsAppFileFetches() {
 
 	s.Contains(sql, `REGEXP_LIKE(QUERY_TEXT, '[ \\t\\n\\r]*(GET|LS|LIST)[ \\t\\n\\r]+''snow://(streamlit|notebook)/.*', 'is')`)
 	s.Contains(sql, `DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE`)
+}
+
+func (s *QueryLogsSuite) TestAppFileFetchPattern() {
+	pattern := regexp.MustCompile(`(?is)^` + appFileFetchPattern + `$`)
+	for _, text := range []string{
+		`GET 'snow://streamlit/"APPS_DB"."PUBLIC"."MY_APP"/versions/version$1/snowflake.yml' 'file:///opt/streamlit-runtime'`,
+		`ls 'snow://streamlit/APPS_DB.PUBLIC.MY_APP/versions/live/'`,
+		"\n  GET 'snow://notebook/\"APPS_DB\".\"PUBLIC\".\"MY_NOTEBOOK\"/versions/live/notebook_app.ipynb' 'file:///tmp'",
+	} {
+		s.True(pattern.MatchString(text), text)
+	}
+	for _, text := range []string{
+		`GET 'snow://workspace/USER$.PUBLIC.DEFAULT$/versions/head/query.sql' 'file:///tmp'`,
+		`GET @my_stage/file.csv file:///tmp`,
+		`SELECT 'GET ''snow://streamlit/APPS_DB.PUBLIC.MY_APP/'''`,
+	} {
+		s.False(pattern.MatchString(text), text)
+	}
 }
 
 func (s *QueryLogsSuite) TestQueryLogsDatabasesPriority() {
