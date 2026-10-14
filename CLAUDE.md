@@ -285,6 +285,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 - Column-level `COMMENT` appears inside `()` of column defs; table-level `COMMENT` appears after — use parenthesis depth tracking to disambiguate
 - Snowflake supports both `COMMENT='value'` and `COMMENT 'value'` syntax
 - **`cluster by (...)` between the table name and the column list defeats the per-object DDL split** — `ParseCreateStatementsPerObject` drops those tables, so `QuerySqlDefinitions` returns them with an empty `Sql` even though `GET_DDL` did contain them. The same table without CLUSTER BY parses.
+- **`QUERY_HISTORY.QUERY_TEXT` is not capped at 100 000 characters**, whatever the docs say. It is kept whole while its snappy encoding fits in 100 000 bytes (a dbt build of 1–2 MB usually does), and a text over that is cut to a prefix whose snappy encoding is about 90 900–100 000 bytes, never under 100 000 bytes of text. Nothing marks a cut, so `snowflakeQueryTextMayBeTruncated` flags that band; `TestSnowflakeQueryTextTruncation` measures it on the account.
 - **A SECURE VIEW has no definition for a non-owner role** — neither `information_schema.views.view_definition` nor `GET_DDL` returns it, so an empty `Sql` there is Snowflake behaviour, not a bug.
 
 ## Important Rules
