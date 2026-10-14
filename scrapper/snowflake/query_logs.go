@@ -7,9 +7,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/sqldialect"
+	"github.com/golang/snappy"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -88,10 +90,29 @@ type SnowflakeQueryLogSchema struct {
 	QueryParameterizedHashVersion          *int64    `db:"QUERY_PARAMETERIZED_HASH_VERSION"`
 }
 
-// snowflakeQueryTextMaxLen is the maximum length of QUERY_TEXT in ACCOUNT_USAGE.QUERY_HISTORY
-// before Snowflake truncates it. Source:
-// https://docs.snowflake.com/en/sql-reference/account-usage/query_history
-const snowflakeQueryTextMaxLen = 100000
+// Snowflake keeps QUERY_TEXT whole while its snappy encoding takes at most 100 000 bytes, so a
+// dbt build of a megabyte or more usually comes back whole. A text over that is cut: the cut keeps
+// a prefix whose snappy encoding is between about 90 900 and 100 000 bytes, and never fewer than
+// 100 000 bytes of text. Measured on a real account by sending statements of known size and
+// reading them back from QUERY_HISTORY (the documentation still says 100 000 characters), see
+// TestSnowflakeQueryTextTruncation. The view has no column that says a text was cut, so a text
+// in that band of snappy sizes may be whole or cut, and it is reported as truncated.
+const (
+	// snowflakeQueryTextMinCutBytes is the shortest text a cut leaves: 100 000 bytes, less the
+	// rest of a UTF-8 character the cut did not split.
+	snowflakeQueryTextMinCutBytes = 100_000 - utf8.UTFMax + 1
+	// snowflakeQueryTextMinCutSnappy is below the snappy size of any prefix a cut keeps.
+	snowflakeQueryTextMinCutSnappy = 90_000
+)
+
+// snowflakeQueryTextMayBeTruncated tells whether QUERY_TEXT could be a prefix Snowflake cut. A
+// text outside the band a cut lands in is whole.
+func snowflakeQueryTextMayBeTruncated(text string) bool {
+	if len(text) < snowflakeQueryTextMinCutBytes {
+		return false
+	}
+	return len(snappy.Encode(nil, []byte(text))) >= snowflakeQueryTextMinCutSnappy
+}
 
 var queryHistoryMandatoryColumns = []string{
 	"QUERY_ID",
@@ -440,10 +461,8 @@ func convertSnowflakeRowToQueryLog(
 		dwhContext.Role = *row.RoleName
 	}
 
-	// Snowflake's ACCOUNT_USAGE.QUERY_HISTORY truncates QUERY_TEXT at 100,000 characters
-	// (https://docs.snowflake.com/en/sql-reference/account-usage/query_history). Detect on
-	// the raw value before sanitization since that may shorten the string.
-	isTruncated := len(row.QueryText) >= snowflakeQueryTextMaxLen
+	// Detect on the raw value: sanitization may shorten the string.
+	isTruncated := snowflakeQueryTextMayBeTruncated(row.QueryText)
 
 	// Sanitize and apply obfuscation to query text
 	// Replace $$$$ with '' (Snowflake-specific escaping) and clean up whitespace/invalid UTF-8

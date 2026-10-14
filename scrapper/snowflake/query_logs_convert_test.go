@@ -1,6 +1,7 @@
 package snowflake
 
 import (
+	"math/rand"
 	"strconv"
 	"strings"
 	"testing"
@@ -72,4 +73,25 @@ func TestConvertSnowflakeRowLongTextIsNotTruncated(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, log.IsTruncated)
 	require.Equal(t, text, log.SQL)
+}
+
+func TestSnowflakeQueryTextMayBeTruncated(t *testing.T) {
+	rnd := rand.New(rand.NewSource(1))
+	random := func(n int) string {
+		const alnum = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
+		b := make([]byte, n)
+		for i := range b {
+			b[i] = alnum[rnd.Intn(len(alnum))]
+		}
+		return string(b)
+	}
+
+	// Under 100 000 bytes nothing is cut, however badly it compresses.
+	require.False(t, snowflakeQueryTextMayBeTruncated(random(99_000)))
+	// A cut never goes below 100 000 bytes, which is where text that does not compress ends up.
+	require.True(t, snowflakeQueryTextMayBeTruncated(random(100_000)))
+	// A megabyte whose snappy encoding is under 50 000 bytes is whole.
+	require.False(t, snowflakeQueryTextMayBeTruncated(strings.Repeat("select 1 as id union all\n", 40_000)))
+	// A prefix whose snappy size is in the band a cut lands in may be cut.
+	require.True(t, snowflakeQueryTextMayBeTruncated(random(95_000)+strings.Repeat("x", 100_000)))
 }

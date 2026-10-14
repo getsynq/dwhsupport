@@ -25,6 +25,7 @@ require (
 	github.com/gkampitakis/go-snaps v0.5.14
 	github.com/go-db2/go-db2 v0.0.0-20260926194529-3326334e97ba
 	github.com/go-sql-driver/mysql v1.10.1
+	github.com/golang/snappy v1.0.0
 	github.com/google/uuid v1.6.0
 	github.com/influxdata/athenadriver/v2 v2.0.0
 	github.com/invopop/jsonschema v0.13.0
@@ -126,7 +127,6 @@ require (
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/golang/snappy v1.0.0 // indirect
 	github.com/google/flatbuffers v25.12.19+incompatible // indirect
 	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
