@@ -2,6 +2,7 @@ package snowflake
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,4 +57,19 @@ func TestConvertSnowflakeRowSessionID(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, log.SessionID)
 	})
+}
+
+// QUERY_HISTORY keeps a statement of more than 100 000 characters whole, so a dbt build of that
+// size is not truncated and has to be parsed.
+func TestConvertSnowflakeRowLongTextIsNotTruncated(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	text := "create or replace transient table DB.SCHEMA.MODEL__dbt_tmp as (select 1 as id /* " +
+		strings.Repeat("x", 150_000) + " */)"
+	row := &SnowflakeQueryLogSchema{QueryID: "q1", ExecutionStatus: "SUCCESS", QueryText: text}
+	log, err := convertSnowflakeRowToQueryLog(row, obfuscator, "snowflake", "account")
+	require.NoError(t, err)
+	require.False(t, log.IsTruncated)
+	require.Equal(t, text, log.SQL)
 }
