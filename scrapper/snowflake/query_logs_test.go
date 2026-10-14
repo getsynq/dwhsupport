@@ -193,6 +193,24 @@ func (s *QueryLogsSuite) TestBuildQueryLogsSqlMultipleDatabases() {
 	s.Contains(sql, `DB1|DB2|DB3`)
 }
 
+func (s *QueryLogsSuite) TestBuildQueryLogsSqlAdmitsAppFileFetches() {
+	// A Streamlit app or a notebook fetches its own files under the login Snowflake runs it as, and
+	// that fetch is the only statement tying the login to the app. The app often lives in a database
+	// the filter leaves out, while its queries read the listed ones.
+	ctx := context.Background()
+	from := time.Date(2025, 10, 28, 12, 0, 0, 0, time.UTC)
+	to := time.Date(2025, 11, 4, 12, 0, 0, 0, time.UTC)
+
+	scrapper := &SnowflakeScrapper{conf: &SnowflakeScrapperConf{
+		SnowflakeConf: dwhexecsnowflake.SnowflakeConf{Account: "test-account", Databases: []string{"ANALYTICS"}},
+	}}
+	sql, err := scrapper.buildQueryLogsSql(ctx, from, to, []string{"QUERY_ID", "QUERY_TEXT"})
+	require.NoError(s.T(), err)
+
+	s.Contains(sql, `REGEXP_LIKE(QUERY_TEXT, '[ \\t\\n\\r]*(GET|LS|LIST)[ \\t\\n\\r]+''snow://(streamlit|notebook)/.*', 'is')`)
+	s.Contains(sql, `DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE`)
+}
+
 func (s *QueryLogsSuite) TestQueryLogsDatabasesPriority() {
 	// Test that QueryLogsDatabases takes priority over Databases
 	ctx := context.Background()
