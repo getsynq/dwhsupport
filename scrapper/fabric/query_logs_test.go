@@ -102,3 +102,56 @@ func TestIsQueryInsightsMissing(t *testing.T) {
 		})
 	}
 }
+
+// TestConvertFabricRowUndoesDoubledQuotes feeds command as queryinsights stores
+// it, with every single quote doubled, and expects the statement that ran.
+func TestConvertFabricRowUndoesDoubledQuotes(t *testing.T) {
+	obfuscator, err := querylogs.NewQueryObfuscator(querylogs.ObfuscationNone)
+	require.NoError(t, err)
+
+	cases := []struct {
+		name    string
+		command string
+		want    string
+	}{
+		{
+			"our own window query",
+			`SELECT command FROM [SALES_DW].queryinsights.exec_requests_history WHERE submit_time >= CAST(''2026-10-14 18:41:19'' AS DATETIME2)`,
+			`SELECT command FROM [SALES_DW].queryinsights.exec_requests_history WHERE submit_time >= CAST('2026-10-14 18:41:19' AS DATETIME2)`,
+		},
+		{
+			"unicode literal",
+			`select s.name from sys.schemas s where s.name = N''REPORT''`,
+			`select s.name from sys.schemas s where s.name = N'REPORT'`,
+		},
+		{
+			"empty unicode literal",
+			`SELECT ISNULL(clmns.collation_name, N'''') FROM sys.all_columns AS clmns`,
+			`SELECT ISNULL(clmns.collation_name, N'') FROM sys.all_columns AS clmns`,
+		},
+		{
+			"escaped quote inside a literal",
+			`SELECT ''it''''s'' AS v`,
+			`SELECT 'it''s' AS v`,
+		},
+		{
+			"procedure call",
+			`EXEC sp_set_session_context ''root_activity_id'', ''abc''`,
+			`EXEC sp_set_session_context 'root_activity_id', 'abc'`,
+		},
+		{"no quotes", `SELECT TOP 10 * FROM dbo.orders`, `SELECT TOP 10 * FROM dbo.orders`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			row := &FabricQueryLogSchema{
+				Database: "SALES_DW",
+				QueryID:  "3F1C2A9E-5B7D-4E60-A1C2-9D8E7F6A5B4C",
+				Status:   "Succeeded",
+				Command:  ptr(tc.command),
+			}
+			log, err := convertFabricRowToQueryLog(row, obfuscator, "fabric", "abc-xyz.datawarehouse.fabric.microsoft.com")
+			require.NoError(t, err)
+			require.Equal(t, tc.want, log.SQL)
+		})
+	}
+}
