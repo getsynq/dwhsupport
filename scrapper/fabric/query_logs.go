@@ -200,6 +200,17 @@ func fabricStatusToStatus(status string) string {
 	}
 }
 
+// unescapeCommand turns queryinsights' command back into the statement that ran.
+// exec_requests_history keeps the text escaped as a string literal, with every
+// single quote written twice, so the literal N'REPORT' is stored with a doubled
+// quote on each side and an empty unicode literal as N followed by four quotes.
+// An escaped quote inside a literal arrives as four quotes and becomes the two
+// the statement had. Checked on a real Fabric warehouse: over 30 days of SELECT,
+// EXECUTE PROC and batches, every run of quotes in command has even length.
+func unescapeCommand(command string) string {
+	return strings.ReplaceAll(command, "''", "'")
+}
+
 func convertFabricRowToQueryLog(
 	row *FabricQueryLogSchema,
 	obfuscator querylogs.QueryObfuscator,
@@ -218,7 +229,7 @@ func convertFabricRowToQueryLog(
 
 	queryText := ""
 	if row.Command != nil {
-		queryText = strings.TrimSpace(strings.ToValidUTF8(*row.Command, ""))
+		queryText = strings.TrimSpace(strings.ToValidUTF8(unescapeCommand(*row.Command), ""))
 		queryText = obfuscator.Obfuscate(queryText)
 	}
 
