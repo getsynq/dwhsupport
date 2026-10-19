@@ -64,7 +64,10 @@ func healthyTpch() []fakeRoute {
 		{
 			match:   sqlContains("FROM tpch.information_schema.tables t\nJOIN tpch.information_schema.columns"),
 			columns: catalogColumns,
-			rows:    [][]any{{"tpch", "tiny", "nation", "nationkey", 1, "bigint", nil, "nations"}},
+			rows: [][]any{
+				{"tpch", "tiny", "nation", "nationkey", 1, "bigint", nil, "nations"},
+				{"tpch", "tiny", "nation", "balance", 2, "decimal(12,2)", nil, "nations"},
+			},
 		},
 		{
 			match:   sqlContains("from tpch.information_schema.tables", "information_schema.views"),
@@ -73,8 +76,13 @@ func healthyTpch() []fakeRoute {
 		{
 			match:   sqlContains("FROM tpch.information_schema.tables t"),
 			columns: tableColumns,
-			rows:    [][]any{{"tpch", "tiny", "nation", "BASE TABLE", "nations", true, false}},
+			rows: [][]any{
+				{"tpch", "tiny", "nation", "BASE TABLE", "nations", true, false},
+				{"tpch", "information_schema_like", "no_stats", "BASE TABLE", "", true, false},
+			},
 		},
+		failing(sqlContains(`SHOW STATS FOR "tpch"."information_schema_like"."no_stats"`), "USER_ERROR",
+			"Table 'information_schema_like.no_stats' has no supported columns (all 0 columns are not supported)"),
 		{
 			match:   sqlContains(`SHOW STATS FOR "tpch"."tiny"."nation"`),
 			columns: showStatsColumns,
@@ -134,10 +142,10 @@ func (s *IncompleteSuite) TestTablesOfAnUnreadableCatalogAreListedWithoutDescrip
 	s.Equal(scrapper.OmittedDescriptions, omissions[0].Part)
 	s.Contains(omissions[0].Err.Error(), lakeStorageError)
 
-	byDatabase := lo.KeyBy(rows, func(r *scrapper.TableRow) string { return r.Database })
-	s.Require().Len(rows, 2)
-	s.Equal("nations", lo.FromPtr(byDatabase["tpch"].Description))
-	lake := byDatabase["lake"]
+	byTable := lo.KeyBy(rows, func(r *scrapper.TableRow) string { return r.Table })
+	s.Require().Len(rows, 3)
+	s.Equal("nations", lo.FromPtr(byTable["nation"].Description))
+	lake := byTable["orders"]
 	s.Require().NotNil(lake)
 	s.Equal("orders", lake.Table)
 	s.True(lake.IsTable)
@@ -152,9 +160,13 @@ func (s *IncompleteSuite) TestColumnsOfAnUnreadableCatalogAreOmitted() {
 	omissions := s.requireOmissions(err)
 	s.Require().Len(omissions, 1)
 	s.Equal(scrapper.Omission{Database: "lake", Part: scrapper.OmittedColumns, Err: omissions[0].Err}, omissions[0])
-	s.Require().Len(rows, 1)
+	s.Require().Len(rows, 2)
 	s.Equal("tpch", rows[0].Database)
 	s.Equal("nationkey", rows[0].Column)
+	balance := rows[1]
+	s.Equal(scrapper.NumericCategoryDecimal, balance.NumericCategory, "numeric columns are still resolved")
+	s.Equal(int64(12), lo.FromPtr(balance.Precision))
+	s.Equal(int64(2), lo.FromPtr(balance.Scale))
 }
 
 func (s *IncompleteSuite) TestMetricsOfUnreadableTablesAreOmitted() {
@@ -165,7 +177,8 @@ func (s *IncompleteSuite) TestMetricsOfUnreadableTablesAreOmitted() {
 
 	omissions := s.requireOmissions(err)
 	parts := lo.Map(omissions, func(o scrapper.Omission, _ int) string { return string(o.Part) + " " + o.Scope() })
-	s.Equal([]string{"metrics lake.sales.orders"}, parts)
+	s.Equal([]string{"metrics lake.sales.orders"}, parts,
+		"a table Trino refuses statistics for by design (USER_ERROR) is not reported, only one it failed to read")
 	s.Require().Len(rows, 1)
 	s.Equal("nation", rows[0].Table)
 	s.Equal(int64(25), lo.FromPtr(rows[0].RowCount))
@@ -183,11 +196,11 @@ func (s *IncompleteSuite) TestWrappersPassIncompleteResultsThrough() {
 
 	tables, err := wrapped.QueryTables(ctx)
 	s.Len(s.requireOmissions(err), 1)
-	s.Len(tables, 2)
+	s.Len(tables, 3)
 
 	columns, err := wrapped.QueryCatalog(ctx)
 	s.Len(s.requireOmissions(err), 1)
-	s.Len(columns, 1)
+	s.Len(columns, 2)
 
 	metrics, err := wrapped.QueryTableMetrics(ctx, time.Time{})
 	s.Len(s.requireOmissions(err), 1)
@@ -214,7 +227,7 @@ func (s *IncompleteSuite) TestAnUnavailableCatalogIsReportedWhenAsked() {
 	s.Require().Len(omissions, 1)
 	s.Equal("lake", omissions[0].Database)
 	s.Equal(scrapper.OmittedObjects, omissions[0].Part)
-	s.Require().Len(rows, 1)
+	s.Require().Len(rows, 2)
 	s.Equal("tpch", rows[0].Database)
 }
 
@@ -258,6 +271,6 @@ func (s *IncompleteSuite) TestWithoutAskingAnUnavailableCatalogIsSkipped() {
 
 	rows, err := scr.QueryTables(ctx)
 	s.Require().NoError(err)
-	s.Require().Len(rows, 1)
+	s.Require().Len(rows, 2)
 	s.Equal("tpch", rows[0].Database)
 }
