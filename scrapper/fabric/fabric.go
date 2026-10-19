@@ -56,7 +56,10 @@ func NewFabricScrapper(ctx context.Context, conf *FabricScrapperConf) (*FabricSc
 	if err != nil {
 		return nil, err
 	}
+	return newFabricScrapperWithExecutor(ctx, conf, executor), nil
+}
 
+func newFabricScrapperWithExecutor(ctx context.Context, conf *FabricScrapperConf, executor *dwhexecfabric.FabricExecutor) *FabricScrapper {
 	e := &FabricScrapper{
 		conf:     conf,
 		executor: executor,
@@ -72,7 +75,7 @@ func NewFabricScrapper(ctx context.Context, conf *FabricScrapperConf) (*FabricSc
 		}
 		return names, nil
 	})
-	return e, nil
+	return e
 }
 
 type dbNameRow struct {
