@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/stretchr/testify/require"
+	"github.com/getsynq/dwhsupport/scrapper/reject"
+	"github.com/getsynq/dwhsupport/scrapper/sanitize"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -41,9 +43,9 @@ var lockedDataset = fakeDataset{id: "locked", listStatus: http.StatusForbidden}
 // returns the tables it returned rows for.
 var methods = map[string]struct {
 	part scrapper.OmittedPart
-	run  func(ctx context.Context, s *BigQueryScrapper) ([]string, error)
+	run  func(ctx context.Context, s scrapper.Scrapper) ([]string, error)
 }{
-	"QueryTables": {scrapper.OmittedObjects, func(ctx context.Context, s *BigQueryScrapper) ([]string, error) {
+	"QueryTables": {scrapper.OmittedObjects, func(ctx context.Context, s scrapper.Scrapper) ([]string, error) {
 		rows, err := s.QueryTables(ctx)
 		var out []string
 		for _, r := range rows {
@@ -51,7 +53,7 @@ var methods = map[string]struct {
 		}
 		return out, err
 	}},
-	"QueryCatalog": {scrapper.OmittedColumns, func(ctx context.Context, s *BigQueryScrapper) ([]string, error) {
+	"QueryCatalog": {scrapper.OmittedColumns, func(ctx context.Context, s scrapper.Scrapper) ([]string, error) {
 		rows, err := s.QueryCatalog(ctx)
 		var out []string
 		for _, r := range rows {
@@ -59,7 +61,7 @@ var methods = map[string]struct {
 		}
 		return out, err
 	}},
-	"QueryTableMetrics": {scrapper.OmittedMetrics, func(ctx context.Context, s *BigQueryScrapper) ([]string, error) {
+	"QueryTableMetrics": {scrapper.OmittedMetrics, func(ctx context.Context, s scrapper.Scrapper) ([]string, error) {
 		rows, err := s.QueryTableMetrics(ctx, time.Time{})
 		var out []string
 		for _, r := range rows {
@@ -67,7 +69,7 @@ var methods = map[string]struct {
 		}
 		return out, err
 	}},
-	"QuerySqlDefinitions": {scrapper.OmittedDefinitions, func(ctx context.Context, s *BigQueryScrapper) ([]string, error) {
+	"QuerySqlDefinitions": {scrapper.OmittedDefinitions, func(ctx context.Context, s scrapper.Scrapper) ([]string, error) {
 		rows, err := s.QuerySqlDefinitions(ctx)
 		var out []string
 		for _, r := range rows {
@@ -243,11 +245,25 @@ func (s *IncompleteSuite) TestNotAcceptingIncompleteKeepsOldBehaviour() {
 	}
 }
 
-func TestOmissionsAreSafeForTheWrappers(t *testing.T) {
-	// A wrapper forwards an incomplete result with its rows only when it checks
-	// scrapper.Failed, so the error the scrapper returns must be recognised as one.
-	bq := newFakeMetadataScrapper(t, salesDataset(), lockedDataset)
-	rows, err := bq.QueryTables(scrapper.WithIncompleteResults(context.Background()))
-	require.False(t, scrapper.Failed(err))
-	require.Len(t, rows, 2)
+// The wrappers a caller stacks over a scrapper pass an incomplete result on
+// whole, rows and omissions both.
+func (s *IncompleteSuite) TestWrappersPassIncompleteResultsThrough() {
+	ctx := scrapper.WithIncompleteResults(context.Background())
+	inner := newFakeMetadataScrapper(s.T(), salesDataset(), lockedDataset, fakeDataset{id: "other", tables: []fakeTable{fakeBaseTable("t")}})
+	wrapped := scope.NewScopedScrapper(
+		sanitize.NewSanitizingScrapper(reject.NewRejectingScrapper(inner)),
+		&scope.ScopeFilter{Exclude: []scope.ScopeRule{{Database: fakeProject, Schema: "other"}}},
+	)
+
+	for name, m := range methods {
+		s.Run(name, func() {
+			tables, err := m.run(ctx, wrapped)
+			s.False(scrapper.Failed(err), "%v", err)
+			s.Equal(readTables[name], sortedStrings(tables))
+			s.Equal([]string{
+				string(m.part) + " test-project.locked",
+				string(m.part) + " test-project.sales.secret",
+			}, omissionScopes(err))
+		})
+	}
 }
