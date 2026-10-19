@@ -92,6 +92,18 @@ func Incomplete(omissions []Omission) error {
 	return &IncompleteError{Omissions: omissions}
 }
 
+// Failed reports whether err means the query returned nothing: any error except
+// an *IncompleteError, which comes with rows. A wrapper forwarding a query uses it
+// in place of `err != nil`, and returns its rows with err, so an incomplete
+// result passes through it whole.
+func Failed(err error) bool {
+	if err == nil {
+		return false
+	}
+	_, incomplete := AsIncomplete(err)
+	return !incomplete
+}
+
 // AsIncomplete reports whether err is an *IncompleteError, and returns it.
 func AsIncomplete(err error) (*IncompleteError, bool) {
 	var incomplete *IncompleteError

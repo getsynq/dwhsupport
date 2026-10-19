@@ -6,6 +6,9 @@ import (
 	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/reject"
+	"github.com/getsynq/dwhsupport/scrapper/sanitize"
+	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
@@ -161,12 +164,34 @@ func (s *IncompleteSuite) TestMetricsOfUnreadableTablesAreOmitted() {
 	rows, err := scr.QueryTableMetrics(ctx, time.Time{})
 
 	omissions := s.requireOmissions(err)
-	s.Require().Len(omissions, 2)
 	parts := lo.Map(omissions, func(o scrapper.Omission, _ int) string { return string(o.Part) + " " + o.Scope() })
-	s.ElementsMatch([]string{"descriptions lake", "metrics lake.sales.orders"}, parts)
+	s.Equal([]string{"metrics lake.sales.orders"}, parts)
 	s.Require().Len(rows, 1)
 	s.Equal("nation", rows[0].Table)
 	s.Equal(int64(25), lo.FromPtr(rows[0].RowCount))
+}
+
+// The wrappers a caller stacks over a scrapper pass an incomplete result on
+// whole, rows and omissions both.
+func (s *IncompleteSuite) TestWrappersPassIncompleteResultsThrough() {
+	ctx := scrapper.WithIncompleteResults(context.Background())
+	inner := s.scrapper(ctx, lakeAndTpch(), lakeWithUnreachableStorage(), healthyTpch())
+	wrapped := scope.NewScopedScrapper(
+		sanitize.NewSanitizingScrapper(reject.NewRejectingScrapper(inner)),
+		&scope.ScopeFilter{Exclude: []scope.ScopeRule{{Database: "tpch", Schema: "sf1"}}},
+	)
+
+	tables, err := wrapped.QueryTables(ctx)
+	s.Len(s.requireOmissions(err), 1)
+	s.Len(tables, 2)
+
+	columns, err := wrapped.QueryCatalog(ctx)
+	s.Len(s.requireOmissions(err), 1)
+	s.Len(columns, 1)
+
+	metrics, err := wrapped.QueryTableMetrics(ctx, time.Time{})
+	s.Len(s.requireOmissions(err), 1)
+	s.Len(metrics, 1)
 }
 
 func (s *IncompleteSuite) TestSqlDefinitionsAreUnaffected() {
