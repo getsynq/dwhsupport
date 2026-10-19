@@ -1,6 +1,7 @@
 package trino
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -42,6 +43,7 @@ type fakeColumn struct {
 }
 
 type fakeTrinoError struct {
+	errorName string // the errorType when empty
 	errorType string
 	message   string
 }
@@ -95,7 +97,7 @@ func (f *fakeTrino) serve(w http.ResponseWriter, r *http.Request) {
 			response["stats"] = map[string]any{"state": "FAILED"}
 			response["error"] = map[string]any{
 				"message":   route.err.message,
-				"errorName": route.err.errorType,
+				"errorName": cmp.Or(route.err.errorName, route.err.errorType),
 				"errorType": route.err.errorType,
 			}
 		} else {

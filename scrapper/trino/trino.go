@@ -16,6 +16,7 @@ import (
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/trinodb/trino-go-client/trino"
 )
 
 type TrinoScrapperConf struct {
@@ -199,40 +200,36 @@ func (e *TrinoScrapper) fqn(row scrapper.HasTableFqn, dollarTable ...string) any
 	return fmt.Sprintf("%q.%q.%q", fqn.DatabaseName, fqn.SchemaName, table)
 }
 
-// isCatalogUnavailableError checks if the error indicates a catalog is unavailable or inaccessible
+// unavailableCatalogErrorNames are the Trino error codes (StandardErrorCode)
+// that say the catalog itself is gone: dropped, never registered, or failed to
+// load on the coordinator.
+var unavailableCatalogErrorNames = map[string]bool{
+	"CATALOG_NOT_FOUND":     true,
+	"CATALOG_UNAVAILABLE":   true,
+	"CATALOG_NOT_AVAILABLE": true,
+}
+
+// isCatalogUnavailableError reports an error that says the catalog is gone, or
+// that its connector cannot reach the database behind it, which is when a
+// caller not accepting incomplete results skips the catalog.
 //
-// This function detects when Trino cannot access a catalog's underlying data source.
-// The typical error chain is:
-//  1. Go wrapper: "failed to fetch metrics: failed to query metrics"
-//  2. Trino driver: "trino: query failed (200 OK)"
-//  3. Trino server: "EXTERNAL: Error listing tables for catalog xyz: The connection attempt failed"
-//
-// Note: Trino responds with HTTP 200 OK but includes an error message when it cannot
-// connect to the external database backing a catalog (e.g., PostgreSQL, MySQL).
-// The "EXTERNAL" prefix indicates the error is with the external data source, not Trino itself.
+// It decides by the error Trino reported, never by the message text alone. A
+// catalog whose tables cannot be read fails with "Error listing table columns
+// for catalog iceberg: Failed to open input stream …", which names the catalog
+// and says listing failed, and skipping that catalog would publish its tables
+// without columns. A JDBC catalog whose database is down answers EXTERNAL "The
+// connection attempt failed.", with or without the "Error listing tables for
+// catalog" prefix, and that one is unavailable.
 func isCatalogUnavailableError(err error) bool {
-	if err == nil {
+	var trinoErr *trino.ErrTrino
+	if !errors.As(err, &trinoErr) {
 		return false
 	}
-	errMsg := strings.ToLower(err.Error())
-	// Common patterns for unavailable Trino catalogs:
-	// - "catalog 'xyz' not found" - catalog not registered in Trino
-	// - "catalog 'xyz' does not exist" - catalog doesn't exist
-	// - "line 1:15: catalog 'xyz' not registered" - catalog not registered
-	// - "EXTERNAL: Error listing tables for catalog xyz: The connection attempt failed" - external DB unreachable
-	// - "EXTERNAL: The connection attempt failed." - external DB unreachable (no catalog in message)
-	// - Other connection/listing errors from external data sources
-	if strings.Contains(errMsg, "external") && strings.Contains(errMsg, "connection attempt failed") {
+	if unavailableCatalogErrorNames[trinoErr.ErrorName] {
 		return true
 	}
-	return strings.Contains(errMsg, "catalog") &&
-		(strings.Contains(errMsg, "not found") ||
-			strings.Contains(errMsg, "does not exist") ||
-			strings.Contains(errMsg, "not registered") ||
-			strings.Contains(errMsg, "connection") ||
-			strings.Contains(errMsg, "unreachable") ||
-			strings.Contains(errMsg, "unavailable") ||
-			strings.Contains(errMsg, "error listing"))
+	return trinoErr.ErrorType == "EXTERNAL" &&
+		strings.Contains(strings.ToLower(trinoErr.Message), "the connection attempt failed")
 }
 
 // isTableNotFoundError checks if the error indicates a table does not exist.

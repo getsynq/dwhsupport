@@ -20,9 +20,11 @@ type catalogReader[T any] func(ctx context.Context, catalog *TrinoCatalog) ([]*T
 // A caller that asked with scrapper.WithIncompleteResults gets the other
 // catalogs' rows and an *IncompleteError naming the failed catalog as omitted
 // for failedPart. One that did not keeps the behaviour it had: the first
-// failure fails the call, except for a catalog Trino reports as unavailable,
-// which is skipped. Either way, a call in which every catalog failed returns the
-// first failure, since there is nothing partial about reading nothing.
+// failure fails the call, except for a catalog Trino reports as gone or whose
+// connector cannot reach its database (isCatalogUnavailableError), which is
+// skipped. A catalog Trino failed to list is not skipped, since its tables would
+// be published without columns. Either way, a call in which every catalog failed
+// returns the first failure, since there is nothing partial about reading nothing.
 func readCatalogs[T any](
 	ctx context.Context,
 	catalogs []*TrinoCatalog,
