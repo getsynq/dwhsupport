@@ -19,9 +19,12 @@ var querySqlDefinitionsSQL string
 
 func (e *TrinoScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	basic, err := e.getBasicSqlDefinitions(origCtx)
-	if err != nil {
+	if _, incomplete := scrapper.AsIncomplete(err); err != nil && !incomplete {
 		return nil, err
 	}
+	// What getBasicSqlDefinitions left out stays left out; it is returned with the
+	// rest once the definitions it did read are complete.
+	incompleteErr := err
 
 	if len(basic) > 0 && (e.conf.UseShowCreateTable || e.conf.UseShowCreateView) {
 		g, groupCtx := errgroup.WithContext(origCtx)
@@ -51,8 +54,7 @@ func (e *TrinoScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrappe
 			}
 		}
 
-		err = g.Wait()
-		if err != nil {
+		if err := g.Wait(); err != nil {
 			return nil, err
 		}
 	}
@@ -64,7 +66,7 @@ func (e *TrinoScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrappe
 			result = append(result, row)
 		}
 	}
-	return result, nil
+	return result, incompleteErr
 }
 
 func (e *TrinoScrapper) showCreate(
@@ -97,53 +99,47 @@ func (e *TrinoScrapper) showCreate(
 }
 
 func (e *TrinoScrapper) getBasicSqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	query := querySqlDefinitionsSQL
-	db := e.executor.GetDb()
-	var out []*scrapper.SqlDefinitionRow
-
 	acceptedCatalogs, err := e.acceptedCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return readCatalogs(ctx, acceptedCatalogs, scrapper.OmittedDefinitions, e.queryCatalogSqlDefinitions)
+}
 
-	for _, catalog := range acceptedCatalogs {
-		catalogQuery := strings.Replace(query, "{{catalog}}", catalog.CatalogName, -1)
+func (e *TrinoScrapper) queryCatalogSqlDefinitions(
+	ctx context.Context,
+	catalog *TrinoCatalog,
+) ([]*scrapper.SqlDefinitionRow, []scrapper.Omission, error) {
+	catalogQuery := strings.Replace(querySqlDefinitionsSQL, "{{catalog}}", catalog.CatalogName, -1)
 
-		// Conditionally add materialized views JOIN based on feature flag
-		if e.conf.FetchMaterializedViews {
-			catalogQuery = strings.Replace(
-				catalogQuery,
-				"{{materialized_views_join}}",
-				"LEFT JOIN system.metadata.materialized_views mv ON t.database = mv.catalog_name AND t.schema = mv.schema_name AND t.table_name = mv.name",
-				-1,
-			)
-			catalogQuery = strings.Replace(catalogQuery, "{{is_materialized_view_expression}}",
-				"(mv.name IS NOT NULL)", -1)
-			catalogQuery = strings.Replace(catalogQuery, "{{sql_expression}}",
-				"coalesce(mv.definition, v.view_definition, '')", -1)
-		} else {
-			catalogQuery = strings.Replace(catalogQuery, "{{materialized_views_join}}", "", -1)
-			catalogQuery = strings.Replace(catalogQuery, "{{is_materialized_view_expression}}", "false", -1)
-			catalogQuery = strings.Replace(catalogQuery, "{{sql_expression}}",
-				"coalesce(v.view_definition, '')", -1)
-		}
-
-		catalogQuery = scope.AppendScopeConditions(ctx, catalogQuery, "", "table_schema", "table_name")
-		res, err := stdsql.QueryMany(ctx, db, catalogQuery,
-			dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
-				row.Instance = e.conf.Host
-				return row, nil
-			}),
+	// Conditionally add materialized views JOIN based on feature flag
+	if e.conf.FetchMaterializedViews {
+		catalogQuery = strings.Replace(
+			catalogQuery,
+			"{{materialized_views_join}}",
+			"LEFT JOIN system.metadata.materialized_views mv ON t.database = mv.catalog_name AND t.schema = mv.schema_name AND t.table_name = mv.name",
+			-1,
 		)
-		if err != nil {
-			if isCatalogUnavailableError(err) {
-				logging.GetLogger(ctx).WithField("catalog", catalog.CatalogName).WithError(err).
-					Warn("Catalog is no longer available, skipping")
-				continue
-			}
-			return nil, err
-		}
-		out = append(out, res...)
+		catalogQuery = strings.Replace(catalogQuery, "{{is_materialized_view_expression}}",
+			"(mv.name IS NOT NULL)", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{sql_expression}}",
+			"coalesce(mv.definition, v.view_definition, '')", -1)
+	} else {
+		catalogQuery = strings.Replace(catalogQuery, "{{materialized_views_join}}", "", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{is_materialized_view_expression}}", "false", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{sql_expression}}",
+			"coalesce(v.view_definition, '')", -1)
 	}
-	return out, nil
+
+	catalogQuery = scope.AppendScopeConditions(ctx, catalogQuery, "", "table_schema", "table_name")
+	res, err := stdsql.QueryMany(ctx, e.executor.GetDb(), catalogQuery,
+		dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {
+			row.Instance = e.conf.Host
+			return row, nil
+		}),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	return res, nil, nil
 }

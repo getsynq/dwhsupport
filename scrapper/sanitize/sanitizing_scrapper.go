@@ -44,46 +44,46 @@ func (s *SanitizingScrapper) ValidateConfiguration(ctx context.Context) (warning
 
 func (s *SanitizingScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	rows, err := s.inner.QueryCatalog(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	for _, r := range rows {
 		r.Sanitize()
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *SanitizingScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 	rows, err := s.inner.QueryTableMetrics(ctx, lastMetricsFetchTime)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	for _, r := range rows {
 		r.Sanitize()
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *SanitizingScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	rows, err := s.inner.QuerySqlDefinitions(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	for _, r := range rows {
 		r.Sanitize()
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *SanitizingScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	rows, err := s.inner.QueryTables(ctx, opts...)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	for _, r := range rows {
 		r.Sanitize()
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *SanitizingScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {

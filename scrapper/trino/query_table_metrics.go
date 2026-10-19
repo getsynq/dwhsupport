@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,84 +20,98 @@ type MetricsStrategy func(ctx context.Context, tableRow *scrapper.TableRow, tabl
 
 // QueryTableMetrics fetches metrics for each table returned by queryTables, which
 // already applies scope filtering via SQL push-down. No additional scope check needed.
-func (e *TrinoScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-
-	var outMu sync.Mutex
-	var tableMetricsRows []*scrapper.TableMetricsRow
-
-	acceptedCatalogs, err := e.acceptedCatalogs(origCtx)
+func (e *TrinoScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
+	acceptedCatalogs, err := e.acceptedCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return readCatalogs(ctx, acceptedCatalogs, scrapper.OmittedMetrics, e.queryCatalogMetrics)
+}
 
-	for _, catalog := range acceptedCatalogs {
-		tables, err := e.queryTables(origCtx, catalog.CatalogName)
-		if err != nil {
-			return nil, err
-		}
+// queryCatalogMetrics reads each table's metrics on its own. A table whose metrics
+// cannot be read is left out, and named as omitted to a caller accepting
+// incomplete results; the table listing's own omissions are not about metrics, so
+// they are not passed on.
+func (e *TrinoScrapper) queryCatalogMetrics(
+	origCtx context.Context,
+	catalog *TrinoCatalog,
+) ([]*scrapper.TableMetricsRow, []scrapper.Omission, error) {
+	var outMu sync.Mutex
+	var tableMetricsRows []*scrapper.TableMetricsRow
+	var omissions []scrapper.Omission
+	reportOmissions := scrapper.IncompleteResultsAccepted(origCtx)
 
-		var metricsStrategy MetricsStrategy
-
-		switch catalog.ConnectorName {
-		case "iceberg", "galaxy_objectstore":
-			logging.GetLogger(origCtx).Infof("using iceberg metrics strategy for catalog %s", catalog.CatalogName)
-			metricsStrategy = e.icebergMetricsStrategy
-
-		default:
-			logging.GetLogger(origCtx).Warnf(
-				"unknown connector %s for catalog %s, falling back to SHOW STATS",
-				catalog.ConnectorName, catalog.CatalogName,
-			)
-			metricsStrategy = e.showStatsMetricsStrategy
-		}
-
-		if len(tables) > 0 {
-			g, groupCtx := errgroup.WithContext(origCtx)
-			g.SetLimit(8)
-
-			for _, t := range tables {
-
-				if t.TableType == "VIEW" {
-					continue
-				}
-				tableMetricsRow := &scrapper.TableMetricsRow{
-					Instance: t.Instance,
-					Database: t.Database,
-					Schema:   t.Schema,
-					Table:    t.Table,
-				}
-
-				select {
-				case <-groupCtx.Done():
-					return nil, groupCtx.Err()
-				default:
-				}
-
-				if metricsStrategy != nil {
-					g.Go(func() error {
-						if err := metricsStrategy(groupCtx, t, tableMetricsRow); err != nil {
-							logging.GetLogger(groupCtx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
-							return nil
-						}
-						if tableMetricsRow.SizeBytes == nil && tableMetricsRow.RowCount == nil && tableMetricsRow.UpdatedAt == nil {
-							logging.GetLogger(groupCtx).WithField("table_fqn", tableMetricsRow.TableFqn()).Warnf("no metrics found")
-							return nil
-						}
-						outMu.Lock()
-						tableMetricsRows = append(tableMetricsRows, tableMetricsRow)
-						outMu.Unlock()
-
-						return nil
-					})
-				}
-			}
-			err = g.Wait()
-			if err != nil {
-				return nil, err
-			}
-		}
+	tables, _, err := e.queryTables(origCtx, catalog.CatalogName)
+	if err != nil {
+		return nil, nil, err
 	}
-	return tableMetricsRows, nil
+
+	var metricsStrategy MetricsStrategy
+
+	switch catalog.ConnectorName {
+	case "iceberg", "galaxy_objectstore":
+		logging.GetLogger(origCtx).Infof("using iceberg metrics strategy for catalog %s", catalog.CatalogName)
+		metricsStrategy = e.icebergMetricsStrategy
+
+	default:
+		logging.GetLogger(origCtx).Warnf(
+			"unknown connector %s for catalog %s, falling back to SHOW STATS",
+			catalog.ConnectorName, catalog.CatalogName,
+		)
+		metricsStrategy = e.showStatsMetricsStrategy
+	}
+
+	if len(tables) == 0 {
+		return nil, nil, nil
+	}
+
+	g, groupCtx := errgroup.WithContext(origCtx)
+	g.SetLimit(8)
+
+	for _, t := range tables {
+		if t.TableType == "VIEW" {
+			continue
+		}
+		tableMetricsRow := &scrapper.TableMetricsRow{
+			Instance: t.Instance,
+			Database: t.Database,
+			Schema:   t.Schema,
+			Table:    t.Table,
+		}
+
+		select {
+		case <-groupCtx.Done():
+			return nil, nil, groupCtx.Err()
+		default:
+		}
+
+		g.Go(func() error {
+			if err := metricsStrategy(groupCtx, t, tableMetricsRow); err != nil {
+				logging.GetLogger(groupCtx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
+				if reportOmissions && groupCtx.Err() == nil && !isTableWithoutStatistics(err) {
+					outMu.Lock()
+					omissions = append(omissions, scrapper.Omission{
+						Database: t.Database, Schema: t.Schema, Table: t.Table, Part: scrapper.OmittedMetrics, Err: err,
+					})
+					outMu.Unlock()
+				}
+				return nil
+			}
+			if tableMetricsRow.SizeBytes == nil && tableMetricsRow.RowCount == nil && tableMetricsRow.UpdatedAt == nil {
+				logging.GetLogger(groupCtx).WithField("table_fqn", tableMetricsRow.TableFqn()).Warnf("no metrics found")
+				return nil
+			}
+			outMu.Lock()
+			tableMetricsRows = append(tableMetricsRows, tableMetricsRow)
+			outMu.Unlock()
+
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, nil, err
+	}
+	return tableMetricsRows, omissions, nil
 }
 
 type trinoShowStatsRow struct {
@@ -260,4 +275,13 @@ func getInt(m map[string]interface{}, s string) (int64, bool) {
 	}
 
 	return 0, false
+}
+
+// isTableWithoutStatistics reports a metrics query Trino refused as a USER_ERROR,
+// which it answers for a table that cannot have statistics at all: a system table
+// with no supported columns, or a $snapshots table of something that is not an
+// Iceberg table. Every refresh meets the same ones, so they are expected and only
+// logged, never reported as metrics left out.
+func isTableWithoutStatistics(err error) bool {
+	return strings.Contains(err.Error(), `"USER_ERROR: `)
 }

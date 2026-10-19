@@ -89,37 +89,37 @@ func (s *ScopedScrapper) EstimateQuery(ctx context.Context, sql string) (*scrapp
 func (s *ScopedScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	ctx = s.effectiveCtx(ctx)
 	rows, err := s.inner.QueryCatalog(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
-	return FilterRows(rows, GetScope(ctx)), nil
+	return FilterRows(rows, GetScope(ctx)), err
 }
 
 func (s *ScopedScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 	ctx = s.effectiveCtx(ctx)
 	rows, err := s.inner.QueryTableMetrics(ctx, lastMetricsFetchTime)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
-	return FilterRows(rows, GetScope(ctx)), nil
+	return FilterRows(rows, GetScope(ctx)), err
 }
 
 func (s *ScopedScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	ctx = s.effectiveCtx(ctx)
 	rows, err := s.inner.QuerySqlDefinitions(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
-	return FilterRows(rows, GetScope(ctx)), nil
+	return FilterRows(rows, GetScope(ctx)), err
 }
 
 func (s *ScopedScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	ctx = s.effectiveCtx(ctx)
 	rows, err := s.inner.QueryTables(ctx, opts...)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
-	return FilterRows(rows, GetScope(ctx)), nil
+	return FilterRows(rows, GetScope(ctx)), err
 }
 
 func (s *ScopedScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {

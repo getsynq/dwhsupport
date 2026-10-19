@@ -71,7 +71,7 @@ func filterValid[T identified](rows []T, dialect, method string) []T {
 
 func (s *RejectingScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	rows, err := s.inner.QueryCatalog(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	rows = filterValid(rows, s.DialectType(), "QueryCatalog")
@@ -80,32 +80,32 @@ func (s *RejectingScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catal
 		r.TableTags = filterValid(r.TableTags, s.DialectType(), "QueryCatalog.TableTags")
 		r.FieldSchemas = filterValid(r.FieldSchemas, s.DialectType(), "QueryCatalog.FieldSchemas")
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *RejectingScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 	rows, err := s.inner.QueryTableMetrics(ctx, lastMetricsFetchTime)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
-	return filterValid(rows, s.DialectType(), "QueryTableMetrics"), nil
+	return filterValid(rows, s.DialectType(), "QueryTableMetrics"), err
 }
 
 func (s *RejectingScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	rows, err := s.inner.QuerySqlDefinitions(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	rows = filterValid(rows, s.DialectType(), "QuerySqlDefinitions")
 	for _, r := range rows {
 		r.Tags = filterValid(r.Tags, s.DialectType(), "QuerySqlDefinitions.Tags")
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *RejectingScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	rows, err := s.inner.QueryTables(ctx, opts...)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	rows = filterValid(rows, s.DialectType(), "QueryTables")
@@ -114,7 +114,7 @@ func (s *RejectingScrapper) QueryTables(ctx context.Context, opts ...scrapper.Qu
 		r.Annotations = filterValid(r.Annotations, s.DialectType(), "QueryTables.Annotations")
 		r.Constraints = filterValid(r.Constraints, s.DialectType(), "QueryTables.Constraints")
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *RejectingScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.DatabaseRow, error) {

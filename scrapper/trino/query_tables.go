@@ -7,7 +7,6 @@ import (
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
-	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
@@ -16,31 +15,41 @@ import (
 var queryTablesSQL string
 
 func (e *TrinoScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
-	var out []*scrapper.TableRow
-
 	acceptedCatalogs, err := e.acceptedCatalogs(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	for _, catalog := range acceptedCatalogs {
-		res, err := e.queryTables(ctx, catalog.CatalogName)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, res...)
-	}
-	return out, nil
+	return readCatalogs(
+		ctx,
+		acceptedCatalogs,
+		scrapper.OmittedObjects,
+		func(ctx context.Context, catalog *TrinoCatalog) ([]*scrapper.TableRow, []scrapper.Omission, error) {
+			return e.queryTables(ctx, catalog.CatalogName)
+		},
+	)
 }
 
-func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]*scrapper.TableRow, error) {
+func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]*scrapper.TableRow, []scrapper.Omission, error) {
+	var res []*scrapper.TableRow
+	omissions, err := e.withoutCommentsOnFailure(ctx, catalogName, func(withComments bool) error {
+		rows, err := e.queryTablesWith(ctx, catalogName, withComments)
+		res = rows
+		return err
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return res, omissions, nil
+}
+
+func (e *TrinoScrapper) queryTablesWith(ctx context.Context, catalogName string, withComments bool) ([]*scrapper.TableRow, error) {
 	query := queryTablesSQL
 	db := e.executor.GetDb()
 
 	catalogQuery := strings.Replace(query, "{{catalog}}", catalogName, -1)
 
 	// Conditionally add table comments JOIN based on feature flag
-	if e.conf.FetchTableComments {
+	if withComments {
 		catalogQuery = strings.Replace(
 			catalogQuery,
 			"{{table_comments_join}}",
@@ -50,7 +59,7 @@ func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]
 		catalogQuery = strings.Replace(catalogQuery, "{{table_comment_expression}}", "c.comment", -1)
 	} else {
 		catalogQuery = strings.Replace(catalogQuery, "{{table_comments_join}}", "", -1)
-		catalogQuery = strings.Replace(catalogQuery, "{{table_comment_expression}}", "''", -1)
+		catalogQuery = strings.Replace(catalogQuery, "{{table_comment_expression}}", noCommentExpression(e.conf.FetchTableComments), -1)
 	}
 
 	// Conditionally add materialized views JOIN based on feature flag
@@ -82,11 +91,6 @@ func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]
 		}),
 	)
 	if err != nil {
-		if isCatalogUnavailableError(err) {
-			logging.GetLogger(ctx).WithField("catalog", catalogName).WithError(err).
-				Warn("Catalog is no longer available, skipping")
-			return nil, nil
-		}
 		return nil, err
 	}
 	return res, nil
