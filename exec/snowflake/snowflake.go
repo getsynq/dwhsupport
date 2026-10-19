@@ -249,6 +249,13 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 	return &SnowflakeExecutor{conf: conf, db: db}, nil
 }
 
+// NewSnowflakeExecutorWithDb wraps a connection pool the caller opened itself.
+// It skips the connection check NewSnowflakeExecutor makes, and exists so a
+// test can put a fake database/sql driver behind the executor.
+func NewSnowflakeExecutorWithDb(conf *SnowflakeConf, db *sqlx.DB) *SnowflakeExecutor {
+	return &SnowflakeExecutor{conf: conf, db: db}
+}
+
 func openSnowflakeDb(c *gosnowflake.Config) *sqlx.DB {
 	connector := gosnowflake.NewConnector(gosnowflake.SnowflakeDriver{}, *c)
 	return sqlx.NewDb(sql.OpenDB(connector), "snowflake")
