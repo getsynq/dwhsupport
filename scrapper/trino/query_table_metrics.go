@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -87,7 +88,7 @@ func (e *TrinoScrapper) queryCatalogMetrics(
 		g.Go(func() error {
 			if err := metricsStrategy(groupCtx, t, tableMetricsRow); err != nil {
 				logging.GetLogger(groupCtx).WithField("table_fqn", t.TableFqn()).WithError(err).Warnf("error getting metrics for table")
-				if reportOmissions && groupCtx.Err() == nil {
+				if reportOmissions && groupCtx.Err() == nil && !isTableWithoutStatistics(err) {
 					outMu.Lock()
 					omissions = append(omissions, scrapper.Omission{
 						Database: t.Database, Schema: t.Schema, Table: t.Table, Part: scrapper.OmittedMetrics, Err: err,
@@ -274,4 +275,13 @@ func getInt(m map[string]interface{}, s string) (int64, bool) {
 	}
 
 	return 0, false
+}
+
+// isTableWithoutStatistics reports a metrics query Trino refused as a USER_ERROR,
+// which it answers for a table that cannot have statistics at all: a system table
+// with no supported columns, or a $snapshots table of something that is not an
+// Iceberg table. Every refresh meets the same ones, so they are expected and only
+// logged, never reported as metrics left out.
+func isTableWithoutStatistics(err error) bool {
+	return strings.Contains(err.Error(), `"USER_ERROR: `)
 }
