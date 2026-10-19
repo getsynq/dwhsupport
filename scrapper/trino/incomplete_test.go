@@ -291,3 +291,21 @@ func (s *IncompleteSuite) TestWithoutAskingAFailedColumnListingFailsTheCall() {
 	s.Contains(err.Error(), "Error listing table columns for catalog lake")
 	s.Empty(rows)
 }
+
+// A catalog dropped between the listing of catalogs and its read is gone, so a
+// caller that did not ask for incomplete results reads the others without it.
+func (s *IncompleteSuite) TestWithoutAskingADroppedCatalogIsSkipped() {
+	ctx := context.Background()
+	dropped := fakeRoute{
+		match: sqlContains("lake.information_schema"),
+		err:   &fakeTrinoError{errorName: "CATALOG_NOT_FOUND", errorType: "USER_ERROR", message: "line 4:6: Catalog 'lake' not found"},
+	}
+	fake := &fakeTrino{t: s.T(), routes: lo.Flatten([][]fakeRoute{lakeAndTpch(), {dropped}, healthyTpch()})}
+	scr := newFakeTrinoScrapper(s.T(), ctx, fake, TrinoScrapperConf{Catalogs: []string{"lake", "tpch"}})
+
+	rows, err := scr.QueryCatalog(ctx)
+
+	s.Require().NoError(err)
+	s.Require().Len(rows, 2)
+	s.Equal("tpch", rows[0].Database)
+}

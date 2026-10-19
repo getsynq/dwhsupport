@@ -2,13 +2,14 @@ package trino
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/getsynq/dwhsupport/exec/trino"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/suite"
+	trinoclient "github.com/trinodb/trino-go-client/trino"
 )
 
 type ValidateConfigSuite struct {
@@ -109,94 +110,94 @@ func TestErrorDetectionSuite(t *testing.T) {
 	suite.Run(t, new(ErrorDetectionSuite))
 }
 
+// queryFailed is an error the way trino-go-client returns one Trino reported.
+func queryFailed(errorName, errorType, message string) error {
+	return &trinoclient.ErrQueryFailed{
+		StatusCode: 200,
+		Reason:     &trinoclient.ErrTrino{ErrorName: errorName, ErrorType: errorType, Message: message},
+	}
+}
+
 func (s *ErrorDetectionSuite) TestIsCatalogUnavailableError() {
 	testCases := []struct {
 		name     string
-		errMsg   string
+		err      error
 		expected bool
 	}{
 		{
 			name:     "catalog not found",
-			errMsg:   "line 1:15: catalog 'missing_catalog' not found",
+			err:      queryFailed("CATALOG_NOT_FOUND", "USER_ERROR", "line 1:15: Catalog 'missing_catalog' not found"),
 			expected: true,
 		},
 		{
-			name:     "catalog not registered",
-			errMsg:   "line 1:15: catalog 'xyz' not registered",
+			name:     "catalog failed to load",
+			err:      queryFailed("CATALOG_UNAVAILABLE", "USER_ERROR", "Catalog 'broken' failed to initialize and is disabled"),
 			expected: true,
 		},
 		{
-			name:     "catalog does not exist",
-			errMsg:   "catalog 'test' does not exist",
+			name:     "catalog not available on a worker",
+			err:      queryFailed("CATALOG_NOT_AVAILABLE", "INTERNAL_ERROR", "No catalog 'broken'"),
 			expected: true,
 		},
 		{
-			name:     "catalog connection failed",
-			errMsg:   "EXTERNAL: Error listing tables for catalog kernel_ext_dbt_pg: The connection attempt failed.",
+			name:     "JDBC catalog whose database is down",
+			err:      queryFailed("JDBC_ERROR", "EXTERNAL", "The connection attempt failed."),
 			expected: true,
 		},
 		{
-			name:     "catalog with failed keyword",
-			errMsg:   "trino: query failed (200 OK): \"EXTERNAL: Error listing tables for catalog kernel_ext_dbt_pg: The connection attempt failed.\"",
+			name: "JDBC catalog whose database is down, while listing",
+			err: queryFailed("JDBC_ERROR", "EXTERNAL",
+				"Error listing tables for catalog kernel_ext_dbt_pg: The connection attempt failed."),
 			expected: true,
 		},
 		{
-			name:     "external connection attempt failed without catalog",
-			errMsg:   "trino: query failed (200 OK): \"EXTERNAL: The connection attempt failed.\"",
+			name:     "wrapped",
+			err:      errors.Wrap(queryFailed("CATALOG_NOT_FOUND", "USER_ERROR", "Catalog 'x' not found"), "query failed"),
 			expected: true,
 		},
 		{
-			name:     "catalog unreachable",
-			errMsg:   "catalog 'remote_catalog' unreachable",
-			expected: true,
-		},
-		{
-			name:     "catalog unavailable",
-			errMsg:   "catalog 'shared_catalog' unavailable",
-			expected: true,
-		},
-		{
-			name:     "other error",
-			errMsg:   "permission denied",
+			name: "columns of a catalog whose storage cannot be read",
+			err: queryFailed("ICEBERG_FILESYSTEM_ERROR", "EXTERNAL",
+				"Error listing table columns for catalog iceberg: Failed to open input stream for file: s3://lake/metadata.json"),
 			expected: false,
 		},
 		{
-			name:     "syntax error",
-			errMsg:   "line 1:15: mismatched input 'FROM'",
+			name: "tables of a catalog whose storage cannot be read",
+			err: queryFailed("GENERIC_INTERNAL_ERROR", "INTERNAL_ERROR",
+				"Error listing tables for catalog iceberg: Failed to open input stream for file: s3://lake/metadata.json"),
+			expected: false,
+		},
+		{
+			name: "a table that does not exist",
+			err: queryFailed("TABLE_NOT_FOUND", "USER_ERROR",
+				"line 1:15: Table 'iceberg.information_schema.table_constraints' does not exist"),
+			expected: false,
+		},
+		{
+			name:     "connection failure outside the connector",
+			err:      queryFailed("GENERIC_INTERNAL_ERROR", "INTERNAL_ERROR", "The connection attempt failed."),
+			expected: false,
+		},
+		{
+			name:     "not a Trino error, even when its text says so",
+			err:      errors.New("catalog 'x' not found"),
+			expected: false,
+		},
+		{
+			name:     "permission denied",
+			err:      queryFailed("PERMISSION_DENIED", "USER_ERROR", "Access Denied: Cannot select from columns"),
 			expected: false,
 		},
 		{
 			name:     "nil error",
-			errMsg:   "",
+			err:      nil,
 			expected: false,
 		},
 	}
 
 	for _, tc := range testCases {
 		s.Run(tc.name, func() {
-			var err error
-			if tc.errMsg != "" {
-				err = fmt.Errorf("%s", tc.errMsg)
-			}
-			result := isCatalogUnavailableError(err)
-			s.Equal(tc.expected, result, "Error message: %s", tc.errMsg)
-		})
-	}
-}
-
-func (s *ErrorDetectionSuite) TestIsCatalogUnavailableError_CaseInsensitive() {
-	testCases := []string{
-		"CATALOG 'TEST' NOT FOUND",
-		"Catalog 'test' Not Found",
-		"CATALOG 'TEST' DOES NOT EXIST",
-		"CATALOG CONNECTION FAILED",
-	}
-
-	for _, errMsg := range testCases {
-		s.Run(errMsg, func() {
-			err := fmt.Errorf("%s", errMsg)
-			result := isCatalogUnavailableError(err)
-			s.True(result, "Should detect error: %s", errMsg)
+			s.Equal(tc.expected, isCatalogUnavailableError(tc.err), "error: %v", tc.err)
 		})
 	}
 }
