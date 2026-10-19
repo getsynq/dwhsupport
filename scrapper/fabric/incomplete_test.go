@@ -12,6 +12,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/samber/lo"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -327,4 +328,29 @@ func (s *IncompleteSuite) requirePlainFailure(err error) {
 	_, incomplete := scrapper.AsIncomplete(err)
 	s.False(incomplete, "expected a plain failure, got %v", err)
 	s.ErrorContains(err, "is not currently available")
+}
+
+// A context cancelled while the databases are being read fails the call, though
+// one database had already been read: the read that saw the cancellation did
+// not fail on the database's account.
+func TestReadDatabasesCancelledMidReadFails(t *testing.T) {
+	ctx, cancel := context.WithCancel(scrapper.WithIncompleteResults(context.Background()))
+	defer cancel()
+	sales := make(chan struct{})
+
+	rows, err := readDatabases(ctx, []string{"sales", "lake"}, scrapper.OmittedObjects,
+		func(ctx context.Context, database string) ([]*scrapper.TableRow, error) {
+			if database == "sales" {
+				defer close(sales)
+				return []*scrapper.TableRow{{Database: database}}, nil
+			}
+			<-sales
+			cancel()
+			return nil, ctx.Err()
+		})
+
+	require.ErrorIs(t, err, context.Canceled)
+	_, incomplete := scrapper.AsIncomplete(err)
+	require.False(t, incomplete)
+	require.Nil(t, rows)
 }

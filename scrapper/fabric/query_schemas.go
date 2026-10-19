@@ -13,7 +13,7 @@ var querySchemasSql string
 
 func (e *FabricScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	ctx = e.withEffectiveScope(ctx)
-	return queryEachDatabase(ctx, e,
+	return queryEachDatabase(ctx, e, wholeListing,
 		func(db string) string {
 			return expandDatabase(scope.AppendSchemaScopeConditions(ctx, querySchemasSql, "", "s.name"), db)
 		},

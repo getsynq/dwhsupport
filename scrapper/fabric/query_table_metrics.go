@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"strings"
-	"sync"
 	"time"
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
@@ -12,7 +11,6 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
-	"golang.org/x/sync/errgroup"
 )
 
 //go:embed query_table_metrics_tables.sql
@@ -50,7 +48,8 @@ type fabricTableRef struct {
 // timestamp to drive an incremental fetch, so every call recomputes counts.
 //
 // Workspace-centric: the in-scope databases are iterated concurrently, and each
-// table is counted with a three-part [db].[schema].[table] name.
+// table is counted with a three-part [db].[schema].[table] name. A database
+// whose listing or any count fails is left out whole (readDatabases).
 func (e *FabricScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 	ctx = e.withEffectiveScope(ctx)
 	databases, err := e.GetDatabasesToQuery(ctx)
@@ -58,29 +57,7 @@ func (e *FabricScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFetch
 		return nil, err
 	}
 
-	var (
-		mu  sync.Mutex
-		out []*scrapper.TableMetricsRow
-	)
-	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(maxDatabaseConcurrency)
-	for _, database := range databases {
-		database := database
-		g.Go(func() error {
-			rows, err := e.tableMetricsForDatabase(gctx, database)
-			if err != nil {
-				return err
-			}
-			mu.Lock()
-			out = append(out, rows...)
-			mu.Unlock()
-			return nil
-		})
-	}
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return readDatabases(ctx, databases, scrapper.OmittedMetrics, e.tableMetricsForDatabase)
 }
 
 func (e *FabricScrapper) tableMetricsForDatabase(ctx context.Context, database string) ([]*scrapper.TableMetricsRow, error) {
