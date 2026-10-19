@@ -173,9 +173,9 @@ var tablesListProgressInterval = 5 * time.Second
 // A non-Done error from the iterator is TERMINAL: the BigQuery iterator does not
 // advance past it, so retrying the same iterator would get the same error and
 // busy-loop forever — the root cause of the multi-hour catalog hangs. The
-// listing (in collectTableIDs) always returns on error, letting the caller fail
-// the scrape (failing is safe: a failed fetch publishes nothing, so no assets
-// are wrongly marked deleted), and emits progress/done span events so a slow or
+// listing (in collectTableIDs) always returns on error and leaves it to the caller
+// (datasetReads.datasetFailed) to fail the scrape or leave the dataset out as an
+// omission, never to drop it silently, and emits progress/done span events so a slow or
 // stalled listing is observable.
 func (e *BigQueryScrapper) listTableIDs(ctx context.Context, datasetID string) ([]string, error) {
 	ids, err := withRateLimitRetry(ctx, e.rateLimitCfg, func(ctx context.Context) ([]string, error) {
@@ -186,8 +186,8 @@ func (e *BigQueryScrapper) listTableIDs(ctx context.Context, datasetID string) (
 		// 404 means the dataset itself is gone — typically a linked/shared
 		// dataset whose source was deleted (its Metadata() still resolves but
 		// listing its tables 404s). It genuinely no longer exists, so skip it and
-		// let the rest of the scrape proceed. Access-denied and other errors
-		// still fail the scrape: we must not silently drop — and thereby delete —
+		// let the rest of the scrape proceed. Access-denied and other errors go
+		// back to the caller: we must not silently drop — and thereby delete —
 		// tables we simply can't see right now.
 		if errIsNotFound(err) {
 			logging.GetLogger(ctx).
@@ -197,7 +197,7 @@ func (e *BigQueryScrapper) listTableIDs(ctx context.Context, datasetID string) (
 				Warn("skipping dataset that no longer exists (tables.list returned not-found)")
 			return nil, nil
 		}
-		return nil, e.scrapeError(ctx, "tables.list", datasetID, "", err)
+		return nil, err
 	}
 	return ids, nil
 }
