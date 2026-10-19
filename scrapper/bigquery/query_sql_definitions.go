@@ -53,6 +53,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
+	reads := e.newDatasetReads(ctx, scrapper.OmittedDefinitions)
 
 	numTablesTotal := 0
 	for _, dataset := range allDatasets {
@@ -71,7 +72,10 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 
 		tableIds, err := e.listTableIDs(groupCtx, dataset.DatasetID)
 		if err != nil {
-			return nil, err
+			if err := reads.datasetFailed(groupCtx, "tables.list", dataset.DatasetID, err); err != nil {
+				return nil, err
+			}
+			continue
 		}
 
 		// Collect sharded tables
@@ -107,11 +111,9 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
 				})
 				if err != nil {
-					if errIsNotFound(err) || errIsAccessDenied(err) {
-						return nil
-					}
-					return e.scrapeError(groupCtx, "table.metadata", dataset.DatasetID, tableId, err)
+					return reads.tableFailed(groupCtx, dataset.DatasetID, tableId, tableAlias, err)
 				}
+				reads.markRead()
 
 				mutex.Lock()
 				defer mutex.Unlock()
@@ -142,6 +144,9 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 			})
 		}
 
+		if numTables == 0 {
+			reads.markRead()
+		}
 		numTablesTotal += numTables
 		log.Infof("found %d tables, %d total so far", numTables, numTablesTotal)
 	}
@@ -150,7 +155,11 @@ func (e *BigQueryScrapper) querySqlDefinitionsApi(ctx context.Context) ([]*scrap
 		return nil, err
 	}
 
-	return collapseShardedSqlDefinitions(rows)
+	collapsed, err := collapseShardedSqlDefinitions(rows)
+	if err != nil {
+		return nil, err
+	}
+	return collapsed, reads.result()
 }
 
 func (e *BigQueryScrapper) querySqlDefinitionsSql(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {

@@ -29,6 +29,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
+	reads := e.newDatasetReads(ctx, scrapper.OmittedColumns)
 
 	numTablesTotal := 0
 
@@ -48,7 +49,10 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 			return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Metadata(ctx)
 		})
 		if err != nil {
-			return nil, e.scrapeError(groupCtx, "dataset.metadata", dataset.DatasetID, "", err)
+			if err := reads.datasetFailed(groupCtx, "dataset.metadata", dataset.DatasetID, err); err != nil {
+				return nil, err
+			}
+			continue
 		}
 		datasetTags := labelsToTags(datasetMeta.Labels)
 
@@ -56,7 +60,10 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 
 		tableIds, err := e.listTableIDs(groupCtx, dataset.DatasetID)
 		if err != nil {
-			return nil, err
+			if err := reads.datasetFailed(groupCtx, "tables.list", dataset.DatasetID, err); err != nil {
+				return nil, err
+			}
+			continue
 		}
 
 		// Collect sharded tables
@@ -92,11 +99,9 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
 				})
 				if err != nil {
-					if errIsNotFound(err) || errIsAccessDenied(err) {
-						return nil
-					}
-					return e.scrapeError(groupCtx, "table.metadata", dataset.DatasetID, tableId, err)
+					return reads.tableFailed(groupCtx, dataset.DatasetID, tableId, tableAlias, err)
 				}
+				reads.markRead()
 
 				var tableTags []*scrapper.Tag = datasetTags
 				tableTags = append(tableTags, labelsToTags(tableMeta.Labels)...)
@@ -133,6 +138,9 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 			})
 		}
 
+		if numTables == 0 {
+			reads.markRead()
+		}
 		log.Infof("found %d tables, %d total so far", numTables, numTablesTotal)
 		numTablesTotal += numTables
 	}
@@ -141,7 +149,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 		return nil, err
 	}
 
-	return rows, nil
+	return rows, reads.result()
 }
 
 func labelsToTags(labels map[string]string) []*scrapper.Tag {

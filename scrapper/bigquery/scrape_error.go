@@ -16,8 +16,8 @@ import (
 // The fan-out scrappers deliberately return (never swallow) the result: a
 // partial catalog would make the un-fetched tables look deleted downstream, so a
 // stalled or failing metadata call must fail the whole scrape rather than drop
-// tables silently. Permission/not-found errors are filtered out by the callers
-// before reaching here — those are expected and skipped.
+// tables silently. A caller that accepts incomplete results gets the failure as
+// an omission instead, and never reaches here (datasetReads).
 //
 // dataset/table may be empty for dataset- or project-level operations.
 func (e *BigQueryScrapper) scrapeError(ctx context.Context, op, dataset, table string, err error) error {
