@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/DataDog/go-sqllexer"
 	"github.com/getsynq/dwhsupport/logging"
@@ -44,83 +43,60 @@ AND table_type !='MATERIALIZED VIEW'
 `
 
 func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	var finalResults []*scrapper.SqlDefinitionRow
-	var m sync.Mutex
-
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	g, groupCtx := errgroup.WithContext(origCtx)
-	g.SetLimit(8)
-	for _, database := range databasesToQuery {
-		select {
-		case <-groupCtx.Done():
-			return nil, groupCtx.Err()
-		default:
-		}
+	// incomplete names the databases left out, and goes back with the rows.
+	finalResults, incomplete := readDatabases(
+		origCtx, databasesToQuery, 8, scrapper.OmittedDefinitions,
+		func(groupCtx context.Context, database string) ([]*scrapper.SqlDefinitionRow, error) {
+			var tmpResults []*scrapper.SqlDefinitionRow
 
-		g.Go(
-			func() error {
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(sqlDefinitionsQuery, database), "", "table_schema", "table_name")
+			rows, err := e.executor.QueryRows(groupCtx, query)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to query sql definitions for database %s", database)
+			}
+			defer rows.Close()
 
-				var tmpResults []*scrapper.SqlDefinitionRow
+			definitionRows, err := scrapper.ScanAll[scrapper.SqlDefinitionRow](
+				groupCtx, rows, fmt.Sprintf("%s.information_schema.views", database),
+			)
+			if err != nil {
+				return nil, err
+			}
+			for _, result := range definitionRows {
+				result.Instance = e.conf.Account
+				tmpResults = append(tmpResults, result)
+			}
 
-				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(sqlDefinitionsQuery, database), "", "table_schema", "table_name")
-				rows, err := e.executor.QueryRows(groupCtx, query)
-				if err != nil {
-					if isSharedDatabaseUnavailableError(err) {
-						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
-							Warn("Shared database is no longer available, skipping")
-						return nil
-					}
-					return errors.Wrapf(err, "failed to query sql definitions for database %s", database)
+			streamRows, err := e.showStreamsInDatabase(groupCtx, database)
+			if err == nil {
+				for _, streamRow := range streamRows {
+
+					tmpResults = append(
+						tmpResults, &scrapper.SqlDefinitionRow{
+							Instance:           e.conf.Account,
+							Database:           streamRow.DatabaseName,
+							Schema:             streamRow.SchemaName,
+							Table:              streamRow.Name,
+							IsView:             false,
+							IsMaterializedView: false,
+							Sql:                fmt.Sprintf("SELECT * FROM %s", streamRow.TableName),
+						},
+					)
 				}
-				defer rows.Close()
+			} else {
+				logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+			}
 
-				definitionRows, err := scrapper.ScanAll[scrapper.SqlDefinitionRow](
-					groupCtx, rows, fmt.Sprintf("%s.information_schema.views", database),
-				)
-				if err != nil {
-					return err
-				}
-				for _, result := range definitionRows {
-					result.Instance = e.conf.Account
-					tmpResults = append(tmpResults, result)
-				}
-
-				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
-				if err == nil {
-					for _, streamRow := range streamRows {
-
-						tmpResults = append(
-							tmpResults, &scrapper.SqlDefinitionRow{
-								Instance:           e.conf.Account,
-								Database:           streamRow.DatabaseName,
-								Schema:             streamRow.SchemaName,
-								Table:              streamRow.Name,
-								IsView:             false,
-								IsMaterializedView: false,
-								Sql:                fmt.Sprintf("SELECT * FROM %s", streamRow.TableName),
-							},
-						)
-					}
-				} else {
-					logging.GetLogger(origCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
-				}
-
-				m.Lock()
-				defer m.Unlock()
-				finalResults = append(finalResults, tmpResults...)
-
-				return nil
-			},
-		)
-	}
-
-	err = g.Wait()
-	if err != nil {
-		return nil, err
+			return tmpResults, nil
+		},
+	)
+	if scrapper.Failed(incomplete) {
+		return nil, incomplete
 	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
@@ -128,7 +104,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 
 	if e.conf.NoGetDll {
 		logging.GetLogger(origCtx).Info("skipping get ddl in sql definitions")
-		return finalResults, nil
+		return finalResults, incomplete
 	}
 
 	allDatabases, err := e.GetExistingDbs(origCtx)
@@ -144,7 +120,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 			},
 		)
 
-		g, groupCtx = errgroup.WithContext(origCtx)
+		g, groupCtx := errgroup.WithContext(origCtx)
 		g.SetLimit(8)
 
 		for databaseAndSchema, rows := range perSchema {
@@ -204,14 +180,14 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 			)
 		}
 
-		err = g.Wait()
+		err := g.Wait()
 		if err != nil {
 			return nil, err
 		}
 
 	}
 
-	return finalResults, nil
+	return finalResults, incomplete
 }
 
 func GetObjectNameFromFqn(fqn string) string {

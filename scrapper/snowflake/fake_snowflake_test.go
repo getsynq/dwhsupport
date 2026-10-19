@@ -83,7 +83,9 @@ func (f *fakeSnowflake) Driver() driver.Driver                        { return f
 
 type fakeDriver struct{}
 
-func (fakeDriver) Open(string) (driver.Conn, error) { return nil, errors.New("open the fake through its connector") }
+func (fakeDriver) Open(string) (driver.Conn, error) {
+	return nil, errors.New("open the fake through its connector")
+}
 
 type fakeConn struct{ f *fakeSnowflake }
 
@@ -97,8 +99,10 @@ func (c *fakeConn) QueryContext(ctx context.Context, query string, args []driver
 func (c *fakeConn) Prepare(string) (driver.Stmt, error) {
 	return nil, errors.New("fake Snowflake answers queries only")
 }
-func (c *fakeConn) Close() error              { return nil }
-func (c *fakeConn) Begin() (driver.Tx, error) { return nil, errors.New("fake Snowflake has no transactions") }
+func (c *fakeConn) Close() error { return nil }
+func (c *fakeConn) Begin() (driver.Tx, error) {
+	return nil, errors.New("fake Snowflake has no transactions")
+}
 
 type fakeRows struct {
 	columns []string

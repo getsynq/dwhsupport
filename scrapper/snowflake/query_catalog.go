@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
@@ -12,7 +11,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 )
 
 var catalogQuery = `
@@ -39,153 +37,131 @@ var catalogQuery = `
 	`
 
 func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-	var finalResults []*scrapper.CatalogColumnRow
-	var m sync.Mutex
-
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	g, groupCtx := errgroup.WithContext(origCtx)
-	g.SetLimit(4)
+	finalResults, err := readDatabases(
+		origCtx, databasesToQuery, 4, scrapper.OmittedColumns,
+		func(groupCtx context.Context, database string) ([]*scrapper.CatalogColumnRow, error) {
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(catalogQuery, database), "", "c.table_schema", "c.table_name")
+			rows, err := e.executor.QueryRows(groupCtx, query)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to query catalog for database %s", database)
+			}
+			defer rows.Close()
+			tmpResults, err := scrapper.ScanAll[scrapper.CatalogColumnRow](
+				groupCtx, rows, fmt.Sprintf("%s.information_schema.columns", database),
+			)
+			if err != nil {
+				return nil, err
+			}
+			for _, result := range tmpResults {
+				result.Instance = e.conf.Account
+				result.ResolveNumeric(e.DialectType())
+			}
 
-	for _, database := range databasesToQuery {
-		select {
-		case <-groupCtx.Done():
-			return nil, groupCtx.Err()
-		default:
-		}
-		g.Go(
-			func() error {
-				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(catalogQuery, database), "", "c.table_schema", "c.table_name")
-				rows, err := e.executor.QueryRows(groupCtx, query)
-				if err != nil {
-					if isSharedDatabaseUnavailableError(err) {
-						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
-							Warn("Shared database is no longer available, skipping")
-						return nil
+			streamRows, err := e.showStreamsInDatabase(groupCtx, database)
+			if err == nil {
+				for _, streamRow := range streamRows {
+					sourceTableParts := strings.Split(streamRow.TableName, ".")
+					if len(sourceTableParts) != 3 {
+						continue
 					}
-					return errors.Wrapf(err, "failed to query catalog for database %s", database)
-				}
-				defer rows.Close()
-				tmpResults, err := scrapper.ScanAll[scrapper.CatalogColumnRow](
-					groupCtx, rows, fmt.Sprintf("%s.information_schema.columns", database),
-				)
-				if err != nil {
-					return err
-				}
-				for _, result := range tmpResults {
-					result.Instance = e.conf.Account
-					result.ResolveNumeric(e.DialectType())
-				}
 
-				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
-				if err == nil {
-					for _, streamRow := range streamRows {
-						sourceTableParts := strings.Split(streamRow.TableName, ".")
-						if len(sourceTableParts) != 3 {
-							continue
-						}
-
-						var sourceTableColumns []*scrapper.CatalogColumnRow
-						for _, result := range tmpResults {
-							if result.Database == sourceTableParts[0] && result.Schema == sourceTableParts[1] && result.Table == sourceTableParts[2] {
-								sourceTableColumns = append(sourceTableColumns, result)
-							}
-						}
-
-						if len(sourceTableColumns) > 0 {
-							for _, sourceTableColumn := range sourceTableColumns {
-								tmpResults = append(
-									tmpResults, &scrapper.CatalogColumnRow{
-										Instance:        sourceTableColumn.Instance,
-										Database:        streamRow.DatabaseName,
-										Schema:          streamRow.SchemaName,
-										Table:           streamRow.Name,
-										Column:          sourceTableColumn.Column,
-										Type:            sourceTableColumn.Type,
-										Position:        sourceTableColumn.Position,
-										Comment:         sourceTableColumn.Comment,
-										TableComment:    sourceTableColumn.TableComment,
-										ColumnTags:      sourceTableColumn.ColumnTags,
-										TableTags:       sourceTableColumn.TableTags,
-										IsStructColumn:  sourceTableColumn.IsStructColumn,
-										IsArrayColumn:   sourceTableColumn.IsArrayColumn,
-										FieldSchemas:    sourceTableColumn.FieldSchemas,
-										Precision:       sourceTableColumn.Precision,
-										Scale:           sourceTableColumn.Scale,
-										NumericCategory: sourceTableColumn.NumericCategory,
-									},
-								)
-							}
-
-							tmpResults = append(
-								tmpResults, &scrapper.CatalogColumnRow{
-									Instance: sourceTableColumns[0].Instance,
-									Database: streamRow.DatabaseName,
-									Schema:   streamRow.SchemaName,
-									Table:    streamRow.Name,
-									Column:   "METADATA$ACTION",
-									Type:     "VARCHAR",
-									Position: int32(len(sourceTableColumns) + 1),
-									Comment:  lo.ToPtr("Specifies the action (INSERT or DELETE)."),
-								},
-							)
-							tmpResults = append(
-								tmpResults, &scrapper.CatalogColumnRow{
-									Instance: sourceTableColumns[0].Instance,
-									Database: streamRow.DatabaseName,
-									Schema:   streamRow.SchemaName,
-									Table:    streamRow.Name,
-									Column:   "METADATA$ISUPDATE",
-									Type:     "BOOLEAN",
-									Position: int32(len(sourceTableColumns) + 2),
-									Comment: lo.ToPtr(
-										"Specifies whether the action recorded (INSERT or DELETE) is part of an UPDATE applied to the rows in the source table or view.",
-									),
-								},
-							)
-							tmpResults = append(
-								tmpResults, &scrapper.CatalogColumnRow{
-									Instance: sourceTableColumns[0].Instance,
-									Database: streamRow.DatabaseName,
-									Schema:   streamRow.SchemaName,
-									Table:    streamRow.Name,
-									Column:   "METADATA$ROW_ID",
-									Type:     "ROWID",
-									Position: int32(len(sourceTableColumns) + 3),
-									Comment: lo.ToPtr(
-										"Specifies the unique and immutable ID for the row, which can be used to track changes to specific rows over time.",
-									),
-								},
-							)
-						} else {
-							logging.GetLogger(groupCtx).WithFields(
-								logrus.Fields{
-									"stream_table_name": streamRow.TableName,
-									"database":          database,
-								},
-							).Warn("Failed to get columns of the STREAM")
+					var sourceTableColumns []*scrapper.CatalogColumnRow
+					for _, result := range tmpResults {
+						if result.Database == sourceTableParts[0] && result.Schema == sourceTableParts[1] && result.Table == sourceTableParts[2] {
+							sourceTableColumns = append(sourceTableColumns, result)
 						}
 					}
-				} else {
-					logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+
+					if len(sourceTableColumns) > 0 {
+						for _, sourceTableColumn := range sourceTableColumns {
+							tmpResults = append(
+								tmpResults, &scrapper.CatalogColumnRow{
+									Instance:        sourceTableColumn.Instance,
+									Database:        streamRow.DatabaseName,
+									Schema:          streamRow.SchemaName,
+									Table:           streamRow.Name,
+									Column:          sourceTableColumn.Column,
+									Type:            sourceTableColumn.Type,
+									Position:        sourceTableColumn.Position,
+									Comment:         sourceTableColumn.Comment,
+									TableComment:    sourceTableColumn.TableComment,
+									ColumnTags:      sourceTableColumn.ColumnTags,
+									TableTags:       sourceTableColumn.TableTags,
+									IsStructColumn:  sourceTableColumn.IsStructColumn,
+									IsArrayColumn:   sourceTableColumn.IsArrayColumn,
+									FieldSchemas:    sourceTableColumn.FieldSchemas,
+									Precision:       sourceTableColumn.Precision,
+									Scale:           sourceTableColumn.Scale,
+									NumericCategory: sourceTableColumn.NumericCategory,
+								},
+							)
+						}
+
+						tmpResults = append(
+							tmpResults, &scrapper.CatalogColumnRow{
+								Instance: sourceTableColumns[0].Instance,
+								Database: streamRow.DatabaseName,
+								Schema:   streamRow.SchemaName,
+								Table:    streamRow.Name,
+								Column:   "METADATA$ACTION",
+								Type:     "VARCHAR",
+								Position: int32(len(sourceTableColumns) + 1),
+								Comment:  lo.ToPtr("Specifies the action (INSERT or DELETE)."),
+							},
+						)
+						tmpResults = append(
+							tmpResults, &scrapper.CatalogColumnRow{
+								Instance: sourceTableColumns[0].Instance,
+								Database: streamRow.DatabaseName,
+								Schema:   streamRow.SchemaName,
+								Table:    streamRow.Name,
+								Column:   "METADATA$ISUPDATE",
+								Type:     "BOOLEAN",
+								Position: int32(len(sourceTableColumns) + 2),
+								Comment: lo.ToPtr(
+									"Specifies whether the action recorded (INSERT or DELETE) is part of an UPDATE applied to the rows in the source table or view.",
+								),
+							},
+						)
+						tmpResults = append(
+							tmpResults, &scrapper.CatalogColumnRow{
+								Instance: sourceTableColumns[0].Instance,
+								Database: streamRow.DatabaseName,
+								Schema:   streamRow.SchemaName,
+								Table:    streamRow.Name,
+								Column:   "METADATA$ROW_ID",
+								Type:     "ROWID",
+								Position: int32(len(sourceTableColumns) + 3),
+								Comment: lo.ToPtr(
+									"Specifies the unique and immutable ID for the row, which can be used to track changes to specific rows over time.",
+								),
+							},
+						)
+					} else {
+						logging.GetLogger(groupCtx).WithFields(
+							logrus.Fields{
+								"stream_table_name": streamRow.TableName,
+								"database":          database,
+							},
+						).Warn("Failed to get columns of the STREAM")
+					}
 				}
+			} else {
+				logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+			}
 
-				m.Lock()
-				defer m.Unlock()
-				finalResults = append(finalResults, tmpResults...)
-				return nil
-			},
-		)
-	}
-
-	err = g.Wait()
-	if err != nil {
+			return tmpResults, nil
+		},
+	)
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
-	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), nil
+	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), err
 }

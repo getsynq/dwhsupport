@@ -181,9 +181,17 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 	var missingDbs []string
 	var unavailableSharedDbs []string
 
+	// A caller accepting incomplete results is told about an unavailable share
+	// by every read, as an omission of that database carrying Snowflake's own
+	// error, so probing for it here would only say the same thing twice.
+	probeShares := !scrapper.IncompleteResultsAccepted(ctx)
+
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
 			missingDbs = append(missingDbs, database)
+			continue
+		}
+		if !probeShares {
 			continue
 		}
 
