@@ -13,7 +13,7 @@ var queryTableConstraintsSql string
 
 func (e *FabricScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	ctx = e.withEffectiveScope(ctx)
-	return queryEachDatabase(ctx, e,
+	return queryEachDatabase(ctx, e, wholeListing,
 		func(db string) string {
 			return expandDatabase(scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "tc.TABLE_SCHEMA", "tc.TABLE_NAME"), db)
 		},

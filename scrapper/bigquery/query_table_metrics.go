@@ -27,6 +27,7 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
+	reads := e.newDatasetReads(ctx, scrapper.OmittedMetrics)
 
 	for _, dataset := range allDatasets {
 		if isPrivateDataset(dataset.DatasetID) {
@@ -40,7 +41,13 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 
 		tableIds, err := e.listTableIDs(groupCtx, dataset.DatasetID)
 		if err != nil {
-			return nil, err
+			if err := reads.datasetFailed(groupCtx, "tables.list", dataset.DatasetID, err); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if len(tableIds) == 0 {
+			reads.markRead()
 		}
 
 		for _, tableId := range tableIds {
@@ -57,11 +64,9 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 					return e.executor.GetBigQueryClient().Dataset(dataset.DatasetID).Table(tableId).Metadata(ctx)
 				})
 				if err != nil {
-					if errIsNotFound(err) || errIsAccessDenied(err) {
-						return nil
-					}
-					return e.scrapeError(groupCtx, "table.metadata", dataset.DatasetID, tableId, err)
+					return reads.tableFailed(groupCtx, dataset.DatasetID, tableId, metricsTableName(tableId), err)
 				}
+				reads.markRead()
 
 				numRows := int64(tableMeta.NumRows)
 				numBytes := tableMeta.NumBytes
@@ -91,5 +96,9 @@ func (e *BigQueryScrapper) QueryTableMetrics(ctx context.Context, lastMetricsFet
 		return nil, err
 	}
 
-	return collapseShardedMetrics(results)
+	collapsed, err := collapseShardedMetrics(results)
+	if err != nil {
+		return nil, err
+	}
+	return collapsed, reads.result()
 }

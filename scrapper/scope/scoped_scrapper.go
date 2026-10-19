@@ -134,10 +134,10 @@ func (s *ScopedScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.Databa
 func (s *ScopedScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	ctx = s.effectiveCtx(ctx)
 	rows, err := s.inner.QuerySchemas(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
-	return FilterSchemaRows(rows, GetScope(ctx)), nil
+	return FilterSchemaRows(rows, GetScope(ctx)), err
 }
 
 func (s *ScopedScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {

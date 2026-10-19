@@ -3,40 +3,17 @@ package databricks
 import (
 	"context"
 
-	"github.com/getsynq/dwhsupport/logging"
+	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/samber/lo"
 )
 
 func (e *DatabricksScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	var res []*scrapper.SchemaRow
-	scopeFilter := e.effectiveScope(ctx)
-
-	catalogs, err := e.listCatalogs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, catalogInfo := range catalogs {
-		if e.isIgnoredCatalog(catalogInfo) {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
-			logging.GetLogger(ctx).Infof("catalog %s excluded by scope filter", catalogInfo.Name)
-			continue
-		}
-
-		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
-		if err != nil {
-			return nil, err
-		}
+	walk := e.walkUnityCatalog(ctx, scrapper.OmittedObjects)
+	err := walk.forEachCatalog(ctx, func(_ servicecatalog.CatalogInfo, schemas []servicecatalog.SchemaInfo) error {
+		walk.markRead()
 		for _, schemaInfo := range schemas {
-			if schemaInfo.Name == "information_schema" {
-				continue
-			}
-			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
-				logging.GetLogger(ctx).Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
-				continue
-			}
 			res = append(res, &scrapper.SchemaRow{
 				Instance:    e.conf.WorkspaceUrl,
 				Database:    schemaInfo.CatalogName,
@@ -45,6 +22,10 @@ func (e *DatabricksScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.Sche
 				SchemaOwner: lo.EmptyableToPtr(schemaInfo.Owner),
 			})
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	return res, nil
+	return res, walk.result()
 }

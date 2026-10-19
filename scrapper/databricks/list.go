@@ -66,8 +66,9 @@ func (e *DatabricksScrapper) listTables(
 //
 // Only a missing object is tolerated: the 404 the API answers with, carrying
 // CATALOG_DOES_NOT_EXIST or SCHEMA_DOES_NOT_EXIST. Anything else — denied permission,
-// a throttled or unavailable workspace — stays fatal, because silently reading no
-// tables for those would report a catalog as empty when it is merely unreadable.
+// a throttled or unavailable workspace — stays a failed listing, because silently
+// reading no tables for those would report a catalog as empty when it is merely
+// unreadable. What a failed listing costs the call is unityCatalogWalk's decision.
 func vanished(ctx context.Context, err error, kind, name string) bool {
 	if err == nil || !apierr.IsMissing(err) {
 		return false

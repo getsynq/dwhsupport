@@ -2,64 +2,29 @@ package databricks
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
 	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
 )
 
 func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
 	log := logging.GetLogger(ctx)
 	var sqlDefs []*scrapper.SqlDefinitionRow
-	scopeFilter := e.effectiveScope(ctx)
-
 	tablesFound := 0
 
-	catalogs, err := e.listCatalogs(ctx)
-	if err != nil {
-		return nil, err
-	}
-	for _, catalogInfo := range catalogs {
-		if e.isIgnoredCatalog(catalogInfo) {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
-			log.Infof("catalog %s excluded by scope filter", catalogInfo.Name)
-			continue
-		}
-
-		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
-		if err != nil {
-			return nil, err
-		}
-		for _, schemaInfo := range schemas {
-			if schemaInfo.Name == "information_schema" {
-				continue
-			}
-			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
-				log.Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
-				continue
-			}
-
-			tables, err := e.listTables(
-				ctx,
-				servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitColumns: true, OmitProperties: true},
-			)
-			if err != nil {
-				return nil, err
-			}
-
+	walk := e.walkUnityCatalog(ctx, scrapper.OmittedDefinitions)
+	err := walk.forEachSchema(ctx, servicecatalog.ListTablesRequest{OmitColumns: true, OmitProperties: true},
+		func(schemaInfo servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error {
 			tablesFound += len(tables)
-			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), catalogInfo.Name, schemaInfo.Name, tablesFound)
+			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), schemaInfo.CatalogName, schemaInfo.Name, tablesFound)
 
 			for _, tableInfo := range tables {
-				if !scopeFilter.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
-					log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
-					continue
-				}
 				sqlDefs = append(sqlDefs, &scrapper.SqlDefinitionRow{
 					Instance: e.conf.WorkspaceUrl,
 					Database: tableInfo.CatalogName,
@@ -69,7 +34,10 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 					IsView:   tableInfo.TableType == servicecatalog.TableTypeMaterializedView || tableInfo.TableType == servicecatalog.TableTypeView,
 				})
 			}
-		}
+			return nil
+		})
+	if err != nil {
+		return nil, err
 	}
 
 	if e.conf.UseShowCreateTable {
@@ -84,9 +52,8 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 			return nil, err
 		}
 
+		omitted := map[*scrapper.SqlDefinitionRow]bool{}
 		for _, sqlDef := range sqlDefs {
-			sqlDef := sqlDef
-
 			select {
 			case <-groupCtx.Done():
 				return nil, groupCtx.Err()
@@ -94,13 +61,31 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 			}
 
 			g.Go(func() error {
-				if !sqlDef.IsView {
-					if sql, err := e.showCreateTable(groupCtx, sqlClient, sqlDef.Database, sqlDef.Schema, sqlDef.Table); err == nil {
-						m.Lock()
-						sqlDef.Sql = sql
-						m.Unlock()
-					}
+				if sqlDef.IsView {
+					return nil
 				}
+				sql, err := e.showCreateTable(groupCtx, sqlClient, sqlDef.Database, sqlDef.Schema, sqlDef.Table)
+				if err == nil {
+					m.Lock()
+					sqlDef.Sql = sql
+					m.Unlock()
+					return nil
+				}
+				// A caller that did not ask for incomplete results gets the table
+				// without a definition, as it always did.
+				if !walk.acceptIncomplete || isTableWithoutCreateStatement(err) {
+					log.WithError(err).Debugf("No CREATE statement for %s.%s.%s", sqlDef.Database, sqlDef.Schema, sqlDef.Table)
+					return nil
+				}
+				omission := scrapper.Omission{
+					Database: sqlDef.Database, Schema: sqlDef.Schema, Table: sqlDef.Table, Part: scrapper.OmittedDefinitions, Err: err,
+				}
+				if err := walk.leaveOut(groupCtx, omission); err != nil {
+					return err
+				}
+				m.Lock()
+				omitted[sqlDef] = true
+				m.Unlock()
 				return nil
 			})
 		}
@@ -108,9 +93,19 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 		if err != nil {
 			return nil, err
 		}
+		sqlDefs = lo.Reject(sqlDefs, func(sqlDef *scrapper.SqlDefinitionRow, _ int) bool { return omitted[sqlDef] })
 	}
 
-	return sqlDefs, nil
+	return sqlDefs, walk.result()
+}
+
+// isTableWithoutCreateStatement reports a SHOW CREATE TABLE that failed for a reason
+// no later run would fix: Databricks cannot show a CREATE for the table by design
+// (UNSUPPORTED_SHOW_CREATE_TABLE, such as a Hive SerDe table), or the table was dropped
+// since it was listed. Those tables keep an empty definition and are not reported.
+func isTableWithoutCreateStatement(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "[UNSUPPORTED_SHOW_CREATE_TABLE") || strings.Contains(msg, "[TABLE_OR_VIEW_NOT_FOUND]")
 }
 
 func (e *DatabricksScrapper) showCreateTable(

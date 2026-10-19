@@ -106,8 +106,10 @@ type fakeWorkspace struct {
 	vanishedCatalogs map[string]bool
 	vanishedSchemas  map[string]bool
 	// deniedSchemas holds schemas whose table listing answers as though the caller
-	// were not allowed to read them, keyed "catalog.schema".
-	deniedSchemas map[string]bool
+	// were not allowed to read them, keyed "catalog.schema"; deniedCatalogs the same
+	// for a catalog's schema listing.
+	deniedSchemas  map[string]bool
+	deniedCatalogs map[string]bool
 	// refuse, when set, decides whether the workspace answers a request by refusing it
 	// for exceeding its control-plane quota rather than serving it. It runs in front of
 	// every endpoint, the way a real limiter does.
@@ -156,6 +158,7 @@ func newFakeWorkspace() *fakeWorkspace {
 		vanishedCatalogs: map[string]bool{},
 		vanishedSchemas:  map[string]bool{},
 		deniedSchemas:    map[string]bool{},
+		deniedCatalogs:   map[string]bool{},
 	}
 }
 
@@ -181,6 +184,13 @@ func (f *fakeWorkspace) addTable(catalog, schema, table string) {
 			{Name: "id", TypeText: "bigint", Position: 0, PartitionIndex: 1},
 		},
 	})
+}
+
+// addUnreadableCatalog adds a catalog that lists like any other but whose schemas
+// the caller is not allowed to read.
+func (f *fakeWorkspace) addUnreadableCatalog(name string) {
+	f.addCatalog(name)
+	f.deniedCatalogs[name] = true
 }
 
 // addVanishingCatalog adds a catalog that lists like any other but has been dropped
@@ -240,6 +250,11 @@ func (f *fakeWorkspace) tryStart(t *testing.T, conf *DatabricksScrapperConf) (*D
 		f.record(&f.listedCatalogs, catalog)
 		if f.vanishedCatalogs[catalog] {
 			f.writeVanished(t, w, "CATALOG_DOES_NOT_EXIST", fmt.Sprintf("Catalog '%s' does not exist.", catalog))
+			return
+		}
+		if f.deniedCatalogs[catalog] {
+			f.writeApiError(t, w, http.StatusForbidden, "PERMISSION_DENIED",
+				fmt.Sprintf("User does not have USE CATALOG on Catalog '%s'.", catalog))
 			return
 		}
 		schemas := f.schemas[catalog]
