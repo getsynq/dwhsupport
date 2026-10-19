@@ -140,6 +140,12 @@ func NewMSSQLExecutor(ctx context.Context, conf *MSSQLConf) (*MSSQLExecutor, err
 	return &MSSQLExecutor{conf: conf, db: db}, nil
 }
 
+// NewMSSQLExecutorFromDb wraps a connection the caller already opened, such as
+// one over a fake driver in a test. It does not ping it.
+func NewMSSQLExecutorFromDb(conf *MSSQLConf, db *sqlx.DB) *MSSQLExecutor {
+	return &MSSQLExecutor{conf: conf, db: db}
+}
+
 func buildConnectionString(conf *MSSQLConf) (string, error) {
 	query := url.Values{}
 	if conf.IntegratedAuth {

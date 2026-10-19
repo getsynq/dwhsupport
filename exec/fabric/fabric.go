@@ -19,6 +19,7 @@ import (
 	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/exec/querier"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
+	"github.com/jmoiron/sqlx"
 	mssql "github.com/microsoft/go-mssqldb"
 	"github.com/pkg/errors"
 )
@@ -227,6 +228,12 @@ func NewFabricExecutor(ctx context.Context, conf *FabricConf) (*FabricExecutor, 
 		return nil, err
 	}
 	return &FabricExecutor{MSSQLExecutor: inner, conf: conf}, nil
+}
+
+// NewFabricExecutorFromDb wraps a connection the caller already opened, such as
+// one over a fake driver in a test. It does not ping it.
+func NewFabricExecutorFromDb(conf *FabricConf, db *sqlx.DB) *FabricExecutor {
+	return &FabricExecutor{MSSQLExecutor: dwhexecmssql.NewMSSQLExecutorFromDb(conf.ToMSSQLConf(), db), conf: conf}
 }
 
 // Conf returns the Fabric configuration this executor was built from.
