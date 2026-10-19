@@ -145,6 +145,12 @@ func NewDatabricksExecutor(ctx context.Context, conf *DatabricksConf) (*Databric
 	return &DatabricksExecutor{sqlClient: sqlClient}, nil
 }
 
+// NewDatabricksExecutorOnDb runs statements over a connection the caller opened
+// itself, such as a test's stand-in for a SQL warehouse.
+func NewDatabricksExecutorOnDb(db *sqlx.DB) *DatabricksExecutor {
+	return &DatabricksExecutor{sqlClient: db}
+}
+
 func (e *DatabricksExecutor) Exec(ctx context.Context, query string, args ...any) error {
 	query = querycontext.AppendSQLComment(ctx, query)
 	collector, ctx := querystats.Start(ctx)

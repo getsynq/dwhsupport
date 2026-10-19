@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/getsynq/dwhsupport/logging"
@@ -12,7 +11,6 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"golang.org/x/sync/errgroup"
 )
 
 var tablesQuery = `
@@ -32,110 +30,85 @@ var tablesQuery = `
 	`
 
 func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
-	var finalResults []*scrapper.TableRow
-	var m sync.Mutex
-
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	g, groupCtx := errgroup.WithContext(origCtx)
-	g.SetLimit(8)
+	finalResults, err := readDatabases(
+		origCtx, databasesToQuery, 8, scrapper.OmittedObjects,
+		func(groupCtx context.Context, database string) ([]*scrapper.TableRow, error) {
+			var tmpResults []*scrapper.TableRow
 
-	for _, database := range databasesToQuery {
-		select {
-		case <-groupCtx.Done():
-			return nil, groupCtx.Err()
-		default:
-		}
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tablesQuery, database), "", "t.table_schema", "t.table_name")
+			rows, err := e.executor.QueryRows(groupCtx, query)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to query tables for database %s", database)
+			}
+			defer rows.Close()
 
-		g.Go(
-			func() error {
-
-				var tmpResults []*scrapper.TableRow
-
-				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(tablesQuery, database), "", "t.table_schema", "t.table_name")
-				rows, err := e.executor.QueryRows(groupCtx, query)
-				if err != nil {
-					if isSharedDatabaseUnavailableError(err) {
-						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
-							Warn("Shared database is no longer available, skipping")
-						return nil
-					}
-					return errors.Wrapf(err, "failed to query tables for database %s", database)
+			tableRows, err := scrapper.ScanAll[scrapper.TableRow](
+				groupCtx, rows, fmt.Sprintf("%s.information_schema.tables", database),
+			)
+			if err != nil {
+				return nil, err
+			}
+			for _, result := range tableRows {
+				result.Instance = e.conf.Account
+				if result.Description != nil && *result.Description == "" {
+					result.Description = nil
 				}
-				defer rows.Close()
+				tmpResults = append(tmpResults, result)
+			}
 
-				tableRows, err := scrapper.ScanAll[scrapper.TableRow](
-					groupCtx, rows, fmt.Sprintf("%s.information_schema.tables", database),
-				)
-				if err != nil {
-					return err
-				}
-				for _, result := range tableRows {
-					result.Instance = e.conf.Account
-					if result.Description != nil && *result.Description == "" {
-						result.Description = nil
-					}
-					tmpResults = append(tmpResults, result)
-				}
+			streamRows, err := e.showStreamsInDatabase(groupCtx, database)
+			if err == nil {
+				for _, streamRow := range streamRows {
 
-				streamRows, err := e.showStreamsInDatabase(groupCtx, database)
-				if err == nil {
-					for _, streamRow := range streamRows {
-
-						tmpResults = append(
-							tmpResults, &scrapper.TableRow{
-								Instance:  e.conf.Account,
-								Database:  streamRow.DatabaseName,
-								Schema:    streamRow.SchemaName,
-								Table:     streamRow.Name,
-								TableType: "STREAM",
-								IsView:    false,
-								IsTable:   true,
-								Options: map[string]interface{}{
-									"table_name": streamRow.TableName,
+					tmpResults = append(
+						tmpResults, &scrapper.TableRow{
+							Instance:  e.conf.Account,
+							Database:  streamRow.DatabaseName,
+							Schema:    streamRow.SchemaName,
+							Table:     streamRow.Name,
+							TableType: "STREAM",
+							IsView:    false,
+							IsTable:   true,
+							Options: map[string]interface{}{
+								"table_name": streamRow.TableName,
+							},
+							Description: lo.EmptyableToPtr(streamRow.Comment),
+							Annotations: []*scrapper.Annotation{
+								{
+									AnnotationName:  "stream_type",
+									AnnotationValue: streamRow.Type,
 								},
-								Description: lo.EmptyableToPtr(streamRow.Comment),
-								Annotations: []*scrapper.Annotation{
-									{
-										AnnotationName:  "stream_type",
-										AnnotationValue: streamRow.Type,
-									},
-									{
-										AnnotationName:  "stream_mode",
-										AnnotationValue: streamRow.Mode,
-									},
-									{
-										AnnotationName:  "stream_stale",
-										AnnotationValue: streamRow.Stale,
-									},
+								{
+									AnnotationName:  "stream_mode",
+									AnnotationValue: streamRow.Mode,
+								},
+								{
+									AnnotationName:  "stream_stale",
+									AnnotationValue: streamRow.Stale,
 								},
 							},
-						)
+						},
+					)
 
-					}
-				} else {
-					logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 				}
+			} else {
+				logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
+			}
 
-				m.Lock()
-				defer m.Unlock()
-				finalResults = append(finalResults, tmpResults...)
-
-				return nil
-			},
-		)
-	}
-
-	err = g.Wait()
-	if err != nil {
+			return tmpResults, nil
+		},
+	)
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
-	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), nil
+	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), err
 }
 
 // ShowStreamsRow represents the structure of a row returned by SHOW STREAMS command

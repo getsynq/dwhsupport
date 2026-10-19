@@ -99,13 +99,13 @@ func (s *SanitizingScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.Da
 
 func (s *SanitizingScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	rows, err := s.inner.QuerySchemas(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
 	for _, r := range rows {
 		r.Sanitize()
 	}
-	return rows, nil
+	return rows, err
 }
 
 func (s *SanitizingScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {

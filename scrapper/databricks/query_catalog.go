@@ -25,54 +25,24 @@ type Tags struct {
 func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
 	log := logging.GetLogger(ctx)
 	var res []*scrapper.CatalogColumnRow
-	scopeFilter := e.effectiveScope(ctx)
-
-	catalogs, err := e.listCatalogs(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	tablesFound := 0
 
-	for _, catalogInfo := range catalogs {
-		if e.isIgnoredCatalog(catalogInfo) {
-			continue
-		}
-		if !scopeFilter.IsDatabaseAccepted(catalogInfo.Name) {
-			log.Infof("catalog %s excluded by scope filter", catalogInfo.Name)
-			continue
-		}
+	// Tags are read once per catalog, on its first schema whose tables listed, so a
+	// catalog whose listing is refused costs no statement on the SQL warehouse.
+	var tagsCatalog string
+	var tagsLookup map[string][]*Tags
 
-		tagsLookup := e.createTagsLookup(ctx, catalogInfo.Name)
-		schemas, err := e.listSchemas(ctx, catalogInfo.Name)
-		if err != nil {
-			return nil, err
-		}
-		for _, schemaInfo := range schemas {
-			if schemaInfo.Name == "information_schema" {
-				continue
-			}
-			if !scopeFilter.IsSchemaAccepted(catalogInfo.Name, schemaInfo.Name) {
-				log.Infof("schema %s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name)
-				continue
-			}
-
-			tables, err := e.listTables(
-				ctx,
-				servicecatalog.ListTablesRequest{CatalogName: catalogInfo.Name, SchemaName: schemaInfo.Name, OmitProperties: true},
-			)
-			if err != nil {
-				return nil, err
+	walk := e.walkUnityCatalog(ctx, scrapper.OmittedColumns)
+	err := walk.forEachSchema(ctx, servicecatalog.ListTablesRequest{OmitProperties: true},
+		func(schemaInfo servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error {
+			if tagsLookup == nil || tagsCatalog != schemaInfo.CatalogName {
+				tagsCatalog, tagsLookup = schemaInfo.CatalogName, e.createTagsLookup(ctx, schemaInfo.CatalogName)
 			}
 
 			tablesFound += len(tables)
-			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), catalogInfo.Name, schemaInfo.Name, tablesFound)
+			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), schemaInfo.CatalogName, schemaInfo.Name, tablesFound)
 
 			for _, tableInfo := range tables {
-				if !scopeFilter.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
-					log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
-					continue
-				}
 				tableTags := getTableTags(tagsLookup, tableInfo.CatalogName, tableInfo.SchemaName, tableInfo.Name)
 				for _, columnInfo := range tableInfo.Columns {
 					catalogRow := &scrapper.CatalogColumnRow{
@@ -94,10 +64,12 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 					res = append(res, catalogRow.ResolveNumeric(e.DialectType()))
 				}
 			}
-		}
+			return nil
+		})
+	if err != nil {
+		return nil, err
 	}
-
-	return res, nil
+	return res, walk.result()
 }
 
 func (e *DatabricksScrapper) queryTags(
