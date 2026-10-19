@@ -127,10 +127,10 @@ func (s *RejectingScrapper) QueryDatabases(ctx context.Context) ([]*scrapper.Dat
 
 func (s *RejectingScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
 	rows, err := s.inner.QuerySchemas(ctx)
-	if err != nil {
+	if scrapper.Failed(err) {
 		return nil, err
 	}
-	return filterValid(rows, s.DialectType(), "QuerySchemas"), nil
+	return filterValid(rows, s.DialectType(), "QuerySchemas"), err
 }
 
 func (s *RejectingScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {

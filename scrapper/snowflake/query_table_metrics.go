@@ -3,14 +3,11 @@ package snowflake
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
-	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/pkg/errors"
-	"golang.org/x/sync/errgroup"
 )
 
 var tableMetricsSql = `
@@ -29,68 +26,39 @@ var tableMetricsSql = `
 	`
 
 func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	var finalResults []*scrapper.TableMetricsRow
-	var m sync.Mutex
-
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
 	}
 
-	g, groupCtx := errgroup.WithContext(origCtx)
-	g.SetLimit(8)
+	return readDatabases(
+		origCtx, databasesToQuery, 8, scrapper.OmittedMetrics,
+		func(groupCtx context.Context, database string) ([]*scrapper.TableMetricsRow, error) {
+			var tmpResults []*scrapper.TableMetricsRow
 
-	for _, database := range databasesToQuery {
-		select {
-		case <-groupCtx.Done():
-			return nil, groupCtx.Err()
-		default:
-		}
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tableMetricsSql, database), "", "table_schema", "table_name")
+			rows, err := e.executor.QueryRows(groupCtx, query)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to query metrics for database %s", database)
+			}
+			defer rows.Close()
 
-		g.Go(
-			func() error {
-
-				var tmpResults []*scrapper.TableMetricsRow
-
-				query := scope.AppendScopeConditions(origCtx, fmt.Sprintf(tableMetricsSql, database), "", "table_schema", "table_name")
-				rows, err := e.executor.QueryRows(groupCtx, query)
-				if err != nil {
-					if isSharedDatabaseUnavailableError(err) {
-						logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
-							Warn("Shared database is no longer available, skipping")
-						return nil
-					}
-					return errors.Wrapf(err, "failed to query metrics for database %s", database)
+			metricsRows, err := scrapper.ScanAll[scrapper.TableMetricsRow](
+				groupCtx, rows, fmt.Sprintf("%s.information_schema.tables", database),
+			)
+			if err != nil {
+				return nil, err
+			}
+			for _, result := range metricsRows {
+				result.Instance = e.conf.Account
+				if result.UpdatedAt != nil {
+					normalized := result.UpdatedAt.UTC()
+					result.UpdatedAt = &normalized
 				}
-				defer rows.Close()
+				tmpResults = append(tmpResults, result)
+			}
 
-				metricsRows, err := scrapper.ScanAll[scrapper.TableMetricsRow](
-					groupCtx, rows, fmt.Sprintf("%s.information_schema.tables", database),
-				)
-				if err != nil {
-					return err
-				}
-				for _, result := range metricsRows {
-					result.Instance = e.conf.Account
-					if result.UpdatedAt != nil {
-						normalized := result.UpdatedAt.UTC()
-						result.UpdatedAt = &normalized
-					}
-					tmpResults = append(tmpResults, result)
-				}
-
-				m.Lock()
-				defer m.Unlock()
-				finalResults = append(finalResults, tmpResults...)
-				return nil
-			},
-		)
-	}
-
-	err = g.Wait()
-	if err != nil {
-		return nil, err
-	}
-
-	return finalResults, nil
+			return tmpResults, nil
+		},
+	)
 }

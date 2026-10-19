@@ -77,7 +77,10 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 	if err != nil {
 		return nil, err
 	}
+	return newSnowflakeScrapper(ctx, conf, executor), nil
+}
 
+func newSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf, executor *dwhexecsnowflake.SnowflakeExecutor) *SnowflakeScrapper {
 	lazyExistingDbs := lazy.New(func() ([]*DbDesc, error) {
 		rows, err := executor.QueryRows(ctx, "SHOW DATABASES")
 		if err != nil {
@@ -104,7 +107,7 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 		return allDatabases, nil
 	})
 
-	return &SnowflakeScrapper{conf: conf, executor: executor, existingDbs: lazyExistingDbs}, nil
+	return &SnowflakeScrapper{conf: conf, executor: executor, existingDbs: lazyExistingDbs}
 }
 
 func (e *SnowflakeScrapper) IsPermissionError(err error) bool {
@@ -178,9 +181,17 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 	var missingDbs []string
 	var unavailableSharedDbs []string
 
+	// A caller accepting incomplete results is told about an unavailable share
+	// by every read, as an omission of that database carrying Snowflake's own
+	// error, so probing for it here would only say the same thing twice.
+	probeShares := !scrapper.IncompleteResultsAccepted(ctx)
+
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
 			missingDbs = append(missingDbs, database)
+			continue
+		}
+		if !probeShares {
 			continue
 		}
 
