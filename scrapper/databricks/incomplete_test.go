@@ -314,13 +314,15 @@ func TestIncompleteResultsReportATableWhoseMetricsCannotBeRead(t *testing.T) {
 
 	rows, err := s.QueryTableMetrics(scrapper.WithIncompleteResults(context.Background()), time.Now().Add(-time.Hour))
 
+	// The per-table reads run beside the walk, so their omissions can come in any order.
 	omissions := requireOmissions(t, err)
-	require.Equal(t, []string{
+	require.ElementsMatch(t, []string{
 		"sales.denied metrics",
 		"locked metrics",
 		"sales.orders.a metrics",
 	}, omissionScopes(omissions))
-	require.ErrorContains(t, omissions[2].Err, "Table metadata is unavailable")
+	tableOmission, _ := lo.Find(omissions, func(o scrapper.Omission) bool { return o.Table == "a" })
+	require.ErrorContains(t, tableOmission.Err, "Table metadata is unavailable")
 	require.ElementsMatch(t, []string{"sales.orders.b", "finance.ledger.c"},
 		lo.Map(rows, func(r *scrapper.TableMetricsRow, _ int) string { return dotted(r.TableFqn()) }))
 	for _, row := range rows {
