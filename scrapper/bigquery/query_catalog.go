@@ -127,6 +127,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 						IsStructColumn: field.Type == bigquery.RecordFieldType || field.Type == bigquery.JSONFieldType,
 						IsArrayColumn:  field.Repeated,
 						FieldSchemas:   toFieldSchemas(field.Schema),
+						IsNullable:     lo.ToPtr(fieldIsNullable(field)),
 					}
 					if sized {
 						row.Precision, row.Scale = &precision, &scale
@@ -150,6 +151,13 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 	}
 
 	return rows, reads.result()
+}
+
+// fieldIsNullable mirrors INFORMATION_SCHEMA.COLUMNS.is_nullable: a REQUIRED
+// field is NOT NULL, and so is a REPEATED one, since an array is never NULL
+// (it is empty instead).
+func fieldIsNullable(field *bigquery.FieldSchema) bool {
+	return !field.Required && !field.Repeated
 }
 
 func labelsToTags(labels map[string]string) []*scrapper.Tag {

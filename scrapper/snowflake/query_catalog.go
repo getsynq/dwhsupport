@@ -24,6 +24,7 @@ var catalogQuery = `
         c.data_type as "type",
         c.numeric_precision as "numeric_precision",
         c.numeric_scale as "numeric_scale",
+        c.is_nullable = 'YES' as "is_nullable",
         c.ordinal_position as "position"
 	from
 		%[1]s.information_schema.columns as c
@@ -98,6 +99,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 									Precision:       sourceTableColumn.Precision,
 									Scale:           sourceTableColumn.Scale,
 									NumericCategory: sourceTableColumn.NumericCategory,
+									IsNullable:      sourceTableColumn.IsNullable,
 								},
 							)
 						}

@@ -117,6 +117,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 					TableType:   string(tableMeta.Type),
 					Description: lo.EmptyableToPtr(tableMeta.Description),
 					Tags:        tableTags,
+					CreatedAt:   scrapper.UTCTimePtr(&tableMeta.CreationTime),
 				}
 
 				if includeConstraints {

@@ -8,6 +8,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
+	"github.com/samber/lo"
 )
 
 //go:embed query_tables.sql
@@ -23,6 +24,8 @@ func (e *RedshiftScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 			}
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
+			row.Owner = lo.EmptyableToPtr(lo.FromPtr(row.Owner))
+			row.CreatedAt = scrapper.UTCTimePtr(row.CreatedAt)
 			return row, nil
 		}),
 	)

@@ -269,6 +269,8 @@ select database_name         as database,
        case when data_type = 'numeric'
             then nullif(regexp_substr(sized_type, '[0-9]+', 1, 2), '')::integer end as numeric_scale,
        ordinal_position      as position,
+       -- an external column whose nullability the catalog does not know is '', which stays NULL
+       case is_nullable when 'YES' then true when 'NO' then false end as is_nullable,
        lower(type) = 'super' as is_struct_column,
        lower(type) = 'super' as is_array_column,
        coalesce(remarks, '') as comment

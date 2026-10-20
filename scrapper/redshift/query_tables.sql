@@ -88,8 +88,20 @@ with svv_all_tables as ((((SELECT current_database()::character varying(128)    
 select distinct tbl.database_name                  as database,
                 tbl.schema_name                    as schema,
                 tbl.table_name                     as table,
-                NVL2(tbl.remarks, tbl.remarks, '') as description
+                NVL2(tbl.remarks, tbl.remarks, '') as description,
+                -- an external table is owned by whoever owns its external schema
+                btrim(coalesce(owner.usename, ext_owner.usename)::text) as owner,
+                pci.relcreationtime                as created_at
 from svv_all_tables tbl
+         left join pg_namespace pns
+                   on tbl.table_type <> 'EXTERNAL TABLE' and pns.nspname = tbl.schema_name
+         left join pg_class pgc
+                   on pgc.relnamespace = pns.oid and pgc.relname = tbl.table_name and pgc.relkind in ('r', 'v')
+         left join pg_user owner on owner.usesysid = pgc.relowner
+         left join pg_class_info pci on pci.reloid = pgc.oid
+         left join svv_external_schemas es
+                   on tbl.table_type = 'EXTERNAL TABLE' and es.schemaname = tbl.schema_name
+         left join pg_user ext_owner on ext_owner.usesysid = es.esowner
 where tbl.schema_name not in ('pg_catalog', 'information_schema', 'pg_automv')
   and tbl.database_name = $1
   /* SYNQ_SCOPE_FILTER */

@@ -21,7 +21,9 @@ var tablesQuery = `
         IFF(t.is_dynamic = 'YES', 'DYNAMIC TABLE', t.table_type) as "table_type",
         NVL2(t.comment, t.comment, '') as "description",
         (table_type='VIEW' OR table_type='MATERIALIZED VIEW') as "is_view",
-        table_type='BASE TABLE' as "is_table"
+        table_type='BASE TABLE' as "is_table",
+        t.table_owner as "owner",
+        t.created as "created_at"
 	from
 		%s.information_schema.tables as t
 	where
@@ -58,6 +60,8 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 				if result.Description != nil && *result.Description == "" {
 					result.Description = nil
 				}
+				result.Owner = lo.EmptyableToPtr(lo.FromPtr(result.Owner))
+				result.CreatedAt = scrapper.UTCTimePtr(result.CreatedAt)
 				tmpResults = append(tmpResults, result)
 			}
 
@@ -78,6 +82,8 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 								"table_name": streamRow.TableName,
 							},
 							Description: lo.EmptyableToPtr(streamRow.Comment),
+							Owner:       lo.EmptyableToPtr(streamRow.Owner),
+							CreatedAt:   streamRow.CreatedAt,
 							Annotations: []*scrapper.Annotation{
 								{
 									AnnotationName:  "stream_type",
@@ -115,6 +121,8 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 type ShowStreamsRow struct {
 	// CreatedOn is the timestamp when the stream was created
 	CreatedOn string
+	// CreatedAt is CreatedOn as an instant in UTC, nil when SHOW STREAMS did not return one
+	CreatedAt *time.Time
 	// Name is the name of the stream
 	Name string
 	// DatabaseName is the database containing the stream
@@ -165,6 +173,7 @@ func (e *SnowflakeScrapper) showStreamsInDatabase(ctx context.Context, database 
 		}
 		results = append(results, &ShowStreamsRow{
 			CreatedOn:     mapStr(tmp, "created_on"),
+			CreatedAt:     mapTime(tmp, "created_on"),
 			Name:          mapStr(tmp, "name"),
 			DatabaseName:  mapStr(tmp, "database_name"),
 			SchemaName:    mapStr(tmp, "schema_name"),
@@ -198,6 +207,15 @@ func mapStr(m map[string]any, key string) string {
 	default:
 		return fmt.Sprint(v)
 	}
+}
+
+// mapTime reads a timestamp column of a MapScan row, nil when it is absent, NULL or not a time.
+func mapTime(m map[string]any, key string) *time.Time {
+	t, ok := m[key].(time.Time)
+	if !ok {
+		return nil
+	}
+	return scrapper.UTCTimePtr(&t)
 }
 
 func (e *SnowflakeScrapper) showShares(ctx context.Context) ([]*ShareDesc, error) {

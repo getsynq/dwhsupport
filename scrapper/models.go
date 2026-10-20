@@ -75,6 +75,10 @@ type CatalogColumnRow struct {
 	Precision       *int64          `db:"numeric_precision" json:"precision,omitempty"        ch:"numeric_precision"`
 	Scale           *int64          `db:"numeric_scale"     json:"scale,omitempty"            ch:"numeric_scale"`
 	NumericCategory NumericCategory `                       json:"numeric_category,omitempty"`
+	// IsNullable is true when the column accepts NULL and false when it is
+	// declared NOT NULL. Nil when the warehouse does not report it, which is
+	// never read as either.
+	IsNullable *bool `db:"is_nullable" json:"is_nullable,omitempty" ch:"is_nullable" bigquery:"is_nullable"`
 }
 
 type SchemaColumnField struct {
@@ -137,6 +141,13 @@ type TableRow struct {
 	Options            map[string]interface{} `db:"options"              json:"options"`
 	Annotations        []*Annotation          `db:"annotations"          json:"annotations"`
 
+	// Owner is the role or user the warehouse names as the object's owner, nil
+	// when it does not report one.
+	Owner *string `db:"owner" json:"owner,omitempty" ch:"owner"`
+	// CreatedAt is when the warehouse created the object, always UTC. Nil when
+	// it does not report it.
+	CreatedAt *time.Time `db:"created_at" json:"created_at,omitempty" ch:"created_at"`
+
 	// Constraints is optionally populated by QueryTables when WithConstraints() is passed.
 	// When non-nil, callers may skip a separate QueryTableConstraints call.
 	Constraints []*TableConstraintRow `json:"constraints,omitempty"`
@@ -149,6 +160,15 @@ func (r TableRow) TableFqn() DwhFqn {
 		SchemaName:   r.Schema,
 		ObjectName:   r.Table,
 	}
+}
+
+// UTCTimePtr returns t in UTC, or nil when t is nil or the zero time, which
+// several APIs return for a time they do not know.
+func UTCTimePtr(t *time.Time) *time.Time {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+	return lo.ToPtr(t.UTC())
 }
 
 func GetTableRowOption[T any](tableRow *TableRow, optionName string) T {
