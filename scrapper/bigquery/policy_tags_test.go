@@ -196,7 +196,7 @@ func (s *PolicyTagsSuite) TestEachTaxonomyIsReadOncePerScan() {
 	s.Equal(1, fake.callsTo(piiTaxonomy))
 	s.Equal(3, fake.callsTo(piiTaxonomy+"/policyTags"), "one call per page")
 	s.Equal(1, fake.callsTo(refusedTaxonomy))
-	s.Zero(fake.callsTo(refusedTaxonomy+"/policyTags"))
+	s.Zero(fake.callsTo(refusedTaxonomy + "/policyTags"))
 }
 
 func (s *PolicyTagsSuite) TestNoClientIsBuiltWithoutPolicyTags() {

@@ -3,7 +3,6 @@ package bigquery
 import (
 	"context"
 	"fmt"
-	datacatalog "google.golang.org/api/datacatalog/v1"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/api/cloudresourcemanager/v1"
+	datacatalog "google.golang.org/api/datacatalog/v1"
 
 	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
