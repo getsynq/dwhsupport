@@ -6,6 +6,7 @@ import (
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/samber/lo"
 )
 
 func (e *BigQueryScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
@@ -15,10 +16,26 @@ func (e *BigQueryScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapp
 	return nil, scrapper.ErrUnsupported
 }
 
-// extractConstraintsFromMeta extracts partitioning and clustering constraints
-// from BigQuery table metadata.
+// extractConstraintsFromMeta extracts the primary key, partitioning and
+// clustering constraints from BigQuery table metadata. A BigQuery primary key
+// is always NOT ENFORCED.
 func extractConstraintsFromMeta(projectId, datasetID, tableAlias string, tableMeta *bigquery.TableMetadata) []*scrapper.TableConstraintRow {
 	var rows []*scrapper.TableConstraintRow
+
+	if tableMeta.TableConstraints != nil && tableMeta.TableConstraints.PrimaryKey != nil {
+		for i, col := range tableMeta.TableConstraints.PrimaryKey.Columns {
+			rows = append(rows, &scrapper.TableConstraintRow{
+				Database:       projectId,
+				Schema:         datasetID,
+				Table:          tableAlias,
+				ConstraintName: "primary_key",
+				ColumnName:     col,
+				ConstraintType: scrapper.ConstraintTypePrimaryKey,
+				ColumnPosition: int32(i + 1),
+				IsEnforced:     lo.ToPtr(false),
+			})
+		}
+	}
 
 	if tableMeta.TimePartitioning != nil {
 		if tableMeta.TimePartitioning.Field != "" {

@@ -3,6 +3,7 @@ package databricks
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	servicecatalog "github.com/databricks/databricks-sdk-go/service/catalog"
@@ -59,6 +60,7 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 						TableComment: lo.EmptyableToPtr(tableInfo.Comment),
 						TableTags:    tableTags,
 						ColumnTags:   getColumnTags(tagsLookup, tableInfo.CatalogName, tableInfo.SchemaName, tableInfo.Name, columnInfo.Name),
+						IsNullable:   columnNullable(columnInfo),
 					}
 
 					res = append(res, catalogRow.ResolveNumeric(e.DialectType()))
@@ -70,6 +72,17 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 		return nil, err
 	}
 	return res, walk.result()
+}
+
+// columnNullable reads ColumnInfo.Nullable, nil when the response left it out.
+// The SDK field is a plain bool, so false alone cannot tell NOT NULL from
+// absent; the SDK records a field the response did send as false in
+// ForceSendFields, and that is what tells the two apart.
+func columnNullable(columnInfo servicecatalog.ColumnInfo) *bool {
+	if columnInfo.Nullable || slices.Contains(columnInfo.ForceSendFields, "Nullable") {
+		return lo.ToPtr(columnInfo.Nullable)
+	}
+	return nil
 }
 
 func (e *DatabricksScrapper) queryTags(

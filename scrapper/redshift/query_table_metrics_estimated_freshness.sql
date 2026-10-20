@@ -1,7 +1,9 @@
 WITH rows_estimation AS (select "database",
                                 "schema",
                                 "table",
-                                estimated_visible_rows as "row_count"
+                                estimated_visible_rows as "row_count",
+                                -- size is in 1 MB blocks
+                                size::bigint * 1048576 as "size_bytes"
                          from pg_catalog.svv_table_info
                          where estimated_visible_rows is not null
                            AND schema <> 'catalog_history'::name
