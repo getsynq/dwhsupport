@@ -38,8 +38,15 @@ func (r TableMetricsRow) TableFqn() DwhFqn {
 	}
 }
 
+// Tag is a tag or label the warehouse assigns to a table or a column. The name
+// follows the platform:
+//   - Snowflake: `<TAG_DATABASE>.<TAG_SCHEMA>.<TAG_NAME>`, unquoted, as Snowflake stores it.
+//   - BigQuery labels: `label.<key>`.
+//   - BigQuery policy tags: `policytag.<taxonomy display name>`, with the value
+//     `<parent display name>:...:<tag display name>`. A taxonomy that cannot be
+//     read gives the name `policytag` and the policy tag resource name as value.
+//   - Databricks: `tag.<name>`, the value may be empty.
 type Tag struct {
-	// Optionally prefix (`tag.` / `policytag.` / etc)
 	TagName  string `json:"tag_name"`
 	TagValue string `json:"tag_value"`
 }
@@ -178,6 +185,9 @@ type SqlDefinitionRow struct {
 	Sql                string  `db:"sql"                  json:"sql"                   ch:"sql"                  bigquery:"sql"`
 	Description        *string `                          json:"description,omitempty"`
 	Tags               []*Tag  `                          json:"tags,omitempty"`
+	// ColumnTags holds the tags of each column the definition assigns them in,
+	// by the column name as the definition writes it, unquoted.
+	ColumnTags map[string][]*Tag `json:"column_tags,omitempty"`
 }
 
 type DatabaseRow struct {

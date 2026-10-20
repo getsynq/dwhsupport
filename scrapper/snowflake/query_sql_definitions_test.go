@@ -549,8 +549,129 @@ func TestQuerySqlDefinitionsReadsTheTagsOfAViewWithSql(t *testing.T) {
 		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
 	}, view.Tags)
 
+	require.Equal(t, map[string][]*scrapper.Tag{
+		"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+	}, view.ColumnTags)
+	require.Nil(t, view.Description, "a view with SQL keeps what information_schema gave it")
+
 	table := byName["CUSTOMERS"]
 	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}}, table.Tags)
+	require.Equal(t, map[string][]*scrapper.Tag{
+		"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+		"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+	}, table.ColumnTags)
 	require.NotNil(t, table.Description)
 	require.Equal(t, "Customer directory", *table.Description)
+	require.Contains(t, table.Sql, "create or replace TABLE MY_DB.MY_SCHEMA.CUSTOMERS")
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
+	cases := []struct {
+		name    string
+		ddl     string
+		table   []*scrapper.Tag
+		columns map[string][]*scrapper.Tag
+	}{
+		{
+			name:  "table with column tags",
+			ddl:   tableWithColumnTagsDdl,
+			table: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+			columns: map[string][]*scrapper.Tag{
+				"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+				"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+			},
+		},
+		{
+			name: "view with column tags",
+			ddl:  viewWithColumnTagsDdl,
+			table: []*scrapper.Tag{
+				{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
+				{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+			},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+		},
+		{
+			name: "no tags at all",
+			ddl:  "create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (\n\tID NUMBER(38,0)\n) COMMENT='x';",
+		},
+		{
+			name: "empty ddl",
+			ddl:  "",
+		},
+		{
+			name: "column tags only",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	ID NUMBER(38,0),
+	EMAIL VARCHAR(255) WITH TAG (MY_DB.GOVERNANCE.PII='high', MY_DB.GOVERNANCE.OWNER='crm')
+);`,
+			columns: map[string][]*scrapper.Tag{"EMAIL": {
+				{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"},
+				{TagName: "MY_DB.GOVERNANCE.OWNER", TagValue: "crm"},
+			}},
+		},
+		{
+			name: "a quoted column name and a quoted tag database",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	"order date" DATE WITH TAG ("my_db".GOVERNANCE.PII='low'),
+	"CONSTRAINT" VARCHAR WITH TAG (MY_DB.GOVERNANCE.PII='low')
+);`,
+			columns: map[string][]*scrapper.Tag{
+				"order date": {{TagName: "my_db.GOVERNANCE.PII", TagValue: "low"}},
+				"CONSTRAINT": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+			},
+		},
+		{
+			name: "a masked column tag is left out",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	EMAIL VARCHAR(255) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE'),
+	SSN VARCHAR(11) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE', MY_DB.GOVERNANCE.PII='high')
+) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE');`,
+			columns: map[string][]*scrapper.Tag{"SSN": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+		},
+		{
+			name: "a masking policy and a default expression are not tags",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	ID NUMBER(38,0) DEFAULT MY_DB.MY_SCHEMA.SEQ.NEXTVAL,
+	EMAIL VARCHAR(255) WITH MASKING POLICY MY_DB.GOVERNANCE.MASK_EMAIL WITH TAG (MY_DB.GOVERNANCE.PII='high'),
+	CREATED_AT TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP()
+) WITH ROW ACCESS POLICY MY_DB.GOVERNANCE.RAP ON (ID) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
+			columns: map[string][]*scrapper.Tag{"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+		},
+		{
+			name: "a cluster key before the column list",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE cluster by (CATEGORY, ID)(
+	ID NUMBER(38,0),
+	NAME VARCHAR(200) WITH TAG (MY_DB.GOVERNANCE.PII='low'),
+	CATEGORY VARCHAR
+) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+		},
+		{
+			name: "a CTE in a view's query is not read",
+			ddl: `create or replace view MY_DB.MY_SCHEMA.MY_VIEW(
+	ID
+) as
+with tag (ID) as (select 1)
+select ID from tag;`,
+		},
+		{
+			name: "a dynamic table's options before its query",
+			ddl: `create or replace dynamic table MY_DB.MY_SCHEMA.MY_DT(
+	ID WITH TAG (MY_DB.GOVERNANCE.PII='low')
+) target_lag = '1 hour' warehouse = COMPUTE_WH WITH TAG (MY_DB.GOVERNANCE.TEAM='core')
+ as
+SELECT ID FROM MY_DB.MY_SCHEMA.SRC;`,
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
+			columns: map[string][]*scrapper.Tag{"ID": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+		},
+	}
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			tags := ParseDdlTags(c.ddl)
+			s.Equal(c.table, tags.Table)
+			s.Equal(c.columns, tags.Columns)
+		})
+	}
 }
