@@ -1,11 +1,16 @@
 package snowflake
 
 import (
+	"context"
+	"database/sql/driver"
 	"testing"
 
+	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -444,4 +449,108 @@ func (s *QuerySqlDefinitionsSuite) TestGetDdlQueryQuotesEveryPart() {
 			s.Equal(c.expected, query)
 		})
 	}
+}
+
+// tableWithColumnTagsDdl is a table as GET_DDL writes it: a column tag sits
+// inline in the column list, the table's own tags after it, and a tag created
+// with a quoted lower-case name keeps its quotes.
+const tableWithColumnTagsDdl = `create or replace TABLE MY_DB.MY_SCHEMA.CUSTOMERS (
+	ID NUMBER(38,0) NOT NULL,
+	EMAIL VARCHAR(255) NOT NULL WITH TAG (MY_DB.GOVERNANCE.PII='high'),
+	SSN VARCHAR(11) WITH TAG (MY_DB.GOVERNANCE.PII='high') COMMENT 'Social security number',
+	FULL_NAME VARCHAR(200),
+	constraint CHK_CUSTOMERS_EMAIL check (EMAIL LIKE '%@%'),
+	constraint PK_CUSTOMERS primary key (ID) rely
+) WITH TAG (MY_DB.GOVERNANCE."data_domain"='customers')
+COMMENT='Customer directory'
+;`
+
+// viewWithColumnTagsDdl is a view as GET_DDL writes it, with a column tag in
+// its column list and two tags of its own, one holding JSON.
+const viewWithColumnTagsDdl = `create or replace view MY_DB.MY_SCHEMA.ACTIVE_PRODUCTS(
+	ID,
+	NAME WITH TAG (MY_DB.GOVERNANCE.PII='low'),
+	PRICE
+) WITH TAG (MY_DB.GOVERNANCE.COST_CENTER='SALES', MY_DB.GOVERNANCE.META='{"owner":"team_a","tier":"gold"}')
+ COMMENT='In-stock products'
+ as
+SELECT ID, NAME, PRICE
+FROM MY_DB.MY_SCHEMA.PRODUCTS
+WHERE IS_ACTIVE = TRUE;`
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheTableTagsNotAColumnTag() {
+	s.Equal(
+		[]*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+		ParseWithTagClause(tableWithColumnTagsDdl),
+	)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheViewTagsNotAColumnTag() {
+	s.Equal(
+		[]*scrapper.Tag{
+			{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
+			{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+		},
+		ParseWithTagClause(viewWithColumnTagsDdl),
+	)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseUnquotesTheTagName() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID NUMBER(38,0)
+) WITH TAG ("My_Db".GOVERNANCE."data_domain"='customers')
+;`
+	s.Equal([]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers"}}, ParseWithTagClause(ddl))
+}
+
+// A view's SQL comes from information_schema.views before GET_DDL is read, and
+// its tags are only in GET_DDL, so they must be read from there all the same,
+// without replacing the SQL.
+func TestQuerySqlDefinitionsReadsTheTagsOfAViewWithSql(t *testing.T) {
+	ctx := context.Background()
+	viewSql := "SELECT ID, NAME, PRICE FROM MY_DB.MY_SCHEMA.PRODUCTS WHERE IS_ACTIVE = TRUE"
+	fake := &fakeSnowflake{t: t, routes: []fakeRoute{
+		{
+			match:   sqlContains("SHOW DATABASES"),
+			columns: []string{"name", "origin", "owner", "comment", "kind"},
+			rows:    [][]driver.Value{{"MY_DB", "", "SYSADMIN", "", "STANDARD"}},
+		},
+		{
+			match:   sqlContains("MY_DB.information_schema.views"),
+			columns: []string{"database", "schema", "table", "is_view", "sql"},
+			rows: [][]driver.Value{
+				{"MY_DB", "MY_SCHEMA", "ACTIVE_PRODUCTS", true, viewSql},
+				{"MY_DB", "MY_SCHEMA", "CUSTOMERS", false, ""},
+			},
+		},
+		{
+			match:   sqlContains("SHOW STREAMS IN DATABASE MY_DB"),
+			columns: []string{"created_on", "name", "database_name", "schema_name", "table_name"},
+		},
+		{
+			match:   sqlContains(`GET_DDL('SCHEMA', '"MY_DB"."MY_SCHEMA"'`),
+			columns: []string{"GET_DDL"},
+			rows:    [][]driver.Value{{tableWithColumnTagsDdl + "\n" + viewWithColumnTagsDdl}},
+		},
+	}}
+	conf := &SnowflakeScrapperConf{SnowflakeConf: dwhexecsnowflake.SnowflakeConf{Account: "ORG-ACCOUNT", Databases: []string{"MY_DB"}}}
+	scr := newFakeSnowflakeScrapper(ctx, fake, conf)
+
+	rows, err := scr.QuerySqlDefinitions(ctx)
+	require.NoError(t, err)
+	byName := lo.KeyBy(rows, func(r *scrapper.SqlDefinitionRow) string { return r.Table })
+	require.Contains(t, byName, "ACTIVE_PRODUCTS")
+	require.Contains(t, byName, "CUSTOMERS")
+
+	view := byName["ACTIVE_PRODUCTS"]
+	require.Equal(t, viewSql, view.Sql, "the view keeps the SQL information_schema gave it")
+	require.Equal(t, []*scrapper.Tag{
+		{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
+		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+	}, view.Tags)
+
+	table := byName["CUSTOMERS"]
+	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}}, table.Tags)
+	require.NotNil(t, table.Description)
+	require.Equal(t, "Customer directory", *table.Description)
 }
