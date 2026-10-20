@@ -10,9 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestBigQueryPolicyTags reads the dwhtesting fixture table policy_tagged,
-// whose column email carries the policy tag High > Email of the taxonomy
-// dwhtesting_sensitivity and nickname carries Low. It needs the Data Catalog
+// TestBigQueryPolicyTags reads, with FetchPolicyTags on, the dwhtesting
+// fixture table policy_tagged, whose column email carries the policy tag
+// High > Email of the taxonomy dwhtesting_sensitivity and nickname carries
+// Low. It needs the Data Catalog
 // API in the project and datacatalog.taxonomies.get for the test's service
 // account, which also covers listing the taxonomy's policy tags.
 func TestBigQueryPolicyTags(t *testing.T) {
@@ -28,6 +29,8 @@ func TestBigQueryPolicyTags(t *testing.T) {
 		t.Skipf("Could not connect to BigQuery: %v", err)
 	}
 	t.Cleanup(func() { _ = sc.Close() })
+	sc.conf.FetchPolicyTags = true
+	sc.newDataCatalog = dataCatalogServiceFor(sc.conf)
 
 	rows, err := sc.QueryCatalog(ctx)
 	require.NoError(t, err)

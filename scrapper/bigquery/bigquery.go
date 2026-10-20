@@ -40,6 +40,13 @@ type BigQueryScrapperConf struct {
 	// This is required for customers who grant permissions at the dataset level and
 	// lack project-level bigquery.datasets.list permission.
 	Datasets []string
+	// FetchPolicyTags turns on reading the taxonomies of column policy tags
+	// through the Data Catalog API, to name each policy tag by its display
+	// path. It needs datacatalog.taxonomies.get, which the baseline role does
+	// not hold, and a denied call shows in the customer's audit log, so it is
+	// opt-in. Without it a policy tag keeps its resource name, which the table
+	// metadata already carries.
+	FetchPolicyTags bool
 }
 
 type Executor interface {
@@ -54,7 +61,8 @@ type BigQueryScrapper struct {
 	executor     *dwhexecbigquery.BigQueryExecutor
 	rateLimitCfg RateLimitConfig
 	// newDataCatalog builds the client that reads the taxonomies of column
-	// policy tags.
+	// policy tags. Nil when the configuration did not opt in, and then the
+	// Data Catalog API is never called.
 	newDataCatalog func(ctx context.Context) (*datacatalog.Service, error)
 }
 
@@ -114,7 +122,7 @@ func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQ
 		conf:           conf,
 		scope:          scopeFilter,
 		rateLimitCfg:   rateLimitCfg,
-		newDataCatalog: newDataCatalogService(&conf.BigQueryConf),
+		newDataCatalog: dataCatalogServiceFor(conf),
 	}, nil
 }
 

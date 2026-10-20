@@ -199,6 +199,26 @@ func (s *PolicyTagsSuite) TestEachTaxonomyIsReadOncePerScan() {
 	s.Zero(fake.callsTo(refusedTaxonomy + "/policyTags"))
 }
 
+// Without the opt-in no Data Catalog call is made at all, and a policy tag
+// keeps the resource name the table metadata carries.
+func (s *PolicyTagsSuite) TestWithoutTheOptInTheDataCatalogIsNeverCalled() {
+	fake, _ := newFakeDataCatalog(s.T(), governanceTaxonomies())
+	tags := s.catalog(nil, fakeTableWithFields("customers",
+		`{"name":"id","type":"INTEGER"}`,
+		policyTagField("email", piiTaxonomy+"/policyTags/2"),
+	))
+	s.Equal(map[string][]*scrapper.Tag{
+		"customers.id":    nil,
+		"customers.email": {{TagName: "policytag", TagValue: piiTaxonomy + "/policyTags/2"}},
+	}, tags)
+	s.Empty(fake.calls)
+}
+
+func (s *PolicyTagsSuite) TestTheConfigurationDecidesWhetherThereIsAClient() {
+	s.Nil(dataCatalogServiceFor(&BigQueryScrapperConf{}), "off by default")
+	s.NotNil(dataCatalogServiceFor(&BigQueryScrapperConf{FetchPolicyTags: true}))
+}
+
 func (s *PolicyTagsSuite) TestNoClientIsBuiltWithoutPolicyTags() {
 	tags := s.catalog(func(context.Context) (*datacatalog.Service, error) {
 		s.Fail("no column has a policy tag")

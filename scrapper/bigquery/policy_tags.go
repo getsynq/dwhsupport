@@ -22,11 +22,15 @@ const (
 	maxPolicyTagDepth = 16
 )
 
-// newDataCatalogService builds the Data Catalog client a scan reads policy
-// taxonomies with, acting as the same identity as the BigQuery client.
-func newDataCatalogService(conf *dwhexecbigquery.BigQueryConf) func(ctx context.Context) (*datacatalog.Service, error) {
+// dataCatalogServiceFor builds the Data Catalog client a scan reads policy
+// taxonomies with, acting as the same identity as the BigQuery client, or nil
+// when the configuration did not opt in to FetchPolicyTags.
+func dataCatalogServiceFor(conf *BigQueryScrapperConf) func(ctx context.Context) (*datacatalog.Service, error) {
+	if !conf.FetchPolicyTags {
+		return nil
+	}
 	return func(ctx context.Context) (*datacatalog.Service, error) {
-		httpClient, err := dwhexecbigquery.NewHTTPClient(ctx, conf, datacatalog.CloudPlatformScope)
+		httpClient, err := dwhexecbigquery.NewHTTPClient(ctx, &conf.BigQueryConf, datacatalog.CloudPlatformScope)
 		if err != nil {
 			return nil, err
 		}
@@ -37,7 +41,9 @@ func newDataCatalogService(conf *dwhexecbigquery.BigQueryConf) func(ctx context.
 // policyTagResolver turns the policy tag resource names BigQuery puts on a
 // column into tags naming the taxonomy and the path to the policy tag inside
 // it, by their display names. Each taxonomy is read once per scan, by whichever
-// worker asks first, and a taxonomy that cannot be read is logged once.
+// worker asks first, and a taxonomy that cannot be read is logged once. With no
+// client (FetchPolicyTags off) nothing is read and every policy tag keeps its
+// resource name.
 type policyTagResolver struct {
 	newService   func(ctx context.Context) (*datacatalog.Service, error)
 	rateLimitCfg RateLimitConfig
@@ -82,7 +88,7 @@ func (r *policyTagResolver) tags(ctx context.Context, names []string) []*scrappe
 func (r *policyTagResolver) tag(ctx context.Context, name string) *scrapper.Tag {
 	unresolved := &scrapper.Tag{TagName: policyTagPrefix, TagValue: name}
 	taxonomyName, _, found := strings.Cut(name, "/policyTags/")
-	if !found {
+	if !found || r.newService == nil {
 		return unresolved
 	}
 	taxonomy := r.taxonomy(ctx, taxonomyName)
