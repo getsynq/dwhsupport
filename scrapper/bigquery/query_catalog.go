@@ -3,6 +3,7 @@ package bigquery
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -103,8 +104,8 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 				}
 				reads.markRead()
 
-				var tableTags []*scrapper.Tag = datasetTags
-				tableTags = append(tableTags, labelsToTags(tableMeta.Labels)...)
+				// A copy, as the tables of one dataset are read concurrently.
+				tableTags := append(slices.Clone(datasetTags), labelsToTags(tableMeta.Labels)...)
 
 				isView := tableMeta.Type == bigquery.ViewTable || tableMeta.Type == bigquery.MaterializedView
 
