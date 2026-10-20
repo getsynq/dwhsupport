@@ -3,6 +3,7 @@ package scrapper
 import (
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/samber/lo"
@@ -38,18 +39,45 @@ func (r TableMetricsRow) TableFqn() DwhFqn {
 	}
 }
 
-// Tag is a tag or label the warehouse assigns to a table or a column. The name
-// follows the platform:
-//   - Snowflake: `<TAG_DATABASE>.<TAG_SCHEMA>.<TAG_NAME>`, unquoted, as Snowflake stores it.
-//   - BigQuery labels: `label.<key>`.
-//   - BigQuery policy tags: `policytag.<taxonomy display name>`, with the value
-//     `<parent display name>:...:<tag display name>`. A taxonomy that cannot be
-//     read gives the name `policytag` and the policy tag resource name as value.
-//   - Databricks: `tag.<name>`, the value may be empty.
+// TagKind says what a warehouse means by a tag, as the platforms use one word
+// for things that work differently.
+type TagKind string
+
+const (
+	// TagKindLabel is free key-value metadata on an object: BigQuery labels and
+	// Databricks tags. The name is the key, the value may be empty.
+	TagKindLabel TagKind = "label"
+	// TagKindGovernedTag is a tag that is an object of its own, with the values
+	// it allows and the policies it carries: Snowflake tags. The name is the
+	// tag's `<TAG_DATABASE>.<TAG_SCHEMA>.<TAG_NAME>`, unquoted, as Snowflake
+	// stores it.
+	TagKindGovernedTag TagKind = "governed_tag"
+	// TagKindPolicyTag is a classification in a taxonomy that controls who
+	// reads a column: BigQuery policy tags, on columns only. The name is the
+	// display name of the taxonomy and the value the display path of the policy
+	// tag inside it, `<parent>:...:<tag>`. One whose taxonomy could not be read
+	// is named by resource instead, see IsUnresolvedPolicyTag.
+	TagKindPolicyTag TagKind = "policy_tag"
+)
+
+// Tag is a tag or label the warehouse assigns to a table or a column. Kind
+// says which, and the name is the platform's own, with nothing added to it.
 type Tag struct {
-	TagName  string `json:"tag_name"`
-	TagValue string `json:"tag_value"`
+	TagName  string  `json:"tag_name"`
+	TagValue string  `json:"tag_value"`
+	Kind     TagKind `json:"kind,omitempty"`
 }
+
+// IsUnresolvedPolicyTag is whether this is a policy tag whose taxonomy could
+// not be read, so it carries the taxonomy's resource name as its name and the
+// policy tag's resource name as its value, rather than their display names.
+func (t Tag) IsUnresolvedPolicyTag() bool {
+	return t.Kind == TagKindPolicyTag && strings.HasPrefix(t.TagName, policyTagResourcePrefix)
+}
+
+// policyTagResourcePrefix starts the resource name of a Data Catalog taxonomy.
+// A display name cannot start with it, as it holds a '/'.
+const policyTagResourcePrefix = "projects/"
 
 func (t Tag) String() string {
 	return fmt.Sprintf("%s:%s", t.TagName, t.TagValue)

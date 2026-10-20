@@ -26,10 +26,10 @@ func TestTablesOfOneDatasetKeepTheirOwnLabels(t *testing.T) {
 	require.Len(t, rows, 16)
 	for _, row := range rows {
 		require.ElementsMatch(t, []*scrapper.Tag{
-			{TagName: "label.team", TagValue: "data"},
-			{TagName: "label.env", TagValue: "prod"},
-			{TagName: "label.tier", TagValue: "gold"},
-			{TagName: "label.table", TagValue: row.Table},
+			{TagName: "team", TagValue: "data", Kind: scrapper.TagKindLabel},
+			{TagName: "env", TagValue: "prod", Kind: scrapper.TagKindLabel},
+			{TagName: "tier", TagValue: "gold", Kind: scrapper.TagKindLabel},
+			{TagName: "table", TagValue: row.Table, Kind: scrapper.TagKindLabel},
 		}, row.TableTags, row.Table)
 	}
 }

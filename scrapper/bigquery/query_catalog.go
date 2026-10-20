@@ -2,7 +2,6 @@ package bigquery
 
 import (
 	"context"
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -181,8 +180,9 @@ func labelsToTags(labels map[string]string) []*scrapper.Tag {
 			continue
 		}
 		res = append(res, &scrapper.Tag{
-			TagName:  fmt.Sprintf("label.%s", k),
+			TagName:  k,
 			TagValue: v,
+			Kind:     scrapper.TagKindLabel,
 		})
 	}
 	return res
