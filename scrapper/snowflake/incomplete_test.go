@@ -76,6 +76,10 @@ func healthySales() []fakeRoute {
 			rows: [][]driver.Value{{"ORG-ACCOUNT", "SALES", "PUBLIC", "ORDERS", false, "AMOUNT", "NUMBER", int64(12), int64(2), int64(1)}},
 		},
 		{
+			match:   sqlContains("ACCOUNT_USAGE.TAG_REFERENCES"),
+			columns: tagReferenceColumns,
+		},
+		{
 			match:   sqlContains("SALES.information_schema.tables", `as "row_count"`),
 			columns: []string{"database", "schema", "table", "row_count", "size_bytes", "updated_at"},
 			rows:    [][]driver.Value{{"SALES", "PUBLIC", "ORDERS", int64(25), int64(1024), time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)}},

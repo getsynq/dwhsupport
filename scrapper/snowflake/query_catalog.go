@@ -161,6 +161,9 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 	if scrapper.Failed(err) {
 		return nil, err
 	}
+	if tagErr := e.addTagReferences(origCtx, databasesToQuery, finalResults); tagErr != nil {
+		return nil, tagErr
+	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
 	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), err
