@@ -135,6 +135,16 @@ func TestCustomMetricsRow_Sanitize(t *testing.T) {
 	assert.Equal(t, IntValue(1), row.ColumnValues[0].Value)
 }
 
+func TestSanitize_SqlDefinitionRowTags(t *testing.T) {
+	row := &SqlDefinitionRow{
+		Tags:       []*Tag{{TagName: "team\x00", TagValue: "core"}},
+		ColumnTags: map[string][]*Tag{"EMAIL": {{TagName: "pii", TagValue: "hi\x00gh"}, nil}},
+	}
+	row.Sanitize()
+	assert.Equal(t, "team", row.Tags[0].TagName)
+	assert.Equal(t, "high", row.ColumnTags["EMAIL"][0].TagValue)
+}
+
 func TestSanitize_NilReceiverSafe(t *testing.T) {
 	var (
 		cat    *CatalogColumnRow

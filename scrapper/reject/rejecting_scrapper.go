@@ -99,8 +99,27 @@ func (s *RejectingScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrappe
 	rows = filterValid(rows, s.DialectType(), "QuerySqlDefinitions")
 	for _, r := range rows {
 		r.Tags = filterValid(r.Tags, s.DialectType(), "QuerySqlDefinitions.Tags")
+		r.ColumnTags = filterValidColumnTags(r.ColumnTags, s.DialectType())
 	}
 	return rows, err
+}
+
+// filterValidColumnTags drops the tags of a column whose name is not a valid
+// identity, and each tag that is not.
+func filterValidColumnTags(columnTags map[string][]*scrapper.Tag, dialect string) map[string][]*scrapper.Tag {
+	for column, tags := range columnTags {
+		if !scrapper.IsValidString(column) {
+			logrus.WithFields(logrus.Fields{
+				"dialect": dialect,
+				"method":  "QuerySqlDefinitions.ColumnTags",
+				"dropped": len(tags),
+			}).Warn("rejected the tags of a column whose name has NUL bytes or invalid UTF-8")
+			delete(columnTags, column)
+			continue
+		}
+		columnTags[column] = filterValid(tags, dialect, "QuerySqlDefinitions.ColumnTags")
+	}
+	return columnTags
 }
 
 func (s *RejectingScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {

@@ -141,6 +141,25 @@ func TestRejectingScrapper_QueryTables_FiltersNested(t *testing.T) {
 	assert.Equal(t, "pk", rows[0].Constraints[0].ConstraintName)
 }
 
+func TestRejectingScrapper_QuerySqlDefinitions_FiltersTags(t *testing.T) {
+	inner := &stubScrapper{
+		sqlDefs: []*scrapper.SqlDefinitionRow{{
+			Database: "db", Schema: "s", Table: "t",
+			Tags: []*scrapper.Tag{{TagName: "k", TagValue: "v"}, {TagName: "k\x00", TagValue: "v"}},
+			ColumnTags: map[string][]*scrapper.Tag{
+				"EMAIL":   {{TagName: "pii", TagValue: "high"}, {TagName: "pii", TagValue: "bad\xff"}, nil},
+				"bad\x00": {{TagName: "pii", TagValue: "high"}},
+			},
+		}},
+	}
+	ss := NewRejectingScrapper(inner)
+	rows, err := ss.QuerySqlDefinitions(context.Background())
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, []*scrapper.Tag{{TagName: "k", TagValue: "v"}}, rows[0].Tags)
+	assert.Equal(t, map[string][]*scrapper.Tag{"EMAIL": {{TagName: "pii", TagValue: "high"}}}, rows[0].ColumnTags)
+}
+
 func TestRejectingScrapper_SimpleRowTypes(t *testing.T) {
 	inner := &stubScrapper{
 		metrics:     []*scrapper.TableMetricsRow{{Database: "ok", Table: "t"}, {Database: "bad\x00", Table: "t"}},

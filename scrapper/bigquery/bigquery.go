@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/api/cloudresourcemanager/v1"
+	datacatalog "google.golang.org/api/datacatalog/v1"
 
 	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
@@ -39,6 +40,13 @@ type BigQueryScrapperConf struct {
 	// This is required for customers who grant permissions at the dataset level and
 	// lack project-level bigquery.datasets.list permission.
 	Datasets []string
+	// FetchPolicyTags turns on reading the taxonomies of column policy tags
+	// through the Data Catalog API, to name each policy tag by its display
+	// path. It needs datacatalog.taxonomies.get, which the baseline role does
+	// not hold, and a denied call shows in the customer's audit log, so it is
+	// opt-in. Without it a policy tag keeps its resource name, which the table
+	// metadata already carries.
+	FetchPolicyTags bool
 }
 
 type Executor interface {
@@ -52,6 +60,10 @@ type BigQueryScrapper struct {
 	scope        *scope.ScopeFilter
 	executor     *dwhexecbigquery.BigQueryExecutor
 	rateLimitCfg RateLimitConfig
+	// newDataCatalog builds the client that reads the taxonomies of column
+	// policy tags. Nil when the configuration did not opt in, and then the
+	// Data Catalog API is never called.
+	newDataCatalog func(ctx context.Context) (*datacatalog.Service, error)
 }
 
 func (e *BigQueryScrapper) IsPermissionError(err error) bool {
@@ -106,10 +118,11 @@ func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQ
 	}
 
 	return &BigQueryScrapper{
-		executor:     executor,
-		conf:         conf,
-		scope:        scopeFilter,
-		rateLimitCfg: rateLimitCfg,
+		executor:       executor,
+		conf:           conf,
+		scope:          scopeFilter,
+		rateLimitCfg:   rateLimitCfg,
+		newDataCatalog: dataCatalogServiceFor(conf),
 	}, nil
 }
 

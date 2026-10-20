@@ -132,6 +132,11 @@ func (r *SqlDefinitionRow) Sanitize() {
 	for _, t := range r.Tags {
 		t.Sanitize()
 	}
+	for _, tags := range r.ColumnTags {
+		for _, t := range tags {
+			t.Sanitize()
+		}
+	}
 }
 
 func (r *DatabaseRow) Sanitize() {

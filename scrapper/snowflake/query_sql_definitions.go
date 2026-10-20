@@ -166,11 +166,15 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 							objectName := GetObjectNameFromFqn(fqn)
 
 							if sqlDefRow, found := rowsPerName[strings.ToUpper(objectName)]; found {
+								// A view already has its SQL from information_schema.views,
+								// but its tags are only here.
+								tags := ParseDdlTags(ddl)
+								sqlDefRow.Tags = tags.Table
+								sqlDefRow.ColumnTags = tags.Columns
 								if sqlDefRow.Sql != "" {
 									continue
 								}
 								sqlDefRow.Sql = ddl
-								sqlDefRow.Tags = ParseWithTagClause(ddl)
 								sqlDefRow.Description = ParseCommentClause(ddl)
 							}
 						}
@@ -326,45 +330,113 @@ func fixDdl(s string) string {
 	return ddlReplacer.Replace(s)
 }
 
-// ParseWithTagClause extracts tags from a Snowflake DDL's WITH TAG (...) clause.
+// ParseWithTagClause extracts the object's own tags from a Snowflake DDL's
+// WITH TAG (...) clause, leaving out the tags of its columns.
 // It skips UNKNOWN_TAG sentinel entries that indicate insufficient permissions.
 func ParseWithTagClause(ddl string) []*scrapper.Tag {
+	return ParseDdlTags(ddl).Table
+}
+
+// DdlTags are the tags one CREATE statement assigns.
+type DdlTags struct {
+	// Table holds the object's own tags.
+	Table []*scrapper.Tag
+	// Columns holds each column's tags by the column's name as the DDL writes
+	// it, unquoted. Nil when no column has a tag.
+	Columns map[string][]*scrapper.Tag
+}
+
+// ParseDdlTags reads every WITH TAG (...) clause of a CREATE TABLE or CREATE
+// VIEW statement as GET_DDL writes it. A column's tags sit inside the column
+// list, after the column's name and type, and the object's own tags follow the
+// column list. A view's query after its top-level AS is never read, so a CTE in
+// it cannot pass for a tag.
+// It skips UNKNOWN_TAG sentinel entries that indicate insufficient permissions.
+func ParseDdlTags(ddl string) DdlTags {
 	lexer := sqllexer.New(ddl, sqllexer.WithDBMS(sqllexer.DBMSSnowflake))
 	tokens := sqlparser.ScanAllTokens(lexer)
 	parser := sqlparser.BaseParser{Tokens: tokens}
 
-	// Scan for WITH TAG pattern
+	var result DdlTags
+	depth := 0
+	// The column list is the first top-level parenthesis, except the key of a
+	// CLUSTER BY written before it.
+	seenColumnList, inColumnList := false, false
+	atColumnStart := false
+	column := ""
+	var previous *sqllexer.Token
+
 	for {
 		ind, tok := parser.PeekToken()
 		if tok.Type == sqllexer.EOF {
-			return nil
+			return result
 		}
 		parser.Index = ind
+		last := previous
+		previous = tok
 
-		if strings.ToUpper(tok.Value) != "WITH" {
+		switch {
+		case tok.Type == sqllexer.PUNCTUATION && tok.Value == "(":
+			depth++
+			if depth == 1 && !seenColumnList && (last == nil || strings.ToUpper(last.Value) != "BY") {
+				seenColumnList, inColumnList, atColumnStart = true, true, true
+			}
+			continue
+		case tok.Type == sqllexer.PUNCTUATION && tok.Value == ")":
+			depth--
+			if depth == 0 {
+				inColumnList = false
+			}
+			continue
+		case inColumnList && depth == 1 && tok.Type == sqllexer.PUNCTUATION && tok.Value == ",":
+			atColumnStart, column = true, ""
+			continue
+		case inColumnList && depth == 1 && atColumnStart:
+			atColumnStart = false
+			// A constraint is listed with the columns and names none.
+			if sqlparser.IsIdentifierLikeToken(tok) && !(tok.Type != sqllexer.QUOTED_IDENT && strings.EqualFold(tok.Value, "CONSTRAINT")) {
+				column = strings.Join(unquoteNameParts(tok.Value), ".")
+			}
+			continue
+		case depth == 0 && tok.Type != sqllexer.QUOTED_IDENT && strings.EqualFold(tok.Value, "AS"):
+			return result
+		}
+
+		if !strings.EqualFold(tok.Value, "WITH") || tok.Type == sqllexer.QUOTED_IDENT {
 			continue
 		}
-
-		nextInd, nextTok := parser.PeekToken()
-		if nextTok.Type == sqllexer.EOF {
-			return nil
-		}
-		if strings.ToUpper(nextTok.Value) != "TAG" {
-			// Not WITH TAG, continue scanning
-			parser.Index = nextInd
+		owner := ""
+		switch {
+		case depth == 0:
+		case inColumnList && depth == 1 && column != "":
+			owner = column
+		default:
 			continue
 		}
-		parser.Index = nextInd
-
-		// Expect opening parenthesis
+		afterWith := parser.Index
+		tagInd, tagTok := parser.PeekToken()
+		if !strings.EqualFold(tagTok.Value, "TAG") {
+			continue
+		}
+		parser.Index = tagInd
 		openInd, openTok := parser.PeekToken()
 		if openTok.Type != sqllexer.PUNCTUATION || openTok.Value != "(" {
+			parser.Index = afterWith
 			continue
 		}
 		parser.Index = openInd
-
-		// Parse tag assignments until closing parenthesis
-		return parseTagAssignments(&parser)
+		previous = openTok
+		// The closing parenthesis is left to the loop, which takes depth back.
+		depth++
+		tags := parseTagAssignments(&parser)
+		if owner == "" {
+			result.Table = append(result.Table, tags...)
+		} else if len(tags) > 0 {
+			if result.Columns == nil {
+				result.Columns = map[string][]*scrapper.Tag{}
+			}
+			result.Columns[owner] = append(result.Columns[owner], tags...)
+		}
 	}
 }
 
@@ -426,7 +498,9 @@ func parseTagName(parser *sqlparser.BaseParser) (string, bool) {
 			return "", false
 		}
 		parser.Index = ind
-		parts = append(parts, tok.Value)
+		// The lexer keeps a dotted name in one token, and a tag created with a
+		// quoted name is written quoted while Snowflake stores it without them.
+		parts = append(parts, unquoteNameParts(tok.Value)...)
 
 		// Check for dot separator
 		ind, tok = parser.PeekToken()
@@ -439,6 +513,19 @@ func parseTagName(parser *sqlparser.BaseParser) (string, bool) {
 	}
 
 	return strings.Join(parts, "."), len(parts) > 0
+}
+
+// unquoteNameParts splits a possibly dot-qualified name as a DDL writes it into
+// its parts, each without its quotes. An unquoted part is already the name as
+// Snowflake stores it, since GET_DDL quotes every name that would fold.
+func unquoteNameParts(text string) []string {
+	dialect := sqldialect.NewSnowflakeDialect()
+	return lo.Map(sqldialect.SplitQualifiedIdent(text), func(part string, _ int) string {
+		if name, quoted := dialect.UnquoteIdent(part); quoted {
+			return name
+		}
+		return part
+	})
 }
 
 // ParseCommentClause extracts the table-level COMMENT='...' value from a Snowflake DDL statement.

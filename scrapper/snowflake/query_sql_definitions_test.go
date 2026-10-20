@@ -1,11 +1,16 @@
 package snowflake
 
 import (
+	"context"
+	"database/sql/driver"
 	"testing"
 
+	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -442,6 +447,231 @@ func (s *QuerySqlDefinitionsSuite) TestGetDdlQueryQuotesEveryPart() {
 			query, err := getDdlQuery("SCHEMA", c.parts...)
 			s.Require().NoError(err)
 			s.Equal(c.expected, query)
+		})
+	}
+}
+
+// tableWithColumnTagsDdl is a table as GET_DDL writes it: a column tag sits
+// inline in the column list, the table's own tags after it, and a tag created
+// with a quoted lower-case name keeps its quotes.
+const tableWithColumnTagsDdl = `create or replace TABLE MY_DB.MY_SCHEMA.CUSTOMERS (
+	ID NUMBER(38,0) NOT NULL,
+	EMAIL VARCHAR(255) NOT NULL WITH TAG (MY_DB.GOVERNANCE.PII='high'),
+	SSN VARCHAR(11) WITH TAG (MY_DB.GOVERNANCE.PII='high') COMMENT 'Social security number',
+	FULL_NAME VARCHAR(200),
+	constraint CHK_CUSTOMERS_EMAIL check (EMAIL LIKE '%@%'),
+	constraint PK_CUSTOMERS primary key (ID) rely
+) WITH TAG (MY_DB.GOVERNANCE."data_domain"='customers')
+COMMENT='Customer directory'
+;`
+
+// viewWithColumnTagsDdl is a view as GET_DDL writes it, with a column tag in
+// its column list and two tags of its own, one holding JSON.
+const viewWithColumnTagsDdl = `create or replace view MY_DB.MY_SCHEMA.ACTIVE_PRODUCTS(
+	ID,
+	NAME WITH TAG (MY_DB.GOVERNANCE.PII='low'),
+	PRICE
+) WITH TAG (MY_DB.GOVERNANCE.COST_CENTER='SALES', MY_DB.GOVERNANCE.META='{"owner":"team_a","tier":"gold"}')
+ COMMENT='In-stock products'
+ as
+SELECT ID, NAME, PRICE
+FROM MY_DB.MY_SCHEMA.PRODUCTS
+WHERE IS_ACTIVE = TRUE;`
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheTableTagsNotAColumnTag() {
+	s.Equal(
+		[]*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+		ParseWithTagClause(tableWithColumnTagsDdl),
+	)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheViewTagsNotAColumnTag() {
+	s.Equal(
+		[]*scrapper.Tag{
+			{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
+			{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+		},
+		ParseWithTagClause(viewWithColumnTagsDdl),
+	)
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseUnquotesTheTagName() {
+	ddl := `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+    ID NUMBER(38,0)
+) WITH TAG ("My_Db".GOVERNANCE."data_domain"='customers')
+;`
+	s.Equal([]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers"}}, ParseWithTagClause(ddl))
+}
+
+// A view's SQL comes from information_schema.views before GET_DDL is read, and
+// its tags are only in GET_DDL, so they must be read from there all the same,
+// without replacing the SQL.
+func TestQuerySqlDefinitionsReadsTheTagsOfAViewWithSql(t *testing.T) {
+	ctx := context.Background()
+	viewSql := "SELECT ID, NAME, PRICE FROM MY_DB.MY_SCHEMA.PRODUCTS WHERE IS_ACTIVE = TRUE"
+	fake := &fakeSnowflake{t: t, routes: []fakeRoute{
+		{
+			match:   sqlContains("SHOW DATABASES"),
+			columns: []string{"name", "origin", "owner", "comment", "kind"},
+			rows:    [][]driver.Value{{"MY_DB", "", "SYSADMIN", "", "STANDARD"}},
+		},
+		{
+			match:   sqlContains("MY_DB.information_schema.views"),
+			columns: []string{"database", "schema", "table", "is_view", "sql"},
+			rows: [][]driver.Value{
+				{"MY_DB", "MY_SCHEMA", "ACTIVE_PRODUCTS", true, viewSql},
+				{"MY_DB", "MY_SCHEMA", "CUSTOMERS", false, ""},
+			},
+		},
+		{
+			match:   sqlContains("SHOW STREAMS IN DATABASE MY_DB"),
+			columns: []string{"created_on", "name", "database_name", "schema_name", "table_name"},
+		},
+		{
+			match:   sqlContains(`GET_DDL('SCHEMA', '"MY_DB"."MY_SCHEMA"'`),
+			columns: []string{"GET_DDL"},
+			rows:    [][]driver.Value{{tableWithColumnTagsDdl + "\n" + viewWithColumnTagsDdl}},
+		},
+	}}
+	conf := &SnowflakeScrapperConf{SnowflakeConf: dwhexecsnowflake.SnowflakeConf{Account: "ORG-ACCOUNT", Databases: []string{"MY_DB"}}}
+	scr := newFakeSnowflakeScrapper(ctx, fake, conf)
+
+	rows, err := scr.QuerySqlDefinitions(ctx)
+	require.NoError(t, err)
+	byName := lo.KeyBy(rows, func(r *scrapper.SqlDefinitionRow) string { return r.Table })
+	require.Contains(t, byName, "ACTIVE_PRODUCTS")
+	require.Contains(t, byName, "CUSTOMERS")
+
+	view := byName["ACTIVE_PRODUCTS"]
+	require.Equal(t, viewSql, view.Sql, "the view keeps the SQL information_schema gave it")
+	require.Equal(t, []*scrapper.Tag{
+		{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
+		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+	}, view.Tags)
+
+	require.Equal(t, map[string][]*scrapper.Tag{
+		"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+	}, view.ColumnTags)
+	require.Nil(t, view.Description, "a view with SQL keeps what information_schema gave it")
+
+	table := byName["CUSTOMERS"]
+	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}}, table.Tags)
+	require.Equal(t, map[string][]*scrapper.Tag{
+		"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+		"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+	}, table.ColumnTags)
+	require.NotNil(t, table.Description)
+	require.Equal(t, "Customer directory", *table.Description)
+	require.Contains(t, table.Sql, "create or replace TABLE MY_DB.MY_SCHEMA.CUSTOMERS")
+}
+
+func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
+	cases := []struct {
+		name    string
+		ddl     string
+		table   []*scrapper.Tag
+		columns map[string][]*scrapper.Tag
+	}{
+		{
+			name:  "table with column tags",
+			ddl:   tableWithColumnTagsDdl,
+			table: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+			columns: map[string][]*scrapper.Tag{
+				"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+				"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+			},
+		},
+		{
+			name: "view with column tags",
+			ddl:  viewWithColumnTagsDdl,
+			table: []*scrapper.Tag{
+				{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
+				{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+			},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+		},
+		{
+			name: "no tags at all",
+			ddl:  "create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (\n\tID NUMBER(38,0)\n) COMMENT='x';",
+		},
+		{
+			name: "empty ddl",
+			ddl:  "",
+		},
+		{
+			name: "column tags only",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	ID NUMBER(38,0),
+	EMAIL VARCHAR(255) WITH TAG (MY_DB.GOVERNANCE.PII='high', MY_DB.GOVERNANCE.OWNER='crm')
+);`,
+			columns: map[string][]*scrapper.Tag{"EMAIL": {
+				{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"},
+				{TagName: "MY_DB.GOVERNANCE.OWNER", TagValue: "crm"},
+			}},
+		},
+		{
+			name: "a quoted column name and a quoted tag database",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	"order date" DATE WITH TAG ("my_db".GOVERNANCE.PII='low'),
+	"CONSTRAINT" VARCHAR WITH TAG (MY_DB.GOVERNANCE.PII='low')
+);`,
+			columns: map[string][]*scrapper.Tag{
+				"order date": {{TagName: "my_db.GOVERNANCE.PII", TagValue: "low"}},
+				"CONSTRAINT": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+			},
+		},
+		{
+			name: "a masked column tag is left out",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	EMAIL VARCHAR(255) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE'),
+	SSN VARCHAR(11) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE', MY_DB.GOVERNANCE.PII='high')
+) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE');`,
+			columns: map[string][]*scrapper.Tag{"SSN": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+		},
+		{
+			name: "a masking policy and a default expression are not tags",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE (
+	ID NUMBER(38,0) DEFAULT MY_DB.MY_SCHEMA.SEQ.NEXTVAL,
+	EMAIL VARCHAR(255) WITH MASKING POLICY MY_DB.GOVERNANCE.MASK_EMAIL WITH TAG (MY_DB.GOVERNANCE.PII='high'),
+	CREATED_AT TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP()
+) WITH ROW ACCESS POLICY MY_DB.GOVERNANCE.RAP ON (ID) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
+			columns: map[string][]*scrapper.Tag{"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+		},
+		{
+			name: "a cluster key before the column list",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.MY_TABLE cluster by (CATEGORY, ID)(
+	ID NUMBER(38,0),
+	NAME VARCHAR(200) WITH TAG (MY_DB.GOVERNANCE.PII='low'),
+	CATEGORY VARCHAR
+) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+		},
+		{
+			name: "a CTE in a view's query is not read",
+			ddl: `create or replace view MY_DB.MY_SCHEMA.MY_VIEW(
+	ID
+) as
+with tag (ID) as (select 1)
+select ID from tag;`,
+		},
+		{
+			name: "a dynamic table's options before its query",
+			ddl: `create or replace dynamic table MY_DB.MY_SCHEMA.MY_DT(
+	ID WITH TAG (MY_DB.GOVERNANCE.PII='low')
+) target_lag = '1 hour' warehouse = COMPUTE_WH WITH TAG (MY_DB.GOVERNANCE.TEAM='core')
+ as
+SELECT ID FROM MY_DB.MY_SCHEMA.SRC;`,
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
+			columns: map[string][]*scrapper.Tag{"ID": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+		},
+	}
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			tags := ParseDdlTags(c.ddl)
+			s.Equal(c.table, tags.Table)
+			s.Equal(c.columns, tags.Columns)
 		})
 	}
 }

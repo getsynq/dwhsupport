@@ -27,11 +27,13 @@ type fakeTable struct {
 }
 
 // fakeDataset is a dataset of fakeMetadataServer. A non-zero metadataStatus
-// fails datasets.get, a non-zero listStatus fails tables.list.
+// fails datasets.get, a non-zero listStatus fails tables.list. labels is the
+// JSON object of its labels, {"team":"data"} when empty.
 type fakeDataset struct {
 	id             string
 	metadataStatus int
 	listStatus     int
+	labels         string
 	tables         []fakeTable
 }
 
@@ -72,7 +74,11 @@ func (f *fakeMetadataServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				fakeError(w, ds.metadataStatus, "dataset "+ds.id+" refused")
 				return
 			}
-			_, _ = fmt.Fprintf(w, `{"datasetReference":{"projectId":%q,"datasetId":%q},"labels":{"team":"data"}}`, fakeProject, ds.id)
+			labels := ds.labels
+			if labels == "" {
+				labels = `{"team":"data"}`
+			}
+			_, _ = fmt.Fprintf(w, `{"datasetReference":{"projectId":%q,"datasetId":%q},"labels":%s}`, fakeProject, ds.id, labels)
 		case len(parts) == 3 && parts[2] == "tables":
 			if ds.listStatus != 0 {
 				fakeError(w, ds.listStatus, "Access Denied: Dataset "+fakeProject+":"+ds.id+": Permission bigquery.tables.list denied")
