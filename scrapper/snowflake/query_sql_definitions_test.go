@@ -500,7 +500,10 @@ func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseUnquotesTheTagName() {
     ID NUMBER(38,0)
 ) WITH TAG ("My_Db".GOVERNANCE."data_domain"='customers')
 ;`
-	s.Equal([]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}}, ParseWithTagClause(ddl))
+	s.Equal(
+		[]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}},
+		ParseWithTagClause(ddl),
+	)
 }
 
 // A view's SQL comes from information_schema.views before GET_DDL is read, and

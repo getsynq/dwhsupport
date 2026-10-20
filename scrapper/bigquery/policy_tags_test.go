@@ -174,10 +174,16 @@ func (s *PolicyTagsSuite) TestAnUnreadablePolicyTagKeepsItsResourceName() {
 	))
 
 	s.Equal(map[string][]*scrapper.Tag{
-		"customers.refused":          {{TagName: refusedTaxonomy, TagValue: refusedTaxonomy + "/policyTags/9", Kind: scrapper.TagKindPolicyTag}},
-		"customers.deleted_taxonomy": {{TagName: "projects/governance/locations/eu/taxonomies/404", TagValue: "projects/governance/locations/eu/taxonomies/404/policyTags/1", Kind: scrapper.TagKindPolicyTag}},
-		"customers.deleted_tag":      {{TagName: piiTaxonomy, TagValue: piiTaxonomy + "/policyTags/99", Kind: scrapper.TagKindPolicyTag}},
-		"customers.malformed":        {{TagName: "not-a-policy-tag", TagValue: "not-a-policy-tag", Kind: scrapper.TagKindPolicyTag}},
+		"customers.refused": {{TagName: refusedTaxonomy, TagValue: refusedTaxonomy + "/policyTags/9", Kind: scrapper.TagKindPolicyTag}},
+		"customers.deleted_taxonomy": {
+			{
+				TagName:  "projects/governance/locations/eu/taxonomies/404",
+				TagValue: "projects/governance/locations/eu/taxonomies/404/policyTags/1",
+				Kind:     scrapper.TagKindPolicyTag,
+			},
+		},
+		"customers.deleted_tag": {{TagName: piiTaxonomy, TagValue: piiTaxonomy + "/policyTags/99", Kind: scrapper.TagKindPolicyTag}},
+		"customers.malformed":   {{TagName: "not-a-policy-tag", TagValue: "not-a-policy-tag", Kind: scrapper.TagKindPolicyTag}},
 	}, tags)
 }
 

@@ -110,10 +110,16 @@ func (s *TagReferencesSuite) TestTagsGoOnTheirTableAndColumn() {
 		{TagName: "MY_DB.GOVERNANCE.CERTIFIED", TagValue: "", Kind: scrapper.TagKindGovernedTag},
 	}
 	s.Equal(map[string]columnTags{
-		"CUSTOMERS.ID":           {table: customers},
-		"CUSTOMERS.EMAIL":        {table: customers, column: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}}},
-		"ACTIVE_CUSTOMERS.EMAIL": {table: activeCustomers, column: []*scrapper.Tag{{TagName: "SNOWFLAKE.CORE.SEMANTIC_CATEGORY", TagValue: "EMAIL", Kind: scrapper.TagKindGovernedTag}}},
-		"orders.ID":              {},
+		"CUSTOMERS.ID": {table: customers},
+		"CUSTOMERS.EMAIL": {
+			table:  customers,
+			column: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
+		},
+		"ACTIVE_CUSTOMERS.EMAIL": {
+			table:  activeCustomers,
+			column: []*scrapper.Tag{{TagName: "SNOWFLAKE.CORE.SEMANTIC_CATEGORY", TagValue: "EMAIL", Kind: scrapper.TagKindGovernedTag}},
+		},
+		"orders.ID": {},
 	}, tagsByColumn(rows))
 }
 
