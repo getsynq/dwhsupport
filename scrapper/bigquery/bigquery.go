@@ -3,6 +3,7 @@ package bigquery
 import (
 	"context"
 	"fmt"
+	datacatalog "google.golang.org/api/datacatalog/v1"
 	"sort"
 	"strings"
 	"time"
@@ -52,6 +53,9 @@ type BigQueryScrapper struct {
 	scope        *scope.ScopeFilter
 	executor     *dwhexecbigquery.BigQueryExecutor
 	rateLimitCfg RateLimitConfig
+	// newDataCatalog builds the client that reads the taxonomies of column
+	// policy tags.
+	newDataCatalog func(ctx context.Context) (*datacatalog.Service, error)
 }
 
 func (e *BigQueryScrapper) IsPermissionError(err error) bool {
@@ -106,10 +110,11 @@ func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQ
 	}
 
 	return &BigQueryScrapper{
-		executor:     executor,
-		conf:         conf,
-		scope:        scopeFilter,
-		rateLimitCfg: rateLimitCfg,
+		executor:       executor,
+		conf:           conf,
+		scope:          scopeFilter,
+		rateLimitCfg:   rateLimitCfg,
+		newDataCatalog: newDataCatalogService(&conf.BigQueryConf),
 	}, nil
 }
 

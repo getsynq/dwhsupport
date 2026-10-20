@@ -31,6 +31,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
 	reads := e.newDatasetReads(ctx, scrapper.OmittedColumns)
+	policyTags := newPolicyTagResolver(e.newDataCatalog, e.rateLimitCfg)
 
 	numTablesTotal := 0
 
@@ -109,6 +110,15 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 
 				isView := tableMeta.Type == bigquery.ViewTable || tableMeta.Type == bigquery.MaterializedView
 
+				// Policy tags of nested fields are not read: SchemaColumnField
+				// carries no tags.
+				columnTags := make([][]*scrapper.Tag, len(tableMeta.Schema))
+				for i, field := range tableMeta.Schema {
+					if field.PolicyTags != nil {
+						columnTags[i] = policyTags.tags(groupCtx, field.PolicyTags.Names)
+					}
+				}
+
 				mutex.Lock()
 				defer mutex.Unlock()
 
@@ -125,6 +135,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 						Comment:        lo.EmptyableToPtr(field.Description),
 						TableComment:   lo.EmptyableToPtr(tableMeta.Description),
 						TableTags:      tableTags,
+						ColumnTags:     columnTags[i],
 						IsStructColumn: field.Type == bigquery.RecordFieldType || field.Type == bigquery.JSONFieldType,
 						IsArrayColumn:  field.Repeated,
 						FieldSchemas:   toFieldSchemas(field.Schema),
