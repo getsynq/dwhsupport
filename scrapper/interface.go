@@ -141,6 +141,9 @@ type Scrapper interface {
 	Capabilities() Capabilities
 	ValidateConfiguration(ctx context.Context) (warnings []string, err error)
 	QueryCatalog(ctx context.Context) ([]*CatalogColumnRow, error)
+	// QueryTableMetrics returns every table in scope on every call. No implementation
+	// filters on lastMetricsFetchTime: callers pass the last run of a job that may
+	// cover more than this connection, and deciding what changed is theirs.
 	QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*TableMetricsRow, error)
 	QuerySqlDefinitions(ctx context.Context) ([]*SqlDefinitionRow, error)
 	QueryTables(ctx context.Context, opts ...QueryTablesOption) ([]*TableRow, error)

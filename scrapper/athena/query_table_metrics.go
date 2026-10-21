@@ -32,9 +32,12 @@ import (
 // Tables with no usable stats from either source are skipped — we'd rather omit
 // a row than emit zeros that downstream consumers treat as a real "0 rows".
 //
-// `lastFetchTime` is honoured against Glue's `UpdateTime`: tables that haven't
-// changed since the last fetch are skipped entirely, including their Iceberg scan.
-func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
+// Every table in scope is returned on every call, whether or not it changed,
+// as on every other warehouse; the caller decides what changed. The last fetch
+// time is ignored: callers pass the last run of a job that covers the whole
+// workspace, so skipping tables older than it left a new integration with no
+// first reading and a table that does not change with no reading at all.
+func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, _ time.Time) ([]*scrapper.TableMetricsRow, error) {
 	glueClient := e.executor.GlueClient()
 	if glueClient == nil {
 		return nil, nil
@@ -81,17 +84,12 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime ti
 					// information_schema reports views in QueryTables; metrics don't apply.
 					continue
 				}
-				updatedAt := glueUpdateTime(t)
-				if !lastFetchTime.IsZero() && updatedAt != nil && !updatedAt.After(lastFetchTime) {
-					continue
-				}
-
 				row := &scrapper.TableMetricsRow{
 					Instance:  instance,
 					Database:  athenaCatalog,
 					Schema:    dbName,
 					Table:     name,
-					UpdatedAt: updatedAt,
+					UpdatedAt: glueUpdateTime(t),
 				}
 				if rowCount, ok := parseInt64Param(t.Parameters, "numRows"); ok && rowCount >= 0 {
 					row.RowCount = &rowCount
