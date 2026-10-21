@@ -51,12 +51,15 @@ order by r.routine_schema, r.routine_name
 // QueryRoutines reads the procedures, functions and table functions from the
 // region's INFORMATION_SCHEMA.ROUTINES. A role granted only on the datasets may
 // not read that, but may read each dataset's own, so a refused region read
-// falls back to reading each dataset. A dataset that refuses that too is left
+// falls back to reading each dataset, and the scrapper remembers the refusal
+// and reads each dataset from then on. A dataset that refuses that too is left
 // out.
 func (e *BigQueryScrapper) QueryRoutines(ctx context.Context) ([]*scrapper.RoutineRow, error) {
+	if e.regionRoutinesRefused.known() {
+		return e.queryRoutinesPerDataset(ctx)
+	}
 	rows, err := e.readRoutines(ctx, fmt.Sprintf("`region-%s`", e.conf.Region))
-	if errIsAccessDenied(err) {
-		logging.GetLogger(ctx).WithError(err).Warn("region INFORMATION_SCHEMA.ROUTINES refused, reading each dataset's")
+	if e.regionRoutinesRefused.remember(ctx, "ROUTINES", err) {
 		return e.queryRoutinesPerDataset(ctx)
 	}
 	return rows, err
@@ -81,7 +84,7 @@ func (e *BigQueryScrapper) queryRoutinesPerDataset(ctx context.Context) ([]*scra
 
 		g.Go(func() error {
 			datasetRows, err := e.readRoutines(groupCtx, fmt.Sprintf("`%s`.`%s`", e.conf.ProjectId, datasetId))
-			if errIsAccessDenied(err) {
+			if isRefused(err) {
 				logging.GetLogger(groupCtx).WithField("dataset", datasetId).WithError(err).
 					Warn("dataset INFORMATION_SCHEMA.ROUTINES refused, leaving its routines out")
 				return nil

@@ -37,11 +37,14 @@ const datasetQueryConcurrency = 8
 // QuerySqlDefinitions reads the DDL of every table, view, snapshot and clone
 // from the region's INFORMATION_SCHEMA.TABLES. A role granted only on the
 // datasets may not read that, but may read each dataset's own, which has the
-// same rows, so a refused region read falls back to reading each dataset.
+// same rows, so a refused region read falls back to reading each dataset, and
+// the scrapper remembers the refusal and reads each dataset from then on.
 func (e *BigQueryScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
+	if e.regionTablesRefused.known() {
+		return e.querySqlDefinitionsPerDataset(ctx)
+	}
 	sqlDefs, err := e.querySqlDefinitionsSql(ctx)
-	if errIsAccessDenied(err) {
-		logging.GetLogger(ctx).WithError(err).Warn("region INFORMATION_SCHEMA.TABLES refused, reading each dataset's")
+	if e.regionTablesRefused.remember(ctx, "TABLES", err) {
 		return e.querySqlDefinitionsPerDataset(ctx)
 	}
 	return sqlDefs, err
@@ -74,7 +77,7 @@ func (e *BigQueryScrapper) querySqlDefinitionsPerDataset(ctx context.Context) ([
 		g.Go(func() error {
 			tables := fmt.Sprintf("`%s`.`%s`.INFORMATION_SCHEMA.TABLES", e.conf.ProjectId, datasetId)
 			datasetRows, err := e.readSqlDefinitions(groupCtx, strings.ReplaceAll(sqlDefinitionsSql, "{TABLES}", tables))
-			if errIsAccessDenied(err) {
+			if isRefused(err) {
 				mutex.Lock()
 				defer mutex.Unlock()
 				refused[datasetId] = err
