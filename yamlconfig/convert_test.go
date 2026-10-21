@@ -129,6 +129,7 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	require.NotNil(t, rsConf)
 	assert.Equal(t, int32(5439), rsConf.GetPort())
 	assert.True(t, rsConf.GetFreshnessFromQueryLogs())
+	assert.True(t, rsConf.GetUseShowCreateTable())
 
 	// Verify Fabric
 	fabric := protos["fabric-prod"]
@@ -178,6 +179,28 @@ func TestFromProtoConnection_Db2(t *testing.T) {
 	rt := FromProtoConnection(pb)
 	require.NotNil(t, rt)
 	assert.Equal(t, original, rt.Db2)
+}
+
+func TestFromProtoConnection_Redshift(t *testing.T) {
+	for _, original := range []*RedshiftConf{
+		{
+			Host:                   "redshift.example.com",
+			Port:                   5439,
+			Database:               "analytics",
+			Username:               "synq",
+			Password:               "secret",
+			FreshnessFromQueryLogs: true,
+			UseShowCreateTable:     true,
+		},
+		{Host: "redshift.example.com", Port: 5439, Database: "analytics", Username: "synq", Password: "secret"},
+	} {
+		pb, err := ToProtoConnection("redshift", &Connection{Redshift: original})
+		require.NoError(t, err)
+		assert.Equal(t, original.UseShowCreateTable, pb.GetRedshift().GetUseShowCreateTable())
+		rt := FromProtoConnection(pb)
+		require.NotNil(t, rt)
+		assert.Equal(t, original, rt.Redshift)
+	}
 }
 
 func TestFromProtoConnection_MSSQLIntegratedAuth(t *testing.T) {

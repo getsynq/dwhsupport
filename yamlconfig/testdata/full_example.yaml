@@ -128,6 +128,7 @@ connections:
       username: synq
       password: ${REDSHIFT_PASSWORD}
       freshness_from_query_logs: true
+      use_show_create_table: true
 
   "fabric-prod":
     name: "Fabric Warehouse"

@@ -160,6 +160,7 @@ func redshiftConfToProto(c *RedshiftConf) *agentdwhv1.RedshiftConf {
 		Username:               c.Username,
 		Password:               c.Password,
 		FreshnessFromQueryLogs: c.FreshnessFromQueryLogs,
+		UseShowCreateTable:     c.UseShowCreateTable,
 	}
 }
 
