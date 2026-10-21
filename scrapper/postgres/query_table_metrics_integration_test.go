@@ -82,28 +82,38 @@ func TestPostgresTableMetricsCoversEveryRelation(t *testing.T) {
 		}
 
 		switch {
-		case rel.Reltuples > 0 && rel.Relpages > 0 && rel.HeapBytes > 0:
+		case rel.Reltuples >= 0 && rel.Relpages > 0:
 			// Analyzed or vacuumed: the planner's estimate, which a lost n_live_tup does not zero.
 			seen["analyzed"]++
-			if assert.NotNilf(t, rowCount, "%s", name) {
+			if !assert.NotNilf(t, rowCount, "%s", name) {
+				continue
+			}
+			if rel.Reltuples > 0 && rel.HeapBytes > 0 {
 				assert.Positivef(t, *rowCount, "%s was analyzed with %v rows", name, rel.Reltuples)
-				if rel.CanBeCounted {
-					var actual int64
-					require.NoError(t, sc.executor.GetDb().GetContext(ctx, &actual,
-						`select count(*) from `+pq.QuoteIdentifier(rel.Schema)+"."+pq.QuoteIdentifier(rel.Table)))
-					assert.InDeltaf(t, actual, *rowCount, float64(actual)/2+1, "%s", name)
-				}
+			}
+			if rel.CanBeCounted {
+				var actual int64
+				require.NoError(t, sc.executor.GetDb().GetContext(ctx, &actual,
+					`select count(*) from `+pq.QuoteIdentifier(rel.Schema)+"."+pq.QuoteIdentifier(rel.Table)))
+				assert.InDeltaf(t, actual, *rowCount, float64(actual)/2+1, "%s", name)
 			}
 		case (rel.Kind == "r" || rel.Kind == "m") && rel.HeapBytes == 0:
 			seen["empty heap"]++
 			if assert.NotNilf(t, rowCount, "%s", name) {
 				assert.Zerof(t, *rowCount, "%s has no heap", name)
 			}
-		case rel.Reltuples < 0 && rel.HeapBytes > 0 && (rel.LiveTuples == nil || *rel.LiveTuples == 0):
-			// Never analyzed and the statistics have no rows for it: unknown, never a made-up 0.
+		case rel.Reltuples >= 0 && (rel.Kind == "p" || rel.Kind == "f"):
+			// No heap of its own, so relpages stays 0; ANALYZE sets reltuples.
+			seen["analyzed, no heap of its own"]++
+			if assert.NotNilf(t, rowCount, "%s", name) {
+				assert.Equalf(t, int64(rel.Reltuples), *rowCount, "%s", name)
+			}
+		case rel.LiveTuples == nil || *rel.LiveTuples == 0:
+			// Never analyzed and the statistics know no rows of it: unknown, never a made-up 0. A
+			// partitioned table never analyzed lands here too, its rows are counted in its partitions.
 			seen["never analyzed, statistics lost"]++
 			assert.Nilf(t, rowCount, "%s was never analyzed and n_live_tup knows no rows", name)
-		case rel.Reltuples < 0 && rel.LiveTuples != nil && *rel.LiveTuples > 0:
+		default:
 			seen["never analyzed, statistics kept"]++
 			if assert.NotNilf(t, rowCount, "%s", name) {
 				assert.Equalf(t, *rel.LiveTuples, *rowCount, "%s", name)
