@@ -433,7 +433,8 @@ func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_ConcatWsOverManyArgum
 // placeholder, with a NULL among them. Engines differ in what a NULL does to a
 // concatenation (CONCAT_WS skips it, `||` on Redshift and Db2 makes the whole
 // result NULL), so callers COALESCE first, and the text has to come back the
-// same on every engine.
+// same on every engine. The NULL is a typed one, as a column's is: ToString
+// of a bare NULL literal is ambiguous on Db2 (SQLCODE -245).
 func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_ConcatWsOfCoalescedValues() {
 	s.skipIfNil()
 
@@ -445,7 +446,7 @@ func (s *SqlDialectExecutionSuite) TestSqlDialectExecution_ConcatWsOfCoalescedVa
 		From(SubqueryTable(s.sideQuery(), "_recon_base")).
 		Cols(As(ConcatWs("|",
 			coalesced(Int64(1)),
-			coalesced(Sql("NULL")),
+			coalesced(Fn("NULLIF", Int64(1), Int64(1))),
 			coalesced(String("a")),
 		), Alias("concatenated"))).
 		WithLimit(Limit(Int64(1)))
