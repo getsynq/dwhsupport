@@ -67,7 +67,8 @@ SELECT
     '' AS column_name,
     'CHECK' AS constraint_type,
     0 AS column_position,
-    pg_get_constraintdef(con.oid) AS constraint_expression,
+    -- the expression alone, as the other platforms give it; pg_get_constraintdef wraps it in CHECK (...)
+    pg_get_expr(con.conbin, con.conrelid) AS constraint_expression,
     con.convalidated AS is_enforced,
     '' AS referenced_schema,
     '' AS referenced_table,

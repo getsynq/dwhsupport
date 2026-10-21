@@ -23,13 +23,15 @@ SELECT
 FROM pg_catalog.pg_attribute a
 JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
-WHERE (a.attsortkeyord > 0 OR a.attisdistkey = true)
+WHERE (a.attsortkeyord <> 0 OR a.attisdistkey = true)
 	AND a.attnum > 0
+	-- the indexes backing a table's keys carry its sort and distribution columns too
+	AND c.relkind = 'r'
 	AND n.nspname NOT IN ({{system_schemas}})
 	-- a materialized view keeps its rows in mv_tbl__<view>__<n> in its own schema, owned by rdsdb (usesysid 1)
 	AND NOT (c.relowner = 1 AND left(c.relname, 8) = 'mv_tbl__')
 	/* SYNQ_SCOPE_FILTER */
-ORDER BY n.nspname, c.relname, a.attsortkeyord
+ORDER BY n.nspname, c.relname, abs(a.attsortkeyord)
 `
 
 func (e *RedshiftScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
@@ -77,25 +79,50 @@ func (e *RedshiftScrapper) querySortDistKeys(ctx context.Context) ([]*scrapper.T
 	if err != nil {
 		return nil, err
 	}
+	return sortDistKeyConstraints(e.conf.Host, e.conf.Database, rows), nil
+}
+
+// sortDistKeyConstraints turns the sort and distribution key columns of
+// pg_attribute into constraints. attsortkeyord is a column's position in the
+// sort key, and an interleaved sort key stores its first column's position
+// negated (-1, 2, 3): such a key is marked INTERLEAVED in its expression, a
+// compound one has none.
+func sortDistKeyConstraints(host, database string, rows []*sortDistRow) []*scrapper.TableConstraintRow {
+	type table struct{ schema, name string }
+	interleaved := map[table]bool{}
+	for _, row := range rows {
+		if row.SortKeyOrd < 0 {
+			interleaved[table{row.SchemaName, row.TableName}] = true
+		}
+	}
 
 	var results []*scrapper.TableConstraintRow
 	for _, row := range rows {
-		if row.SortKeyOrd > 0 {
+		if row.SortKeyOrd != 0 {
+			var expression string
+			if interleaved[table{row.SchemaName, row.TableName}] {
+				expression = "INTERLEAVED"
+			}
+			position := row.SortKeyOrd
+			if position < 0 {
+				position = -position
+			}
 			results = append(results, &scrapper.TableConstraintRow{
-				Instance:       e.conf.Host,
-				Database:       e.conf.Database,
-				Schema:         row.SchemaName,
-				Table:          row.TableName,
-				ConstraintName: "sortkey",
-				ColumnName:     row.ColumnName,
-				ConstraintType: scrapper.ConstraintTypeSortingKey,
-				ColumnPosition: row.SortKeyOrd,
+				Instance:             host,
+				Database:             database,
+				Schema:               row.SchemaName,
+				Table:                row.TableName,
+				ConstraintName:       "sortkey",
+				ColumnName:           row.ColumnName,
+				ConstraintType:       scrapper.ConstraintTypeSortingKey,
+				ColumnPosition:       position,
+				ConstraintExpression: expression,
 			})
 		}
 		if row.IsDistKey {
 			results = append(results, &scrapper.TableConstraintRow{
-				Instance:       e.conf.Host,
-				Database:       e.conf.Database,
+				Instance:       host,
+				Database:       database,
 				Schema:         row.SchemaName,
 				Table:          row.TableName,
 				ConstraintName: "distkey",
@@ -105,6 +132,5 @@ func (e *RedshiftScrapper) querySortDistKeys(ctx context.Context) ([]*scrapper.T
 			})
 		}
 	}
-
-	return results, nil
+	return results
 }

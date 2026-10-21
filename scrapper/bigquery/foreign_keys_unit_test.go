@@ -53,3 +53,30 @@ func TestExtractConstraintsFromMeta_ForeignKeys(t *testing.T) {
 		fk("foreign_key_3", "order_id", 1, "project", "dataset", "orders", "id"),
 	}, rows)
 }
+
+func TestExtractConstraintsFromMeta_IngestionTimePartitioning(t *testing.T) {
+	for _, tc := range []struct {
+		partitioning *bigquery.TimePartitioning
+		column       string
+	}{
+		// PARTITION BY _PARTITIONDATE, or DATE(_PARTITIONTIME)
+		{&bigquery.TimePartitioning{Type: bigquery.DayPartitioningType}, "_PARTITIONDATE"},
+		// PARTITION BY TIMESTAMP_TRUNC(_PARTITIONTIME, HOUR), which has no _PARTITIONDATE
+		{&bigquery.TimePartitioning{Type: bigquery.HourPartitioningType}, "_PARTITIONTIME"},
+		{&bigquery.TimePartitioning{Type: bigquery.MonthPartitioningType}, "_PARTITIONTIME"},
+		// A column-partitioned table names its column.
+		{&bigquery.TimePartitioning{Type: bigquery.DayPartitioningType, Field: "created_at"}, "created_at"},
+	} {
+		rows := extractConstraintsFromMeta("project", "dataset", "page_views", &bigquery.TableMetadata{TimePartitioning: tc.partitioning})
+		require.Len(t, rows, 1, "%+v", tc.partitioning)
+		require.Equal(t, &scrapper.TableConstraintRow{
+			Database:       "project",
+			Schema:         "dataset",
+			Table:          "page_views",
+			ConstraintName: "time_partitioning_" + string(tc.partitioning.Type),
+			ColumnName:     tc.column,
+			ConstraintType: scrapper.ConstraintTypePartitionBy,
+			ColumnPosition: 1,
+		}, rows[0])
+	}
+}
