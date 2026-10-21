@@ -46,6 +46,11 @@ func (s *SnowflakeComplianceSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Snowflake: %v", err)
 	}
 	s.Scrapper = sc
+	// The seed creates this SECURE VIEW as another role, and Snowflake shows a
+	// secure view's text to its owner only.
+	s.DefinitionsHiddenFromTheTestRole = []scrappertest.FixtureTable{
+		{Database: "DWH_TESTING", Schema: "SCHEMA_A", Table: "PRODUCTS_PUBLIC"},
+	}
 }
 
 func (s *SnowflakeComplianceSuite) TearDownSuite() {
