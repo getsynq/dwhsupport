@@ -178,17 +178,24 @@ func TestAthenaQueryTableMetrics_IcebergScanOnlyForChangedTables(t *testing.T) {
 		require.Equal(t, int64(2048), *changed.SizeBytes)
 		require.Equal(t, committed, *changed.UpdatedAt, "the snapshot commit time wins over Glue's")
 
+		require.Empty(t, changed.NotReRead)
+
 		unchanged := byTable["sales.ice_unchanged"]
 		require.Equal(t, int64(3), *unchanged.RowCount, "Glue's numbers")
 		require.Nil(t, unchanged.SizeBytes)
 		require.Equal(t, before, *unchanged.UpdatedAt)
+		require.Equal(t, []scrapper.TableMetric{scrapper.TableMetricSizeBytes}, unchanged.NotReRead,
+			"Glue had the row count, the last scan has the size")
 
 		atLastFetch := byTable["sales.ice_at_last_fetch"]
 		require.Nil(t, atLastFetch.RowCount)
 		require.Equal(t, lastFetch, *atLastFetch.UpdatedAt)
+		require.Equal(t, []scrapper.TableMetric{scrapper.TableMetricRowCount, scrapper.TableMetricSizeBytes}, atLastFetch.NotReRead)
 
 		require.Equal(t, int64(7), *byTable["sales.ice_no_time"].RowCount, "no time to compare: scanned")
+		require.Empty(t, byTable["sales.ice_no_time"].NotReRead)
 		require.Equal(t, int64(9), *byTable["sales.hive_changed"].RowCount)
+		require.Empty(t, byTable["sales.hive_changed"].NotReRead, "a Hive table has no scan to skip")
 	})
 
 	t.Run("a first fetch scans every iceberg table", func(t *testing.T) {
@@ -207,6 +214,9 @@ func TestAthenaQueryTableMetrics_IcebergScanOnlyForChangedTables(t *testing.T) {
 		unchanged := metricsByTable(rows)["sales.ice_unchanged"]
 		require.Equal(t, int64(3), *unchanged.RowCount, "Glue's numRows stays ahead of the scan's")
 		require.Equal(t, int64(300), *unchanged.SizeBytes)
+		for _, row := range rows {
+			require.Empty(t, row.NotReRead, "%s was scanned", row.Table)
+		}
 	})
 
 	allFail := map[string][]driver.Value{"ice_changed": nil, "ice_no_time": nil, "ice_unchanged": nil, "ice_at_last_fetch": nil}
@@ -222,6 +232,8 @@ func TestAthenaQueryTableMetrics_IcebergScanOnlyForChangedTables(t *testing.T) {
 		byTable := metricsByTable(rows)
 		require.Equal(t, after, *byTable["sales.ice_changed"].UpdatedAt)
 		require.Nil(t, byTable["sales.ice_changed"].RowCount)
+		require.Empty(t, byTable["sales.ice_changed"].NotReRead,
+			"the table changed, so the last scan no longer holds: a failed scan is not a skipped one")
 		require.NotContains(t, byTable, "sales.ice_no_time", "no time and no numbers: nothing to report")
 	})
 
@@ -233,5 +245,8 @@ func TestAthenaQueryTableMetrics_IcebergScanOnlyForChangedTables(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, scans.tables())
 		require.Len(t, rows, 4)
+		for _, row := range rows {
+			require.Empty(t, row.NotReRead, "%s: no scan was skipped, none was ever asked for", row.Table)
+		}
 	})
 }

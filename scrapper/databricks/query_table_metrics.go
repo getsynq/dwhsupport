@@ -67,11 +67,16 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 					metricsRow.SizeBytes = &extractedByteSize
 				}
 
+				refresh := e.shouldRefreshTableInfo(lastMetricsFetchTime, tableInfo)
+				if !refresh && e.refreshSkippedAsUnchanged(tableInfo) {
+					metricsRow.MarkNotReRead()
+				}
+
 				mutex.Lock()
 				res = append(res, metricsRow)
 				mutex.Unlock()
 
-				if e.shouldRefreshTableInfo(lastMetricsFetchTime, tableInfo) {
+				if refresh {
 					g.Go(func() error {
 						sql, err := analyzeTableStatement(tableInfo, noScan)
 						if err != nil {
@@ -170,6 +175,16 @@ func (e *DatabricksScrapper) shouldRefreshTableInfo(lastMetricsFetchTime time.Ti
 		return false
 	}
 	return lastMetricsFetchTime.Before(tableUpdate)
+}
+
+// refreshSkippedAsUnchanged says whether a table shouldRefreshTableInfo turned down was turned
+// down only for not changing since the last fetch, so the statistics its last refresh read still
+// hold. A view has none, and with refreshing off or no update time there was no refresh to skip.
+func (e *DatabricksScrapper) refreshSkippedAsUnchanged(tableInfo servicecatalog.TableInfo) bool {
+	if tableInfo.TableType == servicecatalog.TableTypeView || tableInfo.TableType == servicecatalog.TableTypeMaterializedView {
+		return false
+	}
+	return e.conf.RefreshTableMetrics && tableInfo.UpdatedAt > 0
 }
 
 func analyzeTableStatement(tableInfo servicecatalog.TableInfo, noScan string) (string, error) {

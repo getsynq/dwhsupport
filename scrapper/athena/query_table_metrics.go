@@ -37,7 +37,8 @@ import (
 // the one a freshness monitor has to see. `lastFetchTime` only decides which
 // Iceberg tables get the scan, as it decides which tables Databricks analyzes:
 // those whose Glue `UpdateTime` moved after it, which an Iceberg commit always
-// does. An unchanged Iceberg table reports what Glue has for it.
+// does. An unchanged Iceberg table reports what Glue has for it, and lists in
+// NotReRead what the scan would have filled, as its last scan still holds.
 func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 	glueClient := e.executor.GlueClient()
 	if glueClient == nil {
@@ -99,12 +100,16 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime ti
 					row.SizeBytes = &size
 				}
 
-				if e.conf.UseIcebergMetricsScan && isIcebergTable(t) && changedSince(row.UpdatedAt, lastFetchTime) {
-					// Queue a changed Iceberg table even when Glue already had
-					// row count and size: the precise commit timestamp from
-					// $snapshots is still wanted for data freshness, and the
-					// combined $files + $snapshots query is one Athena call either way.
-					icebergPending = append(icebergPending, row)
+				if e.conf.UseIcebergMetricsScan && isIcebergTable(t) {
+					if changedSince(row.UpdatedAt, lastFetchTime) {
+						// Queue a changed Iceberg table even when Glue already had
+						// row count and size: the precise commit timestamp from
+						// $snapshots is still wanted for data freshness, and the
+						// combined $files + $snapshots query is one Athena call either way.
+						icebergPending = append(icebergPending, row)
+					} else {
+						row.MarkNotReRead()
+					}
 				}
 				out = append(out, row)
 			}
