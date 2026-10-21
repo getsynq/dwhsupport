@@ -30,12 +30,25 @@ func (s *PostgresForeignKeysSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Postgres: %v", err)
 	}
 	s.Scrapper = sc
-	s.ForeignKeys = []scrappertest.ForeignKey{{
-		Table:             scrappertest.FixtureTable{Schema: "schema_a", Table: "order_items"},
-		Columns:           []string{"product_id"},
-		Referenced:        scrappertest.FixtureTable{Schema: "schema_a", Table: "products"},
-		ReferencedColumns: []string{"id"},
-	}}
+	table := func(name string) scrappertest.FixtureTable {
+		return scrappertest.FixtureTable{Schema: "schema_a", Table: name}
+	}
+	s.ForeignKeys = []scrappertest.ForeignKey{
+		{Table: table("order_items"), Columns: []string{"product_id"}, Referenced: table("products"), ReferencedColumns: []string{"id"}},
+		// A composite key into a partitioned table.
+		{
+			Table:             table("order_event_notes"),
+			Columns:           []string{"event_id", "event_month"},
+			Referenced:        table("order_events"),
+			ReferencedColumns: []string{"event_id", "event_month"},
+		},
+		// A key declared on a partitioned table, and the one each partition inherits.
+		{Table: table("order_event_tags"), Columns: []string{"product_id"}, Referenced: table("products"), ReferencedColumns: []string{"id"}},
+		{Table: table("order_event_tags_2026_01"), Columns: []string{"product_id"}, Referenced: table("products"), ReferencedColumns: []string{"id"}},
+	}
+	// Postgres also stores the key into order_events once for each of its
+	// partitions, which is not a foreign key of its own.
+	s.NeverReferenced = []scrappertest.FixtureTable{table("order_events_2026_01"), table("order_events_2026_02")}
 }
 
 func (s *PostgresForeignKeysSuite) TearDownSuite() {

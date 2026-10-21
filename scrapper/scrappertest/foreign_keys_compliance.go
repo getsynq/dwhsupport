@@ -30,6 +30,9 @@ type ForeignKeysSuite struct {
 	suite.Suite
 	Scrapper    scrapper.Scrapper
 	ForeignKeys []ForeignKey
+	// NeverReferenced are tables no foreign key of the ForeignKeys tables may
+	// name, such as the partitions of a referenced partitioned table.
+	NeverReferenced []FixtureTable
 }
 
 func (s *ForeignKeysSuite) Ctx() context.Context {
@@ -70,6 +73,15 @@ func (s *ForeignKeysSuite) TestForeignKeys_ReferenceTheirTable() {
 		for _, row := range rows {
 			if row.ConstraintType == scrapper.ConstraintTypeForeignKey {
 				byName[row.ConstraintName] = append(byName[row.ConstraintName], row)
+			}
+		}
+
+		for name, key := range byName {
+			for _, row := range key {
+				referenced, _ := row.ReferencedTableFqn()
+				for _, never := range s.NeverReferenced {
+					s.Falsef(never.matches(referenced), "%s %s references %s", want.Table, name, never)
+				}
 			}
 		}
 
