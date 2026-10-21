@@ -60,7 +60,7 @@ func (e *RedshiftScrapper) queryTableDdls(ctx context.Context) ([]*scrapper.SqlD
 	tables := make([]*scrapper.SqlDefinitionRow, len(names))
 	for i, name := range names {
 		tables[i] = &scrapper.SqlDefinitionRow{
-			Instance: e.conf.Host, Database: e.conf.Database, Schema: name.Schema, Table: name.Table, IsTable: true,
+			Instance: e.conf.Host, Database: e.conf.Database, Schema: name.Schema, Table: name.Table, IsTable: true, TableType: "TABLE",
 		}
 	}
 	return scrapper.ReadTableDdls(ctx, tables, showTableParallelism, e.showTable, isRelationGone)
