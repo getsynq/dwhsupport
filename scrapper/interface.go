@@ -141,6 +141,10 @@ type Scrapper interface {
 	Capabilities() Capabilities
 	ValidateConfiguration(ctx context.Context) (warnings []string, err error)
 	QueryCatalog(ctx context.Context) ([]*CatalogColumnRow, error)
+	// QueryTableMetrics returns every table in scope on every call: a table left out
+	// is a gap downstream, never "unchanged". lastMetricsFetchTime may only decide
+	// which tables get an expensive refresh (Databricks ANALYZE, the Athena Iceberg
+	// scan); a table not refreshed reports what the cheap read has for it.
 	QueryTableMetrics(ctx context.Context, lastMetricsFetchTime time.Time) ([]*TableMetricsRow, error)
 	QuerySqlDefinitions(ctx context.Context) ([]*SqlDefinitionRow, error)
 	QueryTables(ctx context.Context, opts ...QueryTablesOption) ([]*TableRow, error)
