@@ -62,6 +62,8 @@ func TestRedshiftSqlDefinitionsOfTablesAndViews(t *testing.T) {
 		}
 		assert.True(t, def.IsTable, name)
 		assert.False(t, def.IsView, name)
+		assert.False(t, def.IsMaterializedView, name)
+		assert.Equal(t, "TABLE", def.TableType, name)
 		assert.True(t, strings.HasPrefix(def.Sql, "CREATE TABLE "+name+" ("), "%s: %s", name, def.Sql)
 	}
 	assert.Contains(t, lo.FromPtr(byName["schema_a.order_items"]).Sql, "FOREIGN KEY (product_id) REFERENCES schema_a.products(id)")
@@ -76,6 +78,39 @@ func TestRedshiftSqlDefinitionsOfTablesAndViews(t *testing.T) {
 		assert.False(t, def.IsTable, name)
 		assert.NotContains(t, def.Sql, "CREATE TABLE", name)
 	}
+}
+
+// Each definition says what it is: a view, a late-binding view (WITH NO
+// SCHEMA BINDING) and a materialized view, which Redshift keeps as a pg_class
+// row of relkind 'v' like a view.
+func TestRedshiftSqlDefinitionsSayWhatEachObjectIs(t *testing.T) {
+	sc := newRedshiftScrapperFromEnv(t, false)
+
+	defs, err := sc.QuerySqlDefinitions(t.Context())
+	require.NoError(t, err)
+	byName := map[string]*scrapper.SqlDefinitionRow{}
+	for _, def := range defs {
+		byName[def.Schema+"."+def.Table] = def
+	}
+
+	for _, name := range []string{"schema_a.active_products", "schema_b.customers_lb", "pipelines.order_net_totals"} {
+		def := byName[name]
+		if !assert.NotNil(t, def, "%s has no definition", name) {
+			continue
+		}
+		assert.True(t, def.IsView, name)
+		assert.False(t, def.IsMaterializedView, name)
+		assert.False(t, def.IsTable, name)
+		assert.Equal(t, "VIEW", def.TableType, name)
+	}
+
+	mv := byName["pipelines.events_hourly"]
+	require.NotNil(t, mv, "the materialized view has no definition")
+	assert.False(t, mv.IsView)
+	assert.True(t, mv.IsMaterializedView)
+	assert.False(t, mv.IsTable)
+	assert.Equal(t, "MATERIALIZED VIEW", mv.TableType)
+	assert.Contains(t, mv.Sql, "CREATE MATERIALIZED VIEW pipelines.events_hourly")
 }
 
 func TestRedshiftSqlDefinitionsWithoutShowTableHaveNoTables(t *testing.T) {

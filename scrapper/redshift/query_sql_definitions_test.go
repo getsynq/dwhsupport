@@ -94,6 +94,7 @@ func TestRedshiftSqlDefinitionsReadEachTableWithShowTable(t *testing.T) {
 		assert.Equal(t, "CREATE TABLE public."+name+" (id bigint);", row.Sql)
 		assert.True(t, row.IsTable)
 		assert.False(t, row.IsView)
+		assert.Equal(t, "TABLE", row.TableType)
 		assert.Equal(t, "dev", row.Database)
 		assert.Equal(t, "cluster", row.Instance)
 	}
