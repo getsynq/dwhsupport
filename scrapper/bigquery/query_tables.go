@@ -55,7 +55,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 			}
 			continue
 		}
-		datasetTags := labelsToTags(datasetMeta.Labels)
+		datasetLabels := datasetMeta.Labels
 
 		numTables := 0
 
@@ -105,9 +105,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 				}
 				reads.markRead()
 
-				tableTags := make([]*scrapper.Tag, 0, len(datasetTags))
-				tableTags = append(tableTags, datasetTags...)
-				tableTags = append(tableTags, labelsToTags(tableMeta.Labels)...)
+				tableTags := tableLabelTags(datasetLabels, tableMeta.Labels)
 
 				row := &scrapper.TableRow{
 					Instance:    "",
