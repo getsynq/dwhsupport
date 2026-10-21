@@ -57,6 +57,6 @@ FROM (
         AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
     WHERE tc.CONSTRAINT_TYPE = 'CHECK'
 ) sub
-WHERE 1=1
+WHERE `schema` NOT IN ('information_schema', 'performance_schema', 'mysql', 'sys')
   /* SYNQ_SCOPE_FILTER */
 ORDER BY `schema`, `table`, `constraint_name`, `column_position`

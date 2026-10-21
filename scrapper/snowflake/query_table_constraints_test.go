@@ -97,3 +97,24 @@ func TestSnowflakeQueryTableConstraints(t *testing.T) {
 		}
 	}
 }
+
+func TestClusteringKeyEntries(t *testing.T) {
+	for _, tc := range []struct {
+		key  string
+		want []string
+	}{
+		{"LINEAR(CATEGORY, ID)", []string{"CATEGORY", "ID"}},
+		{"linear(category)", []string{"category"}},
+		// A bare list, without LINEAR(...).
+		{"CATEGORY, ID", []string{"CATEGORY", "ID"}},
+		{"LINEAR( CATEGORY ,  ID )", []string{"CATEGORY", "ID"}},
+		// Commas inside an expression or a quoted name.
+		{`LINEAR("a,b", TO_DATE(TS), SUBSTRING(CODE, 1, 3))`, []string{"a,b", "TO_DATE(TS)", "SUBSTRING(CODE, 1, 3)"}},
+		{`LINEAR("we""ird")`, []string{`we"ird`}},
+		{`LINEAR(V:"field"::STRING)`, []string{`V:"field"::STRING`}},
+		{"", nil},
+		{"LINEAR()", nil},
+	} {
+		require.Equal(t, tc.want, clusteringKeyEntries(tc.key), tc.key)
+	}
+}

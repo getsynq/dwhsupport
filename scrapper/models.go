@@ -471,6 +471,11 @@ type CustomMetricsRow struct {
 // This covers traditional indexes, primary keys, unique constraints,
 // as well as warehouse-specific concepts like BigQuery partitioning/clustering,
 // ClickHouse sorting keys, and Snowflake clustering keys.
+//
+// ConstraintExpression holds what the columns cannot say: a CHECK's condition
+// (without CHECK (...) around it), the whole key as the platform renders it
+// where its entries can be expressions (a ClickHouse partition key, a
+// Snowflake clustering key), or INTERLEAVED on a Redshift interleaved sort key.
 type TableConstraintRow struct {
 	Instance             string `db:"instance"              json:"instance"              ch:"instance"              bigquery:"instance"`
 	Database             string `db:"database"              json:"database"              ch:"_database"             bigquery:"database"`

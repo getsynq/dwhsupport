@@ -69,17 +69,15 @@ func extractConstraintsFromMeta(projectId, datasetID, tableAlias string, tableMe
 	}
 
 	if tableMeta.TimePartitioning != nil {
-		if tableMeta.TimePartitioning.Field != "" {
-			rows = append(rows, &scrapper.TableConstraintRow{
-				Database:       projectId,
-				Schema:         datasetID,
-				Table:          tableAlias,
-				ConstraintName: fmt.Sprintf("time_partitioning_%s", tableMeta.TimePartitioning.Type),
-				ColumnName:     tableMeta.TimePartitioning.Field,
-				ConstraintType: scrapper.ConstraintTypePartitionBy,
-				ColumnPosition: 1,
-			})
-		}
+		rows = append(rows, &scrapper.TableConstraintRow{
+			Database:       projectId,
+			Schema:         datasetID,
+			Table:          tableAlias,
+			ConstraintName: fmt.Sprintf("time_partitioning_%s", tableMeta.TimePartitioning.Type),
+			ColumnName:     timePartitioningColumn(tableMeta.TimePartitioning),
+			ConstraintType: scrapper.ConstraintTypePartitionBy,
+			ColumnPosition: 1,
+		})
 	}
 
 	if tableMeta.RangePartitioning != nil {
@@ -109,4 +107,19 @@ func extractConstraintsFromMeta(projectId, datasetID, tableAlias string, tableMe
 	}
 
 	return rows
+}
+
+// timePartitioningColumn is the column a table is partitioned on by time. A
+// table partitioned by ingestion time has none of its own, and is partitioned
+// on the pseudo-column _PARTITIONTIME, which a daily one also offers as
+// _PARTITIONDATE, the name PARTITION BY _PARTITIONDATE declares it with.
+func timePartitioningColumn(partitioning *bigquery.TimePartitioning) string {
+	switch {
+	case partitioning.Field != "":
+		return partitioning.Field
+	case partitioning.Type == bigquery.DayPartitioningType || partitioning.Type == "":
+		return "_PARTITIONDATE"
+	default:
+		return "_PARTITIONTIME"
+	}
 }
