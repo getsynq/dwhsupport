@@ -88,6 +88,20 @@ var readTables = map[string][]string{
 	"QuerySqlDefinitions": {"sales.orders_view"},
 }
 
+// withFallback adds what QuerySqlDefinitions reports over the other methods: the
+// fake refuses every query job, so the definitions are read through the tables
+// API, which has no DDL of a base table, and each base table read that way is
+// reported as missing its definition.
+func withFallback(name string, scopes []string, baseTables ...string) []string {
+	out := append([]string(nil), scopes...)
+	if name == "QuerySqlDefinitions" {
+		for _, table := range baseTables {
+			out = append(out, string(scrapper.OmittedDefinitions)+" test-project."+table)
+		}
+	}
+	return sortedStrings(out)
+}
+
 func omissionScopes(err error) []string {
 	incomplete, ok := scrapper.AsIncomplete(err)
 	if !ok {
@@ -110,10 +124,10 @@ func (s *IncompleteSuite) TestRefusedDatasetAndTableAreOmitted() {
 			_, ok := scrapper.AsIncomplete(err)
 			s.Require().True(ok, "expected an incomplete result, got %v", err)
 			s.Equal(readTables[name], sortedStrings(tables))
-			s.Equal([]string{
+			s.Equal(withFallback(name, []string{
 				string(m.part) + " test-project.locked",
 				string(m.part) + " test-project.sales.secret",
-			}, omissionScopes(err), "a dropped table is not an omission")
+			}, "sales.orders"), omissionScopes(err), "a dropped table is not an omission")
 		})
 	}
 }
@@ -141,10 +155,10 @@ func (s *IncompleteSuite) TestFailingTableIsOmitted() {
 			tables, err := m.run(scrapper.WithIncompleteResults(context.Background()), bq)
 
 			s.Equal(readTables[name], sortedStrings(tables))
-			s.Equal([]string{
+			s.Equal(withFallback(name, []string{
 				string(m.part) + " test-project.sales.broken",
 				string(m.part) + " test-project.sales.secret",
-			}, omissionScopes(err))
+			}, "sales.orders"), omissionScopes(err))
 		})
 	}
 }
@@ -194,7 +208,8 @@ func (s *IncompleteSuite) TestDroppedTableIsNotAnOmission() {
 			}})
 			tables, err := m.run(scrapper.WithIncompleteResults(context.Background()), bq)
 
-			s.Require().NoError(err)
+			s.Equal(withFallback(name, nil, "sales.orders"), omissionScopes(err))
+			s.False(scrapper.Failed(err), "%v", err)
 			s.Equal(readTables[name], sortedStrings(tables))
 		})
 	}
@@ -212,7 +227,7 @@ func (s *IncompleteSuite) TestShardedTableIsOmittedUnderItsCollapsedName() {
 				fakeRefusedTable("events_"+latest, http.StatusForbidden),
 			}})
 			_, err := m.run(scrapper.WithIncompleteResults(context.Background()), bq)
-			s.Equal([]string{string(m.part) + " test-project.sales.events"}, omissionScopes(err))
+			s.Equal(withFallback(name, []string{string(m.part) + " test-project.sales.events"}, "sales.orders"), omissionScopes(err))
 		})
 	}
 }
@@ -249,7 +264,7 @@ func (s *IncompleteSuite) TestNotAcceptingIncompleteKeepsOldBehaviour() {
 // whole, rows and omissions both.
 func (s *IncompleteSuite) TestWrappersPassIncompleteResultsThrough() {
 	ctx := scrapper.WithIncompleteResults(context.Background())
-	inner := newFakeMetadataScrapper(s.T(), salesDataset(), lockedDataset, fakeDataset{id: "other", tables: []fakeTable{fakeBaseTable("t")}})
+	inner := newFakeMetadataScrapper(s.T(), salesDataset(), lockedDataset, fakeDataset{id: "other", tables: []fakeTable{fakeView("t")}})
 	wrapped := scope.NewScopedScrapper(
 		sanitize.NewSanitizingScrapper(reject.NewRejectingScrapper(inner)),
 		&scope.ScopeFilter{Exclude: []scope.ScopeRule{{Database: fakeProject, Schema: "other"}}},
@@ -260,10 +275,10 @@ func (s *IncompleteSuite) TestWrappersPassIncompleteResultsThrough() {
 			tables, err := m.run(ctx, wrapped)
 			s.False(scrapper.Failed(err), "%v", err)
 			s.Equal(readTables[name], sortedStrings(tables))
-			s.Equal([]string{
+			s.Equal(withFallback(name, []string{
 				string(m.part) + " test-project.locked",
 				string(m.part) + " test-project.sales.secret",
-			}, omissionScopes(err))
+			}, "sales.orders"), omissionScopes(err))
 		})
 	}
 }

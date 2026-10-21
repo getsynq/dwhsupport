@@ -224,7 +224,7 @@ func (f *fakeMetadataServer) dataset(id string) (fakeDataset, bool) {
 }
 
 func fakeError(w http.ResponseWriter, status int, message string) {
-	reason := map[int]string{http.StatusForbidden: "accessDenied", http.StatusNotFound: "notFound"}[status]
+	reason := map[int]string{http.StatusBadRequest: "invalidQuery", http.StatusForbidden: "accessDenied", http.StatusNotFound: "notFound"}[status]
 	if reason == "" {
 		reason = "backendError"
 	}

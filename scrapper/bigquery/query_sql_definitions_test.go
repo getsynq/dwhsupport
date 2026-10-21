@@ -60,7 +60,7 @@ func TestSqlDefinitionsFallBackToTheTablesApiForADatasetThatRefusesItsQuery(t *t
 		rows, err := bq.QuerySqlDefinitions(scrapper.WithIncompleteResults(context.Background()))
 
 		require.ElementsMatch(t, []string{"sales.orders", "sales.orders_view", "restricted.ledger_view"}, lo.Keys(definitionsByName(rows)))
-		require.Equal(t, []string{"definitions test-project.restricted"}, omissionScopes(err))
+		require.Equal(t, []string{"definitions test-project.restricted.ledger"}, omissionScopes(err))
 		incomplete, _ := scrapper.AsIncomplete(err)
 		require.Contains(t, incomplete.Omissions[0].Err.Error(), "INFORMATION_SCHEMA.TABLES")
 	})
