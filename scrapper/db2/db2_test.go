@@ -331,6 +331,45 @@ func (s *Db2SqlDialectExecutionSuite) TearDownSuite() {
 	}
 }
 
+// TestToStringOfEveryKindOfColumn reads columns of the types VARCHAR() and a
+// CAST to VARCHAR disagree on through ToString: binary strings, which only
+// VARCHAR() reads, and a padded CHAR, which both keep as held. A column
+// selected as a bare NULL has no type, and ToString of it is refused.
+func (s *Db2SqlDialectExecutionSuite) TestToStringOfEveryKindOfColumn() {
+	d := s.Scrapper.SqlDialect()
+	read := func(column string) (string, error) {
+		sql, err := d.ToString(sqldialect.Sql("x")).ToSql(d)
+		s.Require().NoError(err)
+		it, err := s.Scrapper.RunRawQuery(s.Ctx(), "SELECT "+sql+` AS "probe" FROM (SELECT `+column+` AS x FROM SYSIBM.SYSDUMMY1) AS t`)
+		if err != nil {
+			return "", err
+		}
+		defer it.Close()
+		row, err := it.Next(s.Ctx())
+		if err != nil {
+			return "", err
+		}
+		text, ok := scrapper.AsString(row[0].Value)
+		s.Require().True(ok)
+		return text, nil
+	}
+
+	for column, want := range map[string]string{
+		"CAST(X'4142' AS VARBINARY(5))": "AB",
+		"CAST(X'4142' AS BINARY(2))":    "AB",
+		"CAST('ab' AS CHAR(5))":         "ab   ",
+		"CAST(42 AS INTEGER)":           "42",
+	} {
+		got, err := read(column)
+		s.Require().NoError(err, column)
+		s.Equal(want, got, column)
+	}
+
+	_, err := read("NULL")
+	s.Require().Error(err)
+	s.Contains(err.Error(), "SQLCODE=-245")
+}
+
 type Db2ValueRoundTripSuite struct {
 	scrappertest.ValueRoundTripSuite
 }

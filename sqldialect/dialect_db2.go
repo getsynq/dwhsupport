@@ -117,6 +117,11 @@ func (d *Db2Dialect) StringLiteral(s string) string {
 	return StandardSQLStringLiteral(s)
 }
 
+// ToString renders VARCHAR(expr), which reads every built-in type as text,
+// binary strings included. Its argument needs a type: a bare NULL, or a column
+// a query selects as one (`NULL AS x`), is ambiguous (SQLCODE -245), so a
+// caller that can meet one types it first. CAST(expr AS VARCHAR(n)) would
+// accept the NULL but rejects BINARY and VARBINARY (SQLCODE -461).
 func (d *Db2Dialect) ToString(expr Expr) Expr {
 	return Fn("VARCHAR", expr)
 }
