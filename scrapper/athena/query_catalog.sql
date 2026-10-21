@@ -5,8 +5,7 @@ SELECT
     c.column_name                         AS column,
     c.ordinal_position                    AS position,
     c.data_type                           AS type,
-    CAST(NULL AS VARCHAR)                 AS comment,
-    CAST(NULL AS VARCHAR)                 AS table_comment
+    c.comment                             AS comment
 FROM information_schema.columns c
 WHERE c.table_schema NOT IN ('information_schema')
   /* SYNQ_SCOPE_FILTER */

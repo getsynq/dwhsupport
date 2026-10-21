@@ -1,8 +1,8 @@
 // Package athena implements the scrapper.Scrapper interface for Amazon Athena.
 //
-// V1 scope is metadata-only: catalog, tables, databases, view definitions.
-// Table metrics, query logs, freshness, table constraints, and table comments
-// are deferred — those methods either return ErrUnsupported or empty slices.
+// Column comments come from information_schema.columns. Table comments are
+// not in Athena's information_schema, so QueryTables and QueryCatalog read them
+// from Glue (see glueTableComments).
 //
 // Athena exposes a Presto-derived SQL surface, so most queries look like Trino's
 // but talk to Athena's information_schema (no system.metadata.* tables, no

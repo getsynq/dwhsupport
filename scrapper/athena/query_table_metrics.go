@@ -134,7 +134,10 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime ti
 }
 
 func (e *AthenaScrapper) listGlueDatabases(ctx context.Context, glueClient *awsglue.Client) ([]string, error) {
-	catalogID := e.executor.AccountID()
+	return listGlueDatabases(ctx, glueClient, e.executor.AccountID())
+}
+
+func listGlueDatabases(ctx context.Context, glueClient glueTablesAPI, catalogID string) ([]string, error) {
 	var (
 		names     []string
 		nextToken *string
