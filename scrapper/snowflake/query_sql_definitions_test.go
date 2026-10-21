@@ -780,6 +780,6 @@ func TestQuerySqlDefinitionsReadsATableWithAClusterKey(t *testing.T) {
 	require.Contains(t, table.Sql, "create or replace TABLE MY_DB.MY_SCHEMA.PRODUCTS cluster by (CATEGORY, ID)")
 	require.NotNil(t, table.Description)
 	require.Equal(t, "Product catalog", *table.Description)
-	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}}, table.Tags)
-	require.Equal(t, map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}}, table.ColumnTags)
+	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}}, table.Tags)
+	require.Equal(t, map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}}, table.ColumnTags)
 }
