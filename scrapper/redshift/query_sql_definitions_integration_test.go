@@ -10,6 +10,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -63,7 +64,7 @@ func TestRedshiftSqlDefinitionsOfTablesAndViews(t *testing.T) {
 		assert.False(t, def.IsView, name)
 		assert.True(t, strings.HasPrefix(def.Sql, "CREATE TABLE "+name+" ("), "%s: %s", name, def.Sql)
 	}
-	assert.Contains(t, byName["schema_a.order_items"].Sql, "FOREIGN KEY (product_id) REFERENCES schema_a.products(id)")
+	assert.Contains(t, lo.FromPtr(byName["schema_a.order_items"]).Sql, "FOREIGN KEY (product_id) REFERENCES schema_a.products(id)")
 
 	// SHOW TABLE answers a view with a CREATE TABLE of its columns, which must
 	// not replace the view's query.

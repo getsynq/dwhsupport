@@ -41,6 +41,12 @@ type RedshiftExecutor struct {
 	sshTunnelDialer *sshtunnel.SshTunnelDialer
 }
 
+// NewRedshiftExecutorFromDb wraps a connection the caller already opened, such
+// as one over a fake driver in a test. It does not ping it.
+func NewRedshiftExecutorFromDb(conf *RedshiftConf, db *sqlx.DB) *RedshiftExecutor {
+	return &RedshiftExecutor{conf: conf, db: db}
+}
+
 func (e *RedshiftExecutor) GetDb() *sqlx.DB {
 	return e.db
 }

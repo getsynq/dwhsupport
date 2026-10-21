@@ -12,6 +12,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,7 +86,7 @@ func TestOracleSqlDefinitionsOfTablesAndViews(t *testing.T) {
 			assert.NotContains(t, def.Sql, attribute, name)
 		}
 	}
-	assert.Contains(t, byName["SYNQ_A.ORDER_ITEMS"].Sql, `REFERENCES "SYNQ_A"."PRODUCTS" ("ID")`)
+	assert.Contains(t, lo.FromPtr(byName["SYNQ_A.ORDER_ITEMS"]).Sql, `REFERENCES "SYNQ_A"."PRODUCTS" ("ID")`)
 
 	for _, name := range []string{"SYNQ_A.ACTIVE_PRODUCTS", "SYNQ_A.ORDER_SUMMARY", "SYNQ_B.CUSTOMER_REGIONS"} {
 		def := byName[name]
@@ -123,6 +124,27 @@ func TestOracleSqlDefinitionsLeaveOutTablesThatAreNotTablesOfTheirOwn(t *testing
 	require.NoError(t, err)
 	byName := oracleDefinitionsByName(defs)
 	assert.ElementsMatch(t, []string{schema + ".PLAIN", schema + ".ORGANIZED", schema + ".TAGGED"}, oracleKeys(byName))
-	assert.Contains(t, byName[schema+".ORGANIZED"].Sql, "ORGANIZATION INDEX")
-	assert.Contains(t, byName[schema+".TAGGED"].Sql, "NESTED TABLE")
+	assert.Contains(t, lo.FromPtr(byName[schema+".ORGANIZED"]).Sql, "ORGANIZATION INDEX")
+	assert.Contains(t, lo.FromPtr(byName[schema+".TAGGED"]).Sql, "NESTED TABLE")
+}
+
+// The dwhtesting synq user has no SELECT_CATALOG_ROLE: it reads the views, and
+// each schema of tables is one omission saying which grant reads it.
+func TestOracleSqlDefinitionsWithoutTheCatalogRoleOmitTheSchemas(t *testing.T) {
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping Oracle tests in CI")
+	}
+	sc, err := newOracleScrapperFromEnv(t.Context())
+	if err != nil {
+		t.Skipf("Could not connect to Oracle: %v", err)
+	}
+	t.Cleanup(func() { _ = sc.Close() })
+
+	defs, err := sc.QuerySqlDefinitions(inSchemas("SYNQ_A"))
+	incomplete, ok := scrapper.AsIncomplete(err)
+	require.True(t, ok, "%v", err)
+	assert.Equal(t, []scrapper.Omission{
+		{Database: sc.conf.ServiceName, Schema: "SYNQ_A", Part: scrapper.OmittedDefinitions, Err: errNoCatalogRole},
+	}, incomplete.Omissions)
+	assert.ElementsMatch(t, []string{"SYNQ_A.ACTIVE_PRODUCTS", "SYNQ_A.ORDER_SUMMARY"}, oracleKeys(oracleDefinitionsByName(defs)))
 }

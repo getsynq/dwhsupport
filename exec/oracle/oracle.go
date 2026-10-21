@@ -55,6 +55,12 @@ type OracleExecutor struct {
 	db   *sqlx.DB
 }
 
+// NewOracleExecutorFromDb wraps a connection the caller already opened, such as
+// one over a fake driver in a test. It does not ping it.
+func NewOracleExecutorFromDb(conf *OracleConf, db *sqlx.DB) *OracleExecutor {
+	return &OracleExecutor{conf: conf, db: db}
+}
+
 func (e *OracleExecutor) GetDb() *sqlx.DB {
 	return e.db
 }
