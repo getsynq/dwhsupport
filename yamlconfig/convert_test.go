@@ -46,6 +46,7 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	bqConf := bq.GetBigquery()
 	require.NotNil(t, bqConf)
 	assert.Equal(t, "my-gcp-project", bqConf.GetProjectId())
+	assert.True(t, bqConf.GetFetchPolicyTags())
 
 	// Verify Snowflake
 	sf := protos["sf-main"]
@@ -179,6 +180,26 @@ func TestFromProtoConnection_Db2(t *testing.T) {
 	rt := FromProtoConnection(pb)
 	require.NotNil(t, rt)
 	assert.Equal(t, original, rt.Db2)
+}
+
+func TestFromProtoConnection_BigQuery(t *testing.T) {
+	for _, original := range []*BigQueryConf{
+		{
+			ProjectId:         "my-gcp-project",
+			Region:            "europe-west2",
+			ServiceAccountKey: `{"type":"service_account"}`,
+			Datasets:          []string{"analytics"},
+			FetchPolicyTags:   true,
+		},
+		{ProjectId: "my-gcp-project", Region: "europe-west2", ServiceAccountKey: `{"type":"service_account"}`},
+	} {
+		pb, err := ToProtoConnection("bigquery", &Connection{BigQuery: original})
+		require.NoError(t, err)
+		assert.Equal(t, original.FetchPolicyTags, pb.GetBigquery().GetFetchPolicyTags())
+		rt := FromProtoConnection(pb)
+		require.NotNil(t, rt)
+		assert.Equal(t, original, rt.BigQuery)
+	}
 }
 
 func TestFromProtoConnection_Redshift(t *testing.T) {

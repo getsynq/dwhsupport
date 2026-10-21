@@ -35,6 +35,7 @@ connections:
       project_id: my-gcp-project
       region: europe-west2
       service_account_key_file: "keys/service-account.json"
+      fetch_policy_tags: true
 
   "ch-staging":
     name: Clickhouse

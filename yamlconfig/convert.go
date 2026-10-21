@@ -149,6 +149,7 @@ func bigqueryConfToProto(c *BigQueryConf) *agentdwhv1.BigQueryConf {
 		ServiceAccountKey:     c.ServiceAccountKey,
 		ServiceAccountKeyFile: c.ServiceAccountKeyFile,
 		Datasets:              c.Datasets,
+		FetchPolicyTags:       c.FetchPolicyTags,
 	}
 }
 
