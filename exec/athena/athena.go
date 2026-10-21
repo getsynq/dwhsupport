@@ -18,7 +18,6 @@ import (
 	awsglue "github.com/aws/aws-sdk-go-v2/service/glue"
 	awssts "github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/getsynq/dwhsupport/exec"
-	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/exec/querystats"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	athenadriver "github.com/influxdata/athenadriver/v2/go"
@@ -118,7 +117,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	stsClient := awssts.NewFromConfig(awsCfg)
 	whoami, err := stsClient.GetCallerIdentity(ctx, &awssts.GetCallerIdentityInput{})
 	if err != nil {
-		return nil, exec.NewAuthError(fmt.Errorf("athena: sts:GetCallerIdentity: %w", err))
+		return nil, exec.ConnectionError(fmt.Errorf("athena: sts:GetCallerIdentity: %w", err), IsAuthError)
 	}
 	accountID := aws.ToString(whoami.Account)
 
@@ -151,7 +150,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	// before they expire (default 1h, max 12h for AssumeRole).
 	creds, err := awsCfg.Credentials.Retrieve(ctx)
 	if err != nil {
-		return nil, exec.NewAuthError(fmt.Errorf("athena: resolve credentials: %w", err))
+		return nil, exec.ConnectionError(fmt.Errorf("athena: resolve credentials: %w", err), IsAuthError)
 	}
 
 	driverConf, err := athenadriver.NewDefaultConfig(outputLocation, conf.Region, creds.AccessKeyID, creds.SecretAccessKey)
@@ -177,7 +176,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	}
 	if err := stdsql.Ping(ctx, db); err != nil {
 		_ = db.Close()
-		return nil, exec.NewAuthError(fmt.Errorf("athena: ping: %w", err))
+		return nil, exec.ConnectionError(fmt.Errorf("athena: ping: %w", err), IsAuthError)
 	}
 
 	return &AthenaExecutor{
@@ -188,6 +187,13 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 		db:           db,
 		accountID:    accountID,
 	}, nil
+}
+
+// NewAthenaExecutorWithClients builds an executor over a Glue client and an
+// Athena connection the caller opened, such as a test's fake Glue endpoint and
+// stand-in for Athena. db may be nil for the methods that read Glue only.
+func NewAthenaExecutorWithClients(conf *AthenaConf, accountID string, glueClient *awsglue.Client, db *sqlx.DB) *AthenaExecutor {
+	return &AthenaExecutor{conf: conf, glueClient: glueClient, db: db, accountID: accountID}
 }
 
 // buildAwsConfig assembles an aws.Config from the configured authentication
@@ -246,24 +252,27 @@ func buildAwsConfig(ctx context.Context, conf *AthenaConf) (aws.Config, error) {
 }
 
 func (e *AthenaExecutor) QueryRows(ctx context.Context, sql string, args ...interface{}) (*sqlx.Rows, error) {
-	sql = querycontext.AppendSQLComment(ctx, trimRightSemicolons(sql))
+	sql = withQueryContext(ctx, sql)
 	return e.db.QueryxContext(ctx, sql, args...)
 }
 
 func (e *AthenaExecutor) Select(ctx context.Context, dest any, query string, args ...any) error {
-	query = querycontext.AppendSQLComment(ctx, trimRightSemicolons(query))
+	query = withQueryContext(ctx, query)
 	collector, ctx := querystats.Start(ctx)
 	defer collector.Finish()
 	return e.db.SelectContext(ctx, dest, query, args...)
 }
 
 func (e *AthenaExecutor) Exec(ctx context.Context, query string, args ...any) error {
-	query = querycontext.AppendSQLComment(ctx, trimRightSemicolons(query))
+	query = withQueryContext(ctx, query)
 	_, err := e.db.ExecContext(ctx, query, args...)
 	return err
 }
 
 func (e *AthenaExecutor) Close() error {
+	if e.db == nil {
+		return nil
+	}
 	return e.db.Close()
 }
 

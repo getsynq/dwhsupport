@@ -3,6 +3,7 @@ package bigquery
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
@@ -37,6 +38,9 @@ func (s *BigQueryCatalogFactsSuite) SetupSuite() {
 	s.NotNullColumn, s.NullableColumn = "id", "description"
 	s.Table = s.ColumnsTable
 	s.ExpectOwner, s.ExpectCreatedAt, s.ExpectSizeBytes = false, true, true
+
+	s.DescribedSchema = scrappertest.FixtureSchema{Schema: "synq_dwhtesting_b"}
+	s.SchemaDescription = "SYNQ dwhtesting secondary dataset — used for multi-dataset scope-scraping coverage"
 }
 
 // TestRepeatedColumnIsNotNullable pins what INFORMATION_SCHEMA.COLUMNS reports
@@ -78,6 +82,62 @@ func (s *BigQueryCatalogFactsSuite) TestPrimaryKeyInKeyOrder() {
 		}
 	}
 	s.Equal([]string{"order_id", "item_id"}, keyColumns)
+}
+
+// TestSnapshotAndCloneNameTheirBaseTable reads the seed's products_snapshot
+// (CREATE SNAPSHOT TABLE ... CLONE products) and products_clone (CREATE TABLE
+// ... CLONE products).
+func (s *BigQueryCatalogFactsSuite) TestSnapshotAndCloneNameTheirBaseTable() {
+	ctx := scope.WithScope(s.Ctx(), &scope.ScopeFilter{
+		Include: []scope.ScopeRule{{Schema: "synq_dwhtesting"}},
+	})
+	tables, err := s.Scrapper.QueryTables(ctx)
+	s.Require().NoError(err)
+
+	copies := map[string]*scrapper.TableCopyOf{}
+	project := ""
+	for _, table := range tables {
+		if table.Schema == "synq_dwhtesting" {
+			copies[table.Table] = table.CopyOf
+			project = table.Database
+		}
+	}
+	s.Require().Contains(copies, "products")
+	s.Nil(copies["products"])
+	for name, kind := range map[string]scrapper.TableCopyKind{
+		"products_snapshot": scrapper.TableCopySnapshot,
+		"products_clone":    scrapper.TableCopyClone,
+	} {
+		c := copies[name]
+		s.Require().NotNil(c, name)
+		s.Equal(kind, c.Kind, name)
+		s.Equal(scrapper.DwhFqn{DatabaseName: project, SchemaName: "synq_dwhtesting", ObjectName: "products"}, c.TableFqn(), name)
+		s.Require().NotNil(c.At, name)
+		s.Equal(time.UTC, c.At.Location(), name)
+	}
+}
+
+// TestTableLabelReplacesTheDatasetLabel reads the tables labelled
+// owner=analytics in a dataset labelled owner=data-eng.
+func (s *BigQueryCatalogFactsSuite) TestTableLabelReplacesTheDatasetLabel() {
+	ctx := scope.WithScope(s.Ctx(), &scope.ScopeFilter{
+		Include: []scope.ScopeRule{{Schema: "synq_dwhtesting"}},
+	})
+	tables, err := s.Scrapper.QueryTables(ctx)
+	s.Require().NoError(err)
+
+	owners := map[string][]string{}
+	for _, table := range tables {
+		for _, tag := range table.Tags {
+			if tag.TagName == "owner" {
+				owners[table.Table] = append(owners[table.Table], tag.TagValue)
+			}
+		}
+	}
+	for _, name := range []string{"page_views", "events_hourly", "product_revenue_mv"} {
+		s.Equal([]string{"analytics"}, owners[name], name)
+	}
+	s.Equal([]string{"data-eng"}, owners["products"], "products has no owner label of its own")
 }
 
 func (s *BigQueryCatalogFactsSuite) TearDownSuite() {

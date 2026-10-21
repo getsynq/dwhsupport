@@ -104,16 +104,22 @@ func (s *TagReferencesSuite) TestTagsGoOnTheirTableAndColumn() {
 	rows, err := scr.QueryCatalog(context.Background())
 	s.Require().NoError(err)
 
-	customers := []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}}
+	customers := []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}}
 	activeCustomers := []*scrapper.Tag{
-		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a"}`},
-		{TagName: "MY_DB.GOVERNANCE.CERTIFIED", TagValue: ""},
+		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a"}`, Kind: scrapper.TagKindGovernedTag},
+		{TagName: "MY_DB.GOVERNANCE.CERTIFIED", TagValue: "", Kind: scrapper.TagKindGovernedTag},
 	}
 	s.Equal(map[string]columnTags{
-		"CUSTOMERS.ID":           {table: customers},
-		"CUSTOMERS.EMAIL":        {table: customers, column: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
-		"ACTIVE_CUSTOMERS.EMAIL": {table: activeCustomers, column: []*scrapper.Tag{{TagName: "SNOWFLAKE.CORE.SEMANTIC_CATEGORY", TagValue: "EMAIL"}}},
-		"orders.ID":              {},
+		"CUSTOMERS.ID": {table: customers},
+		"CUSTOMERS.EMAIL": {
+			table:  customers,
+			column: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
+		},
+		"ACTIVE_CUSTOMERS.EMAIL": {
+			table:  activeCustomers,
+			column: []*scrapper.Tag{{TagName: "SNOWFLAKE.CORE.SEMANTIC_CATEGORY", TagValue: "EMAIL", Kind: scrapper.TagKindGovernedTag}},
+		},
+		"orders.ID": {},
 	}, tagsByColumn(rows))
 }
 

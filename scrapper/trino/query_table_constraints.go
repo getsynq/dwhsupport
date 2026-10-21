@@ -3,7 +3,6 @@ package trino
 import (
 	"context"
 	_ "embed"
-	"strings"
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
@@ -24,7 +23,7 @@ func (e *TrinoScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.
 	}
 
 	for _, catalog := range acceptedCatalogs {
-		res, err := e.queryTableConstraintsForCatalog(ctx, catalog.CatalogName)
+		res, err := e.queryTableConstraintsForCatalog(ctx, catalog)
 		if err != nil {
 			return nil, err
 		}
@@ -33,8 +32,8 @@ func (e *TrinoScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.
 	return out, nil
 }
 
-func (e *TrinoScrapper) queryTableConstraintsForCatalog(ctx context.Context, catalogName string) ([]*scrapper.TableConstraintRow, error) {
-	query := strings.ReplaceAll(queryTableConstraintsSql, "{{catalog}}", catalogName)
+func (e *TrinoScrapper) queryTableConstraintsForCatalog(ctx context.Context, catalog *TrinoCatalog) ([]*scrapper.TableConstraintRow, error) {
+	query := withCatalog(queryTableConstraintsSql, catalog)
 	query = scope.AppendScopeConditions(ctx, query, "", "\"schema\"", "\"table\"")
 
 	res, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), query,
@@ -48,12 +47,12 @@ func (e *TrinoScrapper) queryTableConstraintsForCatalog(ctx context.Context, cat
 	)
 	if err != nil {
 		if isCatalogUnavailableError(err) {
-			logging.GetLogger(ctx).WithField("catalog", catalogName).WithError(err).
+			logging.GetLogger(ctx).WithField("catalog", catalog.CatalogName).WithError(err).
 				Warn("Catalog is no longer available, skipping")
 			return nil, nil
 		}
 		if isTableNotFoundError(err) {
-			logging.GetLogger(ctx).WithField("catalog", catalogName).
+			logging.GetLogger(ctx).WithField("catalog", catalog.CatalogName).
 				Debug("information_schema.table_constraints not available for catalog, skipping")
 			return nil, nil
 		}

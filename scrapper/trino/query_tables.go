@@ -24,15 +24,15 @@ func (e *TrinoScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryT
 		acceptedCatalogs,
 		scrapper.OmittedObjects,
 		func(ctx context.Context, catalog *TrinoCatalog) ([]*scrapper.TableRow, []scrapper.Omission, error) {
-			return e.queryTables(ctx, catalog.CatalogName)
+			return e.queryTables(ctx, catalog)
 		},
 	)
 }
 
-func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]*scrapper.TableRow, []scrapper.Omission, error) {
+func (e *TrinoScrapper) queryTables(ctx context.Context, catalog *TrinoCatalog) ([]*scrapper.TableRow, []scrapper.Omission, error) {
 	var res []*scrapper.TableRow
-	omissions, err := e.withoutCommentsOnFailure(ctx, catalogName, func(withComments bool) error {
-		rows, err := e.queryTablesWith(ctx, catalogName, withComments)
+	omissions, err := e.withoutCommentsOnFailure(ctx, catalog.CatalogName, func(withComments bool) error {
+		rows, err := e.queryTablesWith(ctx, catalog, withComments)
 		res = rows
 		return err
 	})
@@ -42,11 +42,11 @@ func (e *TrinoScrapper) queryTables(ctx context.Context, catalogName string) ([]
 	return res, omissions, nil
 }
 
-func (e *TrinoScrapper) queryTablesWith(ctx context.Context, catalogName string, withComments bool) ([]*scrapper.TableRow, error) {
+func (e *TrinoScrapper) queryTablesWith(ctx context.Context, catalog *TrinoCatalog, withComments bool) ([]*scrapper.TableRow, error) {
 	query := queryTablesSQL
 	db := e.executor.GetDb()
 
-	catalogQuery := strings.Replace(query, "{{catalog}}", catalogName, -1)
+	catalogQuery := withCatalog(query, catalog)
 
 	// Conditionally add table comments JOIN based on feature flag
 	if withComments {
@@ -87,6 +87,9 @@ func (e *TrinoScrapper) queryTablesWith(ctx context.Context, catalogName string,
 	res, err := stdsql.QueryMany(ctx, db, catalogQuery,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {
 			row.Instance = e.conf.Host
+			if isMySQLViewComment(catalog, row.Description) {
+				row.Description = nil
+			}
 			return row, nil
 		}),
 	)

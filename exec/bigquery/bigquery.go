@@ -118,7 +118,7 @@ func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExec
 		err = nil
 	}
 	if err != nil {
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	return &BigQueryExecutor{client: client, conf: conf}, nil

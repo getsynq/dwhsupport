@@ -69,6 +69,26 @@ func (r *datasetReads) tableFailed(ctx context.Context, dataset, tableId, table 
 	return nil
 }
 
+// degraded handles a table read through a fallback that leaves part of it
+// out. table is the name the result reports it under. A caller that accepts
+// incomplete results is told the table misses part, so it does not read what
+// is missing as removed; any other caller keeps the rows, and the fallback is
+// only logged.
+func (r *datasetReads) degraded(ctx context.Context, op, dataset, tableId, table string, err error) {
+	if !r.accept {
+		logging.GetLogger(ctx).
+			WithField("executor", "bigquery").
+			WithField("bq_op", op).
+			WithField("bq_project", r.e.conf.ProjectId).
+			WithField("bq_dataset", dataset).
+			WithField("bq_table", tableId).
+			WithError(err).
+			Warn("BigQuery metadata read through a fallback that leaves part of it out")
+		return
+	}
+	r.omit(ctx, op, dataset, tableId, table, err)
+}
+
 // markRead records that something was read: a table's metadata, or a dataset
 // listed with no table to read.
 func (r *datasetReads) markRead() {

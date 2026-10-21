@@ -14,7 +14,7 @@ import (
 var schemasSql string
 
 func (e *RedshiftScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow, error) {
-	sql := scope.AppendSchemaScopeConditions(ctx, schemasSql, "", "schema_name")
+	sql := scope.AppendSchemaScopeConditions(ctx, withSystemSchemas(schemasSql), "", "schema_name")
 	return stdsql.QueryMany[scrapper.SchemaRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithArgs[scrapper.SchemaRow](e.conf.Database),
 		dwhexec.WithPostProcessors(func(row *scrapper.SchemaRow) (*scrapper.SchemaRow, error) {

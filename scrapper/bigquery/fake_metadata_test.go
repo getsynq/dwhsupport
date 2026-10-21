@@ -2,11 +2,14 @@ package bigquery
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -27,22 +30,41 @@ type fakeTable struct {
 }
 
 // fakeDataset is a dataset of fakeMetadataServer. A non-zero metadataStatus
-// fails datasets.get, a non-zero listStatus fails tables.list. labels is the
-// JSON object of its labels, {"team":"data"} when empty.
+// fails datasets.get, a non-zero listStatus fails tables.list, a non-zero
+// tablesQueryStatus fails a query of the dataset's INFORMATION_SCHEMA.TABLES.
+// labels is the JSON object of its labels, {"team":"data"} when empty.
 type fakeDataset struct {
-	id             string
-	metadataStatus int
-	listStatus     int
-	labels         string
-	tables         []fakeTable
+	id                string
+	metadataStatus    int
+	listStatus        int
+	tablesQueryStatus int
+	labels            string
+	tables            []fakeTable
 }
 
 // fakeMetadataServer answers the BigQuery REST calls the metadata scrape makes
 // (datasets.list, datasets.get, tables.list, tables.get) for one project, failing
-// the ones a dataset or table is set up to fail. Query jobs are refused with a
-// 403, so QuerySqlDefinitions falls back to reading each table.
+// the ones a dataset or table is set up to fail.
+//
+// Query jobs are refused with a 403 unless answersQueries is set, so
+// QuerySqlDefinitions falls back to reading each table. With it set, a query of
+// a dataset's INFORMATION_SCHEMA.TABLES answers with a row per table that
+// tables.get answers for, the way BigQuery leaves out a table the caller may
+// not read, and a query of the region's is refused, the way it is for a role
+// granted only on the datasets.
 type fakeMetadataServer struct {
-	datasets []fakeDataset
+	datasets       []fakeDataset
+	answersQueries bool
+
+	mu      sync.Mutex
+	queries []string
+}
+
+// queried returns the SQL of every query job it was asked to run.
+func (f *fakeMetadataServer) queried() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.queries...)
 }
 
 func (f *fakeMetadataServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +77,13 @@ func (f *fakeMetadataServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(rest, "/")
 	switch {
 	case len(parts) == 1 && parts[0] == "jobs":
-		fakeError(w, http.StatusForbidden, "Access Denied: Project "+fakeProject+": User does not have bigquery.jobs.create permission")
+		if !f.answersQueries {
+			fakeError(w, http.StatusForbidden, "Access Denied: Project "+fakeProject+": User does not have bigquery.jobs.create permission")
+			return
+		}
+		f.insertQuery(w, r)
+	case len(parts) == 2 && (parts[0] == "queries" || parts[0] == "jobs"):
+		f.queryResults(w, parts[1], parts[0] == "queries")
 	case len(parts) == 1 && parts[0] == "datasets":
 		var items []string
 		for _, ds := range f.datasets {
@@ -110,6 +138,82 @@ func (f *fakeMetadataServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// insertQuery answers a jobs.insert of a query, under a job id naming the
+// dataset whose INFORMATION_SCHEMA.TABLES it reads.
+func (f *fakeMetadataServer) insertQuery(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	var req struct {
+		Configuration struct {
+			Query struct {
+				Query string `json:"query"`
+			} `json:"query"`
+		} `json:"configuration"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		fakeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	sql := req.Configuration.Query.Query
+	f.mu.Lock()
+	f.queries = append(f.queries, sql)
+	f.mu.Unlock()
+
+	if strings.Contains(sql, "region-") {
+		fakeError(w, http.StatusForbidden, "Access Denied: Table "+fakeProject+":region-us.INFORMATION_SCHEMA.TABLES: User does not have permission")
+		return
+	}
+	for _, ds := range f.datasets {
+		if !strings.Contains(sql, fmt.Sprintf("`%s`.`%s`.INFORMATION_SCHEMA.TABLES", fakeProject, ds.id)) {
+			continue
+		}
+		if ds.tablesQueryStatus != 0 {
+			fakeError(
+				w,
+				ds.tablesQueryStatus,
+				"Access Denied: Table "+fakeProject+":"+ds.id+".INFORMATION_SCHEMA.TABLES: User does not have permission",
+			)
+			return
+		}
+		_, _ = fmt.Fprintf(
+			w, `{"jobReference":{"projectId":%q,"jobId":%q,"location":"US"},"configuration":{"query":{"query":"x"}},"status":{"state":"DONE"}}`,
+			fakeProject, "tables-"+ds.id,
+		)
+		return
+	}
+	fakeError(w, http.StatusBadRequest, "unexpected query "+sql)
+}
+
+// queryResults answers jobs.get, and jobs.getQueryResults with the rows of the
+// dataset the job id names.
+func (f *fakeMetadataServer) queryResults(w http.ResponseWriter, jobId string, withRows bool) {
+	datasetId, ok := strings.CutPrefix(jobId, "tables-")
+	ds, found := f.dataset(datasetId)
+	if !ok || !found {
+		fakeError(w, http.StatusNotFound, "Not found: Job "+jobId)
+		return
+	}
+	jobRef := fmt.Sprintf(`"jobReference":{"projectId":%q,"jobId":%q,"location":"US"}`, fakeProject, jobId)
+	if !withRows {
+		_, _ = fmt.Fprintf(w, `{%s,"configuration":{"query":{"query":"x"}},"status":{"state":"DONE"}}`, jobRef)
+		return
+	}
+	var rows []string
+	for _, t := range ds.tables {
+		if t.status != 0 {
+			continue
+		}
+		isView := strings.Contains(t.json, `"type":"VIEW"`)
+		ddl := fmt.Sprintf("CREATE TABLE `%s.%s.%s` (id INT64);", fakeProject, ds.id, t.id)
+		if isView {
+			ddl = fmt.Sprintf("CREATE VIEW `%s.%s.%s` AS select 1 as id;", fakeProject, ds.id, t.id)
+		}
+		rows = append(rows, fmt.Sprintf(`{"f":[{"v":%q},{"v":%q},{"v":%q},{"v":%q},{"v":"%t"}]}`, fakeProject, ds.id, t.id, ddl, isView))
+	}
+	_, _ = fmt.Fprintf(w, `{%s,"jobComplete":true,"totalRows":"%d","rows":[%s],"schema":{"fields":[`+
+		`{"name":"database","type":"STRING"},{"name":"schema","type":"STRING"},{"name":"table","type":"STRING"},`+
+		`{"name":"sql","type":"STRING"},{"name":"is_view","type":"BOOLEAN"}]}}`, jobRef, len(rows), strings.Join(rows, ","))
+}
+
 func (f *fakeMetadataServer) dataset(id string) (fakeDataset, bool) {
 	for _, ds := range f.datasets {
 		if ds.id == id {
@@ -120,7 +224,7 @@ func (f *fakeMetadataServer) dataset(id string) (fakeDataset, bool) {
 }
 
 func fakeError(w http.ResponseWriter, status int, message string) {
-	reason := map[int]string{http.StatusForbidden: "accessDenied", http.StatusNotFound: "notFound"}[status]
+	reason := map[int]string{http.StatusBadRequest: "invalidQuery", http.StatusForbidden: "accessDenied", http.StatusNotFound: "notFound"}[status]
 	if reason == "" {
 		reason = "backendError"
 	}
@@ -130,7 +234,12 @@ func fakeError(w http.ResponseWriter, status int, message string) {
 
 func newFakeMetadataScrapper(t *testing.T, datasets ...fakeDataset) *BigQueryScrapper {
 	t.Helper()
-	srv := httptest.NewServer(&fakeMetadataServer{datasets: datasets})
+	return newFakeMetadataScrapperOn(t, &fakeMetadataServer{datasets: datasets})
+}
+
+func newFakeMetadataScrapperOn(t *testing.T, fake *fakeMetadataServer) *BigQueryScrapper {
+	t.Helper()
+	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 
 	client, err := bigquery.NewClient(

@@ -106,11 +106,22 @@ func TestAthenaTableMetricsAndConstraints(t *testing.T) {
 		}
 	})
 
-	t.Run("lastFetchTime in the future returns nothing", func(t *testing.T) {
-		rows, err := sc.QueryTableMetrics(ctx, time.Now().Add(24*time.Hour))
+	t.Run("lastFetchTime does not drop unchanged tables", func(t *testing.T) {
+		all, err := sc.QueryTableMetrics(ctx, time.Time{})
 		require.NoError(t, err)
-		require.Empty(t, rows)
+		require.NotEmpty(t, all)
+		later, err := sc.QueryTableMetrics(ctx, time.Now().Add(24*time.Hour))
+		require.NoError(t, err)
+		require.ElementsMatch(t, tableNames(all), tableNames(later))
 	})
+}
+
+func tableNames(rows []*scrapper.TableMetricsRow) []string {
+	var out []string
+	for _, r := range rows {
+		out = append(out, r.Schema+"."+r.Table)
+	}
+	return out
 }
 
 func groupConstraintsByTable(rows []*scrapper.TableConstraintRow) map[string][]string {

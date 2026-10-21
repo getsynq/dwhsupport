@@ -12,7 +12,7 @@ import (
 )
 
 // RedshiftCatalogFactsSuite checks column nullability, owner, creation time
-// and size on a products fixture.
+// and size on a products fixture, and the comment on its schema.
 type RedshiftCatalogFactsSuite struct {
 	scrappertest.CatalogFactsSuite
 }
@@ -49,6 +49,9 @@ func (s *RedshiftCatalogFactsSuite) SetupSuite() {
 	s.NotNullColumn, s.NullableColumn = "id", "description"
 	s.Table = s.ColumnsTable
 	s.ExpectOwner, s.ExpectCreatedAt, s.ExpectSizeBytes = true, true, true
+
+	s.DescribedSchema = scrappertest.FixtureSchema{Schema: "schema_a"}
+	s.SchemaDescription = "Primary test schema: products, orders, constraints"
 }
 
 func (s *RedshiftCatalogFactsSuite) TearDownSuite() {

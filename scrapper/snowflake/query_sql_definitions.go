@@ -237,6 +237,7 @@ func parseCreatedFromStatement(logger logrus.FieldLogger, tokens []*sqllexer.Tok
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "TEMPORARY"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "DYNAMIC"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "HYBRID"})
+	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "SECURE"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.IDENT, Value: "MATERIALIZED"})
 	parser.ParseToken(sqllexer.Token{Type: sqllexer.KEYWORD, Value: "RECURSIVE"})
 
@@ -472,6 +473,7 @@ func parseTagAssignments(parser *sqlparser.BaseParser) []*scrapper.Tag {
 			tags = append(tags, &scrapper.Tag{
 				TagName:  tagName,
 				TagValue: tagValue,
+				Kind:     scrapper.TagKindGovernedTag,
 			})
 		}
 

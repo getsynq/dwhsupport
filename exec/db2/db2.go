@@ -133,7 +133,7 @@ func NewDb2Executor(ctx context.Context, conf *Db2Conf) (*Db2Executor, error) {
 	db := sqlx.NewDb(sql.OpenDB(godb2.NewConnector(cfg)), "db2")
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	return &Db2Executor{conf: conf, db: db}, nil

@@ -43,7 +43,7 @@ func TestBigQueryPolicyTags(t *testing.T) {
 	}
 	require.Equal(t, map[string][]*scrapper.Tag{
 		"id":       nil,
-		"email":    {{TagName: "policytag.dwhtesting_sensitivity", TagValue: "High:Email"}},
-		"nickname": {{TagName: "policytag.dwhtesting_sensitivity", TagValue: "Low"}},
+		"email":    {{TagName: "dwhtesting_sensitivity", TagValue: "High:Email", Kind: scrapper.TagKindPolicyTag}},
+		"nickname": {{TagName: "dwhtesting_sensitivity", TagValue: "Low", Kind: scrapper.TagKindPolicyTag}},
 	}, byColumn)
 }

@@ -70,6 +70,17 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 			}
 			results = append(results, pkRows...)
 
+			fkRows, err := e.queryImportedKeysInDatabase(groupCtx, database)
+			if err != nil {
+				if isSharedDatabaseUnavailableError(err) {
+					logging.GetLogger(groupCtx).WithField("database", database).WithError(err).
+						Warn("Shared database is no longer available, skipping")
+					return nil
+				}
+				return errors.Wrapf(err, "failed to query foreign keys for database %s", database)
+			}
+			results = append(results, fkRows...)
+
 			// Query clustering keys for the database (only if CLUSTER_BY column is available)
 			if clusterByAvailable {
 				ckRows, err := e.queryClusteringKeysInDatabase(groupCtx, database)
@@ -95,7 +106,7 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 		return nil, err
 	}
 
-	// Post-filter results for SHOW PRIMARY KEYS which doesn't support WHERE clauses.
+	// Post-filter results for SHOW PRIMARY KEYS and SHOW IMPORTED KEYS, which don't support WHERE clauses.
 	return scope.FilterRows(finalResults, scope.GetScope(ctx)), nil
 }
 
@@ -133,6 +144,53 @@ func (e *SnowflakeScrapper) queryPrimaryKeysInDatabase(ctx context.Context, data
 	}
 
 	return results, nil
+}
+
+// queryImportedKeysInDatabase reads the foreign keys declared on the tables of
+// a database, one row per column, each naming the column it references, which
+// may be in another database.
+func (e *SnowflakeScrapper) queryImportedKeysInDatabase(ctx context.Context, database string) ([]*scrapper.TableConstraintRow, error) {
+	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW IMPORTED KEYS IN DATABASE %s", database))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*scrapper.TableConstraintRow
+	for rows.Next() {
+		tmp := map[string]any{}
+		if err := rows.MapScan(tmp); err != nil {
+			return nil, err
+		}
+		results = append(results, importedKeyRow(e.conf.Account, tmp))
+	}
+	return results, rows.Err()
+}
+
+// importedKeyRow is one column of a foreign key as SHOW IMPORTED KEYS lists it.
+// RELY is reported as whether the key is enforced, as for a primary key.
+func importedKeyRow(account string, row map[string]any) *scrapper.TableConstraintRow {
+	keySequence, _ := strconv.ParseInt(fmt.Sprint(row["key_sequence"]), 10, 32)
+	var isEnforced *bool
+	if rely, ok := row["rely"]; ok && fmt.Sprint(rely) != "" {
+		v := strings.EqualFold(fmt.Sprint(rely), "true")
+		isEnforced = &v
+	}
+	return &scrapper.TableConstraintRow{
+		Instance:             account,
+		Database:             fmt.Sprint(row["fk_database_name"]),
+		Schema:               fmt.Sprint(row["fk_schema_name"]),
+		Table:                fmt.Sprint(row["fk_table_name"]),
+		ConstraintName:       fmt.Sprint(row["fk_name"]),
+		ColumnName:           fmt.Sprint(row["fk_column_name"]),
+		ConstraintType:       scrapper.ConstraintTypeForeignKey,
+		ColumnPosition:       int32(keySequence),
+		IsEnforced:           isEnforced,
+		ReferencedDatabase:   fmt.Sprint(row["pk_database_name"]),
+		ReferencedSchema:     fmt.Sprint(row["pk_schema_name"]),
+		ReferencedTable:      fmt.Sprint(row["pk_table_name"]),
+		ReferencedColumnName: fmt.Sprint(row["pk_column_name"]),
+	}
 }
 
 // hasClusterByColumn checks whether the CLUSTER_BY column exists in information_schema.tables

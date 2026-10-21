@@ -93,7 +93,7 @@ func NewOracleExecutor(ctx context.Context, conf *OracleConf) (*OracleExecutor, 
 
 	if err := db.PingContext(ctx); err != nil {
 		db.Close()
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	return &OracleExecutor{conf: conf, db: db}, nil

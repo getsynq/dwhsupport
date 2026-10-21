@@ -41,7 +41,7 @@ func (e *TrinoScrapper) queryCatalogMetrics(
 	var omissions []scrapper.Omission
 	reportOmissions := scrapper.IncompleteResultsAccepted(origCtx)
 
-	tables, _, err := e.queryTables(origCtx, catalog.CatalogName)
+	tables, _, err := e.queryTables(origCtx, catalog)
 	if err != nil {
 		return nil, nil, err
 	}

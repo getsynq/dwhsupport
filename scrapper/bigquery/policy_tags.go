@@ -14,9 +14,6 @@ import (
 )
 
 const (
-	// policyTagPrefix starts the name of a column's policy tag, followed by the
-	// display name of its taxonomy.
-	policyTagPrefix = "policytag"
 	// maxPolicyTagDepth bounds the walk up a policy tag's parents. Data Catalog
 	// nests them five deep at most, so a longer walk is a broken tree.
 	maxPolicyTagDepth = 16
@@ -71,8 +68,8 @@ func newPolicyTagResolver(newService func(ctx context.Context) (*datacatalog.Ser
 }
 
 // tags resolves the policy tags of one column. A policy tag whose taxonomy
-// cannot be read, or that its taxonomy no longer lists, keeps its resource name
-// as the value of a tag named policytag.
+// cannot be read, or that its taxonomy no longer lists, is named by its
+// taxonomy's resource name and keeps its own resource name as the value.
 func (r *policyTagResolver) tags(ctx context.Context, names []string) []*scrapper.Tag {
 	var tags []*scrapper.Tag
 	for _, name := range names {
@@ -86,8 +83,8 @@ func (r *policyTagResolver) tags(ctx context.Context, names []string) []*scrappe
 }
 
 func (r *policyTagResolver) tag(ctx context.Context, name string) *scrapper.Tag {
-	unresolved := &scrapper.Tag{TagName: policyTagPrefix, TagValue: name}
 	taxonomyName, _, found := strings.Cut(name, "/policyTags/")
+	unresolved := &scrapper.Tag{TagName: taxonomyName, TagValue: name, Kind: scrapper.TagKindPolicyTag}
 	if !found || r.newService == nil {
 		return unresolved
 	}
@@ -99,7 +96,7 @@ func (r *policyTagResolver) tag(ctx context.Context, name string) *scrapper.Tag 
 	if !ok {
 		return unresolved
 	}
-	return &scrapper.Tag{TagName: policyTagPrefix + "." + taxonomy.displayName, TagValue: path}
+	return &scrapper.Tag{TagName: taxonomy.displayName, TagValue: path, Kind: scrapper.TagKindPolicyTag}
 }
 
 func (r *policyTagResolver) taxonomy(ctx context.Context, name string) *policyTaxonomy {

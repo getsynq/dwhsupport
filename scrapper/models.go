@@ -3,6 +3,7 @@ package scrapper
 import (
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/samber/lo"
@@ -38,18 +39,45 @@ func (r TableMetricsRow) TableFqn() DwhFqn {
 	}
 }
 
-// Tag is a tag or label the warehouse assigns to a table or a column. The name
-// follows the platform:
-//   - Snowflake: `<TAG_DATABASE>.<TAG_SCHEMA>.<TAG_NAME>`, unquoted, as Snowflake stores it.
-//   - BigQuery labels: `label.<key>`.
-//   - BigQuery policy tags: `policytag.<taxonomy display name>`, with the value
-//     `<parent display name>:...:<tag display name>`. A taxonomy that cannot be
-//     read gives the name `policytag` and the policy tag resource name as value.
-//   - Databricks: `tag.<name>`, the value may be empty.
+// TagKind says what a warehouse means by a tag, as the platforms use one word
+// for things that work differently.
+type TagKind string
+
+const (
+	// TagKindLabel is free key-value metadata on an object: BigQuery labels and
+	// Databricks tags. The name is the key, the value may be empty.
+	TagKindLabel TagKind = "label"
+	// TagKindGovernedTag is a tag that is an object of its own, with the values
+	// it allows and the policies it carries: Snowflake tags. The name is the
+	// tag's `<TAG_DATABASE>.<TAG_SCHEMA>.<TAG_NAME>`, unquoted, as Snowflake
+	// stores it.
+	TagKindGovernedTag TagKind = "governed_tag"
+	// TagKindPolicyTag is a classification in a taxonomy that controls who
+	// reads a column: BigQuery policy tags, on columns only. The name is the
+	// display name of the taxonomy and the value the display path of the policy
+	// tag inside it, `<parent>:...:<tag>`. One whose taxonomy could not be read
+	// is named by resource instead, see IsUnresolvedPolicyTag.
+	TagKindPolicyTag TagKind = "policy_tag"
+)
+
+// Tag is a tag or label the warehouse assigns to a table or a column. Kind
+// says which, and the name is the platform's own, with nothing added to it.
 type Tag struct {
-	TagName  string `json:"tag_name"`
-	TagValue string `json:"tag_value"`
+	TagName  string  `json:"tag_name"`
+	TagValue string  `json:"tag_value"`
+	Kind     TagKind `json:"kind,omitempty"`
 }
+
+// IsUnresolvedPolicyTag is whether this is a policy tag whose taxonomy could
+// not be read, so it carries the taxonomy's resource name as its name and the
+// policy tag's resource name as its value, rather than their display names.
+func (t Tag) IsUnresolvedPolicyTag() bool {
+	return t.Kind == TagKindPolicyTag && strings.HasPrefix(t.TagName, policyTagResourcePrefix)
+}
+
+// policyTagResourcePrefix starts the resource name of a Data Catalog taxonomy.
+// A display name cannot start with it, as it holds a '/'.
+const policyTagResourcePrefix = "projects/"
 
 func (t Tag) String() string {
 	return fmt.Sprintf("%s:%s", t.TagName, t.TagValue)
@@ -158,6 +186,46 @@ type TableRow struct {
 	// Constraints is optionally populated by QueryTables when WithConstraints() is passed.
 	// When non-nil, callers may skip a separate QueryTableConstraints call.
 	Constraints []*TableConstraintRow `json:"constraints,omitempty"`
+
+	// CopyOf is the table this one is a copy of, as the warehouse states it:
+	// the base table of a BigQuery table snapshot or table clone. Nil when the
+	// object is not a copy, or the warehouse does not say what it copies.
+	CopyOf *TableCopyOf `json:"copy_of,omitempty"`
+}
+
+// TableCopyKind is how a table copy was made, in the platform's own terms.
+type TableCopyKind string
+
+const (
+	// TableCopySnapshot is a read-only copy of the base table at one point in
+	// time (BigQuery table snapshot).
+	TableCopySnapshot TableCopyKind = "snapshot"
+	// TableCopyClone is a writable copy that starts from the base table at one
+	// point in time and is changed on its own after that (BigQuery table clone).
+	TableCopyClone TableCopyKind = "clone"
+)
+
+// TableCopyOf names the base table a copy was made from. The copy holds the
+// base table's data as of At, so it is neither a view of the base nor fed by
+// it: a caller decides whether that is lineage.
+type TableCopyOf struct {
+	Kind     TableCopyKind `json:"kind"`
+	Instance string        `json:"instance,omitempty"`
+	Database string        `json:"database"`
+	Schema   string        `json:"schema"`
+	Table    string        `json:"table"`
+	// At is the time of the base table the copy holds, in UTC. Nil when the
+	// warehouse does not report it.
+	At *time.Time `json:"at,omitempty"`
+}
+
+func (c TableCopyOf) TableFqn() DwhFqn {
+	return DwhFqn{
+		InstanceName: c.Instance,
+		DatabaseName: c.Database,
+		SchemaName:   c.Schema,
+		ObjectName:   c.Table,
+	}
 }
 
 func (r TableRow) TableFqn() DwhFqn {
@@ -361,6 +429,13 @@ type TableConstraintRow struct {
 	ColumnPosition       int32  `db:"column_position"       json:"column_position"       ch:"column_position"       bigquery:"column_position"`
 	ConstraintExpression string `db:"constraint_expression" json:"constraint_expression" ch:"constraint_expression" bigquery:"constraint_expression"`
 	IsEnforced           *bool  `db:"is_enforced"           json:"is_enforced"           ch:"is_enforced"           bigquery:"is_enforced"`
+	// The table a FOREIGN KEY references, on the same instance, and on each
+	// column's row the referenced column at the same position. Empty for every
+	// other constraint type.
+	ReferencedDatabase   string `db:"referenced_database"    json:"referenced_database,omitempty"    ch:"referenced_database"    bigquery:"referenced_database"`
+	ReferencedSchema     string `db:"referenced_schema"      json:"referenced_schema,omitempty"      ch:"referenced_schema"      bigquery:"referenced_schema"`
+	ReferencedTable      string `db:"referenced_table"       json:"referenced_table,omitempty"       ch:"referenced_table"       bigquery:"referenced_table"`
+	ReferencedColumnName string `db:"referenced_column_name" json:"referenced_column_name,omitempty" ch:"referenced_column_name" bigquery:"referenced_column_name"`
 }
 
 func (r TableConstraintRow) TableFqn() DwhFqn {
@@ -370,6 +445,20 @@ func (r TableConstraintRow) TableFqn() DwhFqn {
 		SchemaName:   r.Schema,
 		ObjectName:   r.Table,
 	}
+}
+
+// ReferencedTableFqn is the table a FOREIGN KEY row references, on the row's
+// own instance, and false for a row that references none.
+func (r TableConstraintRow) ReferencedTableFqn() (DwhFqn, bool) {
+	if r.ReferencedTable == "" {
+		return DwhFqn{}, false
+	}
+	return DwhFqn{
+		InstanceName: r.Instance,
+		DatabaseName: r.ReferencedDatabase,
+		SchemaName:   r.ReferencedSchema,
+		ObjectName:   r.ReferencedTable,
+	}, true
 }
 
 // Constraint type constants

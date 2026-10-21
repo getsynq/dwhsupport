@@ -10,7 +10,7 @@ import (
 // Helper method to build tables query for testing
 func (e *TrinoScrapper) buildTablesQuery(catalogName string) string {
 	query := queryTablesSQL
-	catalogQuery := strings.Replace(query, "{{catalog}}", catalogName, -1)
+	catalogQuery := withCatalog(query, &TrinoCatalog{CatalogName: catalogName})
 
 	// Conditionally add table comments JOIN based on feature flag
 	if e.conf.FetchTableComments {
@@ -53,7 +53,7 @@ func (e *TrinoScrapper) buildTablesQuery(catalogName string) string {
 // Helper method to build SQL definitions query for testing
 func (e *TrinoScrapper) buildSqlDefinitionsQuery(catalogName string) string {
 	query := querySqlDefinitionsSQL
-	catalogQuery := strings.Replace(query, "{{catalog}}", catalogName, -1)
+	catalogQuery := withCatalog(query, &TrinoCatalog{CatalogName: catalogName})
 
 	// Conditionally add materialized views JOIN based on feature flag
 	if e.conf.FetchMaterializedViews {

@@ -102,7 +102,9 @@ from svv_all_tables tbl
          left join svv_external_schemas es
                    on tbl.table_type = 'EXTERNAL TABLE' and es.schemaname = tbl.schema_name
          left join pg_user ext_owner on ext_owner.usesysid = es.esowner
-where tbl.schema_name not in ('pg_catalog', 'information_schema', 'pg_automv')
+where tbl.schema_name not in ({{system_schemas}})
+  -- a materialized view keeps its rows in mv_tbl__<view>__<n> in its own schema, owned by rdsdb (usesysid 1)
+  and not (coalesce(pgc.relowner, 0) = 1 and left(tbl.table_name, 8) = 'mv_tbl__')
   and tbl.database_name = $1
   /* SYNQ_SCOPE_FILTER */
 order by database, schema, "table"

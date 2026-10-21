@@ -91,7 +91,7 @@ func NewPostgresExecutor(ctx context.Context, conf *PostgresConf) (*PostgresExec
 	}
 	err = db.PingContext(ctx)
 	if err != nil {
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	return &PostgresExecutor{conf: conf, db: db, sshTunnelDialer: sshTunnelDialer}, nil

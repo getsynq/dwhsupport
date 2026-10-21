@@ -44,7 +44,7 @@ func NewDuckDBExecutor(ctx context.Context, conf *DuckDBConf) (*DuckDBExecutor, 
 	}
 	err = db.PingContext(ctx)
 	if err != nil {
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	return &DuckDBExecutor{conf: conf, db: db}, nil

@@ -25,6 +25,9 @@ JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 WHERE (a.attsortkeyord > 0 OR a.attisdistkey = true)
 	AND a.attnum > 0
+	AND n.nspname NOT IN ({{system_schemas}})
+	-- a materialized view keeps its rows in mv_tbl__<view>__<n> in its own schema, owned by rdsdb (usesysid 1)
+	AND NOT (c.relowner = 1 AND left(c.relname, 8) = 'mv_tbl__')
 	/* SYNQ_SCOPE_FILTER */
 ORDER BY n.nspname, c.relname, a.attsortkeyord
 `
@@ -32,12 +35,16 @@ ORDER BY n.nspname, c.relname, a.attsortkeyord
 func (e *RedshiftScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
-	// Query primary keys and unique constraints
-	sql := scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "n.nspname", "c.relname")
+	// Query primary keys, unique constraints and foreign keys
+	sql := scope.AppendScopeConditions(ctx, withSystemSchemas(queryTableConstraintsSql), "", "n.nspname", "c.relname")
 	pkRows, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
+			// A foreign key cannot reference another database.
+			if row.ReferencedTable != "" {
+				row.ReferencedDatabase = e.conf.Database
+			}
 			return row, nil
 		}),
 	)
@@ -65,7 +72,7 @@ type sortDistRow struct {
 }
 
 func (e *RedshiftScrapper) querySortDistKeys(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
-	sql := scope.AppendScopeConditions(ctx, querySortDistKeysSql, "", "n.nspname", "c.relname")
+	sql := scope.AppendScopeConditions(ctx, withSystemSchemas(querySortDistKeysSql), "", "n.nspname", "c.relname")
 	rows, err := stdsql.QueryMany[sortDistRow](ctx, e.executor.GetDb(), sql)
 	if err != nil {
 		return nil, err

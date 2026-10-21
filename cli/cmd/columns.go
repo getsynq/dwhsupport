@@ -70,6 +70,10 @@ var constraintColumns = output.Columns{
 	{Header: "expression", Path: ".constraint_expression", Default: false},
 	{Header: "position", Path: ".column_position", Default: false},
 	{Header: "is_enforced", Path: ".is_enforced", Default: false},
+	{Header: "referenced_database", Path: ".referenced_database", Default: false},
+	{Header: "referenced_schema", Path: ".referenced_schema", Default: false},
+	{Header: "referenced_table", Path: ".referenced_table", Default: false},
+	{Header: "referenced_column", Path: ".referenced_column_name", Default: false},
 }
 
 var shapeColumns = output.Columns{

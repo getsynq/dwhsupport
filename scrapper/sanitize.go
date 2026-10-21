@@ -113,6 +113,12 @@ func (r *TableRow) Sanitize() {
 	for _, c := range r.Constraints {
 		c.Sanitize()
 	}
+	if c := r.CopyOf; c != nil {
+		c.Instance = SanitizeString(c.Instance)
+		c.Database = SanitizeString(c.Database)
+		c.Schema = SanitizeString(c.Schema)
+		c.Table = SanitizeString(c.Table)
+	}
 	// Options holds warehouse-specific metadata (map[string]interface{}); its string
 	// values originate from typed warehouse APIs (bigquery.TableMetadata, etc.) rather
 	// than raw column data, so they are not sanitised here.
@@ -174,6 +180,10 @@ func (r *TableConstraintRow) Sanitize() {
 	r.ColumnName = SanitizeString(r.ColumnName)
 	r.ConstraintType = SanitizeString(r.ConstraintType)
 	r.ConstraintExpression = SanitizeString(r.ConstraintExpression)
+	r.ReferencedDatabase = SanitizeString(r.ReferencedDatabase)
+	r.ReferencedSchema = SanitizeString(r.ReferencedSchema)
+	r.ReferencedTable = SanitizeString(r.ReferencedTable)
+	r.ReferencedColumnName = SanitizeString(r.ReferencedColumnName)
 }
 
 func (r *SegmentRow) Sanitize() {

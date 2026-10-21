@@ -94,6 +94,7 @@ func (e *SnowflakeScrapper) queryTagReferences(ctx context.Context, databases []
 		tag := &scrapper.Tag{
 			TagName:  strings.Join([]string{reference.TagDatabase, reference.TagSchema, reference.TagName}, "."),
 			TagValue: reference.TagValue,
+			Kind:     scrapper.TagKindGovernedTag,
 		}
 		dedupKey := strings.Join([]string{key.database, key.schema, key.table, reference.Column, tag.TagName, tag.TagValue}, "\x00")
 		if seen[dedupKey] {

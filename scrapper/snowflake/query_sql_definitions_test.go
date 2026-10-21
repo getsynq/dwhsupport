@@ -364,7 +364,7 @@ func (s *QuerySqlDefinitionsSuite) TestParseWithTagClausePreservesInParseDdlsPer
 	for _, objDdl := range perObject {
 		tags := ParseWithTagClause(objDdl)
 		s.Require().Len(tags, 1)
-		s.Equal(&scrapper.Tag{TagName: "GOVERNANCE.TAGS.TEAM", TagValue: "DATA_PLATFORM"}, tags[0])
+		s.Equal(&scrapper.Tag{TagName: "GOVERNANCE.TAGS.TEAM", TagValue: "DATA_PLATFORM", Kind: scrapper.TagKindGovernedTag}, tags[0])
 	}
 }
 
@@ -480,7 +480,7 @@ WHERE IS_ACTIVE = TRUE;`
 
 func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheTableTagsNotAColumnTag() {
 	s.Equal(
-		[]*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+		[]*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}},
 		ParseWithTagClause(tableWithColumnTagsDdl),
 	)
 }
@@ -488,8 +488,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheTableTagsNotACo
 func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheViewTagsNotAColumnTag() {
 	s.Equal(
 		[]*scrapper.Tag{
-			{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
-			{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+			{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES", Kind: scrapper.TagKindGovernedTag},
+			{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`, Kind: scrapper.TagKindGovernedTag},
 		},
 		ParseWithTagClause(viewWithColumnTagsDdl),
 	)
@@ -500,7 +500,10 @@ func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseUnquotesTheTagName() {
     ID NUMBER(38,0)
 ) WITH TAG ("My_Db".GOVERNANCE."data_domain"='customers')
 ;`
-	s.Equal([]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers"}}, ParseWithTagClause(ddl))
+	s.Equal(
+		[]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}},
+		ParseWithTagClause(ddl),
+	)
 }
 
 // A view's SQL comes from information_schema.views before GET_DDL is read, and
@@ -545,20 +548,20 @@ func TestQuerySqlDefinitionsReadsTheTagsOfAViewWithSql(t *testing.T) {
 	view := byName["ACTIVE_PRODUCTS"]
 	require.Equal(t, viewSql, view.Sql, "the view keeps the SQL information_schema gave it")
 	require.Equal(t, []*scrapper.Tag{
-		{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
-		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+		{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES", Kind: scrapper.TagKindGovernedTag},
+		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`, Kind: scrapper.TagKindGovernedTag},
 	}, view.Tags)
 
 	require.Equal(t, map[string][]*scrapper.Tag{
-		"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+		"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}},
 	}, view.ColumnTags)
 	require.Nil(t, view.Description, "a view with SQL keeps what information_schema gave it")
 
 	table := byName["CUSTOMERS"]
-	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}}, table.Tags)
+	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}}, table.Tags)
 	require.Equal(t, map[string][]*scrapper.Tag{
-		"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
-		"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+		"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
+		"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
 	}, table.ColumnTags)
 	require.NotNil(t, table.Description)
 	require.Equal(t, "Customer directory", *table.Description)
@@ -575,20 +578,20 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 		{
 			name:  "table with column tags",
 			ddl:   tableWithColumnTagsDdl,
-			table: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+			table: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}},
 			columns: map[string][]*scrapper.Tag{
-				"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
-				"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+				"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
+				"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
 			},
 		},
 		{
 			name: "view with column tags",
 			ddl:  viewWithColumnTagsDdl,
 			table: []*scrapper.Tag{
-				{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
-				{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+				{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES", Kind: scrapper.TagKindGovernedTag},
+				{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`, Kind: scrapper.TagKindGovernedTag},
 			},
-			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "no tags at all",
@@ -605,8 +608,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	EMAIL VARCHAR(255) WITH TAG (MY_DB.GOVERNANCE.PII='high', MY_DB.GOVERNANCE.OWNER='crm')
 );`,
 			columns: map[string][]*scrapper.Tag{"EMAIL": {
-				{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"},
-				{TagName: "MY_DB.GOVERNANCE.OWNER", TagValue: "crm"},
+				{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag},
+				{TagName: "MY_DB.GOVERNANCE.OWNER", TagValue: "crm", Kind: scrapper.TagKindGovernedTag},
 			}},
 		},
 		{
@@ -616,8 +619,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	"CONSTRAINT" VARCHAR WITH TAG (MY_DB.GOVERNANCE.PII='low')
 );`,
 			columns: map[string][]*scrapper.Tag{
-				"order date": {{TagName: "my_db.GOVERNANCE.PII", TagValue: "low"}},
-				"CONSTRAINT": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+				"order date": {{TagName: "my_db.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}},
+				"CONSTRAINT": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}},
 			},
 		},
 		{
@@ -626,7 +629,7 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	EMAIL VARCHAR(255) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE'),
 	SSN VARCHAR(11) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE', MY_DB.GOVERNANCE.PII='high')
 ) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE');`,
-			columns: map[string][]*scrapper.Tag{"SSN": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+			columns: map[string][]*scrapper.Tag{"SSN": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "a masking policy and a default expression are not tags",
@@ -635,8 +638,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	EMAIL VARCHAR(255) WITH MASKING POLICY MY_DB.GOVERNANCE.MASK_EMAIL WITH TAG (MY_DB.GOVERNANCE.PII='high'),
 	CREATED_AT TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP()
 ) WITH ROW ACCESS POLICY MY_DB.GOVERNANCE.RAP ON (ID) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
-			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
-			columns: map[string][]*scrapper.Tag{"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}},
+			columns: map[string][]*scrapper.Tag{"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "a cluster key before the column list",
@@ -645,8 +648,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	NAME VARCHAR(200) WITH TAG (MY_DB.GOVERNANCE.PII='low'),
 	CATEGORY VARCHAR
 ) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
-			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
-			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "a CTE in a view's query is not read",
@@ -663,8 +666,8 @@ select ID from tag;`,
 ) target_lag = '1 hour' warehouse = COMPUTE_WH WITH TAG (MY_DB.GOVERNANCE.TEAM='core')
  as
 SELECT ID FROM MY_DB.MY_SCHEMA.SRC;`,
-			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
-			columns: map[string][]*scrapper.Tag{"ID": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}},
+			columns: map[string][]*scrapper.Tag{"ID": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}},
 		},
 	}
 	for _, c := range cases {
@@ -674,4 +677,109 @@ SELECT ID FROM MY_DB.MY_SCHEMA.SRC;`,
 			s.Equal(c.columns, tags.Columns)
 		})
 	}
+}
+
+// Each statement is keyed by the object's name alone, whatever follows the name
+// in GET_DDL's output: a CLUSTER BY, a stream's ON TABLE, a COMMENT before AS.
+// A key that ran on into those words matched no object, and the object lost its
+// definition and its tags.
+func (s *QuerySqlDefinitionsSuite) TestParseCreateStatementsPerObjectKeysByTheNameAlone() {
+	cases := []struct {
+		name string
+		ddl  string
+		key  string
+	}{
+		{
+			name: "a cluster key after the name",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.PRODUCTS cluster by (CATEGORY, ID)(
+	ID NUMBER(38,0),
+	CATEGORY VARCHAR(100)
+);`,
+			key: "MY_DB.MY_SCHEMA.PRODUCTS",
+		},
+		{
+			name: "a cluster key on a quoted name",
+			ddl: `create or replace TABLE MY_DB."my_schema"."Products" cluster by (ID)(
+	ID NUMBER(38,0)
+);`,
+			key: `MY_DB."my_schema"."Products"`,
+		},
+		{
+			name: "a stream on its table",
+			ddl:  `create or replace stream MY_DB.MY_SCHEMA.PRODUCTS_STREAM on table PRODUCTS;`,
+			key:  "MY_DB.MY_SCHEMA.PRODUCTS_STREAM",
+		},
+		{
+			name: "a comment before a materialized view's query",
+			ddl: `create or replace materialized view MY_DB.MY_SCHEMA.MY_MV COMMENT='Test view'
+ as SELECT ID FROM MY_DB.MY_SCHEMA.PRODUCTS;`,
+			key: "MY_DB.MY_SCHEMA.MY_MV",
+		},
+		{
+			name: "a secure view",
+			ddl: `create or replace secure view MY_DB.MY_SCHEMA.MY_VIEW(
+	ID
+) as SELECT ID FROM MY_DB.MY_SCHEMA.PRODUCTS;`,
+			key: "MY_DB.MY_SCHEMA.MY_VIEW",
+		},
+		{
+			name: "a dynamic table's options after the column list",
+			ddl: `create or replace dynamic table MY_DB.MY_SCHEMA.MY_DT(
+	ID
+) target_lag = '1 hour' warehouse = COMPUTE_WH
+ as SELECT ID FROM MY_DB.MY_SCHEMA.PRODUCTS;`,
+			key: "MY_DB.MY_SCHEMA.MY_DT",
+		},
+	}
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			perObject, err := ParseCreateStatementsPerObject(s.T().Context(), c.ddl)
+			s.Require().NoError(err)
+			s.Equal([]string{c.key}, lo.Keys(perObject))
+		})
+	}
+}
+
+// A table with a cluster key gets its DDL and tags from GET_DDL like any other.
+func TestQuerySqlDefinitionsReadsATableWithAClusterKey(t *testing.T) {
+	ctx := context.Background()
+	clusteredDdl := `create or replace TABLE MY_DB.MY_SCHEMA.PRODUCTS cluster by (CATEGORY, ID)(
+	ID NUMBER(38,0) NOT NULL,
+	NAME VARCHAR(200) WITH TAG (MY_DB.GOVERNANCE.PII='low'),
+	CATEGORY VARCHAR(100)
+) COMMENT='Product catalog' WITH TAG (MY_DB.GOVERNANCE.TEAM='core')
+;`
+	fake := &fakeSnowflake{t: t, routes: []fakeRoute{
+		{
+			match:   sqlContains("SHOW DATABASES"),
+			columns: []string{"name", "origin", "owner", "comment", "kind"},
+			rows:    [][]driver.Value{{"MY_DB", "", "SYSADMIN", "", "STANDARD"}},
+		},
+		{
+			match:   sqlContains("MY_DB.information_schema.views"),
+			columns: []string{"database", "schema", "table", "is_view", "sql"},
+			rows:    [][]driver.Value{{"MY_DB", "MY_SCHEMA", "PRODUCTS", false, ""}},
+		},
+		{
+			match:   sqlContains("SHOW STREAMS IN DATABASE MY_DB"),
+			columns: []string{"created_on", "name", "database_name", "schema_name", "table_name"},
+		},
+		{
+			match:   sqlContains(`GET_DDL('SCHEMA', '"MY_DB"."MY_SCHEMA"'`),
+			columns: []string{"GET_DDL"},
+			rows:    [][]driver.Value{{clusteredDdl}},
+		},
+	}}
+	conf := &SnowflakeScrapperConf{SnowflakeConf: dwhexecsnowflake.SnowflakeConf{Account: "ORG-ACCOUNT", Databases: []string{"MY_DB"}}}
+	scr := newFakeSnowflakeScrapper(ctx, fake, conf)
+
+	rows, err := scr.QuerySqlDefinitions(ctx)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	table := rows[0]
+	require.Contains(t, table.Sql, "create or replace TABLE MY_DB.MY_SCHEMA.PRODUCTS cluster by (CATEGORY, ID)")
+	require.NotNil(t, table.Description)
+	require.Equal(t, "Product catalog", *table.Description)
+	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}}, table.Tags)
+	require.Equal(t, map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}}, table.ColumnTags)
 }

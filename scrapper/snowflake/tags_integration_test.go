@@ -60,7 +60,7 @@ func (s *TagsIntegrationSuite) catalog(sc *SnowflakeScrapper) map[string]*scrapp
 }
 
 func (s *TagsIntegrationSuite) tag(name, value string) *scrapper.Tag {
-	return &scrapper.Tag{TagName: s.database + ".GOVERNANCE." + name, TagValue: value}
+	return &scrapper.Tag{TagName: s.database + ".GOVERNANCE." + name, TagValue: value, Kind: scrapper.TagKindGovernedTag}
 }
 
 func (s *TagsIntegrationSuite) TestQueryCatalogReadsTableAndColumnTagsWithValues() {

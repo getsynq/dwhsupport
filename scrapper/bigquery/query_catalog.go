@@ -2,8 +2,7 @@ package bigquery
 
 import (
 	"context"
-	"fmt"
-	"slices"
+	"maps"
 	"strings"
 	"sync"
 
@@ -56,7 +55,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 			}
 			continue
 		}
-		datasetTags := labelsToTags(datasetMeta.Labels)
+		datasetLabels := datasetMeta.Labels
 
 		numTables := 0
 
@@ -105,8 +104,7 @@ func (e *BigQueryScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Catalo
 				}
 				reads.markRead()
 
-				// A copy, as the tables of one dataset are read concurrently.
-				tableTags := append(slices.Clone(datasetTags), labelsToTags(tableMeta.Labels)...)
+				tableTags := tableLabelTags(datasetLabels, tableMeta.Labels)
 
 				isView := tableMeta.Type == bigquery.ViewTable || tableMeta.Type == bigquery.MaterializedView
 
@@ -172,6 +170,19 @@ func fieldIsNullable(field *bigquery.FieldSchema) bool {
 	return !field.Required && !field.Repeated
 }
 
+// tableLabelTags is the labels of a table as tags: the labels of its dataset,
+// and its own, a table label replacing the dataset label with the same key.
+// BigQuery keeps the two apart and the table's is the one that describes the
+// table, so keeping both gave a table two values for one key.
+func tableLabelTags(datasetLabels, tableLabels map[string]string) []*scrapper.Tag {
+	labels := maps.Clone(datasetLabels)
+	if labels == nil {
+		labels = make(map[string]string, len(tableLabels))
+	}
+	maps.Copy(labels, tableLabels)
+	return labelsToTags(labels)
+}
+
 func labelsToTags(labels map[string]string) []*scrapper.Tag {
 	var res []*scrapper.Tag
 	for k, v := range labels {
@@ -181,8 +192,9 @@ func labelsToTags(labels map[string]string) []*scrapper.Tag {
 			continue
 		}
 		res = append(res, &scrapper.Tag{
-			TagName:  fmt.Sprintf("label.%s", k),
+			TagName:  k,
 			TagValue: v,
+			Kind:     scrapper.TagKindLabel,
 		})
 	}
 	return res

@@ -195,6 +195,9 @@ func buildSnowflakeConfig(conf *SnowflakeConf) (*gosnowflake.Config, error) {
 
 func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeExecutor, error) {
 	c, err := buildSnowflakeConfig(conf)
+	// A credential that cannot be read or parsed is one to replace, so it stays an
+	// AuthError; only the connection check below has to tell a refused login from
+	// a warehouse that could not be reached.
 	if err != nil {
 		return nil, exec.NewAuthError(err)
 	}
@@ -230,7 +233,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 		// caller the per-database validation that would report which entry is at fault.
 		// Reconnect without a default so the usable databases stay reachable.
 		if c.Database == "" || !isDatabaseNotFoundError(err) {
-			return nil, exec.NewAuthError(err)
+			return nil, exec.ConnectionError(err, IsAuthError)
 		}
 		logging.GetLogger(ctx).WithError(err).WithField("database", c.Database).
 			Warn("session default database is unresolvable, reconnecting without it")
@@ -242,7 +245,7 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 			// Keep the original cause: the retry can fail for an unrelated reason (a tight
 			// caller deadline, a transient fault) which would otherwise bury the only
 			// actionable one.
-			return nil, exec.NewAuthError(errors.Wrapf(retryErr, "reconnect without default database failed (original: %v)", err))
+			return nil, exec.ConnectionError(errors.Wrapf(retryErr, "reconnect without default database failed (original: %v)", err), IsAuthError)
 		}
 	}
 
