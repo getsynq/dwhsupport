@@ -48,6 +48,13 @@ CROSS JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS ord(attnum
 JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ord.attnum
 JOIN pg_catalog.pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ord.refattnum
 WHERE con.contype = 'f'
+  -- A key into a partitioned table is stored again for each partition, on the
+  -- same table and with conparentid naming the key. A partition's key inherited
+  -- from its partitioned table is on the partition itself, so it stays.
+  AND NOT EXISTS (
+      SELECT 1 FROM pg_catalog.pg_constraint parent
+      WHERE parent.oid = con.conparentid AND parent.conrelid = con.conrelid
+  )
   AND n.nspname NOT IN ('pg_catalog', 'pg_toast', 'information_schema')
 
 UNION ALL
