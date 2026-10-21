@@ -122,6 +122,7 @@ func TestParseConnections_FullExample(t *testing.T) {
 	require.NotNil(t, rs.Redshift)
 	assert.Equal(t, 5439, rs.Redshift.Port)
 	assert.True(t, rs.Redshift.FreshnessFromQueryLogs)
+	assert.True(t, rs.Redshift.UseShowCreateTable)
 
 	// Clickhouse
 	ch := conns["ch-staging"]

@@ -149,6 +149,8 @@ type RedshiftConf struct {
 	Password string `yaml:"password" jsonschema:"required"`
 	// Estimate table freshness from Redshift query logs instead of metadata.
 	FreshnessFromQueryLogs bool `yaml:"freshness_from_query_logs,omitempty"`
+	// Read each table's DDL with SHOW TABLE, one statement per table.
+	UseShowCreateTable bool `yaml:"use_show_create_table,omitempty"`
 }
 
 // MySQLConf contains MySQL connection parameters.

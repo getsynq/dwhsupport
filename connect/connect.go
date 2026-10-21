@@ -140,7 +140,11 @@ func Postgres(ctx context.Context, t *agentdwhv1.PostgresConf) (*scrapperpostgre
 }
 
 func Redshift(ctx context.Context, t *agentdwhv1.RedshiftConf) (*scrapperredshift.RedshiftScrapper, error) {
-	return scrapperredshift.NewRedshiftScrapper(ctx, &scrapperredshift.RedshiftScrapperConf{
+	return scrapperredshift.NewRedshiftScrapper(ctx, redshiftScrapperConf(t))
+}
+
+func redshiftScrapperConf(t *agentdwhv1.RedshiftConf) *scrapperredshift.RedshiftScrapperConf {
+	return &scrapperredshift.RedshiftScrapperConf{
 		RedshiftConf: dwhexecredshift.RedshiftConf{
 			User:     t.GetUsername(),
 			Password: t.GetPassword(),
@@ -149,7 +153,8 @@ func Redshift(ctx context.Context, t *agentdwhv1.RedshiftConf) (*scrapperredshif
 			Port:     int(t.GetPort()),
 		},
 		FreshnessFromQueryLogs: t.GetFreshnessFromQueryLogs(),
-	})
+		UseShowCreateTable:     t.GetUseShowCreateTable(),
+	}
 }
 
 func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowflake.SnowflakeScrapper, error) {

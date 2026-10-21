@@ -126,6 +126,7 @@ func redshiftConfFromProto(c *agentdwhv1.RedshiftConf) *RedshiftConf {
 		Username:               c.GetUsername(),
 		Password:               c.GetPassword(),
 		FreshnessFromQueryLogs: c.GetFreshnessFromQueryLogs(),
+		UseShowCreateTable:     c.GetUseShowCreateTable(),
 	}
 }
 
