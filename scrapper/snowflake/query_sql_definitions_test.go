@@ -364,7 +364,7 @@ func (s *QuerySqlDefinitionsSuite) TestParseWithTagClausePreservesInParseDdlsPer
 	for _, objDdl := range perObject {
 		tags := ParseWithTagClause(objDdl)
 		s.Require().Len(tags, 1)
-		s.Equal(&scrapper.Tag{TagName: "GOVERNANCE.TAGS.TEAM", TagValue: "DATA_PLATFORM"}, tags[0])
+		s.Equal(&scrapper.Tag{TagName: "GOVERNANCE.TAGS.TEAM", TagValue: "DATA_PLATFORM", Kind: scrapper.TagKindGovernedTag}, tags[0])
 	}
 }
 
@@ -480,7 +480,7 @@ WHERE IS_ACTIVE = TRUE;`
 
 func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheTableTagsNotAColumnTag() {
 	s.Equal(
-		[]*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+		[]*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}},
 		ParseWithTagClause(tableWithColumnTagsDdl),
 	)
 }
@@ -488,8 +488,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheTableTagsNotACo
 func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseTakesTheViewTagsNotAColumnTag() {
 	s.Equal(
 		[]*scrapper.Tag{
-			{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
-			{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+			{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES", Kind: scrapper.TagKindGovernedTag},
+			{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`, Kind: scrapper.TagKindGovernedTag},
 		},
 		ParseWithTagClause(viewWithColumnTagsDdl),
 	)
@@ -500,7 +500,10 @@ func (s *QuerySqlDefinitionsSuite) TestParseWithTagClauseUnquotesTheTagName() {
     ID NUMBER(38,0)
 ) WITH TAG ("My_Db".GOVERNANCE."data_domain"='customers')
 ;`
-	s.Equal([]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers"}}, ParseWithTagClause(ddl))
+	s.Equal(
+		[]*scrapper.Tag{{TagName: "My_Db.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}},
+		ParseWithTagClause(ddl),
+	)
 }
 
 // A view's SQL comes from information_schema.views before GET_DDL is read, and
@@ -545,20 +548,20 @@ func TestQuerySqlDefinitionsReadsTheTagsOfAViewWithSql(t *testing.T) {
 	view := byName["ACTIVE_PRODUCTS"]
 	require.Equal(t, viewSql, view.Sql, "the view keeps the SQL information_schema gave it")
 	require.Equal(t, []*scrapper.Tag{
-		{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
-		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+		{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES", Kind: scrapper.TagKindGovernedTag},
+		{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`, Kind: scrapper.TagKindGovernedTag},
 	}, view.Tags)
 
 	require.Equal(t, map[string][]*scrapper.Tag{
-		"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+		"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}},
 	}, view.ColumnTags)
 	require.Nil(t, view.Description, "a view with SQL keeps what information_schema gave it")
 
 	table := byName["CUSTOMERS"]
-	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}}, table.Tags)
+	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}}, table.Tags)
 	require.Equal(t, map[string][]*scrapper.Tag{
-		"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
-		"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+		"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
+		"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
 	}, table.ColumnTags)
 	require.NotNil(t, table.Description)
 	require.Equal(t, "Customer directory", *table.Description)
@@ -575,20 +578,20 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 		{
 			name:  "table with column tags",
 			ddl:   tableWithColumnTagsDdl,
-			table: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers"}},
+			table: []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.data_domain", TagValue: "customers", Kind: scrapper.TagKindGovernedTag}},
 			columns: map[string][]*scrapper.Tag{
-				"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
-				"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}},
+				"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
+				"SSN":   {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}},
 			},
 		},
 		{
 			name: "view with column tags",
 			ddl:  viewWithColumnTagsDdl,
 			table: []*scrapper.Tag{
-				{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES"},
-				{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`},
+				{TagName: "MY_DB.GOVERNANCE.COST_CENTER", TagValue: "SALES", Kind: scrapper.TagKindGovernedTag},
+				{TagName: "MY_DB.GOVERNANCE.META", TagValue: `{"owner":"team_a","tier":"gold"}`, Kind: scrapper.TagKindGovernedTag},
 			},
-			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "no tags at all",
@@ -605,8 +608,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	EMAIL VARCHAR(255) WITH TAG (MY_DB.GOVERNANCE.PII='high', MY_DB.GOVERNANCE.OWNER='crm')
 );`,
 			columns: map[string][]*scrapper.Tag{"EMAIL": {
-				{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"},
-				{TagName: "MY_DB.GOVERNANCE.OWNER", TagValue: "crm"},
+				{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag},
+				{TagName: "MY_DB.GOVERNANCE.OWNER", TagValue: "crm", Kind: scrapper.TagKindGovernedTag},
 			}},
 		},
 		{
@@ -616,8 +619,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	"CONSTRAINT" VARCHAR WITH TAG (MY_DB.GOVERNANCE.PII='low')
 );`,
 			columns: map[string][]*scrapper.Tag{
-				"order date": {{TagName: "my_db.GOVERNANCE.PII", TagValue: "low"}},
-				"CONSTRAINT": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}},
+				"order date": {{TagName: "my_db.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}},
+				"CONSTRAINT": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}},
 			},
 		},
 		{
@@ -626,7 +629,7 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	EMAIL VARCHAR(255) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE'),
 	SSN VARCHAR(11) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE', MY_DB.GOVERNANCE.PII='high')
 ) WITH TAG (UNKNOWN_TAG='UNKNOWN_VALUE');`,
-			columns: map[string][]*scrapper.Tag{"SSN": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+			columns: map[string][]*scrapper.Tag{"SSN": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "a masking policy and a default expression are not tags",
@@ -635,8 +638,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	EMAIL VARCHAR(255) WITH MASKING POLICY MY_DB.GOVERNANCE.MASK_EMAIL WITH TAG (MY_DB.GOVERNANCE.PII='high'),
 	CREATED_AT TIMESTAMP_NTZ(9) DEFAULT CURRENT_TIMESTAMP()
 ) WITH ROW ACCESS POLICY MY_DB.GOVERNANCE.RAP ON (ID) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
-			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
-			columns: map[string][]*scrapper.Tag{"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high"}}},
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}},
+			columns: map[string][]*scrapper.Tag{"EMAIL": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "high", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "a cluster key before the column list",
@@ -645,8 +648,8 @@ func (s *QuerySqlDefinitionsSuite) TestParseDdlTags() {
 	NAME VARCHAR(200) WITH TAG (MY_DB.GOVERNANCE.PII='low'),
 	CATEGORY VARCHAR
 ) WITH TAG (MY_DB.GOVERNANCE.TEAM='core');`,
-			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
-			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}},
+			columns: map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}},
 		},
 		{
 			name: "a CTE in a view's query is not read",
@@ -663,8 +666,8 @@ select ID from tag;`,
 ) target_lag = '1 hour' warehouse = COMPUTE_WH WITH TAG (MY_DB.GOVERNANCE.TEAM='core')
  as
 SELECT ID FROM MY_DB.MY_SCHEMA.SRC;`,
-			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}},
-			columns: map[string][]*scrapper.Tag{"ID": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}},
+			table:   []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core", Kind: scrapper.TagKindGovernedTag}},
+			columns: map[string][]*scrapper.Tag{"ID": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low", Kind: scrapper.TagKindGovernedTag}}},
 		},
 	}
 	for _, c := range cases {

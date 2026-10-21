@@ -177,8 +177,9 @@ func getTableTags(lookup map[string][]*Tags, catalogName string, schemaName stri
 	var tableTags []*scrapper.Tag
 	for _, rawTableTag := range res {
 		tableTags = append(tableTags, &scrapper.Tag{
-			TagName:  fmt.Sprintf("tag.%s", rawTableTag.TagName),
+			TagName:  rawTableTag.TagName,
 			TagValue: rawTableTag.TagValue,
+			Kind:     scrapper.TagKindLabel,
 		})
 	}
 
@@ -189,8 +190,9 @@ func getColumnTags(lookup map[string][]*Tags, catalogName string, schemaName str
 	var tableTags []*scrapper.Tag
 	for _, rawTableTag := range lookup[fmt.Sprintf("%s.%s.%s.%s", catalogName, schemaName, tableName, columnName)] {
 		tableTags = append(tableTags, &scrapper.Tag{
-			TagName:  fmt.Sprintf("tag.%s", rawTableTag.TagName),
+			TagName:  rawTableTag.TagName,
 			TagValue: rawTableTag.TagValue,
+			Kind:     scrapper.TagKindLabel,
 		})
 	}
 

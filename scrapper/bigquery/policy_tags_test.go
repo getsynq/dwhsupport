@@ -157,10 +157,10 @@ func (s *PolicyTagsSuite) TestPolicyTagsBecomeTheTaxonomyAndThePathInsideIt() {
 
 	s.Equal(map[string][]*scrapper.Tag{
 		"customers.id":       nil,
-		"customers.email":    {{TagName: "policytag.PII", TagValue: "High:Email"}},
-		"customers.nickname": {{TagName: "policytag.PII", TagValue: "Low"}},
-		"customers.high":     {{TagName: "policytag.PII", TagValue: "High"}},
-		"customers.address":  {{TagName: "policytag.PII", TagValue: "Low"}},
+		"customers.email":    {{TagName: "PII", TagValue: "High:Email", Kind: scrapper.TagKindPolicyTag}},
+		"customers.nickname": {{TagName: "PII", TagValue: "Low", Kind: scrapper.TagKindPolicyTag}},
+		"customers.high":     {{TagName: "PII", TagValue: "High", Kind: scrapper.TagKindPolicyTag}},
+		"customers.address":  {{TagName: "PII", TagValue: "Low", Kind: scrapper.TagKindPolicyTag}},
 	}, tags)
 }
 
@@ -174,10 +174,16 @@ func (s *PolicyTagsSuite) TestAnUnreadablePolicyTagKeepsItsResourceName() {
 	))
 
 	s.Equal(map[string][]*scrapper.Tag{
-		"customers.refused":          {{TagName: "policytag", TagValue: refusedTaxonomy + "/policyTags/9"}},
-		"customers.deleted_taxonomy": {{TagName: "policytag", TagValue: "projects/governance/locations/eu/taxonomies/404/policyTags/1"}},
-		"customers.deleted_tag":      {{TagName: "policytag", TagValue: piiTaxonomy + "/policyTags/99"}},
-		"customers.malformed":        {{TagName: "policytag", TagValue: "not-a-policy-tag"}},
+		"customers.refused": {{TagName: refusedTaxonomy, TagValue: refusedTaxonomy + "/policyTags/9", Kind: scrapper.TagKindPolicyTag}},
+		"customers.deleted_taxonomy": {
+			{
+				TagName:  "projects/governance/locations/eu/taxonomies/404",
+				TagValue: "projects/governance/locations/eu/taxonomies/404/policyTags/1",
+				Kind:     scrapper.TagKindPolicyTag,
+			},
+		},
+		"customers.deleted_tag": {{TagName: piiTaxonomy, TagValue: piiTaxonomy + "/policyTags/99", Kind: scrapper.TagKindPolicyTag}},
+		"customers.malformed":   {{TagName: "not-a-policy-tag", TagValue: "not-a-policy-tag", Kind: scrapper.TagKindPolicyTag}},
 	}, tags)
 }
 
@@ -209,7 +215,7 @@ func (s *PolicyTagsSuite) TestWithoutTheOptInTheDataCatalogIsNeverCalled() {
 	))
 	s.Equal(map[string][]*scrapper.Tag{
 		"customers.id":    nil,
-		"customers.email": {{TagName: "policytag", TagValue: piiTaxonomy + "/policyTags/2"}},
+		"customers.email": {{TagName: piiTaxonomy, TagValue: piiTaxonomy + "/policyTags/2", Kind: scrapper.TagKindPolicyTag}},
 	}, tags)
 	s.Empty(fake.calls)
 }
@@ -232,7 +238,7 @@ func (s *PolicyTagsSuite) TestAClientThatCannotBeBuiltKeepsResourceNames() {
 		return nil, errors.New("no credentials")
 	}, fakeTableWithFields("customers", policyTagField("email", piiTaxonomy+"/policyTags/2")))
 	s.Equal(map[string][]*scrapper.Tag{
-		"customers.email": {{TagName: "policytag", TagValue: piiTaxonomy + "/policyTags/2"}},
+		"customers.email": {{TagName: piiTaxonomy, TagValue: piiTaxonomy + "/policyTags/2", Kind: scrapper.TagKindPolicyTag}},
 	}, tags)
 }
 

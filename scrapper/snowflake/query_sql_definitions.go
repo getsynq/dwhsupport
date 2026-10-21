@@ -473,6 +473,7 @@ func parseTagAssignments(parser *sqlparser.BaseParser) []*scrapper.Tag {
 			tags = append(tags, &scrapper.Tag{
 				TagName:  tagName,
 				TagValue: tagValue,
+				Kind:     scrapper.TagKindGovernedTag,
 			})
 		}
 
