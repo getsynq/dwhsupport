@@ -28,6 +28,61 @@ type TableMetricsRow struct {
 	RowCount  *int64     `db:"row_count"  json:"row_count"  ch:"row_count"  bigquery:"row_count"`
 	UpdatedAt *time.Time `db:"updated_at" json:"updated_at" ch:"updated_at" bigquery:"updated_at"`
 	SizeBytes *int64     `db:"size_bytes" json:"size_bytes" ch:"size_bytes" bigquery:"size_bytes"`
+	// NotReRead lists the metrics this read left unset because the table has not changed since
+	// the last fetch and reading them again is expensive, so the scrapper skipped it. The value
+	// the last read of the table reported still holds, and a caller that kept it fills it in with
+	// ReuseLastReading. An unset metric not listed here is one the warehouse did not report.
+	NotReRead []TableMetric `db:"-" json:"not_re_read,omitempty" ch:"-" bigquery:"-"`
+}
+
+// TableMetric names one metric of a TableMetricsRow.
+type TableMetric string
+
+const (
+	TableMetricRowCount  TableMetric = "row_count"
+	TableMetricSizeBytes TableMetric = "size_bytes"
+)
+
+// MarkNotReRead records that the expensive read of the table was skipped as it has not changed
+// since the last fetch. Only the metrics the cheap read left unset are listed: one it did report
+// is current.
+func (r *TableMetricsRow) MarkNotReRead() {
+	r.NotReRead = nil
+	if r.RowCount == nil {
+		r.NotReRead = append(r.NotReRead, TableMetricRowCount)
+	}
+	if r.SizeBytes == nil {
+		r.NotReRead = append(r.NotReRead, TableMetricSizeBytes)
+	}
+}
+
+// ReuseLastReading fills each metric listed in NotReRead from the last reading of the same table,
+// and leaves listed only those the last reading did not have either. A metric this read did
+// report is never replaced.
+func (r *TableMetricsRow) ReuseLastReading(rowCount, sizeBytes *int64) {
+	var still []TableMetric
+	for _, metric := range r.NotReRead {
+		var field **int64
+		var last *int64
+		switch metric {
+		case TableMetricRowCount:
+			field, last = &r.RowCount, rowCount
+		case TableMetricSizeBytes:
+			field, last = &r.SizeBytes, sizeBytes
+		default:
+			still = append(still, metric)
+			continue
+		}
+		if *field != nil {
+			continue
+		}
+		if last == nil {
+			still = append(still, metric)
+			continue
+		}
+		*field = lo.ToPtr(*last)
+	}
+	r.NotReRead = still
 }
 
 func (r TableMetricsRow) TableFqn() DwhFqn {
