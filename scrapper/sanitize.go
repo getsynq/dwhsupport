@@ -174,6 +174,10 @@ func (r *TableConstraintRow) Sanitize() {
 	r.ColumnName = SanitizeString(r.ColumnName)
 	r.ConstraintType = SanitizeString(r.ConstraintType)
 	r.ConstraintExpression = SanitizeString(r.ConstraintExpression)
+	r.ReferencedDatabase = SanitizeString(r.ReferencedDatabase)
+	r.ReferencedSchema = SanitizeString(r.ReferencedSchema)
+	r.ReferencedTable = SanitizeString(r.ReferencedTable)
+	r.ReferencedColumnName = SanitizeString(r.ReferencedColumnName)
 }
 
 func (r *SegmentRow) Sanitize() {
