@@ -62,6 +62,7 @@ The library is organized into three main layers:
 - `QuerySqlDefinitions(ctx)` - Get view/table SQL definitions
 - `QueryTables(ctx)` - Get table metadata
 - `QueryDatabases(ctx)` - Get database metadata
+- `QueryRoutines(ctx)` - Stored procedures and user-defined functions, each with the statement that creates it; BigQuery, SQL Server, Fabric, Oracle and Db2, `ErrUnsupported` elsewhere
 - `QuerySegments(ctx, sql, args)` - Query custom segments
 - `QueryCustomMetrics(ctx, sql, args)` - Query custom metrics (never returns text by design: read values back with `RunRawQuery`)
 - `QueryShape(ctx, sql)` - Get column schema for a SQL query
@@ -77,6 +78,7 @@ All data models are in `scrapper/models.go`:
 - `TableRow` - Table metadata with types, descriptions, tags, annotations
 - `SqlDefinitionRow` - SQL definitions for views/materialized views
 - `DatabaseRow` - Database-level metadata
+- `RoutineRow` - A procedure or function: its kind, the platform's routine type, language, arguments, return type and `Definition`. The definition is the whole CREATE statement, never the bare body, so a parser reads the tables the routine uses; Oracle keeps its source without the `CREATE OR REPLACE`, which `QueryRoutines` puts back, and a wrapped (obfuscated) Oracle routine has none. Oracle reads `DBA_OBJECTS`/`DBA_SOURCE` and falls back to the `ALL_` views on a refusal, since `ALL_SOURCE` shows a routine only to a role that may execute or debug it
 - `DwhFqn` - Fully qualified name (instance, database, schema, object)
 
 ### Adding New Data Warehouse Support
@@ -175,6 +177,7 @@ Embeddable test suites in `scrapper/scrappertest/`:
 - **PlatformUsersSuite** — checks `QueryPlatformUsers` against `Capabilities().PlatformUsers`, that the login the test connects as (`ConnectedLogin`) is listed with the facts in `ExpectFacts`, and the listing's shape. A test role that may not list users skips it, so a skip there is a missing grant, not a pass.
 - **ValueRoundTripSuite** selects a timestamp, timestamptz, date, numeric, bigint, double, text and uuid as native literals (the per-dialect SQL is `roundTripExprs`), then checks the `Kind` that `RunRawQuery` and `QueryShape` report, the `Precision` / `Scale` they report for an exact numeric (`roundTripDecimalSizes`, and nil for one declared without a size), whether a float is `SinglePrecision` (`singlePrecisionFloatExprs`), the `RunRawQuery` and `QueryCustomMetrics` decodes, that the warehouse's own `CAST(... AS VARCHAR)` text parses back to the instant, and that `scrapper.SqlLiteral` of the decoded value compares equal to the original in SQL. Needs no table. Wired in `scrapper/<wh>/value_roundtrip_test.go`; the DuckDB copy runs in CI. Run it on a host whose zone is not UTC, since the Trino/Athena zone-less timestamp bug only shows there.
 - **CommentsSuite** checks a commented fixture table's comment as the `QueryTables` description (and as `CatalogColumnRow.TableComment` where the catalog query reads it, `CatalogTableComments`) and its column comments in `QueryCatalog`, and that a view without a comment comes back without one. Wired in `scrapper/<wh>/comments_test.go` against the dwhtesting seed; Snowflake needs `SNOWFLAKE_DATABASE` pointed at the seeded database.
+- **RoutinesSuite** checks `QueryRoutines` lists the seed's procedures and functions (`Expect`) with their kind and a definition holding the expected text, and that a scope narrows and excludes them like tables. Wired in `scrapper/<wh>/routines_test.go` against the dwhtesting seed; BigQuery's goes through a `ScopedScrapper`, as BigQuery applies only the configured datasets itself.
 - **CatalogNumericSuite** reads one fixture table through `QueryCatalog` and checks each listed column's `NumericCategory`, `Precision` and `Scale`, so a catalog query that loses a size (a type column that folds `numeric(18,6)` to `numeric`) or invents one fails. Wired in `scrapper/<wh>/catalog_numeric_test.go` against a dwhtesting seed table or a sample every account has (Snowflake `SNOWFLAKE_SAMPLE_DATA`, Databricks `samples`, Trino `tpcds`/`tpch`); the DuckDB copy creates its own table and runs in CI.
 
 Integration tests connect to dwhtesting staging databases via Twingate (no port-forwarding needed). Each scrapper package has a `base_test.go` that loads `../../.env` via `godotenv`. Env var prefixes per database:

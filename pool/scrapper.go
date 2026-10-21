@@ -162,6 +162,15 @@ func (s *scrapperWrapper[K]) QuerySchemas(ctx context.Context) ([]*scrapper.Sche
 	return s.lease.Value().QuerySchemas(ctx)
 }
 
+func (s *scrapperWrapper[K]) QueryRoutines(ctx context.Context) ([]*scrapper.RoutineRow, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.lease == nil || s.lease.Released() {
+		return nil, nil
+	}
+	return s.lease.Value().QueryRoutines(ctx)
+}
+
 func (s *scrapperWrapper[K]) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

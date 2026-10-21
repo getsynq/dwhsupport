@@ -150,6 +150,11 @@ type Scrapper interface {
 	// visible to the connection. Scope filtering is driven by the context
 	// (scope.WithScope) exactly like QueryTables, not by a parameter.
 	QuerySchemas(ctx context.Context) ([]*SchemaRow, error)
+	// QueryRoutines lists the stored procedures and user-defined functions,
+	// each with the statement that creates it, or returns ErrUnsupported where
+	// they are not read. Scope filtering is driven by the context exactly like
+	// QueryTables, a routine being an object of its schema.
+	QueryRoutines(ctx context.Context) ([]*RoutineRow, error)
 	QuerySegments(ctx context.Context, sql string, args ...any) ([]*SegmentRow, error)
 	QueryCustomMetrics(ctx context.Context, sql string, args ...any) ([]*CustomMetricsRow, error)
 	QueryShape(ctx context.Context, sql string) ([]*QueryShapeColumn, error)

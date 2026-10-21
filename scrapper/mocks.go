@@ -394,6 +394,45 @@ func (c *MockScrapperQueryPlatformUsersCall) DoAndReturn(f func(context.Context)
 	return c
 }
 
+// QueryRoutines mocks base method.
+func (m *MockScrapper) QueryRoutines(ctx context.Context) ([]*RoutineRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryRoutines", ctx)
+	ret0, _ := ret[0].([]*RoutineRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// QueryRoutines indicates an expected call of QueryRoutines.
+func (mr *MockScrapperMockRecorder) QueryRoutines(ctx any) *MockScrapperQueryRoutinesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRoutines", reflect.TypeOf((*MockScrapper)(nil).QueryRoutines), ctx)
+	return &MockScrapperQueryRoutinesCall{Call: call}
+}
+
+// MockScrapperQueryRoutinesCall wrap *gomock.Call
+type MockScrapperQueryRoutinesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockScrapperQueryRoutinesCall) Return(arg0 []*RoutineRow, arg1 error) *MockScrapperQueryRoutinesCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockScrapperQueryRoutinesCall) Do(f func(context.Context) ([]*RoutineRow, error)) *MockScrapperQueryRoutinesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockScrapperQueryRoutinesCall) DoAndReturn(f func(context.Context) ([]*RoutineRow, error)) *MockScrapperQueryRoutinesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // QuerySchemas mocks base method.
 func (m *MockScrapper) QuerySchemas(ctx context.Context) ([]*SchemaRow, error) {
 	m.ctrl.T.Helper()

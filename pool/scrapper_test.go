@@ -60,6 +60,10 @@ func (m *mockScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow,
 	return nil, nil
 }
 
+func (m *mockScrapper) QueryRoutines(context.Context) ([]*scrapper.RoutineRow, error) {
+	return nil, nil
+}
+
 func (m *mockScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {
 	return nil, nil
 }

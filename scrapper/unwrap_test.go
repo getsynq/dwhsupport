@@ -40,6 +40,10 @@ func (stubLeaf) QueryDatabases(context.Context) ([]*scrapper.DatabaseRow, error)
 func (stubLeaf) QuerySchemas(context.Context) ([]*scrapper.SchemaRow, error) {
 	return nil, nil
 }
+
+func (stubLeaf) QueryRoutines(context.Context) ([]*scrapper.RoutineRow, error) {
+	return nil, nil
+}
 func (stubLeaf) QuerySegments(context.Context, string, ...any) ([]*scrapper.SegmentRow, error) {
 	return nil, nil
 }

@@ -183,6 +183,22 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		}
 	}
 
+	// --- QueryRoutines ---
+	routines, err := s.Scrapper.QueryRoutines(ctx)
+	if !s.True(isAcceptableError(err), "QueryRoutines error: %v", err) {
+		s.T().FailNow()
+	}
+	for i, row := range routines {
+		s.NotEmptyf(row.Database, "QueryRoutines row[%d].Database", i)
+		s.NotEmptyf(row.Schema, "QueryRoutines row[%d].Schema", i)
+		s.NotEmptyf(row.Name, "QueryRoutines row[%d].Name", i)
+		s.Containsf([]scrapper.RoutineKind{scrapper.RoutineKindProcedure, scrapper.RoutineKindFunction}, row.Kind,
+			"QueryRoutines row[%d].Kind", i)
+		if row.Instance != "" {
+			allInstances = append(allInstances, row.Instance)
+		}
+	}
+
 	// --- QueryTables ---
 	tables, err := s.Scrapper.QueryTables(ctx)
 	if !s.True(isAcceptableError(err), "QueryTables error: %v", err) {
