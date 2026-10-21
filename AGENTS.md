@@ -313,6 +313,10 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 - **Public repo, internal refs**: no links to private repos (`getsynq/cloud#…`) and no internal hostnames (`*.svc.cluster.local`) in PR bodies, code or tests. Test defaults are `127.0.0.1`; the dwhtesting hosts go in `.env`.
 - **Errors: use `github.com/pkg/errors`, not stdlib `errors`/`fmt.Errorf`.** `errors.New` / `errors.Errorf` / `errors.Wrap` capture a stacktrace, which is what makes failures in the `sqldialect` AST (`ToSql` returning an error from deep in a nested expression) actually debuggable. Plain `fmt.Errorf` loses that.
 
+## Postgres Gotchas
+
+- **A table row count is an estimate, and `NULL` when nothing knows it** (`query_table_metrics.sql`). An analyzed or vacuumed table gets the planner's figure, `reltuples / relpages` scaled to the current size. `n_live_tup` is used only for a table never analyzed: the server loses the cumulative statistics on a crash or an immediate shutdown and reports 0 for every table after it, so a 0 there is unknown, not empty. Since Postgres 14 a table never analyzed has `reltuples = -1`, and autovacuum never analyzes a small table that stays small, so filtering on `reltuples >= 0` drops most seed-sized tables. `TestPostgresTableMetricsCoversEveryRelation` checks each case on whatever relations the instance has in that state, since the test role cannot create tables.
+
 ## MySQL Gotchas
 
 - **Post-processor pattern**: MySQL sets only `row.Database = e.conf.Host` (not `Instance`) in scrapper post-processors. `ResolveExternalDatabase` for MySQL uses `database` as the `HostId` and ignores `instance` entirely — consistent with BigQuery's pattern.
