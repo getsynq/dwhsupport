@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/exec/stdsql"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
+	"github.com/samber/lo"
 )
 
 //go:embed query_catalog.sql
@@ -63,6 +64,9 @@ func (e *TrinoScrapper) queryCatalogColumnsWith(
 	return stdsql.QueryMany(ctx, e.executor.GetDb(), query,
 		dwhexec.WithPostProcessors(func(row *scrapper.CatalogColumnRow) (*scrapper.CatalogColumnRow, error) {
 			row.Instance = e.conf.Host
+			if isMySQLViewComment(catalog, row.TableComment) {
+				row.TableComment = lo.ToPtr("")
+			}
 			return row.ResolveNumeric(e.DialectType()), nil
 		}),
 	)

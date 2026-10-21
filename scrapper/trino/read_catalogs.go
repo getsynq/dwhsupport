@@ -106,3 +106,15 @@ func noCommentExpression(commentsRequested bool) string {
 	}
 	return "''"
 }
+
+// isMySQLViewComment is true for the comment of a view in a catalog backed by
+// MySQL or MariaDB, which report the comment of every view as the text "VIEW".
+// Their Trino connectors list a view as a BASE TABLE, so the comment is the only
+// sign of it, and a table whose comment is exactly "VIEW" loses it too.
+func isMySQLViewComment(catalog *TrinoCatalog, comment *string) bool {
+	switch catalog.ConnectorName {
+	case "mysql", "mariadb":
+		return comment != nil && *comment == "VIEW"
+	}
+	return false
+}
