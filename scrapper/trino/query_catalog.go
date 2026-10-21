@@ -28,7 +28,7 @@ func (e *TrinoScrapper) queryCatalogColumns(
 ) ([]*scrapper.CatalogColumnRow, []scrapper.Omission, error) {
 	var rows []*scrapper.CatalogColumnRow
 	omissions, err := e.withoutCommentsOnFailure(ctx, catalog.CatalogName, func(withComments bool) error {
-		res, err := e.queryCatalogColumnsWith(ctx, catalog.CatalogName, withComments)
+		res, err := e.queryCatalogColumnsWith(ctx, catalog, withComments)
 		rows = res
 		return err
 	})
@@ -40,10 +40,10 @@ func (e *TrinoScrapper) queryCatalogColumns(
 
 func (e *TrinoScrapper) queryCatalogColumnsWith(
 	ctx context.Context,
-	catalogName string,
+	catalog *TrinoCatalog,
 	withComments bool,
 ) ([]*scrapper.CatalogColumnRow, error) {
-	query := strings.Replace(queryCatalogSQL, "{{catalog}}", catalogName, -1)
+	query := withCatalog(queryCatalogSQL, catalog)
 
 	// Conditionally add table comments JOIN based on feature flag
 	if withComments {

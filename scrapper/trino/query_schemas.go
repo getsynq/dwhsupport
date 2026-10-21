@@ -3,7 +3,6 @@ package trino
 import (
 	"context"
 	_ "embed"
-	"strings"
 
 	dwhexec "github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/stdsql"
@@ -25,7 +24,7 @@ func (e *TrinoScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRow
 	}
 
 	for _, catalog := range acceptedCatalogs {
-		query := strings.Replace(querySchemasSQL, "{{catalog}}", catalog.CatalogName, -1)
+		query := withCatalog(querySchemasSQL, catalog)
 		query = scope.AppendSchemaScopeConditions(ctx, query, "catalog_name", "schema_name")
 		rows, err := stdsql.QueryMany(ctx, db, query,
 			dwhexec.WithPostProcessors(func(row *scrapper.SchemaRow) (*scrapper.SchemaRow, error) {

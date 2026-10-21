@@ -26,6 +26,38 @@ func sqlExcludesSchemas(match func(string) bool, schemas ...string) func(string)
 	}
 }
 
+func TestExcludedSchemas(t *testing.T) {
+	// A connector whose source has no schemas of its own (tpch, hive, memory) or
+	// one not known here leaves out only what Trino adds to every catalog.
+	require.Equal(t, "'information_schema'", excludedSchemas("tpch"))
+	require.Equal(t, "'information_schema'", excludedSchemas(""))
+
+	require.Equal(t, "'information_schema', 'pg_catalog', 'pg_toast'", excludedSchemas("postgresql"))
+	require.Contains(t, excludedSchemas("oracle"), "'sys$umf'")
+	require.NotContains(t, excludedSchemas("oracle"), "pdbadmin", "PDBADMIN is the account the PDB was created with, not one Oracle maintains")
+
+	for connector, schemas := range connectorSystemSchemas {
+		for _, schema := range schemas {
+			require.Equal(t, strings.ToLower(schema), schema, "%s: Trino reports every name in lower case", connector)
+		}
+	}
+}
+
+func TestWithCatalogFillsEveryPlaceholder(t *testing.T) {
+	for name, query := range map[string]string{
+		"tables":          queryTablesSQL,
+		"catalog":         queryCatalogSQL,
+		"schemas":         querySchemasSQL,
+		"sql definitions": querySqlDefinitionsSQL,
+		"constraints":     queryTableConstraintsSql,
+	} {
+		filled := withCatalog(query, &TrinoCatalog{CatalogName: "mssqlcat", ConnectorName: "sqlserver"})
+		require.Contains(t, filled, "'sys'", name)
+		require.NotContains(t, filled, excludedSchemasPlaceholder, name)
+		require.NotContains(t, filled, "{{catalog}}", name)
+	}
+}
+
 func TestSystemSchemasOfConnectorAreNotListed(t *testing.T) {
 	ctx := context.Background()
 	tables := sqlContains("FROM mssqlcat.information_schema.tables t")
