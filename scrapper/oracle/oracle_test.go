@@ -2,12 +2,11 @@ package oracle
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"io"
 
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/querylogs"
@@ -15,6 +14,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -292,9 +292,15 @@ func (s *OracleScrapperSuite) TestFetchQueryLogs() {
 	// Oracle folds an unquoted user name to upper case, and that is how its
 	// dictionary names the user who parsed the statement.
 	connectedAs := strings.ToUpper(testenv.EnvOrDefault("ORACLE_USER", "synq"))
+	var users []string
+	s.Require().NoError(s.scrapper.executor.Select(s.ctx, &users, "SELECT username FROM ALL_USERS"))
 	var ranByUs bool
 	for _, log := range logs {
-		s.NotEmpty(log.DwhContext.User, "User (the parsing user) should be set on %s", log.QueryID)
+		// V$SQL keeps the cursors of a user dropped since, such as the ones the
+		// other tests create, and ALL_USERS has no name left to give them.
+		if lo.Contains(users, log.DwhContext.Schema) {
+			s.NotEmpty(log.DwhContext.User, "User (the parsing user) should be set on %s", log.QueryID)
+		}
 		if strings.Contains(log.SQL, "category = 'Electronics'") && log.DwhContext.User == connectedAs {
 			ranByUs = true
 		}
