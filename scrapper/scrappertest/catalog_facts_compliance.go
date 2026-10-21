@@ -34,15 +34,31 @@ func (f FixtureTable) String() string {
 	return f.Database + "." + f.Schema + "." + f.Table
 }
 
+// FixtureSchema names a schema of a warehouse's dwhtesting seed as the catalog
+// spells it, matched case-insensitively. An empty Database matches any.
+type FixtureSchema struct {
+	Database, Schema string
+}
+
+func (f FixtureSchema) matches(row *scrapper.SchemaRow) bool {
+	return (f.Database == "" || strings.EqualFold(row.Database, f.Database)) && strings.EqualFold(row.Schema, f.Schema)
+}
+
+func (f FixtureSchema) String() string {
+	return f.Database + "." + f.Schema
+}
+
 // CatalogFactsSuite checks the facts a catalog reads about a table beyond its
 // columns' types: whether a column accepts NULL, who owns the table, when it
-// was created and how many bytes it holds.
+// was created and how many bytes it holds, and the description of a schema.
 //
 // Embed it in a warehouse test and set, in SetupSuite, Scrapper, the
 // ColumnsTable with one column declared NOT NULL and one that accepts NULL
 // (left empty when the warehouse's seed has no such table), and the Table
 // whose owner, creation time and size are read (often the same table). A fact the warehouse does not report must stay nil, so an Expect
-// left false asserts nil rather than skipping.
+// left false asserts nil rather than skipping. DescribedSchema is a schema the
+// seed comments and SchemaDescription that comment, left empty when the
+// warehouse's seed comments no schema.
 type CatalogFactsSuite struct {
 	suite.Suite
 	Scrapper scrapper.Scrapper
@@ -57,6 +73,9 @@ type CatalogFactsSuite struct {
 	// ExpectSizeBytes asserts QueryTableMetrics reports a size above zero for
 	// Table, which must hold rows.
 	ExpectSizeBytes bool
+
+	DescribedSchema   FixtureSchema
+	SchemaDescription string
 }
 
 func (s *CatalogFactsSuite) Ctx() context.Context {
@@ -140,4 +159,23 @@ func (s *CatalogFactsSuite) TestCatalogFacts_SizeBytes() {
 		}
 	}
 	s.True(found, "fixture table %s has no metrics", s.Table)
+}
+
+func (s *CatalogFactsSuite) TestCatalogFacts_SchemaDescription() {
+	if s.DescribedSchema.Schema == "" {
+		s.T().Skip("no fixture schema with a description")
+	}
+	rows, err := s.Scrapper.QuerySchemas(s.Ctx())
+	s.Require().NoError(err)
+
+	var schema *scrapper.SchemaRow
+	for _, row := range rows {
+		if s.DescribedSchema.matches(row) {
+			schema = row
+		}
+	}
+	s.Require().NotNil(schema, "fixture schema %s not listed", s.DescribedSchema)
+	if s.NotNil(schema.Description, "description of %s", s.DescribedSchema) {
+		s.Equal(s.SchemaDescription, *schema.Description, "description of %s", s.DescribedSchema)
+	}
 }

@@ -328,6 +328,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 - **`end_time` is a zone-less UTC timestamp.** `FetchQueryLogs` converts its bounds to UTC; a bound in another zone would be compared by its wall clock.
 - **A cluster that cannot read `SYS_QUERY_TEXT` or `pg_user` falls back** to `query_logs_history.sql` (missing object, refused, or unsupported join; `canReadHistoryAlone`), so the fetch degrades to logs without user names and with long statements flagged truncated instead of failing.
 - **`SVV_USER_INFO` shows a non-superuser only its own row**, even with `ACCESS SYSTEM TABLE`; `PG_USER` and `PG_GROUP` show every user. `SYS_CONNECTION_LOG` works with `sys:monitor` where `STL_CONNECTION_LOG` is refused (42501), and its `user_name` is padded CHAR.
+- **`SVV_ALL_SCHEMAS` carries no comment.** A schema's `COMMENT ON SCHEMA` is in `pg_description` (`objsubid = 0`) keyed by the `pg_namespace` oid, which covers the connected database only, so `query_schemas.sql` joins them for that database and leaves other databases' schemas without a description.
 - **`TestRedshiftQueryLogsSuite`** runs statements on the real cluster and reads them back. `SYS_QUERY_HISTORY` shows a session's own queries only, unless the user has `SYSLOG ACCESS UNRESTRICTED` or the `sys:monitor` role.
 
 ## Db2 Gotchas

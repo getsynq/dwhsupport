@@ -37,6 +37,9 @@ func (s *BigQueryCatalogFactsSuite) SetupSuite() {
 	s.NotNullColumn, s.NullableColumn = "id", "description"
 	s.Table = s.ColumnsTable
 	s.ExpectOwner, s.ExpectCreatedAt, s.ExpectSizeBytes = false, true, true
+
+	s.DescribedSchema = scrappertest.FixtureSchema{Schema: "synq_dwhtesting_b"}
+	s.SchemaDescription = "SYNQ dwhtesting secondary dataset — used for multi-dataset scope-scraping coverage"
 }
 
 // TestRepeatedColumnIsNotNullable pins what INFORMATION_SCHEMA.COLUMNS reports
