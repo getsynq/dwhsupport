@@ -7,6 +7,7 @@ import (
 	dwhexecdb2 "github.com/getsynq/dwhsupport/exec/db2"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
+	"github.com/samber/lo"
 )
 
 //go:embed query_table_constraints.sql
@@ -21,6 +22,9 @@ type db2ConstraintRow struct {
 	ColumnPosition       int32   `db:"column_position"`
 	ConstraintExpression *string `db:"constraint_expression"`
 	IsEnforced           int     `db:"is_enforced"`
+	ReferencedSchema     *string `db:"referenced_schema"`
+	ReferencedTable      *string `db:"referenced_table"`
+	ReferencedColumnName *string `db:"referenced_column_name"`
 }
 
 func (e *Db2Scrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
@@ -52,6 +56,13 @@ func (e *Db2Scrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.Ta
 		}
 		if row.ConstraintExpression != nil {
 			r.ConstraintExpression = *row.ConstraintExpression
+		}
+		if row.ReferencedTable != nil {
+			// A foreign key cannot reference another database.
+			r.ReferencedDatabase = database
+			r.ReferencedSchema = lo.FromPtr(row.ReferencedSchema)
+			r.ReferencedTable = *row.ReferencedTable
+			r.ReferencedColumnName = lo.FromPtr(row.ReferencedColumnName)
 		}
 		results = append(results, r)
 	}

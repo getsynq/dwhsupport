@@ -1,6 +1,8 @@
-SELECT "schema", "table", "constraint_name", "column_name", "constraint_type", "column_position", "constraint_expression", "is_enforced"
+SELECT "schema", "table", "constraint_name", "column_name", "constraint_type", "column_position", "constraint_expression", "is_enforced",
+    "referenced_schema", "referenced_table", "referenced_column_name"
 FROM (
-    -- primary keys, unique and foreign key constraints, one row per column
+    -- primary keys, unique and foreign key constraints, one row per column; a
+    -- foreign key column names the column at the same position of the parent key
     SELECT
         c.TABSCHEMA AS "schema",
         c.TABNAME AS "table",
@@ -13,10 +15,17 @@ FROM (
         END AS "constraint_type",
         k.COLSEQ AS "column_position",
         CAST('' AS VARCHAR(1)) AS "constraint_expression",
-        CASE WHEN c.ENFORCED = 'Y' THEN 1 ELSE 0 END AS "is_enforced"
+        CASE WHEN c.ENFORCED = 'Y' THEN 1 ELSE 0 END AS "is_enforced",
+        r.REFTABSCHEMA AS "referenced_schema",
+        r.REFTABNAME AS "referenced_table",
+        rk.COLNAME AS "referenced_column_name"
     FROM SYSCAT.TABCONST c
     JOIN SYSCAT.KEYCOLUSE k
         ON k.CONSTNAME = c.CONSTNAME AND k.TABSCHEMA = c.TABSCHEMA AND k.TABNAME = c.TABNAME
+    LEFT JOIN SYSCAT.REFERENCES r
+        ON c.TYPE = 'F' AND r.CONSTNAME = c.CONSTNAME AND r.TABSCHEMA = c.TABSCHEMA AND r.TABNAME = c.TABNAME
+    LEFT JOIN SYSCAT.KEYCOLUSE rk
+        ON rk.CONSTNAME = r.REFKEYNAME AND rk.TABSCHEMA = r.REFTABSCHEMA AND rk.TABNAME = r.REFTABNAME AND rk.COLSEQ = k.COLSEQ
     WHERE c.TYPE IN ('P', 'U', 'F')
 
     UNION ALL
@@ -30,7 +39,10 @@ FROM (
         'CHECK',
         0,
         CAST(ch.TEXT AS VARCHAR(32000)),
-        CASE WHEN c.ENFORCED = 'Y' THEN 1 ELSE 0 END
+        CASE WHEN c.ENFORCED = 'Y' THEN 1 ELSE 0 END,
+        CAST(NULL AS VARCHAR(128)),
+        CAST(NULL AS VARCHAR(128)),
+        CAST(NULL AS VARCHAR(128))
     FROM SYSCAT.TABCONST c
     JOIN SYSCAT.CHECKS ch
         ON ch.CONSTNAME = c.CONSTNAME AND ch.TABSCHEMA = c.TABSCHEMA AND ch.TABNAME = c.TABNAME
@@ -47,7 +59,10 @@ FROM (
         CASE i.UNIQUERULE WHEN 'U' THEN 'UNIQUE INDEX' ELSE 'INDEX' END,
         ic.COLSEQ,
         CAST('' AS VARCHAR(1)),
-        1
+        1,
+        CAST(NULL AS VARCHAR(128)),
+        CAST(NULL AS VARCHAR(128)),
+        CAST(NULL AS VARCHAR(128))
     FROM SYSCAT.INDEXES i
     JOIN SYSCAT.INDEXCOLUSE ic
         ON ic.INDSCHEMA = i.INDSCHEMA AND ic.INDNAME = i.INDNAME
@@ -69,7 +84,10 @@ FROM (
         'PARTITION BY',
         p.DATAPARTITIONKEYSEQ,
         CAST('' AS VARCHAR(1)),
-        1
+        1,
+        CAST(NULL AS VARCHAR(128)),
+        CAST(NULL AS VARCHAR(128)),
+        CAST(NULL AS VARCHAR(128))
     FROM SYSCAT.DATAPARTITIONEXPRESSION p
 ) x
 WHERE "schema" NOT LIKE 'SYS%'

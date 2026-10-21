@@ -7,6 +7,7 @@ import (
 	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
+	"github.com/samber/lo"
 )
 
 //go:embed query_table_constraints.sql
@@ -21,6 +22,9 @@ type oracleConstraintRow struct {
 	ColumnPosition       int32   `db:"column_position"`
 	ConstraintExpression *string `db:"constraint_expression"`
 	IsEnforced           int     `db:"is_enforced"`
+	ReferencedSchema     *string `db:"referenced_schema"`
+	ReferencedTable      *string `db:"referenced_table"`
+	ReferencedColumnName *string `db:"referenced_column_name"`
 }
 
 func (e *OracleScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
@@ -48,6 +52,13 @@ func (e *OracleScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper
 		}
 		if row.ConstraintExpression != nil {
 			r.ConstraintExpression = *row.ConstraintExpression
+		}
+		if row.ReferencedTable != nil {
+			// A foreign key cannot reference another database.
+			r.ReferencedDatabase = e.conf.ServiceName
+			r.ReferencedSchema = lo.FromPtr(row.ReferencedSchema)
+			r.ReferencedTable = *row.ReferencedTable
+			r.ReferencedColumnName = lo.FromPtr(row.ReferencedColumnName)
 		}
 		results = append(results, r)
 	}

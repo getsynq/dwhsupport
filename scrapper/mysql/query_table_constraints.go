@@ -25,6 +25,9 @@ func (e *MySQLScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.
 	return dwhexecmysql.NewQuerier[scrapper.TableConstraintRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Host
+			if row.ReferencedTable != "" {
+				row.ReferencedDatabase = e.conf.Host
+			}
 			return row, nil
 		}),
 	)

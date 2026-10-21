@@ -16,9 +16,9 @@ func (e *BigQueryScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapp
 	return nil, scrapper.ErrUnsupported
 }
 
-// extractConstraintsFromMeta extracts the primary key, partitioning and
-// clustering constraints from BigQuery table metadata. A BigQuery primary key
-// is always NOT ENFORCED.
+// extractConstraintsFromMeta extracts the primary key, foreign keys,
+// partitioning and clustering constraints from BigQuery table metadata. A
+// BigQuery primary or foreign key is always NOT ENFORCED.
 func extractConstraintsFromMeta(projectId, datasetID, tableAlias string, tableMeta *bigquery.TableMetadata) []*scrapper.TableConstraintRow {
 	var rows []*scrapper.TableConstraintRow
 
@@ -34,6 +34,37 @@ func extractConstraintsFromMeta(projectId, datasetID, tableAlias string, tableMe
 				ColumnPosition: int32(i + 1),
 				IsEnforced:     lo.ToPtr(false),
 			})
+		}
+	}
+
+	if tableMeta.TableConstraints != nil {
+		for i, fk := range tableMeta.TableConstraints.ForeignKeys {
+			if fk == nil || fk.ReferencedTable == nil {
+				continue
+			}
+			name := fk.Name
+			if name == "" {
+				// Rows are grouped into one constraint by name, so two unnamed
+				// foreign keys must not share one.
+				name = fmt.Sprintf("foreign_key_%d", i+1)
+			}
+			referencedProject := lo.CoalesceOrEmpty(fk.ReferencedTable.ProjectID, projectId)
+			for j, ref := range fk.ColumnReferences {
+				rows = append(rows, &scrapper.TableConstraintRow{
+					Database:             projectId,
+					Schema:               datasetID,
+					Table:                tableAlias,
+					ConstraintName:       name,
+					ColumnName:           ref.ReferencingColumn,
+					ConstraintType:       scrapper.ConstraintTypeForeignKey,
+					ColumnPosition:       int32(j + 1),
+					IsEnforced:           lo.ToPtr(false),
+					ReferencedDatabase:   referencedProject,
+					ReferencedSchema:     fk.ReferencedTable.DatasetID,
+					ReferencedTable:      fk.ReferencedTable.TableID,
+					ReferencedColumnName: ref.ReferencedColumn,
+				})
+			}
 		}
 	}
 

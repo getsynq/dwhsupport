@@ -11,13 +11,43 @@ SELECT
     END AS constraint_type,
     ord.ordinality::int AS column_position,
     '' AS constraint_expression,
-    con.convalidated AS is_enforced
+    con.convalidated AS is_enforced,
+    '' AS referenced_schema,
+    '' AS referenced_table,
+    '' AS referenced_column_name
 FROM pg_catalog.pg_constraint con
 JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ord(attnum, ordinality)
 JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ord.attnum
 WHERE con.contype IN ('p', 'u')
+  AND n.nspname NOT IN ('pg_catalog', 'pg_toast', 'information_schema')
+
+UNION ALL
+
+-- FOREIGN KEY constraints, one row per column, each with the column it references
+-- (conkey and confkey pair up by position)
+SELECT
+    n.nspname AS "schema",
+    c.relname AS "table",
+    con.conname AS constraint_name,
+    a.attname AS column_name,
+    'FOREIGN KEY' AS constraint_type,
+    ord.ordinality::int AS column_position,
+    '' AS constraint_expression,
+    con.convalidated AS is_enforced,
+    rn.nspname AS referenced_schema,
+    rc.relname AS referenced_table,
+    ra.attname AS referenced_column_name
+FROM pg_catalog.pg_constraint con
+JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_catalog.pg_class rc ON rc.oid = con.confrelid
+JOIN pg_catalog.pg_namespace rn ON rn.oid = rc.relnamespace
+CROSS JOIN LATERAL unnest(con.conkey, con.confkey) WITH ORDINALITY AS ord(attnum, refattnum, ordinality)
+JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ord.attnum
+JOIN pg_catalog.pg_attribute ra ON ra.attrelid = rc.oid AND ra.attnum = ord.refattnum
+WHERE con.contype = 'f'
   AND n.nspname NOT IN ('pg_catalog', 'pg_toast', 'information_schema')
 
 UNION ALL
@@ -31,7 +61,10 @@ SELECT
     'CHECK' AS constraint_type,
     0 AS column_position,
     pg_get_constraintdef(con.oid) AS constraint_expression,
-    con.convalidated AS is_enforced
+    con.convalidated AS is_enforced,
+    '' AS referenced_schema,
+    '' AS referenced_table,
+    '' AS referenced_column_name
 FROM pg_catalog.pg_constraint con
 JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
@@ -49,7 +82,10 @@ SELECT
     CASE WHEN ix.indisunique THEN 'UNIQUE INDEX' ELSE 'INDEX' END AS constraint_type,
     key_ord.ordinality::int AS column_position,
     '' AS constraint_expression,
-    ix.indisvalid AS is_enforced
+    ix.indisvalid AS is_enforced,
+    '' AS referenced_schema,
+    '' AS referenced_table,
+    '' AS referenced_column_name
 FROM pg_catalog.pg_index ix
 JOIN pg_catalog.pg_class ic ON ic.oid = ix.indexrelid
 JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
@@ -64,7 +100,8 @@ WHERE NOT EXISTS (
   AND key_ord.attnum > 0
   AND n.nspname NOT IN ('pg_catalog', 'pg_toast', 'information_schema')
 )
-SELECT "schema", "table", constraint_name, column_name, constraint_type, column_position, constraint_expression, is_enforced
+SELECT "schema", "table", constraint_name, column_name, constraint_type, column_position, constraint_expression, is_enforced,
+    referenced_schema, referenced_table, referenced_column_name
 FROM all_constraints
 WHERE 1=1
   /* SYNQ_SCOPE_FILTER */

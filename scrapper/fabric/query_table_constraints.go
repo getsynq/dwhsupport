@@ -15,11 +15,14 @@ func (e *FabricScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper
 	ctx = e.withEffectiveScope(ctx)
 	return queryEachDatabase(ctx, e, wholeListing,
 		func(db string) string {
-			return expandDatabase(scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "tc.TABLE_SCHEMA", "tc.TABLE_NAME"), db)
+			return expandDatabase(scope.AppendScopeConditions(ctx, queryTableConstraintsSql, "", "[schema]", "[table]"), db)
 		},
 		func(row *scrapper.TableConstraintRow, db string) {
 			row.Instance = e.conf.Host
 			row.Database = db
+			if row.ReferencedTable != "" {
+				row.ReferencedDatabase = db
+			}
 		},
 	)
 }
