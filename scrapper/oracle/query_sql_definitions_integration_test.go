@@ -17,25 +17,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newOracleScrapperAsSystem connects as SYSTEM, whose DBA role includes
-// SELECT_CATALOG_ROLE. The dwhtesting synq user has SELECT ANY DICTIONARY
-// only, which DBMS_METADATA does not take for another schema's objects.
+// newOracleScrapperAsSystem connects as SYSTEM, for the tests that create a
+// schema or a user of their own.
 func newOracleScrapperAsSystem(t *testing.T) *OracleScrapper {
 	if os.Getenv("CI") != "" {
 		t.Skip("Skipping Oracle tests in CI")
 	}
-	sc, err := NewOracleScrapper(t.Context(), &OracleScrapperConf{OracleConf: dwhexecoracle.OracleConf{
-		User:        "system",
-		Password:    testenv.EnvOrDefault("ORACLE_SYSTEM_PASSWORD", "SynqTest1"),
-		Host:        testenv.EnvOrDefault("ORACLE_HOST", "127.0.0.1"),
-		Port:        testenv.EnvOrDefaultInt("ORACLE_PORT", 1521),
-		ServiceName: testenv.EnvOrDefault("ORACLE_SERVICE", "FREEPDB1"),
-	}})
+	sc, err := newOracleScrapperAs(t.Context(), "system", testenv.EnvOrDefault("ORACLE_SYSTEM_PASSWORD", "SynqTest1"))
 	if err != nil {
 		t.Skipf("Could not connect to Oracle as SYSTEM: %v", err)
 	}
 	t.Cleanup(func() { _ = sc.Close() })
 	return sc
+}
+
+func newOracleScrapperAs(ctx context.Context, user, password string) (*OracleScrapper, error) {
+	return NewOracleScrapper(ctx, &OracleScrapperConf{OracleConf: dwhexecoracle.OracleConf{
+		User:        user,
+		Password:    password,
+		Host:        testenv.EnvOrDefault("ORACLE_HOST", "127.0.0.1"),
+		Port:        testenv.EnvOrDefaultInt("ORACLE_PORT", 1521),
+		ServiceName: testenv.EnvOrDefault("ORACLE_SERVICE", "FREEPDB1"),
+	}})
 }
 
 func inSchemas(schemas ...string) context.Context {
@@ -63,9 +66,18 @@ func oracleKeys(m map[string]*scrapper.SqlDefinitionRow) []string {
 }
 
 // Every table of the fixture gets its DDL, without storage or segment
-// attributes, and the views keep their query.
+// attributes, and the views keep their query. The dwhtesting synq user holds
+// SELECT_CATALOG_ROLE as a grant of its own, as a customer's user would, where
+// SYSTEM has it only through DBA.
 func TestOracleSqlDefinitionsOfTablesAndViews(t *testing.T) {
-	sc := newOracleScrapperAsSystem(t)
+	if os.Getenv("CI") != "" {
+		t.Skip("Skipping Oracle tests in CI")
+	}
+	sc, err := newOracleScrapperFromEnv(t.Context())
+	if err != nil {
+		t.Skipf("Could not connect to Oracle: %v", err)
+	}
+	t.Cleanup(func() { _ = sc.Close() })
 
 	defs, err := sc.QuerySqlDefinitions(inSchemas("SYNQ_A", "SYNQ_B"))
 	require.NoError(t, err)
@@ -128,16 +140,23 @@ func TestOracleSqlDefinitionsLeaveOutTablesThatAreNotTablesOfTheirOwn(t *testing
 	assert.Contains(t, lo.FromPtr(byName[schema+".TAGGED"]).Sql, "NESTED TABLE")
 }
 
-// The dwhtesting synq user has no SELECT_CATALOG_ROLE: it reads the views, and
-// each schema of tables is one omission saying which grant reads it.
+// A user with SELECT ANY DICTIONARY and no SELECT_CATALOG_ROLE reads the views,
+// and each schema of tables is one omission saying which grant reads it. The
+// user is the test's own, as the dwhtesting synq user has the role.
 func TestOracleSqlDefinitionsWithoutTheCatalogRoleOmitTheSchemas(t *testing.T) {
-	if os.Getenv("CI") != "" {
-		t.Skip("Skipping Oracle tests in CI")
+	system := newOracleScrapperAsSystem(t)
+	ctx := t.Context()
+	user := fmt.Sprintf("SYNQ_NO_CATALOG_%d", time.Now().UnixNano())
+	exec := func(statement string) {
+		require.NoError(t, system.executor.Exec(ctx, statement), statement)
 	}
-	sc, err := newOracleScrapperFromEnv(t.Context())
-	if err != nil {
-		t.Skipf("Could not connect to Oracle: %v", err)
-	}
+	exec(`CREATE USER ` + user + ` IDENTIFIED BY "SynqTest1"`)
+	t.Cleanup(func() { _ = system.executor.Exec(context.Background(), `DROP USER `+user+` CASCADE`) })
+	exec(`GRANT CREATE SESSION, SELECT ANY TABLE, SELECT ANY DICTIONARY TO ` + user)
+
+	sc, err := newOracleScrapperAs(ctx, user, "SynqTest1")
+	require.NoError(t, err)
+	// Cleanups run last first, so the session is gone before the user is dropped.
 	t.Cleanup(func() { _ = sc.Close() })
 
 	defs, err := sc.QuerySqlDefinitions(inSchemas("SYNQ_A"))
