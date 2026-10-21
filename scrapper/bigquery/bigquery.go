@@ -38,7 +38,7 @@ type BigQueryScrapperConf struct {
 	// Datasets is an explicit list of dataset names to scrape. When set, only these
 	// datasets are queried instead of listing all datasets in the project via API.
 	// This is required for customers who grant permissions at the dataset level and
-	// lack project-level bigquery.datasets.list permission.
+	// lack bigquery.datasets.get on the project, which listing the datasets needs.
 	Datasets []string
 	// FetchPolicyTags turns on reading the taxonomies of column policy tags
 	// through the Data Catalog API, to name each policy tag by its display
