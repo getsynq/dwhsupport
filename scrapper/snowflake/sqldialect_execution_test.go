@@ -54,11 +54,11 @@ func (s *SnowflakeSqlDialectExecutionSuite) SetupSuite() {
 	s.Config = scrappertest.SqlDialectExecutionConfig{
 		TableFqn: sqldialect.TableFqn(
 			database,
-			testenv.EnvOrDefault("SNOWFLAKE_SCHEMA", "PUBLIC"),
-			testenv.EnvOrDefault("SNOWFLAKE_TEST_TABLE_NAME", "SEED_TAXI_ZONES"),
+			testenv.EnvOrDefault("SNOWFLAKE_SCHEMA", "SCHEMA_A"),
+			testenv.EnvOrDefault("SNOWFLAKE_TEST_TABLE_NAME", "PRODUCTS"),
 		),
-		KeyField:     testenv.EnvOrDefault("SNOWFLAKE_TEST_KEY_FIELD", "LOCATION_ID"),
-		SegmentField: testenv.EnvOrDefault("SNOWFLAKE_TEST_SEGMENT_FIELD", "BOROUGH"),
+		KeyField:     testenv.EnvOrDefault("SNOWFLAKE_TEST_KEY_FIELD", "ID"),
+		SegmentField: testenv.EnvOrDefault("SNOWFLAKE_TEST_SEGMENT_FIELD", "CATEGORY"),
 	}
 }
 

@@ -28,7 +28,7 @@ func (s *SnowflakeCatalogFactsSuite) SetupSuite() {
 	if os.Getenv("SNOWFLAKE_ACCOUNT") == "" {
 		s.T().Skip("SNOWFLAKE_ACCOUNT env var not set")
 	}
-	database := testenv.EnvOrDefault("SNOWFLAKE_DATABASE", "NYC_TAXI")
+	database := testenv.EnvOrDefault("SNOWFLAKE_DATABASE", "DWH_TESTING")
 	sfConf := dwhexecsnowflake.SnowflakeConf{
 		User:           os.Getenv("SNOWFLAKE_USER"),
 		Password:       os.Getenv("SNOWFLAKE_PASSWORD"),
@@ -52,8 +52,8 @@ func (s *SnowflakeCatalogFactsSuite) SetupSuite() {
 
 	s.Table = scrappertest.FixtureTable{
 		Database: database,
-		Schema:   testenv.EnvOrDefault("SNOWFLAKE_SCHEMA", "PUBLIC"),
-		Table:    testenv.EnvOrDefault("SNOWFLAKE_FACTS_TABLE", "SEED_RATE_CODES"),
+		Schema:   testenv.EnvOrDefault("SNOWFLAKE_SCHEMA", "SCHEMA_A"),
+		Table:    testenv.EnvOrDefault("SNOWFLAKE_FACTS_TABLE", "PRODUCTS"),
 	}
 	s.ExpectOwner, s.ExpectCreatedAt, s.ExpectSizeBytes = true, true, true
 }
