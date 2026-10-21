@@ -196,3 +196,11 @@ func TestPlatformUsersRolesSkip(t *testing.T) {
 		})
 	}
 }
+
+// The grant a caller recommends has to name the database role that holds
+// ACCOUNT_USAGE.USERS and GRANTS_TO_USERS: Snowflake puts both under
+// SECURITY_VIEWER, and USAGE_VIEWER grants neither.
+func TestPlatformUsersGrantNamesTheRoleThatReadsUsers(t *testing.T) {
+	assert.Contains(t, platformUsersGrant, "SNOWFLAKE.SECURITY_VIEWER")
+	assert.NotContains(t, platformUsersGrant, "USAGE_VIEWER")
+}
