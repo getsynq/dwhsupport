@@ -13,11 +13,10 @@ select ''                  as "database",
        table_schema        as "schema",
        table_name          as "table",
        table_type = 'view' as "is_view",
-       view_definition     as "sql"
+       coalesce(view_definition, '') as "sql"
 from tables
          LEFT JOIN information_schema.VIEWS
                    USING (table_schema, table_name)
 where table_schema not in ('information_schema', 'performance_schema', 'mysql', 'sys')
-  AND (table_type = 'view' or VIEW_DEFINITION is not null)
   /* SYNQ_SCOPE_FILTER */
 order by "database", "schema", "table"
