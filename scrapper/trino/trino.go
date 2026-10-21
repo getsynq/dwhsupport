@@ -91,6 +91,10 @@ func (e *TrinoScrapper) SqlDialect() sqldialect.Dialect {
 	return sqldialect.NewTrinoDialect()
 }
 
+// catalogProbeTimeout bounds the query ValidateConfiguration sends each configured
+// catalog. A catalog whose backend is gone can take longer than that to say so.
+const catalogProbeTimeout = 15 * time.Second
+
 func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
 
 	availableCatalogs, err := e.allAvailableCatalogs.Get()
@@ -104,6 +108,9 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 	}
 
 	var missingCatalogs []string
+	// Each skipped catalog is its own warning, with what Trino answered the probe:
+	// that answer is what says whether the catalog, its connector or the database
+	// behind it needs fixing.
 	var unavailableCatalogs []string
 
 	for _, catalog := range e.conf.Catalogs {
@@ -112,9 +119,9 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 			continue
 		}
 
-		// Probe the catalog to check if it's accessible with a 15 second timeout
+		// Probe the catalog to check if it's accessible within catalogProbeTimeout
 		// We use a simple query against information_schema which will fail if the catalog is unavailable
-		probeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		probeCtx, cancel := context.WithTimeout(ctx, catalogProbeTimeout)
 		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.schemata LIMIT 1", catalog)
 		probeRows, probeErr := e.executor.QueryRows(probeCtx, probeQuery)
 		if probeRows != nil {
@@ -130,7 +137,14 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 			if isCatalogUnavailableError(probeErr) || timedOut {
 				logging.GetLogger(ctx).WithField("catalog", catalog).WithError(probeErr).
 					Warn("Catalog is no longer available")
-				unavailableCatalogs = append(unavailableCatalogs, catalog)
+				unavailableCatalogs = append(
+					unavailableCatalogs,
+					fmt.Sprintf(
+						"Catalog %s is no longer available and will be skipped during data extraction. "+
+							"It may need to be reconfigured or reconnected. Trino answered: %s",
+						catalog, probeAnswer(probeErr, timedOut),
+					),
+				)
 			} else {
 				// For other errors, log but don't fail validation
 				logging.GetLogger(ctx).WithField("catalog", catalog).WithError(probeErr).
@@ -145,18 +159,22 @@ func (e *TrinoScrapper) ValidateConfiguration(ctx context.Context) ([]string, er
 		messages = append(messages, fmt.Sprintf("Catalog not found or no permissions to access: %s", strings.Join(missingCatalogs, ", ")))
 	}
 
-	if len(unavailableCatalogs) > 0 {
-		messages = append(
-			messages,
-			fmt.Sprintf(
-				"Catalog(s) no longer available and will be skipped during data extraction: %s. "+
-					"These catalogs may need to be reconfigured or reconnected.",
-				strings.Join(unavailableCatalogs, ", "),
-			),
-		)
-	}
+	messages = append(messages, unavailableCatalogs...)
 
 	return messages, nil
+}
+
+// probeAnswer is what Trino said to a catalog probe, in its own words: the error
+// type and message it reported, without the client's wrapping around them.
+func probeAnswer(err error, timedOut bool) string {
+	if timedOut {
+		return fmt.Sprintf("no answer within %s", catalogProbeTimeout)
+	}
+	var trinoErr *trino.ErrTrino
+	if errors.As(err, &trinoErr) {
+		return trinoErr.Error()
+	}
+	return err.Error()
 }
 
 // acceptedCatalogs returns the subset of all available catalogs that are accepted
