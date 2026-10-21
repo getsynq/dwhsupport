@@ -51,10 +51,14 @@ type fakeDataset struct {
 // a dataset's INFORMATION_SCHEMA.TABLES answers with a row per table that
 // tables.get answers for, the way BigQuery leaves out a table the caller may
 // not read, and a query of the region's is refused, the way it is for a role
-// granted only on the datasets.
+// granted only on the datasets. A query of a dataset's
+// INFORMATION_SCHEMA.ROUTINES answers with no rows. With regionQuotaExceeded
+// the region's query fails with the 403 BigQuery gives a quota instead of the
+// refusal.
 type fakeMetadataServer struct {
-	datasets       []fakeDataset
-	answersQueries bool
+	datasets            []fakeDataset
+	answersQueries      bool
+	regionQuotaExceeded bool
 
 	mu      sync.Mutex
 	queries []string
@@ -65,6 +69,18 @@ func (f *fakeMetadataServer) queried() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.queries...)
+}
+
+// regionQueries returns the SQL of every query job that read the region's
+// INFORMATION_SCHEMA.
+func (f *fakeMetadataServer) regionQueries() []string {
+	var region []string
+	for _, q := range f.queried() {
+		if strings.Contains(q, "region-") {
+			region = append(region, q)
+		}
+	}
+	return region
 }
 
 func (f *fakeMetadataServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -159,10 +175,21 @@ func (f *fakeMetadataServer) insertQuery(w http.ResponseWriter, r *http.Request)
 	f.mu.Unlock()
 
 	if strings.Contains(sql, "region-") {
+		if f.regionQuotaExceeded {
+			fakeErrorWithReason(w, http.StatusForbidden, "quotaExceeded", "Quota exceeded: Your project exceeded quota for concurrent queries")
+			return
+		}
 		fakeError(w, http.StatusForbidden, "Access Denied: Table "+fakeProject+":region-us.INFORMATION_SCHEMA.TABLES: User does not have permission")
 		return
 	}
 	for _, ds := range f.datasets {
+		if strings.Contains(sql, fmt.Sprintf("`%s`.`%s`.INFORMATION_SCHEMA.ROUTINES", fakeProject, ds.id)) {
+			_, _ = fmt.Fprintf(
+				w, `{"jobReference":{"projectId":%q,"jobId":%q,"location":"US"},"configuration":{"query":{"query":"x"}},"status":{"state":"DONE"}}`,
+				fakeProject, "routines-"+ds.id,
+			)
+			return
+		}
 		if !strings.Contains(sql, fmt.Sprintf("`%s`.`%s`.INFORMATION_SCHEMA.TABLES", fakeProject, ds.id)) {
 			continue
 		}
@@ -184,8 +211,25 @@ func (f *fakeMetadataServer) insertQuery(w http.ResponseWriter, r *http.Request)
 }
 
 // queryResults answers jobs.get, and jobs.getQueryResults with the rows of the
-// dataset the job id names.
+// dataset the job id names: its tables, or no routines.
 func (f *fakeMetadataServer) queryResults(w http.ResponseWriter, jobId string, withRows bool) {
+	if datasetId, ok := strings.CutPrefix(jobId, "routines-"); ok {
+		if _, found := f.dataset(datasetId); !found {
+			fakeError(w, http.StatusNotFound, "Not found: Job "+jobId)
+			return
+		}
+		jobRef := fmt.Sprintf(`"jobReference":{"projectId":%q,"jobId":%q,"location":"US"}`, fakeProject, jobId)
+		if !withRows {
+			_, _ = fmt.Fprintf(w, `{%s,"configuration":{"query":{"query":"x"}},"status":{"state":"DONE"}}`, jobRef)
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{%s,"jobComplete":true,"totalRows":"0","rows":[],"schema":{"fields":[`+
+			`{"name":"database","type":"STRING"},{"name":"schema","type":"STRING"},{"name":"name","type":"STRING"},`+
+			`{"name":"routine_type","type":"STRING"},{"name":"language","type":"STRING"},{"name":"arguments","type":"STRING"},`+
+			`{"name":"return_type","type":"STRING"},{"name":"definition","type":"STRING"},{"name":"description","type":"STRING"}]}}`,
+			jobRef)
+		return
+	}
 	datasetId, ok := strings.CutPrefix(jobId, "tables-")
 	ds, found := f.dataset(datasetId)
 	if !ok || !found {
@@ -228,6 +272,10 @@ func fakeError(w http.ResponseWriter, status int, message string) {
 	if reason == "" {
 		reason = "backendError"
 	}
+	fakeErrorWithReason(w, status, reason, message)
+}
+
+func fakeErrorWithReason(w http.ResponseWriter, status int, reason, message string) {
 	w.WriteHeader(status)
 	_, _ = fmt.Fprintf(w, `{"error":{"code":%d,"message":%q,"errors":[{"reason":%q,"message":%q}]}}`, status, message, reason, message)
 }
