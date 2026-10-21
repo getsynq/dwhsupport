@@ -35,12 +35,16 @@ ORDER BY n.nspname, c.relname, a.attsortkeyord
 func (e *RedshiftScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
-	// Query primary keys and unique constraints
+	// Query primary keys, unique constraints and foreign keys
 	sql := scope.AppendScopeConditions(ctx, withSystemSchemas(queryTableConstraintsSql), "", "n.nspname", "c.relname")
 	pkRows, err := stdsql.QueryMany[scrapper.TableConstraintRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableConstraintRow) (*scrapper.TableConstraintRow, error) {
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
+			// A foreign key cannot reference another database.
+			if row.ReferencedTable != "" {
+				row.ReferencedDatabase = e.conf.Database
+			}
 			return row, nil
 		}),
 	)

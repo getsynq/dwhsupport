@@ -429,6 +429,13 @@ type TableConstraintRow struct {
 	ColumnPosition       int32  `db:"column_position"       json:"column_position"       ch:"column_position"       bigquery:"column_position"`
 	ConstraintExpression string `db:"constraint_expression" json:"constraint_expression" ch:"constraint_expression" bigquery:"constraint_expression"`
 	IsEnforced           *bool  `db:"is_enforced"           json:"is_enforced"           ch:"is_enforced"           bigquery:"is_enforced"`
+	// The table a FOREIGN KEY references, on the same instance, and on each
+	// column's row the referenced column at the same position. Empty for every
+	// other constraint type.
+	ReferencedDatabase   string `db:"referenced_database"    json:"referenced_database,omitempty"    ch:"referenced_database"    bigquery:"referenced_database"`
+	ReferencedSchema     string `db:"referenced_schema"      json:"referenced_schema,omitempty"      ch:"referenced_schema"      bigquery:"referenced_schema"`
+	ReferencedTable      string `db:"referenced_table"       json:"referenced_table,omitempty"       ch:"referenced_table"       bigquery:"referenced_table"`
+	ReferencedColumnName string `db:"referenced_column_name" json:"referenced_column_name,omitempty" ch:"referenced_column_name" bigquery:"referenced_column_name"`
 }
 
 func (r TableConstraintRow) TableFqn() DwhFqn {
@@ -438,6 +445,20 @@ func (r TableConstraintRow) TableFqn() DwhFqn {
 		SchemaName:   r.Schema,
 		ObjectName:   r.Table,
 	}
+}
+
+// ReferencedTableFqn is the table a FOREIGN KEY row references, on the row's
+// own instance, and false for a row that references none.
+func (r TableConstraintRow) ReferencedTableFqn() (DwhFqn, bool) {
+	if r.ReferencedTable == "" {
+		return DwhFqn{}, false
+	}
+	return DwhFqn{
+		InstanceName: r.Instance,
+		DatabaseName: r.ReferencedDatabase,
+		SchemaName:   r.ReferencedSchema,
+		ObjectName:   r.ReferencedTable,
+	}, true
 }
 
 // Constraint type constants

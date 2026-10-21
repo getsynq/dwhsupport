@@ -22,6 +22,10 @@ func (e *PostgresScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapp
 			if row.ConstraintType == "UNIQUE" {
 				row.ConstraintType = scrapper.ConstraintTypeUniqueIndex
 			}
+			// A foreign key cannot reference another database.
+			if row.ReferencedTable != "" {
+				row.ReferencedDatabase = e.conf.Database
+			}
 			return row, nil
 		}),
 	)
