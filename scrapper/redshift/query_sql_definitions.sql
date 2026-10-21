@@ -17,6 +17,6 @@ SELECT table_catalog   as database,
        view_definition as sql
 FROM views
 WHERE view_definition is not null
-  AND table_schema not in ('pg_catalog', 'information_schema')
+  AND table_schema not in ({{system_schemas}})
   AND table_catalog = $1
   /* SYNQ_SCOPE_FILTER */

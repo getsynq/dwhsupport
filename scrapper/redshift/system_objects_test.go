@@ -11,6 +11,7 @@ import (
 	dwhexecredshift "github.com/getsynq/dwhsupport/exec/redshift"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -57,6 +58,32 @@ func (s *RedshiftSystemObjectsSuite) SetupSuite() {
 func (s *RedshiftSystemObjectsSuite) TearDownSuite() {
 	if s.scrapper != nil {
 		_ = s.scrapper.Close()
+	}
+}
+
+func TestEveryCatalogQueryLeavesOutTheSystemSchemas(t *testing.T) {
+	for name, sql := range map[string]string{
+		"tables":             withSystemSchemas(tablesSql),
+		"schemas":            withSystemSchemas(schemasSql),
+		"catalog":            withSystemSchemas(queryCatalogSql),
+		"sql definitions":    withSystemSchemas(querySqlDefinitionsSql),
+		"constraints":        withSystemSchemas(queryTableConstraintsSql),
+		"sort and dist keys": withSystemSchemas(querySortDistKeysSql),
+		"metrics":            withSystemSchemas(queryTableMetricsSql),
+		"metrics, freshness": withSystemSchemas(queryTabkeMetricsEstimatedFreshnessSql),
+	} {
+		require.NotContains(t, sql, systemSchemasPlaceholder, name)
+		for _, schema := range systemSchemaNames {
+			require.Contains(t, sql, "'"+schema+"'", name)
+		}
+	}
+	for name, sql := range map[string]string{
+		"tables":             tablesSql,
+		"catalog":            queryCatalogSql,
+		"constraints":        queryTableConstraintsSql,
+		"sort and dist keys": querySortDistKeysSql,
+	} {
+		require.Contains(t, sql, "'mv_tbl__'", name)
 	}
 }
 

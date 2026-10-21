@@ -6,9 +6,7 @@ WITH rows_estimation AS (select "database",
                                 size::bigint * 1048576 as "size_bytes"
                          from pg_catalog.svv_table_info
                          where estimated_visible_rows is not null
-                           AND schema <> 'catalog_history'::name
-                           AND schema <> 'pg_toast'::name
-                           AND schema <> 'pg_internal'::name
+                           AND schema not in ({{system_schemas}})
                            AND database = $1
                            /* SYNQ_SCOPE_FILTER */),
      freshness_estimation AS (SELECT ti.database,

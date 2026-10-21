@@ -14,5 +14,8 @@ JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 JOIN generate_series(1, 32) idx ON idx <= array_upper(con.conkey, 1)
 JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = con.conkey[idx]
 WHERE con.contype IN ('p', 'u')
+  AND n.nspname NOT IN ({{system_schemas}})
+  -- a materialized view keeps its rows in mv_tbl__<view>__<n> in its own schema, owned by rdsdb (usesysid 1)
+  AND NOT (c.relowner = 1 AND left(c.relname, 8) = 'mv_tbl__')
   /* SYNQ_SCOPE_FILTER */
 ORDER BY n.nspname, c.relname, con.conname, idx

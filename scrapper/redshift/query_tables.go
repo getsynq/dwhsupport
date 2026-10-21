@@ -15,13 +15,10 @@ import (
 var tablesSql string
 
 func (e *RedshiftScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
-	sql := scope.AppendScopeConditions(ctx, tablesSql, "", "tbl.schema_name", "tbl.table_name")
+	sql := scope.AppendScopeConditions(ctx, withSystemSchemas(tablesSql), "", "tbl.schema_name", "tbl.table_name")
 	return stdsql.QueryMany[scrapper.TableRow](ctx, e.executor.GetDb(), sql,
 		dwhexec.WithArgs[scrapper.TableRow](e.conf.Database),
 		dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {
-			if row.Schema == "pg_automv" {
-				return nil, nil
-			}
 			row.Database = e.conf.Database
 			row.Instance = e.conf.Host
 			row.Owner = lo.EmptyableToPtr(lo.FromPtr(row.Owner))
