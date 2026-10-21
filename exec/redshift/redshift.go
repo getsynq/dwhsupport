@@ -85,7 +85,7 @@ func NewRedshiftExecutor(ctx context.Context, conf *RedshiftConf) (*RedshiftExec
 	}
 	err = db.PingContext(ctx)
 	if err != nil {
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	return &RedshiftExecutor{conf: conf, db: db, sshTunnelDialer: sshTunnelDialer}, nil

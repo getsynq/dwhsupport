@@ -110,6 +110,9 @@ func NewDatabricksScrapper(ctx context.Context, conf *DatabricksScrapperConf) (*
 		if dwhexecdatabricks.IsRateLimitError(err) {
 			return nil, errors.Wrap(err, "failed to reach the workspace")
 		}
+		if !dwhexecdatabricks.IsAuthError(err) {
+			return nil, dwhexec.ConnectionError(err, dwhexecdatabricks.IsAuthError)
+		}
 		err := dwhexec.NewAuthError(err)
 		errText := err.Error()
 		ret := databricksReasonPhraseRegexp.FindAllStringSubmatch(errText, -1)

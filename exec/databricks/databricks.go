@@ -96,7 +96,7 @@ func NewDatabricksExecutor(ctx context.Context, conf *DatabricksConf) (*Databric
 		if IsRateLimitError(err) {
 			return nil, errors.Wrap(err, "failed to reach the workspace")
 		}
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	warehouses, err := client.Warehouses.ListAll(ctx, servicesql.ListWarehousesRequest{})

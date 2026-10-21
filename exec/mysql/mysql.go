@@ -69,7 +69,7 @@ func NewMySQLExecutor(ctx context.Context, conf *MySQLConf) (*MySQLExecutor, err
 	}
 	err = db.PingContext(ctx)
 	if err != nil {
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 
 	return &MySQLExecutor{conf: conf, db: db}, nil

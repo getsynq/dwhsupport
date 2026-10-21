@@ -60,6 +60,19 @@ func NewAuthError(err error) *AuthError {
 	return &AuthError{Err: err}
 }
 
+// ConnectionError is what an executor returns when its connection check fails.
+// Only a login the warehouse rejected, as isAuthError decides from the driver's
+// own error, is an AuthError: a caller reads that as "change the credentials",
+// which is wrong advice for a host that is down, a TLS handshake that failed or
+// a name that does not resolve. Every other failure keeps the driver's text, so
+// a caller can still tell what went wrong from it.
+func ConnectionError(err error, isAuthError func(error) bool) error {
+	if isAuthError(err) {
+		return NewAuthError(err)
+	}
+	return errors.Wrap(err, "connection error")
+}
+
 type QueryMany[T any] struct {
 	Sql              string
 	Args             []interface{}

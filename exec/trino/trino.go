@@ -61,7 +61,7 @@ func NewTrinoExecutor(ctx context.Context, conf *TrinoConf) (*TrinoExecutor, err
 	}
 	err = db.PingContext(ctx)
 	if err != nil {
-		return nil, exec.NewAuthError(err)
+		return nil, exec.ConnectionError(err, IsAuthError)
 	}
 	return &TrinoExecutor{conf: conf, db: db}, nil
 }

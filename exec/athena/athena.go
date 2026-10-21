@@ -118,7 +118,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	stsClient := awssts.NewFromConfig(awsCfg)
 	whoami, err := stsClient.GetCallerIdentity(ctx, &awssts.GetCallerIdentityInput{})
 	if err != nil {
-		return nil, exec.NewAuthError(fmt.Errorf("athena: sts:GetCallerIdentity: %w", err))
+		return nil, exec.ConnectionError(fmt.Errorf("athena: sts:GetCallerIdentity: %w", err), IsAuthError)
 	}
 	accountID := aws.ToString(whoami.Account)
 
@@ -151,7 +151,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	// before they expire (default 1h, max 12h for AssumeRole).
 	creds, err := awsCfg.Credentials.Retrieve(ctx)
 	if err != nil {
-		return nil, exec.NewAuthError(fmt.Errorf("athena: resolve credentials: %w", err))
+		return nil, exec.ConnectionError(fmt.Errorf("athena: resolve credentials: %w", err), IsAuthError)
 	}
 
 	driverConf, err := athenadriver.NewDefaultConfig(outputLocation, conf.Region, creds.AccessKeyID, creds.SecretAccessKey)
@@ -177,7 +177,7 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	}
 	if err := stdsql.Ping(ctx, db); err != nil {
 		_ = db.Close()
-		return nil, exec.NewAuthError(fmt.Errorf("athena: ping: %w", err))
+		return nil, exec.ConnectionError(fmt.Errorf("athena: ping: %w", err), IsAuthError)
 	}
 
 	return &AthenaExecutor{

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/getsynq/dwhsupport/exec"
+	"github.com/pkg/errors"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -181,6 +182,9 @@ func TestConnectDoesNotRetryForOtherFailures(t *testing.T) {
 		token     string
 		code      int
 		message   string
+		// Only a refused credential is an AuthError. A warehouse or database the
+		// login cannot use is fixed in the configuration, not by new credentials.
+		authError bool
 	}{
 		{
 			name:      "warehouse shares the error code",
@@ -193,6 +197,7 @@ func TestConnectDoesNotRetryForOtherFailures(t *testing.T) {
 			databases: []string{"GOOD_DB"},
 			code:      errIncorrectUsernameOrPassword,
 			message:   "Incorrect username or password was specified.",
+			authError: true,
 		},
 		{
 			// No database configured means no session default to drop, so there is
@@ -226,9 +231,10 @@ func TestConnectDoesNotRetryForOtherFailures(t *testing.T) {
 			assert.Len(t, fake.attempts(), 1, "must not retry")
 
 			// The original failure must reach the caller unaltered: callers branch on
-			// AuthError to decide severity, and re-wrapping would misreport the cause.
+			// AuthError to decide what to tell the owner, and re-wrapping would
+			// misreport the cause.
 			var authErr *exec.AuthError
-			require.ErrorAs(t, err, &authErr)
+			assert.Equal(t, tt.authError, errors.As(err, &authErr))
 			assert.Contains(t, err.Error(), tt.message)
 			assert.NotContains(t, err.Error(), "reconnect", "a failure that was never retried must not claim it was")
 		})

@@ -90,7 +90,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 	db := clickhouse.OpenDB(clickhouseOptions)
 	if err := db.PingContext(ctx); err != nil {
 		if conf.DefaultDatabase == "" {
-			return nil, exec.NewAuthError(err)
+			return nil, exec.ConnectionError(err, IsAuthError)
 		}
 
 		// The default database is a convenience for unqualified table names in a
@@ -109,7 +109,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 		clickhouseOptions.Auth.Database = ""
 		db = clickhouse.OpenDB(clickhouseOptions)
 		if err := db.PingContext(ctx); err != nil {
-			return nil, exec.NewAuthError(err)
+			return nil, exec.ConnectionError(err, IsAuthError)
 		}
 	}
 
