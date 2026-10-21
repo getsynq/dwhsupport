@@ -14,7 +14,10 @@ import (
 // A table snapshot and a table clone name the table they were copied from,
 // and the time of it they hold.
 func TestSnapshotsAndClonesNameTheirBaseTable(t *testing.T) {
+	// The snapshot copies a shard older than the latest, which the scan does
+	// not report on its own: it reports the sharded table in its place.
 	shard := time.Now().UTC().AddDate(0, 0, -3).Format("20060102")
+	latestShard := time.Now().UTC().AddDate(0, 0, -1).Format("20060102")
 	const schema = `"schema":{"fields":[{"name":"id","type":"INTEGER"}]}`
 	scr := newFakeMetadataScrapper(t,
 		fakeDataset{id: "sales", tables: []fakeTable{
@@ -31,14 +34,25 @@ func TestSnapshotsAndClonesNameTheirBaseTable(t *testing.T) {
 			{id: "orphan_snapshot", json: `"type":"SNAPSHOT",` + schema + `,"snapshotDefinition":{"snapshotTime":"2024-03-15T10:20:30Z"}`},
 			{id: "products_view", json: `"type":"VIEW","view":{"query":"SELECT 1"},` + schema},
 		}},
+		fakeDataset{id: "raw", tables: []fakeTable{
+			{id: "events_" + shard, json: `"type":"TABLE",` + schema},
+			{id: "events_" + latestShard, json: `"type":"TABLE",` + schema},
+		}},
 	)
 
 	rows, err := scr.QueryTables(context.Background())
 	require.NoError(t, err)
 	got := map[string]*scrapper.TableCopyOf{}
+	var rawTables []string
 	for _, row := range rows {
+		if row.Schema == "raw" {
+			rawTables = append(rawTables, row.Table)
+			continue
+		}
 		got[row.Table] = row.CopyOf
 	}
+	// The base of events_snapshot is named the way the scan names it.
+	require.Equal(t, []string{"events"}, rawTables)
 
 	require.Equal(t, map[string]*scrapper.TableCopyOf{
 		"products": nil,
@@ -50,9 +64,8 @@ func TestSnapshotsAndClonesNameTheirBaseTable(t *testing.T) {
 			Kind: scrapper.TableCopyClone, Database: "other-project", Schema: "warehouse", Table: "products",
 			At: lo.ToPtr(time.Date(2024, 3, 16, 8, 0, 0, 0, time.UTC)),
 		},
-		// A shard is not a table of the scan, its sharded table events_ is.
 		"events_snapshot": {
-			Kind: scrapper.TableCopySnapshot, Database: "test-project", Schema: "raw", Table: "events_",
+			Kind: scrapper.TableCopySnapshot, Database: "test-project", Schema: "raw", Table: "events",
 			At: lo.ToPtr(time.Date(2024, 3, 15, 10, 20, 30, 0, time.UTC)),
 		},
 		// A snapshot whose base the API does not name copies nothing we can point at.
