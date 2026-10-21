@@ -17,7 +17,7 @@ import (
 // platformUsersGrant is what lets a role read ACCOUNT_USAGE.USERS and
 // ACCOUNT_USAGE.GRANTS_TO_USERS, which hold every user and every fact. Without
 // it the listing falls back to SHOW USERS.
-const platformUsersGrant = "IMPORTED PRIVILEGES on database SNOWFLAKE (or the SNOWFLAKE.USAGE_VIEWER database role), " +
+const platformUsersGrant = "IMPORTED PRIVILEGES on database SNOWFLAKE (or the SNOWFLAKE.SECURITY_VIEWER database role), " +
 	"to read SNOWFLAKE.ACCOUNT_USAGE.USERS and GRANTS_TO_USERS"
 
 // showUsersPageSize is the most rows one SHOW USERS returns; a full page is
