@@ -110,7 +110,7 @@ func (e *TrinoScrapper) queryCatalogSqlDefinitions(
 	ctx context.Context,
 	catalog *TrinoCatalog,
 ) ([]*scrapper.SqlDefinitionRow, []scrapper.Omission, error) {
-	catalogQuery := strings.Replace(querySqlDefinitionsSQL, "{{catalog}}", catalog.CatalogName, -1)
+	catalogQuery := withCatalog(querySqlDefinitionsSQL, catalog)
 
 	// Conditionally add materialized views JOIN based on feature flag
 	if e.conf.FetchMaterializedViews {

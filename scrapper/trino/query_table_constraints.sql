@@ -36,6 +36,6 @@ FROM (
         AND tc.constraint_name = cc.constraint_name
     WHERE tc.constraint_type = 'CHECK'
 )
-WHERE 1=1
+WHERE "schema" NOT IN ({{excluded_schemas}})
   /* SYNQ_SCOPE_FILTER */
 ORDER BY "schema", "table", "constraint_name", "column_position"

@@ -7,8 +7,6 @@ select "database",
        null::timestamp        as "updated_at"
 from pg_catalog.svv_table_info
 where estimated_visible_rows is not null
-  AND schema <> 'catalog_history'::name
-  AND schema <> 'pg_toast'::name
-  AND schema <> 'pg_internal'::name
+  and schema not in ({{system_schemas}})
   and "database" = $1
   /* SYNQ_SCOPE_FILTER */

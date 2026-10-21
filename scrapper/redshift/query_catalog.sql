@@ -29,6 +29,8 @@ with svv_redshift_columns as ((SELECT current_database()::character varying(128)
                                  AND pns.nspname <> 'pg_toast'::name
                                  AND pns.nspname <> 'pg_internal'::name
                                  AND pns.nspname !~~ 'pg_temp%'::text
+                                 -- a materialized view keeps its rows in mv_tbl__<view>__<n> in its own schema, owned by rdsdb (usesysid 1)
+                                 AND NOT (pgc.relowner = 1 AND left(pgc.relname, 8) = 'mv_tbl__')
                                UNION ALL
                                SELECT current_database()::character varying(128)     AS database_name,
                                       lbv_cols."schema"::character varying(128)      AS schema_name,
@@ -276,6 +278,6 @@ select database_name         as database,
        coalesce(remarks, '') as comment
 from svv_all_columns
 where database_name = $1
-  and schema_name not in ('pg_catalog', 'information_schema', 'pg_automv')
+  and schema_name not in ({{system_schemas}})
   /* SYNQ_SCOPE_FILTER */
 order by database, schema, "table", position
