@@ -2,6 +2,8 @@ package athena
 
 import (
 	"context"
+	"database/sql/driver"
+	"maps"
 	"testing"
 	"time"
 
@@ -128,4 +130,108 @@ func TestAthenaQueryTableMetrics_EmptyCatalog(t *testing.T) {
 	rows, err := sc.QueryTableMetrics(context.Background(), time.Now())
 	require.NoError(t, err)
 	require.Empty(t, rows)
+}
+
+// The Iceberg scan is one Athena query per table, so it runs only for a table
+// whose Glue UpdateTime moved since the last fetch, which every Iceberg commit
+// does. An unchanged Iceberg table is still returned, with what Glue has.
+func TestAthenaQueryTableMetrics_IcebergScanOnlyForChangedTables(t *testing.T) {
+	lastFetch := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	before := lastFetch.Add(-48 * time.Hour)
+	after := lastFetch.Add(time.Hour)
+	committed := after.Add(-time.Minute)
+	iceberg := func(params map[string]string) map[string]string {
+		out := map[string]string{"table_type": "ICEBERG"}
+		maps.Copy(out, params)
+		return out
+	}
+
+	f := &fakeGlue{databases: map[string][]fakeGlueTable{
+		"sales": {
+			{Name: "ice_changed", UpdateTime: epoch(after), Parameters: iceberg(nil)},
+			{Name: "ice_unchanged", UpdateTime: epoch(before), Parameters: iceberg(map[string]string{"numRows": "3"})},
+			{Name: "ice_at_last_fetch", UpdateTime: epoch(lastFetch), Parameters: iceberg(nil)},
+			{Name: "ice_no_time", Parameters: map[string]string{"metadata_location": "s3://bucket/ice_no_time/metadata.json"}},
+			{Name: "hive_changed", UpdateTime: epoch(after), Parameters: map[string]string{"numRows": "9"}},
+		},
+	}}
+
+	t.Run("only changed iceberg tables are scanned", func(t *testing.T) {
+		scans, db := newIcebergScans(t, map[string][]driver.Value{
+			"ice_changed":       {int64(100), int64(2048), committed},
+			"ice_no_time":       {int64(7), int64(70), committed},
+			"ice_unchanged":     nil,
+			"ice_at_last_fetch": nil,
+		})
+		sc := newFakeGlueScrapper(t, f, db)
+		sc.conf.UseIcebergMetricsScan = true
+
+		rows, err := sc.QueryTableMetrics(context.Background(), lastFetch)
+		require.NoError(t, err)
+		require.Equal(t, []string{"ice_changed", "ice_no_time"}, scans.tables())
+
+		byTable := metricsByTable(rows)
+		require.Len(t, byTable, 5, "every table is returned, scanned or not")
+
+		changed := byTable["sales.ice_changed"]
+		require.Equal(t, int64(100), *changed.RowCount)
+		require.Equal(t, int64(2048), *changed.SizeBytes)
+		require.Equal(t, committed, *changed.UpdatedAt, "the snapshot commit time wins over Glue's")
+
+		unchanged := byTable["sales.ice_unchanged"]
+		require.Equal(t, int64(3), *unchanged.RowCount, "Glue's numbers")
+		require.Nil(t, unchanged.SizeBytes)
+		require.Equal(t, before, *unchanged.UpdatedAt)
+
+		atLastFetch := byTable["sales.ice_at_last_fetch"]
+		require.Nil(t, atLastFetch.RowCount)
+		require.Equal(t, lastFetch, *atLastFetch.UpdatedAt)
+
+		require.Equal(t, int64(7), *byTable["sales.ice_no_time"].RowCount, "no time to compare: scanned")
+		require.Equal(t, int64(9), *byTable["sales.hive_changed"].RowCount)
+	})
+
+	t.Run("a first fetch scans every iceberg table", func(t *testing.T) {
+		scans, db := newIcebergScans(t, map[string][]driver.Value{
+			"ice_changed":       {int64(100), int64(2048), committed},
+			"ice_unchanged":     {int64(30), int64(300), before},
+			"ice_at_last_fetch": {int64(40), int64(400), lastFetch},
+			"ice_no_time":       {int64(7), int64(70), committed},
+		})
+		sc := newFakeGlueScrapper(t, f, db)
+		sc.conf.UseIcebergMetricsScan = true
+
+		rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"ice_at_last_fetch", "ice_changed", "ice_no_time", "ice_unchanged"}, scans.tables())
+		unchanged := metricsByTable(rows)["sales.ice_unchanged"]
+		require.Equal(t, int64(3), *unchanged.RowCount, "Glue's numRows stays ahead of the scan's")
+		require.Equal(t, int64(300), *unchanged.SizeBytes)
+	})
+
+	allFail := map[string][]driver.Value{"ice_changed": nil, "ice_no_time": nil, "ice_unchanged": nil, "ice_at_last_fetch": nil}
+
+	t.Run("a failed scan keeps the table with what Glue has", func(t *testing.T) {
+		scans, db := newIcebergScans(t, allFail)
+		sc := newFakeGlueScrapper(t, f, db)
+		sc.conf.UseIcebergMetricsScan = true
+
+		rows, err := sc.QueryTableMetrics(context.Background(), lastFetch)
+		require.NoError(t, err)
+		require.Equal(t, []string{"ice_changed", "ice_no_time"}, scans.tables())
+		byTable := metricsByTable(rows)
+		require.Equal(t, after, *byTable["sales.ice_changed"].UpdatedAt)
+		require.Nil(t, byTable["sales.ice_changed"].RowCount)
+		require.NotContains(t, byTable, "sales.ice_no_time", "no time and no numbers: nothing to report")
+	})
+
+	t.Run("without the opt-in nothing is scanned", func(t *testing.T) {
+		scans, db := newIcebergScans(t, allFail)
+		sc := newFakeGlueScrapper(t, f, db)
+
+		rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+		require.NoError(t, err)
+		require.Empty(t, scans.tables())
+		require.Len(t, rows, 4)
+	})
 }

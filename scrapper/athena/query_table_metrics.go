@@ -32,12 +32,13 @@ import (
 // Tables with no usable stats from either source are skipped — we'd rather omit
 // a row than emit zeros that downstream consumers treat as a real "0 rows".
 //
-// Every table in scope is returned on every call, whether or not it changed,
-// as on every other warehouse; the caller decides what changed. The last fetch
-// time is ignored: callers pass the last run of a job that covers the whole
-// workspace, so skipping tables older than it left a new integration with no
-// first reading and a table that does not change with no reading at all.
-func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, _ time.Time) ([]*scrapper.TableMetricsRow, error) {
+// Every table in scope is returned on every call, whether or not it changed:
+// a table left out is a gap downstream, and a table that stopped changing is
+// the one a freshness monitor has to see. `lastFetchTime` only decides which
+// Iceberg tables get the scan, as it decides which tables Databricks analyzes:
+// those whose Glue `UpdateTime` moved after it, which an Iceberg commit always
+// does. An unchanged Iceberg table reports what Glue has for it.
+func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, lastFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
 	glueClient := e.executor.GlueClient()
 	if glueClient == nil {
 		return nil, nil
@@ -98,12 +99,11 @@ func (e *AthenaScrapper) QueryTableMetrics(ctx context.Context, _ time.Time) ([]
 					row.SizeBytes = &size
 				}
 
-				if e.conf.UseIcebergMetricsScan && isIcebergTable(t) {
-					// Always queue Iceberg tables for the metadata scan when
-					// the flag is on — even if Glue already had row count and
-					// size, we still want the precise commit timestamp from
-					// $snapshots for accurate data freshness. The combined
-					// $files + $snapshots query is one Athena call either way.
+				if e.conf.UseIcebergMetricsScan && isIcebergTable(t) && changedSince(row.UpdatedAt, lastFetchTime) {
+					// Queue a changed Iceberg table even when Glue already had
+					// row count and size: the precise commit timestamp from
+					// $snapshots is still wanted for data freshness, and the
+					// combined $files + $snapshots query is one Athena call either way.
 					icebergPending = append(icebergPending, row)
 				}
 				out = append(out, row)
@@ -289,4 +289,10 @@ func glueUpdateTime(t gluetypes.Table) *time.Time {
 		return &ts
 	}
 	return nil
+}
+
+// changedSince says whether a table whose Glue update time is updatedAt may
+// have changed after lastFetchTime. Without either time it may have.
+func changedSince(updatedAt *time.Time, lastFetchTime time.Time) bool {
+	return lastFetchTime.IsZero() || updatedAt == nil || updatedAt.After(lastFetchTime)
 }

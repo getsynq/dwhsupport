@@ -1,20 +1,27 @@
 package athena
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	awsglue "github.com/aws/aws-sdk-go-v2/service/glue"
 	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
-	"github.com/getsynq/dwhsupport/scrapper/scope"
+	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeGlueTable is one table of a fakeGlue database, in the shape the Glue
@@ -68,8 +75,10 @@ func (f *fakeGlue) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(out)
 }
 
-// newFakeGlueScrapper builds an AthenaScrapper whose Glue client talks to f.
-func newFakeGlueScrapper(t *testing.T, f *fakeGlue, scopeFilter *scope.ScopeFilter) *AthenaScrapper {
+// newFakeGlueScrapper builds an AthenaScrapper whose Glue client talks to f
+// and whose Athena statements go to db, which may be nil when the test runs
+// none.
+func newFakeGlueScrapper(t *testing.T, f *fakeGlue, db *sqlx.DB) *AthenaScrapper {
 	t.Helper()
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
@@ -79,14 +88,62 @@ func newFakeGlueScrapper(t *testing.T, f *fakeGlue, scopeFilter *scope.ScopeFilt
 		BaseEndpoint: aws.String(srv.URL),
 		Credentials:  credentials.NewStaticCredentialsProvider("AKID", "SECRET", ""),
 	})
-	conf := &AthenaScrapperConf{
-		AthenaConf: &dwhexecathena.AthenaConf{Region: "eu-west-1"},
-		Scope:      scopeFilter,
-	}
+	conf := &AthenaScrapperConf{AthenaConf: &dwhexecathena.AthenaConf{Region: "eu-west-1"}}
 	return &AthenaScrapper{
 		conf:     conf,
-		executor: dwhexecathena.NewAthenaExecutorWithGlue(conf.AthenaConf, "123456789012", glueClient),
+		executor: dwhexecathena.NewAthenaExecutorWithClients(conf.AthenaConf, "123456789012", glueClient, db),
 	}
+}
+
+// icebergScans stands in for Athena in the Iceberg metadata scan: each table
+// given answers with its row count, size and commit time, or fails when its
+// values are nil, and every table a scan was sent for is recorded. sqlmock
+// only consults the matcher while an expectation is open, so a test lists
+// every Iceberg table, those it expects to stay unscanned too.
+type icebergScans struct {
+	mu      sync.Mutex
+	scanned map[string]bool
+}
+
+var icebergScanTable = regexp.MustCompile(`FROM "[^"]*"\."([^"$]*)\$files"`)
+
+func newIcebergScans(t *testing.T, rows map[string][]driver.Value) (*icebergScans, *sqlx.DB) {
+	t.Helper()
+	s := &icebergScans{scanned: map[string]bool{}}
+	// sqlmock calls the matcher once per open expectation, so a scan is
+	// recorded as a set member, not counted.
+	matcher := sqlmock.QueryMatcherFunc(func(expected, actual string) error {
+		m := icebergScanTable.FindStringSubmatch(actual)
+		if m == nil {
+			return errors.Errorf("not an iceberg scan: %s", actual)
+		}
+		s.mu.Lock()
+		s.scanned[m[1]] = true
+		s.mu.Unlock()
+		if expected != m[1] {
+			return errors.Errorf("scan of %s, expected %s", m[1], expected)
+		}
+		return nil
+	})
+	db, mock, err := sqlmock.New(sqlmock.QueryMatcherOption(matcher))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	mock.MatchExpectationsInOrder(false)
+	for table, values := range rows {
+		if values == nil {
+			mock.ExpectQuery(table).WillReturnError(errors.Errorf("scan of %s refused", table))
+			continue
+		}
+		mock.ExpectQuery(table).
+			WillReturnRows(sqlmock.NewRows([]string{"row_count", "size_bytes", "last_committed_at"}).AddRow(values...))
+	}
+	return s, sqlx.NewDb(db, "sqlmock")
+}
+
+func (s *icebergScans) tables() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Sorted(maps.Keys(s.scanned))
 }
 
 func epoch(t time.Time) float64 { return float64(t.Unix()) }
