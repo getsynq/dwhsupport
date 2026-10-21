@@ -317,6 +317,7 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 
 ## Redshift Gotchas
 
+- **System objects are left out by schema, plus one table by owner and name.** Every catalog query lists the same system schemas through `{{system_schemas}}` (`redshiftSystemSchemas` in `system_objects.go`: `pg_auto_copy`, `pg_mv` and `pg_s3` are readable by every user and were published before). A materialized view keeps its rows in `mv_tbl__<view>__<n>` in its own schema, owned by `rdsdb` (usesysid 1), which the tables, columns and constraints queries leave out. Never leave out everything `rdsdb` owns: `public` is its schema, and the tables a zero-ETL integration replicates may be its too. `RedshiftSystemObjectsSuite` checks it on dwhtesting, whose `pipelines.events_hourly` is a materialized view.
 - **Query text is C-escaped.** `SYS_QUERY_HISTORY.query_text` and `SYS_QUERY_TEXT.text` store a line feed as `\n`, a carriage return as `\r` and a backslash doubled; a tab is stored as it is. `unescapeQueryText` reverses it. Passed through raw, a `--` comment swallows the rest of the statement.
 - **`query_text` is only the first chunk.** `SYS_QUERY_TEXT` holds the whole statement in chunks of at most 4000 bytes, keyed by `query_id` and `sequence`, and Redshift often ends a chunk short of 4000, so length alone cannot tell a cut statement from a complete one. `query_logs.sql` joins the chunks for any `query_text` of at least `queryTextChunkMinBytes`, one row per chunk in sequence order, and `queryLogIterator` collects them. Chunks are joined before unescaping and before UTF-8 cleanup, because a chunk can end inside an escape or a multi-byte character. Missing chunks set `IsTruncated`.
 - **`query_id` is the run, `generic_query_hash` is the shape.** The generic hash ignores literals and covers the whole statement, not just the first chunk, so it is the `NormalizedQueryHash`.
@@ -354,6 +355,10 @@ Paths in `.env` (`SNOWFLAKE_PRIVATE_KEY_FILE`, `BIGQUERY_CREDENTIALS_FILE`) reso
 - **MSSQL dialect compatibility**: Use `DATEADD+DATEDIFF` pattern for time truncation (not `DATETRUNC` — SQL Server 2022+ only, not in Azure SQL Edge). `MEDIAN` returns `NULL` (PERCENTILE_CONT is a window function, can't mix with aggregates).
 - **MSSQL string length**: MSSQL uses `LEN()` not `LENGTH()`. Always use `dialect.StringLength()` — never hardcode `Fn("length", ...)` in metrics queries.
 - **PostgreSQL MEDIAN**: Use `PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY expr)` — no built-in `MEDIAN` function.
+
+## Trino Gotchas
+
+- **A catalog lists the system schemas of the database behind it** (`sys` of SQL Server, the users Oracle maintains, `pg_catalog`, `performance_schema`, the `system` schema an Iceberg JDBC catalog keeps its `iceberg_tables` in). Each catalog query leaves out `information_schema` and the connector's own list through `{{excluded_schemas}}`, filled by `withCatalog` from `connectorSystemSchemas` (`scrapper/trino/system_schemas.go`) by `system.metadata.catalogs.connector_name`. A list follows what the native scrapper for that database skips. The Oracle one is fixed rather than read, since Trino cannot reach `ALL_USERS`. `TrinoSystemSchemasSuite` checks it against the self-hosted Trino's catalogs.
 
 ## Athena Gotchas
 
