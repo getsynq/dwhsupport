@@ -40,19 +40,8 @@ func (s *ForeignKeysSuite) Ctx() context.Context {
 }
 
 func (s *ForeignKeysSuite) constraintsOf(table FixtureTable) []*scrapper.TableConstraintRow {
-	ctx := table.ctx(s.Ctx())
-	var rows []*scrapper.TableConstraintRow
-	if s.Scrapper.Capabilities().ConstraintsViaQueryTables {
-		tables, err := s.Scrapper.QueryTables(ctx, scrapper.WithConstraints())
-		s.Require().NoError(err)
-		for _, t := range tables {
-			rows = append(rows, t.Constraints...)
-		}
-	} else {
-		var err error
-		rows, err = s.Scrapper.QueryTableConstraints(ctx)
-		s.Require().NoError(err)
-	}
+	rows, err := queryConstraints(table.ctx(s.Ctx()), s.Scrapper)
+	s.Require().NoError(err)
 	var matching []*scrapper.TableConstraintRow
 	for _, row := range rows {
 		if table.matches(row.TableFqn()) {
