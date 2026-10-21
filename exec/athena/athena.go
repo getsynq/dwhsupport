@@ -189,6 +189,13 @@ func NewAthenaExecutor(ctx context.Context, conf *AthenaConf) (*AthenaExecutor, 
 	}, nil
 }
 
+// NewAthenaExecutorWithGlue builds an executor over a Glue client the caller
+// built, with no Athena connection, for the methods that read Glue only
+// (table metrics, constraints). Tests use it with a fake Glue endpoint.
+func NewAthenaExecutorWithGlue(conf *AthenaConf, accountID string, glueClient *awsglue.Client) *AthenaExecutor {
+	return &AthenaExecutor{conf: conf, glueClient: glueClient, accountID: accountID}
+}
+
 // buildAwsConfig assembles an aws.Config from the configured authentication
 // method. Resolution order: static keys → profile → default chain. RoleArn
 // wraps whichever base credentials resolved.
@@ -263,6 +270,9 @@ func (e *AthenaExecutor) Exec(ctx context.Context, query string, args ...any) er
 }
 
 func (e *AthenaExecutor) Close() error {
+	if e.db == nil {
+		return nil
+	}
 	return e.db.Close()
 }
 
