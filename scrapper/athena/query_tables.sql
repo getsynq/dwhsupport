@@ -3,7 +3,7 @@ SELECT
     t.table_schema                        AS schema,
     t.table_name                          AS "table",
     t.table_type                          AS "table_type",
-    ''                                    AS description,
+    CAST(NULL AS VARCHAR)                 AS description,
     (t.table_type = 'BASE TABLE')         AS is_table,
     (t.table_type = 'VIEW')               AS is_view
 FROM information_schema.tables t

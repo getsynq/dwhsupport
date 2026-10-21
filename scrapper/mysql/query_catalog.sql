@@ -1,7 +1,11 @@
 with tables as (select null          as "table_database",
                        table_schema  as "table_schema",
                        table_name    as "table_name",
-                       table_comment as "table_comment",
+                       -- MySQL and MariaDB report the comment of every view as 'VIEW'
+                       case
+                           when table_type = 'VIEW' then null
+                           else nullif(table_comment, '')
+                           end       as "table_comment",
                        case
                            when table_type = 'BASE TABLE' then 'table'
                            when table_type = 'VIEW' then 'view'

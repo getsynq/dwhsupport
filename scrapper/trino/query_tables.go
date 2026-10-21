@@ -87,6 +87,9 @@ func (e *TrinoScrapper) queryTablesWith(ctx context.Context, catalog *TrinoCatal
 	res, err := stdsql.QueryMany(ctx, db, catalogQuery,
 		dwhexec.WithPostProcessors(func(row *scrapper.TableRow) (*scrapper.TableRow, error) {
 			row.Instance = e.conf.Host
+			if isMySQLViewComment(catalog, row.Description) {
+				row.Description = nil
+			}
 			return row, nil
 		}),
 	)
