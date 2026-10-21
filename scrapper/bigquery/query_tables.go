@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/getsynq/dwhsupport/logging"
@@ -116,6 +117,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 					Description: lo.EmptyableToPtr(tableMeta.Description),
 					Tags:        tableTags,
 					CreatedAt:   scrapper.UTCTimePtr(&tableMeta.CreationTime),
+					CopyOf:      copyOf(tableMeta, shardLowerBound, shardUpperBound),
 				}
 
 				if includeConstraints {
@@ -142,4 +144,35 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 	}
 
 	return rows, reads.result()
+}
+
+// copyOf names the base table of a table snapshot or a table clone, nil for
+// any other table. The base is named the way QueryTables names it: a shard
+// by the name of its sharded table, which the scan reports in its place.
+func copyOf(meta *bigquery.TableMetadata, shardLowerBound, shardUpperBound time.Time) *scrapper.TableCopyOf {
+	var kind scrapper.TableCopyKind
+	var base *bigquery.Table
+	var at time.Time
+	switch {
+	case meta.SnapshotDefinition != nil:
+		kind, base, at = scrapper.TableCopySnapshot, meta.SnapshotDefinition.BaseTableReference, meta.SnapshotDefinition.SnapshotTime
+	case meta.CloneDefinition != nil:
+		kind, base, at = scrapper.TableCopyClone, meta.CloneDefinition.BaseTableReference, meta.CloneDefinition.CloneTime
+	default:
+		return nil
+	}
+	if base == nil || base.ProjectID == "" || base.DatasetID == "" || base.TableID == "" {
+		return nil
+	}
+	table := base.TableID
+	if sharded, ok := shardedTableName(table, shardLowerBound, shardUpperBound); ok {
+		table = sharded
+	}
+	return &scrapper.TableCopyOf{
+		Kind:     kind,
+		Database: base.ProjectID,
+		Schema:   base.DatasetID,
+		Table:    table,
+		At:       scrapper.UTCTimePtr(&at),
+	}
 }

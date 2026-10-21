@@ -186,6 +186,46 @@ type TableRow struct {
 	// Constraints is optionally populated by QueryTables when WithConstraints() is passed.
 	// When non-nil, callers may skip a separate QueryTableConstraints call.
 	Constraints []*TableConstraintRow `json:"constraints,omitempty"`
+
+	// CopyOf is the table this one is a copy of, as the warehouse states it:
+	// the base table of a BigQuery table snapshot or table clone. Nil when the
+	// object is not a copy, or the warehouse does not say what it copies.
+	CopyOf *TableCopyOf `json:"copy_of,omitempty"`
+}
+
+// TableCopyKind is how a table copy was made, in the platform's own terms.
+type TableCopyKind string
+
+const (
+	// TableCopySnapshot is a read-only copy of the base table at one point in
+	// time (BigQuery table snapshot).
+	TableCopySnapshot TableCopyKind = "snapshot"
+	// TableCopyClone is a writable copy that starts from the base table at one
+	// point in time and is changed on its own after that (BigQuery table clone).
+	TableCopyClone TableCopyKind = "clone"
+)
+
+// TableCopyOf names the base table a copy was made from. The copy holds the
+// base table's data as of At, so it is neither a view of the base nor fed by
+// it: a caller decides whether that is lineage.
+type TableCopyOf struct {
+	Kind     TableCopyKind `json:"kind"`
+	Instance string        `json:"instance,omitempty"`
+	Database string        `json:"database"`
+	Schema   string        `json:"schema"`
+	Table    string        `json:"table"`
+	// At is the time of the base table the copy holds, in UTC. Nil when the
+	// warehouse does not report it.
+	At *time.Time `json:"at,omitempty"`
+}
+
+func (c TableCopyOf) TableFqn() DwhFqn {
+	return DwhFqn{
+		InstanceName: c.Instance,
+		DatabaseName: c.Database,
+		SchemaName:   c.Schema,
+		ObjectName:   c.Table,
+	}
 }
 
 func (r TableRow) TableFqn() DwhFqn {
