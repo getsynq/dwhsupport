@@ -110,7 +110,6 @@ type QueryLog struct {
 //   - BigQuery: Instance="", Database=project_id, Schema=dataset_id
 //   - Redshift: Instance=host, Database=database_name, Schema=schema_name
 //   - Postgres: Instance=host, Database=database_name, Schema=schema_name
-//   - Trino: Instance=host, Database=catalog, Schema=schema
 //   - MySQL: Instance="", Database=host, Schema=schema_name
 //   - ClickHouse: Instance=host, Database=configured instance name (empty unless configured), Schema=database_name
 //   - DuckDB: Instance=motherduck_account, Database="", Schema=schema_name
@@ -118,7 +117,7 @@ type DwhContext struct {
 	// Instance is the unique identifier for the data warehouse instance.
 	// This is typically the hostname, account ID, or workspace URL that uniquely
 	// identifies the data warehouse deployment.
-	// - Set by: Snowflake (account), Databricks (workspace_url), Redshift/Postgres/Trino/ClickHouse (host), DuckDB (motherduck_account)
+	// - Set by: Snowflake (account), Databricks (workspace_url), Redshift/Postgres/ClickHouse (host), DuckDB (motherduck_account)
 	// - Empty for: BigQuery, MySQL
 	Instance string
 
@@ -127,7 +126,6 @@ type DwhContext struct {
 	// - Databricks: catalog_name
 	// - BigQuery: project_id
 	// - Redshift/Postgres: database_name
-	// - Trino: catalog
 	// - MySQL: host (used as instance identifier)
 	// - ClickHouse: the name the service is published under, from config; empty unless
 	//   one was configured, and then the instance names it. NOT the schema-level database
@@ -137,7 +135,6 @@ type DwhContext struct {
 	// Schema name (may be empty for platforms without schema concept)
 	// - Snowflake/Databricks/Redshift/Postgres/MySQL: schema_name
 	// - BigQuery: dataset_id
-	// - Trino: schema
 	// - ClickHouse: database_name (2-level hierarchy)
 	// - DuckDB: schema_name
 	Schema string
@@ -146,7 +143,7 @@ type DwhContext struct {
 	Warehouse string
 
 	// User who executed the query, spelled as the platform's history names it
-	// - Snowflake, Redshift, BigQuery, Databricks, Trino, ClickHouse: the executing user
+	// - Snowflake, Redshift, BigQuery, Databricks, ClickHouse: the executing user
 	// - Fabric: login_name, "<appId>@<tenantId>" for a service principal
 	// - Oracle: the user who parsed the cursor (V$SQL / DBA_HIST_SQLSTAT parsing_user_id),
 	//   which another user with the same privileges may reuse; never the parsing schema
