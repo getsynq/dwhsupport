@@ -166,7 +166,7 @@ func copyOf(meta *bigquery.TableMetadata, shardLowerBound, shardUpperBound time.
 	}
 	table := base.TableID
 	if sharded, ok := shardedTableName(table, shardLowerBound, shardUpperBound); ok {
-		table = sharded
+		table = reportedShardedTableName(sharded)
 	}
 	return &scrapper.TableCopyOf{
 		Kind:     kind,

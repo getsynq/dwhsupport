@@ -74,7 +74,7 @@ The library is organized into three main layers:
 All data models are in `scrapper/models.go`:
 - `TableMetricsRow` - Table statistics (row_count, size_bytes, updated_at)
 - `CatalogColumnRow` - Column metadata with types, comments, tags, nested fields
-- `TableRow` - Table metadata with types, descriptions, tags, annotations. `CopyOf` names the base table of a copy (BigQuery table snapshot and table clone, from `SnapshotDefinition` / `CloneDefinition`), with the point in time it holds. It states the platform's fact and nothing more: whether a copy counts as lineage or a mirror is the caller's call. A base that is a shard is named by its sharded table (`events_`), as QueryTables reports it.
+- `TableRow` - Table metadata with types, descriptions, tags, annotations. `CopyOf` names the base table of a copy (BigQuery table snapshot and table clone, from `SnapshotDefinition` / `CloneDefinition`), with the point in time it holds. It states the platform's fact and nothing more: whether a copy counts as lineage or a mirror is the caller's call. A base that is a shard (`events_20240101`) is named by its sharded table as QueryTables reports it (`events`, trailing underscores trimmed by `reportedShardedTableName`).
 - `SqlDefinitionRow` - SQL definitions for views/materialized views
 - `DatabaseRow` - Database-level metadata
 - `DwhFqn` - Fully qualified name (instance, database, schema, object)

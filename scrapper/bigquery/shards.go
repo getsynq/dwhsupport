@@ -45,10 +45,16 @@ func getShardedTables(tableIds []string, lowerDateBound, upperDateBound time.Tim
 			shardedTable.TableName,
 			getLatestShard(shardedTable.Shards).Format("20060102"),
 		)
-		shardedTable.TableName = strings.TrimRight(shardedTable.TableName, "_")
+		shardedTable.TableName = reportedShardedTableName(shardedTable.TableName)
 	}
 
 	return shardedTables
+}
+
+// reportedShardedTableName is the name QueryTables reports a sharded table
+// under: the shards' common prefix without its trailing underscores.
+func reportedShardedTableName(prefix string) string {
+	return strings.TrimRight(prefix, "_")
 }
 
 var shardedTableIdRegex = regexp.MustCompile(`^(.*\D)(\d{8})$`)
