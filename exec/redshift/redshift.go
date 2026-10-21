@@ -68,27 +68,20 @@ func NewRedshiftExecutor(ctx context.Context, conf *RedshiftConf) (*RedshiftExec
 	var db *sqlx.DB
 	var sshTunnelDialer *sshtunnel.SshTunnelDialer
 
+	connector, err := pq.NewConnector(queryString)
+	if err != nil {
+		return nil, err
+	}
 	if conf.SSHTunnel.IsEnabled() {
 		logging.GetLogger(ctx).Infof("using ssh tunnel to connect to %s", conf.Host)
 		sshTunnelDialer, err = sshtunnel.NewSshTunnelDialer(conf.SSHTunnel)
 		if err != nil {
 			return nil, err
 		}
-		connector, err := pq.NewConnector(queryString)
-		if err != nil {
-			return nil, err
-		}
 		connector.Dialer(sshTunnelDialer)
-
-		stdDb := sql.OpenDB(connector)
-		db = sqlx.NewDb(stdDb, "postgres")
-	} else {
-		db, err = sqlx.Open("postgres", queryString)
 	}
+	db = sqlx.NewDb(sql.OpenDB(retryReadsConnector{Connector: connector}), "postgres")
 
-	if err != nil {
-		return nil, err
-	}
 	err = db.PingContext(ctx)
 	if err != nil {
 		return nil, exec.ConnectionError(err, IsAuthError)

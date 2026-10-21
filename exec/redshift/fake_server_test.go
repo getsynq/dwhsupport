@@ -25,26 +25,26 @@ import (
 // certificate), ping, and run a query with parameters through the extended
 // protocol. Every query returns one text column n holding "1".
 //
-// With duplicateBindComplete set, the first Execute the server sees is
-// answered with BindComplete twice. Redshift Serverless does that to the first
+// The first duplicateBindCompletes Executes the server sees are answered with
+// BindComplete twice. Redshift Serverless does that to the first
 // query that needs compute after the workgroup was idle, and lib/pq then fails
 // the query with "unexpected message during extended query execution: '2'".
 type fakeServer struct {
-	t                     *testing.T
-	listener              net.Listener
-	tlsConfig             *tls.Config
-	duplicateBindComplete bool
+	t                      *testing.T
+	listener               net.Listener
+	tlsConfig              *tls.Config
+	duplicateBindCompletes int32
 
 	connections atomic.Int32
 	executes    atomic.Int32
 	wg          sync.WaitGroup
 }
 
-func newFakeServer(t *testing.T, duplicateBindComplete bool) *fakeServer {
+func newFakeServer(t *testing.T, duplicateBindCompletes int32) *fakeServer {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	s := &fakeServer{t: t, listener: listener, tlsConfig: selfSignedTLS(t), duplicateBindComplete: duplicateBindComplete}
+	s := &fakeServer{t: t, listener: listener, tlsConfig: selfSignedTLS(t), duplicateBindCompletes: duplicateBindCompletes}
 	s.wg.Add(1)
 	go s.accept()
 	t.Cleanup(func() {
@@ -130,7 +130,7 @@ func (s *fakeServer) serve(raw net.Conn) {
 			}
 			if bound {
 				writeMessage(w, '2', nil) // BindComplete
-				if s.executes.Add(1) == 1 && s.duplicateBindComplete {
+				if s.executes.Add(1) <= s.duplicateBindCompletes {
 					writeMessage(w, '2', nil)
 				}
 				writeMessage(w, 'D', append(int16Bytes(1), append(int32Bytes(1), '1')...))
