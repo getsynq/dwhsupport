@@ -29,7 +29,7 @@ func TestAthenaQueryTableMetrics_ReportsTablesUnchangedSinceLastFetch(t *testing
 	before := lastFetch.Add(-48 * time.Hour)
 	after := lastFetch.Add(time.Hour)
 
-	f := &fakeGlue{databases: map[string][]fakeGlueTable{
+	f := &fakeGlueEndpoint{databases: map[string][]fakeGlueTable{
 		"sales": {
 			{Name: "unchanged", UpdateTime: epoch(before), Parameters: map[string]string{"numRows": "10", "totalSize": "1000"}},
 			{Name: "changed", UpdateTime: epoch(after), Parameters: map[string]string{"numRows": "20"}},
@@ -59,7 +59,7 @@ func TestAthenaQueryTableMetrics_ReportsTablesUnchangedSinceLastFetch(t *testing
 // The same tables come back whatever time the caller passes.
 func TestAthenaQueryTableMetrics_IgnoresLastFetchTime(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
-	f := &fakeGlue{databases: map[string][]fakeGlueTable{
+	f := &fakeGlueEndpoint{databases: map[string][]fakeGlueTable{
 		"sales": {
 			{Name: "orders", UpdateTime: epoch(now.Add(-time.Hour)), Parameters: map[string]string{"numRows": "5"}},
 		},
@@ -76,7 +76,7 @@ func TestAthenaQueryTableMetrics_IgnoresLastFetchTime(t *testing.T) {
 
 func TestAthenaQueryTableMetrics_GlueTables(t *testing.T) {
 	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	f := &fakeGlue{databases: map[string][]fakeGlueTable{
+	f := &fakeGlueEndpoint{databases: map[string][]fakeGlueTable{
 		"sales": {
 			{Name: "orders", UpdateTime: epoch(created.Add(time.Hour)), Parameters: map[string]string{"numRows": "7"}},
 			{Name: "orders_view", TableType: "VIRTUAL_VIEW", UpdateTime: epoch(created)},
@@ -126,7 +126,7 @@ func TestAthenaQueryTableMetrics_GlueTables(t *testing.T) {
 }
 
 func TestAthenaQueryTableMetrics_EmptyCatalog(t *testing.T) {
-	sc := newFakeGlueScrapper(t, &fakeGlue{databases: map[string][]fakeGlueTable{"empty": nil}}, nil)
+	sc := newFakeGlueScrapper(t, &fakeGlueEndpoint{databases: map[string][]fakeGlueTable{"empty": nil}}, nil)
 	rows, err := sc.QueryTableMetrics(context.Background(), time.Now())
 	require.NoError(t, err)
 	require.Empty(t, rows)
@@ -146,7 +146,7 @@ func TestAthenaQueryTableMetrics_IcebergScanOnlyForChangedTables(t *testing.T) {
 		return out
 	}
 
-	f := &fakeGlue{databases: map[string][]fakeGlueTable{
+	f := &fakeGlueEndpoint{databases: map[string][]fakeGlueTable{
 		"sales": {
 			{Name: "ice_changed", UpdateTime: epoch(after), Parameters: iceberg(nil)},
 			{Name: "ice_unchanged", UpdateTime: epoch(before), Parameters: iceberg(map[string]string{"numRows": "3"})},

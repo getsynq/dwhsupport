@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeGlueTable is one table of a fakeGlue database, in the shape the Glue
+// fakeGlueTable is one table of a fakeGlueEndpoint database, in the shape the Glue
 // JSON API returns it (timestamps in epoch seconds).
 type fakeGlueTable struct {
 	Name       string            `json:"Name"`
@@ -34,9 +34,9 @@ type fakeGlueTable struct {
 	Parameters map[string]string `json:"Parameters,omitempty"`
 }
 
-// fakeGlue answers the Glue JSON 1.1 calls QueryTableMetrics makes,
+// fakeGlueEndpoint answers the Glue JSON 1.1 calls QueryTableMetrics makes,
 // GetDatabases and GetTables, from an in-memory catalog.
-type fakeGlue struct {
+type fakeGlueEndpoint struct {
 	databases map[string][]fakeGlueTable
 
 	mu sync.Mutex
@@ -44,7 +44,7 @@ type fakeGlue struct {
 	calls []string
 }
 
-func (f *fakeGlue) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (f *fakeGlueEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	target := strings.TrimPrefix(r.Header.Get("X-Amz-Target"), "AWSGlue.")
 	body, _ := io.ReadAll(r.Body)
 	var in struct {
@@ -78,7 +78,7 @@ func (f *fakeGlue) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // newFakeGlueScrapper builds an AthenaScrapper whose Glue client talks to f
 // and whose Athena statements go to db, which may be nil when the test runs
 // none.
-func newFakeGlueScrapper(t *testing.T, f *fakeGlue, db *sqlx.DB) *AthenaScrapper {
+func newFakeGlueScrapper(t *testing.T, f *fakeGlueEndpoint, db *sqlx.DB) *AthenaScrapper {
 	t.Helper()
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
