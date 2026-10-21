@@ -33,3 +33,40 @@ func TestTablesOfOneDatasetKeepTheirOwnLabels(t *testing.T) {
 		}, row.TableTags, row.Table)
 	}
 }
+
+// A table label replaces the dataset label with the same key: BigQuery keeps
+// the two apart, and the table's is the one that describes the table.
+func TestATableLabelReplacesTheDatasetLabelWithTheSameKey(t *testing.T) {
+	scr := newFakeMetadataScrapper(t, fakeDataset{
+		id:     "crm",
+		labels: `{"owner":"data-eng","env":"prod"}`,
+		tables: []fakeTable{
+			{id: "orders", json: `"type":"TABLE","labels":{"owner":"analytics"},"schema":{"fields":[{"name":"id","type":"INTEGER"}]}`},
+			{id: "customers", json: `"type":"TABLE","schema":{"fields":[{"name":"id","type":"INTEGER"}]}`},
+		},
+	})
+	want := map[string][]*scrapper.Tag{
+		"orders": {
+			{TagName: "env", TagValue: "prod", Kind: scrapper.TagKindLabel},
+			{TagName: "owner", TagValue: "analytics", Kind: scrapper.TagKindLabel},
+		},
+		"customers": {
+			{TagName: "env", TagValue: "prod", Kind: scrapper.TagKindLabel},
+			{TagName: "owner", TagValue: "data-eng", Kind: scrapper.TagKindLabel},
+		},
+	}
+
+	tables, err := scr.QueryTables(context.Background())
+	require.NoError(t, err)
+	require.Len(t, tables, 2)
+	for _, row := range tables {
+		require.ElementsMatch(t, want[row.Table], row.Tags, "QueryTables %s", row.Table)
+	}
+
+	columns, err := scr.QueryCatalog(context.Background())
+	require.NoError(t, err)
+	require.Len(t, columns, 2)
+	for _, row := range columns {
+		require.ElementsMatch(t, want[row.Table], row.TableTags, "QueryCatalog %s", row.Table)
+	}
+}

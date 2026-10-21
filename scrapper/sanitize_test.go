@@ -93,6 +93,7 @@ func TestTableRow_Sanitize(t *testing.T) {
 		Tags:        []*Tag{{TagName: "k\x00", TagValue: "v"}},
 		Annotations: []*Annotation{{AnnotationName: "a\x00", AnnotationValue: "b"}},
 		Constraints: []*TableConstraintRow{{ConstraintName: "pk\x00", ColumnName: "id"}},
+		CopyOf:      &TableCopyOf{Kind: TableCopyClone, Database: "p\x00", Schema: "s\xff", Table: "base\x00"},
 	}
 	row.Sanitize()
 
@@ -101,6 +102,7 @@ func TestTableRow_Sanitize(t *testing.T) {
 	assert.Equal(t, "k", row.Tags[0].TagName)
 	assert.Equal(t, "a", row.Annotations[0].AnnotationName)
 	assert.Equal(t, "pk", row.Constraints[0].ConstraintName)
+	assert.Equal(t, DwhFqn{DatabaseName: "p", SchemaName: "s", ObjectName: "base"}, row.CopyOf.TableFqn())
 }
 
 func TestDatabaseRow_Sanitize(t *testing.T) {
