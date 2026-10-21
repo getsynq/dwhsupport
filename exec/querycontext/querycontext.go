@@ -53,6 +53,20 @@ func (qc QueryContext) FormatAsSQLComment() string {
 	return " /* " + j + " */"
 }
 
+// FormatAsSQLLineComment returns the query context as a SQL line comment on a
+// line of its own, for a parser that rejects a block comment after the
+// statement: \n-- {"key":"value"}
+//
+// The comment cannot end early: JSON escapes every line break in a key or a
+// value, so the payload stays on one line.
+func (qc QueryContext) FormatAsSQLLineComment() string {
+	j := qc.FormatAsJSON()
+	if j == "" {
+		return ""
+	}
+	return "\n-- " + j
+}
+
 // AppendSQLComment appends a query context SQL comment to the given SQL string
 // if query context is present in the context. Returns the original SQL unchanged
 // if no query context is set.
@@ -62,6 +76,22 @@ func AppendSQLComment(ctx context.Context, sql string) string {
 		return sql
 	}
 	comment := qc.FormatAsSQLComment()
+	if comment == "" {
+		return sql
+	}
+	return strings.TrimRight(sql, " \t\n\r;") + comment
+}
+
+// AppendSQLLineComment is AppendSQLComment with the context as a line comment
+// (FormatAsSQLLineComment), for a statement whose parser rejects a trailing
+// block comment. Prefer AppendSQLComment everywhere else: it is the form a
+// query log reader looks for.
+func AppendSQLLineComment(ctx context.Context, sql string) string {
+	qc := GetQueryContext(ctx)
+	if qc == nil {
+		return sql
+	}
+	comment := qc.FormatAsSQLLineComment()
 	if comment == "" {
 		return sql
 	}

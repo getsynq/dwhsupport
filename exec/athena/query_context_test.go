@@ -84,3 +84,19 @@ func TestExecutorLineCommentStaysOnOneLine(t *testing.T) {
 	require.NoError(t, e.Select(ctx, &rows, "SHOW CREATE TABLE t"))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestLeadingKeyword(t *testing.T) {
+	cases := map[string]string{
+		"SHOW CREATE TABLE t":                       "SHOW",
+		"  \n\tdescribe t":                          "DESCRIBE",
+		"/* SHOW */ SELECT 1":                       "SELECT",
+		"-- a\n-- b\n/* c */\n MSCK REPAIR TABLE t": "MSCK",
+		"(SELECT 1)":                                "",
+		"-- only a comment":                         "",
+		"/* unterminated":                           "",
+		"":                                          "",
+	}
+	for sql, keyword := range cases {
+		require.Equal(t, keyword, leadingKeyword(sql), "%q", sql)
+	}
+}
