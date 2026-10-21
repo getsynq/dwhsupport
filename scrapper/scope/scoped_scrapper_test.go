@@ -19,6 +19,7 @@ type mockScrapper struct {
 	sqlDefRows     []*scrapper.SqlDefinitionRow
 	databaseRows   []*scrapper.DatabaseRow
 	schemaRows     []*scrapper.SchemaRow
+	routineRows    []*scrapper.RoutineRow
 	constraintRows []*scrapper.TableConstraintRow
 }
 
@@ -54,6 +55,10 @@ func (m *mockScrapper) QueryDatabases(context.Context) ([]*scrapper.DatabaseRow,
 
 func (m *mockScrapper) QuerySchemas(context.Context) ([]*scrapper.SchemaRow, error) {
 	return m.schemaRows, nil
+}
+
+func (m *mockScrapper) QueryRoutines(context.Context) ([]*scrapper.RoutineRow, error) {
+	return m.routineRows, nil
 }
 
 func (m *mockScrapper) QuerySegments(context.Context, string, ...any) ([]*scrapper.SegmentRow, error) {
@@ -202,4 +207,31 @@ func TestScopedScrapper_CallerCannotWiden(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, "prod", rows[0].Database)
+}
+
+func TestScopedScrapper_QueryRoutines(t *testing.T) {
+	inner := &mockScrapper{
+		routineRows: []*scrapper.RoutineRow{
+			{Database: "prod", Schema: "public", Name: "refresh_orders", Kind: scrapper.RoutineKindProcedure},
+			{Database: "prod", Schema: "internal", Name: "rotate_keys", Kind: scrapper.RoutineKindProcedure},
+			{Database: "dev", Schema: "public", Name: "net_price", Kind: scrapper.RoutineKindFunction},
+		},
+	}
+
+	ss := NewScopedScrapper(inner, &ScopeFilter{
+		Include: []ScopeRule{{Database: "prod"}},
+		Exclude: []ScopeRule{{Schema: "internal"}},
+	})
+
+	rows, err := ss.QueryRoutines(context.Background())
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "refresh_orders", rows[0].Name)
+
+	// A routine is an object of its schema, so a table-level rule selects it by name.
+	narrowed, err := ss.QueryRoutines(WithScope(context.Background(), &ScopeFilter{
+		Include: []ScopeRule{{Database: "prod", Schema: "public", Table: "other_*"}},
+	}))
+	require.NoError(t, err)
+	assert.Empty(t, narrowed)
 }

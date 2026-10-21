@@ -18,6 +18,7 @@ type stubScrapper struct {
 	sqlDefs     []*scrapper.SqlDefinitionRow
 	databases   []*scrapper.DatabaseRow
 	schemas     []*scrapper.SchemaRow
+	routines    []*scrapper.RoutineRow
 	constraints []*scrapper.TableConstraintRow
 	segments    []*scrapper.SegmentRow
 	customMet   []*scrapper.CustomMetricsRow
@@ -58,6 +59,10 @@ func (s *stubScrapper) QueryDatabases(context.Context) ([]*scrapper.DatabaseRow,
 
 func (s *stubScrapper) QuerySchemas(context.Context) ([]*scrapper.SchemaRow, error) {
 	return s.schemas, nil
+}
+
+func (s *stubScrapper) QueryRoutines(context.Context) ([]*scrapper.RoutineRow, error) {
+	return s.routines, nil
 }
 
 func (s *stubScrapper) QuerySegments(context.Context, string, ...any) ([]*scrapper.SegmentRow, error) {
@@ -188,4 +193,19 @@ func TestSanitizingScrapper_QueryPlatformUsers(t *testing.T) {
 	users, err = NewSanitizingScrapper(&stubScrapper{}).QueryPlatformUsers(context.Background())
 	require.NoError(t, err)
 	assert.Nil(t, users)
+}
+
+func TestSanitizingScrapper_QueryRoutines(t *testing.T) {
+	definition := "CREATE PROCEDURE p\x00 AS SELECT 1"
+	description := "d\x00"
+	inner := &stubScrapper{
+		routines: []*scrapper.RoutineRow{{Database: "db\x00", Name: "p\x00", Definition: &definition, Description: &description}},
+	}
+	rows, err := NewSanitizingScrapper(inner).QueryRoutines(context.Background())
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "db", rows[0].Database)
+	assert.Equal(t, "p", rows[0].Name)
+	assert.Equal(t, "CREATE PROCEDURE p AS SELECT 1", *rows[0].Definition)
+	assert.Equal(t, "d", *rows[0].Description)
 }

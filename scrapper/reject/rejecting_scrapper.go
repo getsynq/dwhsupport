@@ -152,6 +152,14 @@ func (s *RejectingScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.Schem
 	return filterValid(rows, s.DialectType(), "QuerySchemas"), err
 }
 
+func (s *RejectingScrapper) QueryRoutines(ctx context.Context) ([]*scrapper.RoutineRow, error) {
+	rows, err := s.inner.QueryRoutines(ctx)
+	if scrapper.Failed(err) {
+		return nil, err
+	}
+	return filterValid(rows, s.DialectType(), "QueryRoutines"), err
+}
+
 func (s *RejectingScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {
 	rows, err := s.inner.QuerySegments(ctx, sql, args...)
 	if err != nil {

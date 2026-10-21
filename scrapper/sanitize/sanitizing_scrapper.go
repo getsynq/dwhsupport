@@ -108,6 +108,17 @@ func (s *SanitizingScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.Sche
 	return rows, err
 }
 
+func (s *SanitizingScrapper) QueryRoutines(ctx context.Context) ([]*scrapper.RoutineRow, error) {
+	rows, err := s.inner.QueryRoutines(ctx)
+	if scrapper.Failed(err) {
+		return nil, err
+	}
+	for _, r := range rows {
+		r.Sanitize()
+	}
+	return rows, err
+}
+
 func (s *SanitizingScrapper) QuerySegments(ctx context.Context, sql string, args ...any) ([]*scrapper.SegmentRow, error) {
 	rows, err := s.inner.QuerySegments(ctx, sql, args...)
 	if err != nil {

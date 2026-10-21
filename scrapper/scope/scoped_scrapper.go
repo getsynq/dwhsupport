@@ -140,6 +140,15 @@ func (s *ScopedScrapper) QuerySchemas(ctx context.Context) ([]*scrapper.SchemaRo
 	return FilterSchemaRows(rows, GetScope(ctx)), err
 }
 
+func (s *ScopedScrapper) QueryRoutines(ctx context.Context) ([]*scrapper.RoutineRow, error) {
+	ctx = s.effectiveCtx(ctx)
+	rows, err := s.inner.QueryRoutines(ctx)
+	if scrapper.Failed(err) {
+		return nil, err
+	}
+	return FilterRows(rows, GetScope(ctx)), err
+}
+
 func (s *ScopedScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	ctx = s.effectiveCtx(ctx)
 	rows, err := s.inner.QueryTableConstraints(ctx)

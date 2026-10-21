@@ -18,6 +18,7 @@ type stubScrapper struct {
 	sqlDefs     []*scrapper.SqlDefinitionRow
 	databases   []*scrapper.DatabaseRow
 	schemas     []*scrapper.SchemaRow
+	routines    []*scrapper.RoutineRow
 	constraints []*scrapper.TableConstraintRow
 	segments    []*scrapper.SegmentRow
 	customMet   []*scrapper.CustomMetricsRow
@@ -56,6 +57,10 @@ func (s *stubScrapper) QueryDatabases(context.Context) ([]*scrapper.DatabaseRow,
 
 func (s *stubScrapper) QuerySchemas(context.Context) ([]*scrapper.SchemaRow, error) {
 	return s.schemas, nil
+}
+
+func (s *stubScrapper) QueryRoutines(context.Context) ([]*scrapper.RoutineRow, error) {
+	return s.routines, nil
 }
 
 func (s *stubScrapper) QuerySegments(context.Context, string, ...any) ([]*scrapper.SegmentRow, error) {
@@ -231,4 +236,19 @@ func TestRejectingScrapper_QueryPlatformUsers(t *testing.T) {
 	users, err = NewRejectingScrapper(&stubScrapper{}).QueryPlatformUsers(context.Background())
 	require.NoError(t, err)
 	assert.Nil(t, users)
+}
+
+func TestRejectingScrapper_QueryRoutines(t *testing.T) {
+	inner := &stubScrapper{
+		routines: []*scrapper.RoutineRow{
+			{Database: "db", Schema: "s", Name: "ok"},
+			{Database: "db", Schema: "s", Name: "bad\x00"},
+			{Database: "db", Schema: "bad\xff", Name: "ok"},
+		},
+	}
+	rows, err := NewRejectingScrapper(inner).QueryRoutines(context.Background())
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "s", rows[0].Schema)
+	assert.Equal(t, "ok", rows[0].Name)
 }

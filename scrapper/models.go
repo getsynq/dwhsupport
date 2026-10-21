@@ -317,6 +317,59 @@ func (r SchemaRow) TableFqn() DwhFqn {
 	}
 }
 
+// RoutineKind says whether a routine is called as a statement of its own or
+// used inside one: a stored procedure or a user-defined function.
+type RoutineKind string
+
+const (
+	RoutineKindProcedure RoutineKind = "PROCEDURE"
+	RoutineKindFunction  RoutineKind = "FUNCTION"
+)
+
+// RoutineRow describes a stored procedure or a user-defined function, under
+// the same instance, database and schema the warehouse's tables are reported
+// under.
+type RoutineRow struct {
+	Instance string      `db:"instance" json:"instance"`
+	Database string      `db:"database" json:"database"`
+	Schema   string      `db:"schema"   json:"schema"`
+	Name     string      `db:"name"     json:"name"`
+	Kind     RoutineKind `db:"kind"     json:"kind"`
+	// RoutineType is the warehouse's own name for the kind of routine, such as
+	// BigQuery's TABLE FUNCTION or SQL Server's SQL_INLINE_TABLE_VALUED_FUNCTION.
+	RoutineType string `db:"routine_type" json:"routine_type"`
+	// Language is the language of the body as the warehouse names it (SQL,
+	// JAVASCRIPT, PLSQL). Nil when the warehouse does not say.
+	Language *string `db:"language" json:"language,omitempty"`
+	// Arguments is the parameter list as the warehouse states it, without the
+	// enclosing parentheses. Nil when the warehouse does not say.
+	Arguments *string `db:"arguments" json:"arguments,omitempty"`
+	// ReturnType is the type a function returns. Nil for a procedure, and when
+	// the warehouse does not say.
+	ReturnType *string `db:"return_type" json:"return_type,omitempty"`
+	// Definition is the statement that creates the routine, signature and body,
+	// so a parser can read the tables the routine uses. Nil when the warehouse
+	// withholds it (an encrypted module, a role that may not read it) or has
+	// none (an external routine).
+	Definition  *string `db:"definition"  json:"definition,omitempty"`
+	Description *string `db:"description" json:"description,omitempty"`
+}
+
+func (r *RoutineRow) SetInstance(instance string) {
+	r.Instance = instance
+}
+
+// TableFqn returns the routine's fully-qualified name, so scope filtering
+// treats a routine as an object of its schema.
+func (r RoutineRow) TableFqn() DwhFqn {
+	return DwhFqn{
+		InstanceName: r.Instance,
+		DatabaseName: r.Database,
+		SchemaName:   r.Schema,
+		ObjectName:   r.Name,
+	}
+}
+
 type WithSetInstance interface {
 	SetInstance(instance string)
 }

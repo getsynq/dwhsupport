@@ -168,6 +168,22 @@ func (r *SchemaRow) Sanitize() {
 	SanitizeStringPtr(r.SchemaOwner)
 }
 
+func (r *RoutineRow) Sanitize() {
+	if r == nil {
+		return
+	}
+	r.Instance = SanitizeString(r.Instance)
+	r.Database = SanitizeString(r.Database)
+	r.Schema = SanitizeString(r.Schema)
+	r.Name = SanitizeString(r.Name)
+	r.RoutineType = SanitizeString(r.RoutineType)
+	SanitizeStringPtr(r.Language)
+	SanitizeStringPtr(r.Arguments)
+	SanitizeStringPtr(r.ReturnType)
+	SanitizeStringPtr(r.Definition)
+	SanitizeStringPtr(r.Description)
+}
+
 func (r *TableConstraintRow) Sanitize() {
 	if r == nil {
 		return
