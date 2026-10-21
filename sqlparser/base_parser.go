@@ -44,26 +44,30 @@ func (p *BaseParser) ExpectToken(token sqllexer.Token) error {
 	return nil
 }
 
+// ParseIdentifier reads the name at the parser's position: the next
+// identifier-like token, joined with the identifier-like tokens that follow it
+// directly. A space or a comment ends the name, so the words after it
+// (`PRODUCTS cluster by (...)`, `STREAM on table T`) are not read into it,
+// except inside a quoted part: the lexer splits `DB."my schema".T` at the
+// space when the name does not start with the quote.
 func (p *BaseParser) ParseIdentifier() (string, error) {
-
-	hadString := false
-	var value strings.Builder
-	for {
-		nextInd, nextToken := p.PeekToken()
-		if IsIdentifierLikeToken(nextToken) {
-			hadString = true
-			value.WriteString(nextToken.Value)
-		} else {
-			break
-		}
-		p.Index = nextInd
-	}
-
-	if !hadString {
-		_, nextToken := p.PeekToken()
+	nextInd, nextToken := p.PeekToken()
+	if !IsIdentifierLikeToken(nextToken) {
 		return "", errors.Errorf("expected string, got %s", DumpToken(nextToken))
 	}
 
-	return value.String(), nil
+	var value strings.Builder
+	value.WriteString(nextToken.Value)
+	p.Index = nextInd
+	for p.Index < len(p.Tokens) {
+		token := p.Tokens[p.Index]
+		insideQuotes := strings.Count(value.String(), `"`)%2 == 1
+		if !insideQuotes && !IsIdentifierLikeToken(token) {
+			break
+		}
+		value.WriteString(token.Value)
+		p.Index++
+	}
 
+	return value.String(), nil
 }

@@ -15,7 +15,7 @@ import (
 var querySqlDefinitionsSql string
 
 func (e *PostgresScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	sql := scope.AppendScopeConditions(ctx, querySqlDefinitionsSql, "", "table_schema", "table_name")
+	sql := scope.AppendScopeConditions(ctx, querySqlDefinitionsSql, "", "n.nspname", "c.relname")
 	return dwhexecpostgres.NewQuerier[scrapper.SqlDefinitionRow](e.executor).QueryMany(ctx, sql,
 		dwhexec.WithArgs[scrapper.SqlDefinitionRow](e.conf.Database),
 		dwhexec.WithPostProcessors(func(row *scrapper.SqlDefinitionRow) (*scrapper.SqlDefinitionRow, error) {

@@ -1,22 +1,12 @@
-WITH views AS (SELECT current_database()::information_schema.sql_identifier                        AS table_catalog,
-                      nc.nspname::information_schema.sql_identifier                                AS table_schema,
-                      c.relname::information_schema.sql_identifier                                 AS table_name,
-                      pg_get_viewdef(c.oid)                                                        AS view_definition,
-                      'NONE'::information_schema.character_data::information_schema.character_data AS check_option,
-                      NULL::information_schema.character_data::information_schema.character_data   AS is_updatable,
-                      NULL::information_schema.character_data::information_schema.character_data   AS is_insertable_into
-               FROM pg_namespace nc,
-                    pg_class c,
-                    pg_user u
-               WHERE c.relnamespace = nc.oid
-                 AND u.usesysid = c.relowner
-                 AND c.relkind = 'v'::"char")
-SELECT table_catalog   as database,
-       table_schema    as schema,
-       table_name      as table,
-       view_definition as sql
-FROM views
-WHERE view_definition is not null
-  AND table_schema not in ('pg_catalog', 'information_schema')
-  AND table_catalog = $1
+SELECT current_database()    AS database,
+       n.nspname             AS schema,
+       c.relname             AS table,
+       c.relkind = 'v'       AS is_view,
+       c.relkind = 'm'       AS is_materialized_view,
+       pg_get_viewdef(c.oid) AS sql
+FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind IN ('v', 'm')
+  AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+  AND current_database() = $1
   /* SYNQ_SCOPE_FILTER */

@@ -675,3 +675,108 @@ SELECT ID FROM MY_DB.MY_SCHEMA.SRC;`,
 		})
 	}
 }
+
+// Each statement is keyed by the object's name alone, whatever follows the name
+// in GET_DDL's output: a CLUSTER BY, a stream's ON TABLE, a COMMENT before AS.
+// A key that ran on into those words matched no object, and the object lost its
+// definition and its tags.
+func (s *QuerySqlDefinitionsSuite) TestParseCreateStatementsPerObjectKeysByTheNameAlone() {
+	cases := []struct {
+		name string
+		ddl  string
+		key  string
+	}{
+		{
+			name: "a cluster key after the name",
+			ddl: `create or replace TABLE MY_DB.MY_SCHEMA.PRODUCTS cluster by (CATEGORY, ID)(
+	ID NUMBER(38,0),
+	CATEGORY VARCHAR(100)
+);`,
+			key: "MY_DB.MY_SCHEMA.PRODUCTS",
+		},
+		{
+			name: "a cluster key on a quoted name",
+			ddl: `create or replace TABLE MY_DB."my_schema"."Products" cluster by (ID)(
+	ID NUMBER(38,0)
+);`,
+			key: `MY_DB."my_schema"."Products"`,
+		},
+		{
+			name: "a stream on its table",
+			ddl:  `create or replace stream MY_DB.MY_SCHEMA.PRODUCTS_STREAM on table PRODUCTS;`,
+			key:  "MY_DB.MY_SCHEMA.PRODUCTS_STREAM",
+		},
+		{
+			name: "a comment before a materialized view's query",
+			ddl: `create or replace materialized view MY_DB.MY_SCHEMA.MY_MV COMMENT='Test view'
+ as SELECT ID FROM MY_DB.MY_SCHEMA.PRODUCTS;`,
+			key: "MY_DB.MY_SCHEMA.MY_MV",
+		},
+		{
+			name: "a secure view",
+			ddl: `create or replace secure view MY_DB.MY_SCHEMA.MY_VIEW(
+	ID
+) as SELECT ID FROM MY_DB.MY_SCHEMA.PRODUCTS;`,
+			key: "MY_DB.MY_SCHEMA.MY_VIEW",
+		},
+		{
+			name: "a dynamic table's options after the column list",
+			ddl: `create or replace dynamic table MY_DB.MY_SCHEMA.MY_DT(
+	ID
+) target_lag = '1 hour' warehouse = COMPUTE_WH
+ as SELECT ID FROM MY_DB.MY_SCHEMA.PRODUCTS;`,
+			key: "MY_DB.MY_SCHEMA.MY_DT",
+		},
+	}
+	for _, c := range cases {
+		s.Run(c.name, func() {
+			perObject, err := ParseCreateStatementsPerObject(s.T().Context(), c.ddl)
+			s.Require().NoError(err)
+			s.Equal([]string{c.key}, lo.Keys(perObject))
+		})
+	}
+}
+
+// A table with a cluster key gets its DDL and tags from GET_DDL like any other.
+func TestQuerySqlDefinitionsReadsATableWithAClusterKey(t *testing.T) {
+	ctx := context.Background()
+	clusteredDdl := `create or replace TABLE MY_DB.MY_SCHEMA.PRODUCTS cluster by (CATEGORY, ID)(
+	ID NUMBER(38,0) NOT NULL,
+	NAME VARCHAR(200) WITH TAG (MY_DB.GOVERNANCE.PII='low'),
+	CATEGORY VARCHAR(100)
+) COMMENT='Product catalog' WITH TAG (MY_DB.GOVERNANCE.TEAM='core')
+;`
+	fake := &fakeSnowflake{t: t, routes: []fakeRoute{
+		{
+			match:   sqlContains("SHOW DATABASES"),
+			columns: []string{"name", "origin", "owner", "comment", "kind"},
+			rows:    [][]driver.Value{{"MY_DB", "", "SYSADMIN", "", "STANDARD"}},
+		},
+		{
+			match:   sqlContains("MY_DB.information_schema.views"),
+			columns: []string{"database", "schema", "table", "is_view", "sql"},
+			rows:    [][]driver.Value{{"MY_DB", "MY_SCHEMA", "PRODUCTS", false, ""}},
+		},
+		{
+			match:   sqlContains("SHOW STREAMS IN DATABASE MY_DB"),
+			columns: []string{"created_on", "name", "database_name", "schema_name", "table_name"},
+		},
+		{
+			match:   sqlContains(`GET_DDL('SCHEMA', '"MY_DB"."MY_SCHEMA"'`),
+			columns: []string{"GET_DDL"},
+			rows:    [][]driver.Value{{clusteredDdl}},
+		},
+	}}
+	conf := &SnowflakeScrapperConf{SnowflakeConf: dwhexecsnowflake.SnowflakeConf{Account: "ORG-ACCOUNT", Databases: []string{"MY_DB"}}}
+	scr := newFakeSnowflakeScrapper(ctx, fake, conf)
+
+	rows, err := scr.QuerySqlDefinitions(ctx)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	table := rows[0]
+	require.Contains(t, table.Sql, "create or replace TABLE MY_DB.MY_SCHEMA.PRODUCTS cluster by (CATEGORY, ID)")
+	require.NotNil(t, table.Description)
+	require.Equal(t, "Product catalog", *table.Description)
+	require.Equal(t, []*scrapper.Tag{{TagName: "MY_DB.GOVERNANCE.TEAM", TagValue: "core"}}, table.Tags)
+	require.Equal(t, map[string][]*scrapper.Tag{"NAME": {{TagName: "MY_DB.GOVERNANCE.PII", TagValue: "low"}}}, table.ColumnTags)
+}
