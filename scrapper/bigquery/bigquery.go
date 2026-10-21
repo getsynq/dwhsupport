@@ -64,6 +64,11 @@ type BigQueryScrapper struct {
 	// policy tags. Nil when the configuration did not opt in, and then the
 	// Data Catalog API is never called.
 	newDataCatalog func(ctx context.Context) (*datacatalog.Service, error)
+	// regionTablesRefused and regionRoutinesRefused remember a refused read of
+	// the region's INFORMATION_SCHEMA.TABLES and ROUTINES, after which each
+	// dataset's is read without asking the region again.
+	regionTablesRefused   regionRefusal
+	regionRoutinesRefused regionRefusal
 }
 
 func (e *BigQueryScrapper) IsPermissionError(err error) bool {
