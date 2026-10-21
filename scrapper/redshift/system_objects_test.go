@@ -48,6 +48,8 @@ func (s *RedshiftSystemObjectsSuite) SetupSuite() {
 			Password: testenv.EnvOrDefault("REDSHIFT_PASSWORD", ""),
 			Database: testenv.EnvOrDefault("REDSHIFT_DATABASE", "dev"),
 		},
+		// So QuerySqlDefinitions lists the tables too.
+		UseShowCreateTable: true,
 	})
 	if err != nil {
 		s.T().Skipf("Could not connect to Redshift: %v", err)
@@ -67,6 +69,7 @@ func TestEveryCatalogQueryLeavesOutTheSystemSchemas(t *testing.T) {
 		"schemas":            withSystemSchemas(schemasSql),
 		"catalog":            withSystemSchemas(queryCatalogSql),
 		"sql definitions":    withSystemSchemas(querySqlDefinitionsSql),
+		"table ddl tables":   withSystemSchemas(queryTableDdlTablesSql),
 		"constraints":        withSystemSchemas(queryTableConstraintsSql),
 		"sort and dist keys": withSystemSchemas(querySortDistKeysSql),
 		"metrics":            withSystemSchemas(queryTableMetricsSql),
@@ -82,6 +85,7 @@ func TestEveryCatalogQueryLeavesOutTheSystemSchemas(t *testing.T) {
 		"catalog":            queryCatalogSql,
 		"constraints":        queryTableConstraintsSql,
 		"sort and dist keys": querySortDistKeysSql,
+		"table ddl tables":   queryTableDdlTablesSql,
 	} {
 		require.Contains(t, sql, "'mv_tbl__'", name)
 	}

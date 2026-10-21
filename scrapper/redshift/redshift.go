@@ -13,6 +13,11 @@ import (
 type RedshiftScrapperConf struct {
 	dwhexecredshift.RedshiftConf
 	FreshnessFromQueryLogs bool
+	// UseShowCreateTable, when true, makes QuerySqlDefinitions read each
+	// table's DDL with SHOW TABLE, one statement per table, so it is opt-in
+	// like UseShowCreateTable on the other platforms. Without it only views
+	// have a definition.
+	UseShowCreateTable bool
 }
 
 type Executor interface {
