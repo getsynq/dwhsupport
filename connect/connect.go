@@ -38,15 +38,20 @@ import (
 )
 
 func BigQuery(ctx context.Context, t *agentdwhv1.BigQueryConf) (*scrapperbigquery.BigQueryScrapper, error) {
-	return scrapperbigquery.NewBigQueryScrapper(ctx, &scrapperbigquery.BigQueryScrapperConf{
+	return scrapperbigquery.NewBigQueryScrapper(ctx, bigQueryScrapperConf(t))
+}
+
+func bigQueryScrapperConf(t *agentdwhv1.BigQueryConf) *scrapperbigquery.BigQueryScrapperConf {
+	return &scrapperbigquery.BigQueryScrapperConf{
 		BigQueryConf: dwhexecbigquery.BigQueryConf{
 			ProjectId:       t.GetProjectId(),
 			Region:          t.GetRegion(),
 			CredentialsJson: t.GetServiceAccountKey(),
 			CredentialsFile: t.GetServiceAccountKeyFile(),
 		},
-		Datasets: t.GetDatasets(),
-	})
+		Datasets:        t.GetDatasets(),
+		FetchPolicyTags: t.GetFetchPolicyTags(),
+	}
 }
 
 func Clickhouse(ctx context.Context, t *agentdwhv1.ClickhouseConf) (*scrapperclickhouse.ClickhouseScrapper, error) {

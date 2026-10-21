@@ -131,6 +131,10 @@ type BigQueryConf struct {
 	// Explicit list of dataset names to scrape. When set, only these datasets are queried
 	// and bigquery.datasets.get on the project, which listing the datasets needs, is not required.
 	Datasets []string `yaml:"datasets,omitempty"`
+	// Resolve column policy tags to their taxonomy and tag names through the Data Catalog API.
+	// Needs the API enabled in the taxonomy's project and datacatalog.taxonomies.get; without it
+	// a policy tag keeps its resource name.
+	FetchPolicyTags bool `yaml:"fetch_policy_tags,omitempty"`
 }
 
 // fileFields returns file field pairs for BigQuery.

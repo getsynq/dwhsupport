@@ -47,6 +47,7 @@ func TestParseConnections_FullExample(t *testing.T) {
 	require.NotNil(t, bq.BigQuery)
 	assert.Equal(t, "my-gcp-project", bq.BigQuery.ProjectId)
 	assert.Equal(t, "keys/service-account.json", bq.BigQuery.ServiceAccountKeyFile)
+	assert.True(t, bq.BigQuery.FetchPolicyTags)
 
 	// Snowflake with private key file
 	sf := conns["sf-main"]
