@@ -41,6 +41,19 @@ var complianceQueryContext = querycontext.QueryContext{
 type ComplianceSuite struct {
 	suite.Suite
 	Scrapper scrapper.Scrapper
+	// DefinitionsHiddenFromTheTestRole lists the objects QuerySqlDefinitions
+	// returns without SQL because the platform hides the text from the role the
+	// test connects as, such as a Snowflake SECURE VIEW the role does not own.
+	DefinitionsHiddenFromTheTestRole []FixtureTable
+}
+
+func (s *ComplianceSuite) definitionHiddenFromTheTestRole(fqn scrapper.DwhFqn) bool {
+	for _, fixture := range s.DefinitionsHiddenFromTheTestRole {
+		if fixture.matches(fqn) {
+			return true
+		}
+	}
+	return false
 }
 
 // Ctx returns a background context for use in SetupSuite of embedding suites.
@@ -252,7 +265,11 @@ func (s *ComplianceSuite) TestCompliance_MethodsDoNotError() {
 		s.NotEmptyf(row.Database, "QuerySqlDefinitions row[%d].Database", i)
 		s.NotEmptyf(row.Schema, "QuerySqlDefinitions row[%d].Schema", i)
 		s.NotEmptyf(row.Table, "QuerySqlDefinitions row[%d].Table", i)
-		s.NotEmptyf(row.Sql, "QuerySqlDefinitions row[%d].Sql", i)
+		if hidden := s.definitionHiddenFromTheTestRole(row.TableFqn()); hidden {
+			s.Emptyf(row.Sql, "QuerySqlDefinitions row[%d] %s.%s.%s is listed as hidden from the test role", i, row.Database, row.Schema, row.Table)
+		} else {
+			s.NotEmptyf(row.Sql, "QuerySqlDefinitions row[%d] %s.%s.%s Sql", i, row.Database, row.Schema, row.Table)
+		}
 		if row.Instance != "" {
 			allInstances = append(allInstances, row.Instance)
 		}
