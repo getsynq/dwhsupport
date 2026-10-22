@@ -27,12 +27,12 @@ func TestRedshiftQueryLogWeight(t *testing.T) {
 		ExecutionTime: int64Ptr(106_226),
 		QueryText:     strPtr("select 1"),
 	}
-	log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
+	log, err := convertRedshiftRowToQueryLog(row, nil, true, obfuscator, "redshift", "host", "db")
 	require.NoError(t, err)
 	require.Equal(t, querylogs.QueryWeight{ExecutionMs: int64Ptr(106)}, log.Weight())
 
 	row.ExecutionTime = int64Ptr(0)
-	log, err = convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
+	log, err = convertRedshiftRowToQueryLog(row, nil, true, obfuscator, "redshift", "host", "db")
 	require.NoError(t, err)
 	require.Equal(t, querylogs.QueryWeight{ExecutionMs: int64Ptr(0)}, log.Weight(), "the leader node answered alone")
 }

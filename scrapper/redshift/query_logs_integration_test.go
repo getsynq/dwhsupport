@@ -119,12 +119,24 @@ func (s *RedshiftQueryLogsSuite) TestQueryLogsCarryTheStatementAsItRan() {
 
 	repeated := fmt.Sprintf("select 1 as %s_repeated where 5 = 5", marker)
 
+	// A synq-recon row hash: Redshift counts each pipe twice towards a chunk's 4000 bytes, so its
+	// chunks hold about 3660 bytes, and the first one ends inside a quoted identifier.
+	const reconColumns = 250
+	var reconSource strings.Builder
+	reconSource.WriteString(`select 1 as "id"`)
+	for i := range reconColumns {
+		fmt.Fprintf(&reconSource, `, %d as "c%d"`, i, i)
+	}
+	recon := fmt.Sprintf("select \"id\" as pk, (STRTOL(SUBSTRING(MD5(%s''), 1, 8), 16)) as %s_recon\nfrom (%s) t\nwhere \"id\" = 1",
+		reconHashColumns(0, reconColumns), marker, reconSource.String())
+
 	s.run(multiLine)
 	s.run(longStatement)
 	s.run(repeated)
 	s.run(repeated)
+	s.run(recon)
 
-	logs := s.logsContaining(from, marker, 4)
+	logs := s.logsContaining(from, marker, 5)
 	byText := map[string][]*querylogs.QueryLog{}
 	for _, log := range logs {
 		byText[log.SQL] = append(byText[log.SQL], log)
@@ -138,6 +150,11 @@ func (s *RedshiftQueryLogsSuite) TestQueryLogsCarryTheStatementAsItRan() {
 	s.Run("a statement longer than one chunk is rebuilt whole", func() {
 		s.Require().Len(byText[strings.TrimSpace(longStatement)], 1, "no log matched the long statement exactly")
 		s.False(byText[strings.TrimSpace(longStatement)][0].IsTruncated)
+	})
+
+	s.Run("a statement full of pipes and quotes is rebuilt whole", func() {
+		s.Require().Len(byText[recon], 1, "no log matched the recon statement exactly")
+		s.False(byText[recon][0].IsTruncated)
 	})
 
 	s.Run("each run has its own query_id and the shape is the normalized hash", func() {
@@ -169,7 +186,7 @@ func (s *RedshiftQueryLogsSuite) TestQueryLogsCarryTheStatementAsItRan() {
 			s.scrapper.DialectType(), s.scrapper.conf.Host, s.scrapper.conf.Database)
 		s.Require().NoError(err)
 
-		var multi, longLog *querylogs.QueryLog
+		var multi, longLog, reconLog *querylogs.QueryLog
 		for {
 			log, err := it.Next(context.Background())
 			if err == io.EOF {
@@ -181,6 +198,8 @@ func (s *RedshiftQueryLogsSuite) TestQueryLogsCarryTheStatementAsItRan() {
 				multi = log
 			case strings.Contains(log.SQL, marker+"_long"):
 				longLog = log
+			case strings.HasPrefix(log.SQL, `select "id" as pk`) && log.SQL != recon && strings.HasPrefix(recon, log.SQL):
+				reconLog = log
 			}
 		}
 		s.Require().NotNil(multi)
@@ -188,6 +207,9 @@ func (s *RedshiftQueryLogsSuite) TestQueryLogsCarryTheStatementAsItRan() {
 		s.Empty(multi.DwhContext.User)
 		s.Require().NotNil(longLog)
 		s.True(longLog.IsTruncated)
+		s.Require().NotNil(reconLog, "the first chunk of the recon statement is not in the history")
+		s.Less(len(reconLog.SQL), queryTextChunkMinBytes, "Redshift no longer cuts the first chunk short")
+		s.True(reconLog.IsTruncated)
 	})
 }
 
