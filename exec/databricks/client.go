@@ -121,7 +121,7 @@ func WithPacing(cfg *databricks.Config) *databricks.Config {
 	if _, alreadyPaced := cfg.HTTPTransport.(*pacedTransport); alreadyPaced {
 		return cfg
 	}
-	cfg.HTTPTransport = &pacedTransport{base: baseTransport(cfg)}
+	cfg.HTTPTransport = &pacedTransport{base: baseTransport(cfg), config: (*config.Config)(cfg)}
 	if cfg.HTTPTimeoutSeconds == 0 {
 		cfg.HTTPTimeoutSeconds = pacedHttpTimeoutSeconds
 	}
@@ -172,6 +172,11 @@ func newDefaultTransport() *http.Transport {
 // separately.
 type pacedTransport struct {
 	base http.RoundTripper
+	// config is the config the pacing was installed on. The SDK authenticates a request
+	// before it reaches the transport, so a request held back here is sent later than
+	// it was stamped, and the config is what stamps it again with the credentials
+	// current when it is finally sent.
+	config *config.Config
 }
 
 func (t *pacedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -187,6 +192,13 @@ func (t *pacedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 		waited += held
+
+		if held > 0 || attemptReq != req {
+			attemptReq, err = t.reauthenticate(req, attemptReq)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		resp, err := t.base.RoundTrip(attemptReq)
 		if err != nil {
@@ -230,6 +242,43 @@ func (t *pacedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		drain(resp)
 		attemptReq = retryReq
 	}
+}
+
+// reauthenticate stamps a request that is sent later than the SDK authenticated it,
+// after a wait or as a retry, with the credentials the config has now. The token it was
+// stamped with may have expired while it was held, and the workspace answers that with
+// Invalid Token, which fails the caller however well the pacing did. The caller's own
+// request is never modified: the first attempt is cloned before it is stamped again.
+func (t *pacedTransport) reauthenticate(original, attemptReq *http.Request) (*http.Request, error) {
+	if !t.carriesConfigToken(attemptReq) {
+		return attemptReq, nil
+	}
+	if attemptReq == original {
+		attemptReq = original.Clone(original.Context())
+	}
+	if err := t.config.Authenticate(attemptReq); err != nil {
+		return nil, errors.Wrap(err, "failed to authenticate a request the pacing held back")
+	}
+	return attemptReq, nil
+}
+
+// carriesConfigToken reports whether a request was authenticated by the config: it goes
+// to the config's host with a bearer token. Every other request that passes through is
+// left as it is, and has to be. The SDK sends the OIDC discovery and the token request
+// through this transport too, while it is configuring the credentials and holds the
+// config's lock, so authenticating one of those would wait on that lock forever, and
+// the token request carries the client's own credentials. A config copied for another
+// host (Config.NewWithWorkspaceHost) keeps this transport but authenticates with
+// credentials of its own, which this config cannot stand in for.
+func (t *pacedTransport) carriesConfigToken(req *http.Request) bool {
+	if t.config == nil {
+		return false
+	}
+	scheme, _, found := strings.Cut(req.Header.Get("Authorization"), " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		return false
+	}
+	return strings.EqualFold(req.URL.Host, workspaceHost(t.config.Host))
 }
 
 // replayOf returns the request to send again, and reports false when its body cannot
