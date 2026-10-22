@@ -9,6 +9,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -50,6 +51,7 @@ func (s *RedshiftTableConstraintsSuite) SetupSuite() {
 	products := scrappertest.FixtureTable{Schema: "schema_a", Table: "products"}
 	orderItems := scrappertest.FixtureTable{Schema: "schema_a", Table: "order_items"}
 	s.Expect = []scrappertest.Constraint{
+		{Table: products, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"id"}, IsEnforced: lo.ToPtr(false)},
 		{Table: products, Type: scrapper.ConstraintTypeSortingKey, Columns: []string{"category", "id"}},
 		{Table: products, Type: scrapper.ConstraintTypeDistributionKey, Columns: []string{"id"}},
 		{Table: orderItems, Type: scrapper.ConstraintTypeSortingKey, Columns: []string{"order_id", "product_id"}, Expression: "INTERLEAVED"},

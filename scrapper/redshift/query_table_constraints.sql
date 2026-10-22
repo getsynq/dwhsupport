@@ -9,6 +9,8 @@ SELECT
         WHEN 'f' THEN 'FOREIGN KEY'
     END AS "constraint_type",
     idx AS "column_position",
+    -- Redshift records primary, unique and foreign keys for the planner and never checks them
+    FALSE AS "is_enforced",
     -- a foreign key's column at the same position of the referenced table
     COALESCE(rn.nspname, '') AS "referenced_schema",
     COALESCE(rc.relname, '') AS "referenced_table",

@@ -10,6 +10,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
 	"github.com/jmoiron/sqlx"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -424,6 +425,7 @@ func (s *LocalDuckDBScrapperSuite) TestQueryTableConstraints() {
 	var foundTestTablePK, foundAnotherTablePK bool
 	for _, c := range constraints {
 		s.Equal("test_instance", c.Instance)
+		s.Equal(lo.ToPtr(true), c.IsEnforced, "DuckDB checks its keys and checks on every write")
 		if c.Schema == "test_schema" && c.Table == "test_table" && c.ConstraintType == scrapper.ConstraintTypePrimaryKey {
 			foundTestTablePK = true
 			s.Equal("id", c.ColumnName)
@@ -436,6 +438,25 @@ func (s *LocalDuckDBScrapperSuite) TestQueryTableConstraints() {
 
 	s.True(foundTestTablePK, "Should find PRIMARY KEY constraint for test_table.id")
 	s.True(foundAnotherTablePK, "Should find PRIMARY KEY constraint for another_table.key")
+}
+
+// TestQueryTableConstraints_NameTheTablesDatabase: a constraint is on the table
+// QueryTables lists, database included, so it lands on the same table.
+func (s *LocalDuckDBScrapperSuite) TestQueryTableConstraints_NameTheTablesDatabase() {
+	tables, err := s.duckdbScrapper.QueryTables(s.ctx)
+	s.Require().NoError(err)
+	databaseOf := map[string]string{}
+	for _, t := range tables {
+		databaseOf[t.Schema+"."+t.Table] = t.Database
+	}
+
+	constraints, err := s.duckdbScrapper.QueryTableConstraints(s.ctx)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(constraints)
+	for _, c := range constraints {
+		s.NotEmpty(c.Database, "constraint %s on %s.%s", c.ConstraintName, c.Schema, c.Table)
+		s.Equal(databaseOf[c.Schema+"."+c.Table], c.Database, "constraint %s on %s.%s", c.ConstraintName, c.Schema, c.Table)
+	}
 }
 
 func (s *LocalDuckDBScrapperSuite) TestQueryCustomMetrics_WithHugeInt() {

@@ -1,5 +1,5 @@
 SELECT "schema", "table", "constraint_name", "column_name", "constraint_type", "column_position", "constraint_expression", "is_enforced",
-    "referenced_schema", "referenced_table", "referenced_column_name"
+    "index_type", "referenced_schema", "referenced_table", "referenced_column_name"
 FROM (
     SELECT
         cc.owner AS "schema",
@@ -13,6 +13,7 @@ FROM (
         cc.position AS "column_position",
         '' AS "constraint_expression",
         CASE WHEN c.status = 'ENABLED' AND c.validated = 'VALIDATED' THEN 1 ELSE 0 END AS "is_enforced",
+        ix.index_type AS "index_type",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_schema",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_table",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_column_name"
@@ -20,6 +21,9 @@ FROM (
     JOIN all_cons_columns cc
         ON c.constraint_name = cc.constraint_name
         AND c.owner = cc.owner
+    LEFT JOIN all_indexes ix
+        ON ix.owner = c.index_owner
+        AND ix.index_name = c.index_name
     WHERE c.constraint_type IN ('P', 'U')
 
     UNION ALL
@@ -35,6 +39,7 @@ FROM (
         cc.position AS "column_position",
         '' AS "constraint_expression",
         CASE WHEN c.status = 'ENABLED' AND c.validated = 'VALIDATED' THEN 1 ELSE 0 END AS "is_enforced",
+        CAST(NULL AS VARCHAR2(27)) AS "index_type",
         pc.owner AS "referenced_schema",
         pc.table_name AS "referenced_table",
         pc.column_name AS "referenced_column_name"
@@ -59,6 +64,7 @@ FROM (
         0 AS "column_position",
         c.search_condition_vc AS "constraint_expression",
         CASE WHEN c.status = 'ENABLED' AND c.validated = 'VALIDATED' THEN 1 ELSE 0 END AS "is_enforced",
+        CAST(NULL AS VARCHAR2(27)) AS "index_type",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_schema",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_table",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_column_name"
@@ -70,8 +76,9 @@ FROM (
 
     -- indexes that back no primary key or unique constraint, one row per column.
     -- A function-based index lists a hidden SYS_NC column for each expression,
-    -- and the expressions are LONG, which a UNION cannot carry, so it is left
-    -- out, as are LOB, IOT, domain and cluster indexes, which are Oracle's own.
+    -- and the expressions are LONG, which a UNION cannot carry, so it is read by
+    -- query_function_based_indexes.sql. LOB, IOT, domain and cluster indexes are
+    -- Oracle's own and are left out.
     SELECT
         i.table_owner AS "schema",
         i.table_name AS "table",
@@ -81,6 +88,7 @@ FROM (
         ic.column_position AS "column_position",
         '' AS "constraint_expression",
         CASE WHEN i.status IN ('VALID', 'N/A') THEN 1 ELSE 0 END AS "is_enforced",
+        i.index_type AS "index_type",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_schema",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_table",
         CAST(NULL AS VARCHAR2(128)) AS "referenced_column_name"

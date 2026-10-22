@@ -12,6 +12,8 @@ SELECT
     ord.ordinality::int AS column_position,
     '' AS constraint_expression,
     con.convalidated AS is_enforced,
+    -- the access method of the index backing the key (btree, or hash, gist, ... for an exclusion-style unique index)
+    COALESCE(am.amname, '') AS index_type,
     '' AS referenced_schema,
     '' AS referenced_table,
     '' AS referenced_column_name
@@ -20,6 +22,8 @@ JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 CROSS JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ord(attnum, ordinality)
 JOIN pg_catalog.pg_attribute a ON a.attrelid = c.oid AND a.attnum = ord.attnum
+LEFT JOIN pg_catalog.pg_class ci ON ci.oid = con.conindid
+LEFT JOIN pg_catalog.pg_am am ON am.oid = ci.relam
 WHERE con.contype IN ('p', 'u')
   AND n.nspname NOT IN ('pg_catalog', 'pg_toast', 'information_schema')
 
@@ -36,6 +40,7 @@ SELECT
     ord.ordinality::int AS column_position,
     '' AS constraint_expression,
     con.convalidated AS is_enforced,
+    '' AS index_type,
     rn.nspname AS referenced_schema,
     rc.relname AS referenced_table,
     ra.attname AS referenced_column_name
@@ -70,6 +75,7 @@ SELECT
     -- the expression alone, as the other platforms give it; pg_get_constraintdef wraps it in CHECK (...)
     pg_get_expr(con.conbin, con.conrelid) AS constraint_expression,
     con.convalidated AS is_enforced,
+    '' AS index_type,
     '' AS referenced_schema,
     '' AS referenced_table,
     '' AS referenced_column_name
@@ -91,11 +97,13 @@ SELECT
     key_ord.ordinality::int AS column_position,
     '' AS constraint_expression,
     ix.indisvalid AS is_enforced,
+    am.amname AS index_type,
     '' AS referenced_schema,
     '' AS referenced_table,
     '' AS referenced_column_name
 FROM pg_catalog.pg_index ix
 JOIN pg_catalog.pg_class ic ON ic.oid = ix.indexrelid
+JOIN pg_catalog.pg_am am ON am.oid = ic.relam
 JOIN pg_catalog.pg_class t ON t.oid = ix.indrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
 CROSS JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY AS key_ord(attnum, ordinality)
@@ -109,7 +117,7 @@ WHERE NOT EXISTS (
   AND n.nspname NOT IN ('pg_catalog', 'pg_toast', 'information_schema')
 )
 SELECT "schema", "table", constraint_name, column_name, constraint_type, column_position, constraint_expression, is_enforced,
-    referenced_schema, referenced_table, referenced_column_name
+    index_type, referenced_schema, referenced_table, referenced_column_name
 FROM all_constraints
 WHERE 1=1
   /* SYNQ_SCOPE_FILTER */

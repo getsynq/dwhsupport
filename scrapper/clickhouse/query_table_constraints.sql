@@ -1,6 +1,9 @@
-SELECT schema, table, constraint_name, column_name, constraint_type, column_position, constraint_expression
+SELECT schema, table, constraint_name, column_name, constraint_type, column_position, constraint_expression, index_type
 FROM (
--- Primary keys parsed from system.tables.primary_key with correct key column ordering
+-- Primary keys parsed from system.tables.primary_key with correct key column ordering.
+-- A MergeTree primary key is a prefix of the sorting key that the sparse index is
+-- built on, and two rows may share it, so it is no constraint and is_enforced stays
+-- unset: reporting false would say a uniqueness check is switched off.
 SELECT
     t.database AS schema,
     t.name AS table,
@@ -8,7 +11,8 @@ SELECT
     col AS column_name,
     'PRIMARY KEY' AS constraint_type,
     toInt32(col_idx) AS column_position,
-    '' AS constraint_expression
+    '' AS constraint_expression,
+    '' AS index_type
 FROM clusterAllReplicas(default, system.tables) t
 ARRAY JOIN
     splitByString(', ', t.primary_key) AS col,
@@ -27,7 +31,8 @@ SELECT
     col AS column_name,
     'SORTING KEY' AS constraint_type,
     toInt32(col_idx) AS column_position,
-    '' AS constraint_expression
+    '' AS constraint_expression,
+    '' AS index_type
 FROM clusterAllReplicas(default, system.tables) t
 ARRAY JOIN
     splitByString(', ', t.sorting_key) AS col,
@@ -46,7 +51,9 @@ SELECT
     dsi.expr AS column_name,
     'INDEX' AS constraint_type,
     toInt32(1) AS column_position,
-    '' AS constraint_expression
+    '' AS constraint_expression,
+    -- minmax, set, bloom_filter, ngrambf_v1, tokenbf_v1, ...
+    dsi.type AS index_type
 FROM clusterAllReplicas(default, system.data_skipping_indices) dsi
 WHERE dsi.database NOT IN ('system', 'information_schema', 'INFORMATION_SCHEMA')
 LIMIT 1 BY schema, table, constraint_name
@@ -63,7 +70,8 @@ SELECT
     c.name AS column_name,
     'PARTITION BY' AS constraint_type,
     toInt32(c.position) AS column_position,
-    t.partition_key AS constraint_expression
+    t.partition_key AS constraint_expression,
+    '' AS index_type
 FROM (
     SELECT database, table, name, position
     FROM clusterAllReplicas(default, system.columns)

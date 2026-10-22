@@ -7,12 +7,17 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
+var productsTable = scrappertest.FixtureTable{Table: "schema_a_products"}
+
 var productsConstraints = []scrappertest.Constraint{
-	{Table: scrappertest.FixtureTable{Table: "schema_a_products"}, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"id"}},
-	{Table: scrappertest.FixtureTable{Table: "schema_a_products"}, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"sku"}},
+	{Table: productsTable, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"id"}, IsEnforced: lo.ToPtr(true), IndexType: "BTREE"},
+	{Table: productsTable, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"sku"}, IsEnforced: lo.ToPtr(true), IndexType: "BTREE"},
+	// a plain index constrains nothing, so it says nothing about enforcement
+	{Table: productsTable, Type: scrapper.ConstraintTypeIndex, Columns: []string{"category"}, UnsetEnforced: true, IndexType: "BTREE"},
 }
 
 // MySQLTableConstraintsSuite checks the keys of the products fixture, and that

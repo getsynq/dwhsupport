@@ -7,6 +7,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -34,7 +35,9 @@ func (s *PostgresTableConstraintsSuite) SetupSuite() {
 	s.Scrapper = sc
 	products := scrappertest.FixtureTable{Schema: "schema_a", Table: "products"}
 	s.Expect = []scrappertest.Constraint{
-		{Table: products, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"id"}},
+		{Table: products, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"id"}, IsEnforced: lo.ToPtr(true), IndexType: "btree"},
+		{Table: products, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"sku"}, IsEnforced: lo.ToPtr(true), IndexType: "btree"},
+		{Table: products, Type: scrapper.ConstraintTypeIndex, Columns: []string{"category"}, IndexType: "btree"},
 		{Table: products, Type: scrapper.ConstraintTypeCheck, Expression: "(price >= (0)::numeric)"},
 		{Table: products, Type: scrapper.ConstraintTypeCheck, Expression: "((weight IS NULL) OR (weight >= (0)::double precision))"},
 	}

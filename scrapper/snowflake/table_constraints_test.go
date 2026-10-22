@@ -8,6 +8,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -48,8 +49,9 @@ func (s *SnowflakeTableConstraintsSuite) SetupSuite() {
 	s.Scrapper = sc
 	products := scrappertest.FixtureTable{Database: database, Schema: "SCHEMA_A", Table: "PRODUCTS"}
 	s.Expect = []scrappertest.Constraint{
-		{Table: products, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"ID"}},
-		{Table: products, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"SKU"}},
+		// a key on a standard table is recorded and never checked, whatever its RELY
+		{Table: products, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"ID"}, IsEnforced: lo.ToPtr(false)},
+		{Table: products, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"SKU"}, IsEnforced: lo.ToPtr(false), IsRely: lo.ToPtr(true)},
 		{Table: products, Type: scrapper.ConstraintTypeClusterBy, Columns: []string{"CATEGORY", "ID"}, Expression: "LINEAR(CATEGORY, ID)"},
 		{
 			Table:   scrappertest.FixtureTable{Database: database, Schema: "SCHEMA_A", Table: "ORDER_ITEMS"},

@@ -6,6 +6,7 @@ import (
 
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -32,9 +33,17 @@ func (s *OracleTableConstraintsSuite) SetupSuite() {
 	orderItems := scrappertest.FixtureTable{Schema: "SYNQ_A", Table: "ORDER_ITEMS"}
 	customers := scrappertest.FixtureTable{Schema: "SYNQ_B", Table: "CUSTOMERS"}
 	s.Expect = []scrappertest.Constraint{
-		{Table: products, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"ID"}},
-		{Table: products, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"SKU"}},
-		{Table: products, Type: scrapper.ConstraintTypeIndex, Columns: []string{"CATEGORY"}},
+		{Table: products, Type: scrapper.ConstraintTypePrimaryKey, Columns: []string{"ID"}, IsEnforced: lo.ToPtr(true), IndexType: "NORMAL"},
+		{Table: products, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"SKU"}, IndexType: "NORMAL"},
+		{Table: products, Type: scrapper.ConstraintTypeIndex, Columns: []string{"CATEGORY"}, IndexType: "NORMAL"},
+		// a function-based index's column is its expression, not the hidden SYS_NC column the index lists
+		{
+			Table:      products,
+			Type:       scrapper.ConstraintTypeIndex,
+			Columns:    []string{`UPPER("NAME")`},
+			IsEnforced: lo.ToPtr(true),
+			IndexType:  "FUNCTION-BASED NORMAL",
+		},
 		{Table: products, Type: scrapper.ConstraintTypeIndex, Columns: []string{"CREATED_AT"}},
 		{Table: customers, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"EMAIL"}},
 		{Table: orderItems, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"ORDER_ID", "PRODUCT_ID"}},

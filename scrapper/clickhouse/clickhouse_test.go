@@ -329,6 +329,7 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	var primaryKeyCols, sortingKeyCols []string
 	var indexNames []string
 	var indexExprs []string
+	indexTypes := map[string]string{}
 	var partitionCols []string
 	var partitionExpr string
 
@@ -338,11 +339,14 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 			switch c.ConstraintType {
 			case scrapper.ConstraintTypePrimaryKey:
 				primaryKeyCols = append(primaryKeyCols, c.ColumnName)
+				s.Nil(c.IsEnforced, "a MergeTree primary key is no constraint, so enforcement does not apply")
+				s.Empty(c.IndexType)
 			case scrapper.ConstraintTypeSortingKey:
 				sortingKeyCols = append(sortingKeyCols, c.ColumnName)
 			case scrapper.ConstraintTypeIndex:
 				indexNames = append(indexNames, c.ConstraintName)
 				indexExprs = append(indexExprs, c.ColumnName)
+				indexTypes[c.ConstraintName] = c.IndexType
 			case scrapper.ConstraintTypePartitionBy:
 				partitionCols = append(partitionCols, c.ColumnName)
 				partitionExpr = c.ConstraintExpression
@@ -360,6 +364,8 @@ func (s *LocalClickHouseScrapperSuite) TestQueryTableConstraints() {
 	s.Contains(indexNames, "bloom_idx", "Should find bloom_filter index")
 	s.Contains(indexNames, "minmax_idx", "Should find minmax index")
 	s.Contains(indexNames, "composite_idx", "Should find composite bloom_filter index")
+	s.Equal(map[string]string{"bloom_idx": "bloom_filter", "minmax_idx": "minmax", "composite_idx": "bloom_filter"}, indexTypes,
+		"each data skipping index carries its type, without its arguments")
 
 	// Verify expressions for data skipping indexes
 	for i, name := range indexNames {
