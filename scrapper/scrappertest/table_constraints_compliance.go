@@ -15,15 +15,50 @@ import (
 // columns in key order (none for a CHECK) and its ConstraintExpression, which
 // is compared exactly, so an empty one must come back empty. Names are matched
 // case-insensitively, as the catalog spells them.
+//
+// IsEnforced, IsRely and IndexType are compared only when an expectation sets
+// them: nil and empty mean the test does not care, not that the scrapper must
+// leave them unset. UnsetEnforced asks for an IsEnforced that is nil.
 type Constraint struct {
-	Table      FixtureTable
-	Type       string
-	Columns    []string
-	Expression string
+	Table         FixtureTable
+	Type          string
+	Columns       []string
+	Expression    string
+	IsEnforced    *bool
+	UnsetEnforced bool
+	IsRely        *bool
+	IndexType     string
 }
 
 func (c Constraint) String() string {
-	return fmt.Sprintf("%s %s %v %q", c.Table, c.Type, c.Columns, c.Expression)
+	return fmt.Sprintf(
+		"%s %s %v %q enforced=%s rely=%s index_type=%q",
+		c.Table, c.Type, c.Columns, c.Expression, boolPtrString(c.IsEnforced), boolPtrString(c.IsRely), c.IndexType,
+	)
+}
+
+func boolPtrString(v *bool) string {
+	if v == nil {
+		return "nil"
+	}
+	return fmt.Sprint(*v)
+}
+
+// matches is whether a reported constraint is the one want expects.
+func (c Constraint) matches(want Constraint) bool {
+	if c.Type != want.Type || !equalFold(c.Columns, want.Columns) || c.Expression != want.Expression {
+		return false
+	}
+	if want.IsEnforced != nil && (c.IsEnforced == nil || *c.IsEnforced != *want.IsEnforced) {
+		return false
+	}
+	if want.UnsetEnforced && c.IsEnforced != nil {
+		return false
+	}
+	if want.IsRely != nil && (c.IsRely == nil || *c.IsRely != *want.IsRely) {
+		return false
+	}
+	return want.IndexType == "" || strings.EqualFold(c.IndexType, want.IndexType)
 }
 
 // TableConstraintsSuite checks that a scrapper reports the constraints the
@@ -89,7 +124,14 @@ func (s *TableConstraintsSuite) constraintsOf(table FixtureTable) []Constraint {
 	for _, k := range order {
 		group := grouped[k]
 		sort.SliceStable(group, func(i, j int) bool { return group[i].ColumnPosition < group[j].ColumnPosition })
-		c := Constraint{Table: table, Type: k.constraintType, Expression: group[0].ConstraintExpression}
+		c := Constraint{
+			Table:      table,
+			Type:       k.constraintType,
+			Expression: group[0].ConstraintExpression,
+			IsEnforced: group[0].IsEnforced,
+			IsRely:     group[0].IsRely,
+			IndexType:  group[0].IndexType,
+		}
 		for _, row := range group {
 			if row.ColumnName != "" {
 				c.Columns = append(c.Columns, row.ColumnName)
@@ -106,7 +148,7 @@ func (s *TableConstraintsSuite) TestTableConstraints_AreReported() {
 		got := s.constraintsOf(want.Table)
 		var found bool
 		for _, c := range got {
-			if c.Type == want.Type && equalFold(c.Columns, want.Columns) && c.Expression == want.Expression {
+			if c.matches(want) {
 				found = true
 				break
 			}
