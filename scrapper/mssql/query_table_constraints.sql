@@ -1,5 +1,5 @@
 SELECT [database], [schema], [table], [constraint_name], [column_name], [constraint_type], [column_position], [constraint_expression], [is_enforced],
-    [referenced_database], [referenced_schema], [referenced_table], [referenced_column_name]
+    [index_type], [referenced_database], [referenced_schema], [referenced_table], [referenced_column_name]
 FROM (
     SELECT
         DB_NAME() AS [database],
@@ -15,6 +15,8 @@ FROM (
         ic.key_ordinal AS [column_position],
         '' AS [constraint_expression],
         CAST(CASE WHEN i.is_disabled = 0 THEN 1 ELSE 0 END AS BIT) AS [is_enforced],
+        -- CLUSTERED, NONCLUSTERED, CLUSTERED COLUMNSTORE, NONCLUSTERED COLUMNSTORE, XML, SPATIAL, ...
+        i.type_desc AS [index_type],
         '' AS [referenced_database],
         '' AS [referenced_schema],
         '' AS [referenced_table],
@@ -40,6 +42,7 @@ FROM (
         fkc.constraint_column_id AS [column_position],
         '' AS [constraint_expression],
         CAST(CASE WHEN fk.is_disabled = 0 THEN 1 ELSE 0 END AS BIT) AS [is_enforced],
+        '' AS [index_type],
         DB_NAME() AS [referenced_database],
         rs.name AS [referenced_schema],
         rt.name AS [referenced_table],
@@ -65,6 +68,7 @@ FROM (
         0 AS [column_position],
         cc.definition AS [constraint_expression],
         CAST(CASE WHEN cc.is_disabled = 0 THEN 1 ELSE 0 END AS BIT) AS [is_enforced],
+        '' AS [index_type],
         '' AS [referenced_database],
         '' AS [referenced_schema],
         '' AS [referenced_table],
