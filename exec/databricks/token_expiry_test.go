@@ -50,6 +50,33 @@ func TestM2mWalkOutlivesTheFirstToken(t *testing.T) {
 	})
 }
 
+// TestAHeldRequestIsSentWithACurrentToken covers what renewing early cannot: a request
+// is stamped with a token before the pacing holds it back, so however much life that
+// token had, the hold can outlast it. With background renewal turned off the SDK's
+// cache keeps a token until it expires, which makes that the common case. The request
+// has to be authenticated again when it is finally sent.
+func TestAHeldRequestIsSentWithACurrentToken(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		fake := newFakeOAuthWorkspace(t, "m2m-held.test")
+		fake.refuse = func(sinceStart time.Duration) (time.Duration, bool) {
+			from, until := m2mTokenLifetime-20*time.Second, m2mTokenLifetime+5*time.Second
+			if sinceStart >= from && sinceStart < until {
+				return until - sinceStart, true
+			}
+			return 0, false
+		}
+
+		client := fake.workspaceClient(t, &databricks.Config{DisableAsyncTokenRefresh: true})
+		walkPastTheFirstToken(t, fake, client, time.Second)
+
+		require.Positive(t, fake.refusedCount(), "the workspace never refused anything, so this test proves nothing")
+		require.Empty(t, fake.rejected(), "a request reached the workspace with a token that had expired")
+		issued := fake.issuedAt()
+		require.Len(t, issued, 2)
+		require.GreaterOrEqual(t, issued[1], m2mTokenLifetime, "with background renewal off, the token is renewed when it expires")
+	})
+}
+
 // TestM2mTokenIsRenewedInTheStaleWindow pins when the token is renewed. The SDK's
 // token cache renews a token in the background once it has at most twenty minutes
 // (or half its lifetime) left, and that renewal has to get a new token, not the one
