@@ -246,6 +246,45 @@ type TableRow struct {
 	// the base table of a BigQuery table snapshot or table clone. Nil when the
 	// object is not a copy, or the warehouse does not say what it copies.
 	CopyOf *TableCopyOf `json:"copy_of,omitempty"`
+
+	// ForeignOf is where a foreign table reads its rows from, as the warehouse
+	// states it: the wrapper and server of a Postgres foreign table, and for
+	// postgres_fdw the remote table. Nil when the object is not a foreign table.
+	ForeignOf *TableForeignOf `json:"foreign_of,omitempty"`
+}
+
+// TableForeignOf names the foreign data wrapper and server a foreign table
+// reads through, and, when the wrapper is one whose options say so, the remote
+// table it reads. The foreign table holds no rows of its own: every read goes
+// to the remote side.
+type TableForeignOf struct {
+	// Wrapper is the foreign data wrapper's name (postgres_fdw, mysql_fdw,
+	// file_fdw, ...).
+	Wrapper string `json:"wrapper"`
+	// Server is the foreign server's name.
+	Server string `json:"server"`
+	// Host, Port and Database are the server's connection options as written,
+	// each empty when the server does not set it, and for postgres_fdw libpq's
+	// default then applies (a local socket, 5432, the user name). They are
+	// filled for postgres_fdw only, the one wrapper whose options are known.
+	Host     string `json:"host,omitempty"`
+	Port     string `json:"port,omitempty"`
+	Database string `json:"database,omitempty"`
+	// Schema and Table name the remote table, with postgres_fdw's defaults
+	// applied: an option left out takes the foreign table's own name. Empty
+	// for any other wrapper.
+	Schema string `json:"schema,omitempty"`
+	Table  string `json:"table,omitempty"`
+}
+
+// TableFqn names the remote table, with the server's host as the instance.
+func (f TableForeignOf) TableFqn() DwhFqn {
+	return DwhFqn{
+		InstanceName: f.Host,
+		DatabaseName: f.Database,
+		SchemaName:   f.Schema,
+		ObjectName:   f.Table,
+	}
 }
 
 // TableCopyKind is how a table copy was made, in the platform's own terms.
