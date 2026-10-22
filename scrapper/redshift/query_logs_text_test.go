@@ -3,6 +3,7 @@ package redshift
 import (
 	"context"
 	"database/sql/driver"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -48,7 +49,44 @@ func longText(prefix string) string {
 	return prefix + strings.Repeat("x", queryTextChunkMinBytes)
 }
 
+// reconHashColumns is the text of a synq-recon row hash over columns from..to-1, the shape of statement
+// Redshift cut into chunks shorter than queryTextChunkMinBytes: every column adds three pipes and
+// four single quotes.
+func reconHashColumns(from, to int) string {
+	var b strings.Builder
+	for i := from; i < to; i++ {
+		fmt.Fprintf(&b, `COALESCE(CAST("c%d" AS VARCHAR), '<NULL>') || '|' || `, i)
+	}
+	return b.String()
+}
+
+// reconFirstChunk is the start of a long synq-recon hash query cut where Redshift cuts it: 4000 bytes
+// with each pipe counted twice, which leaves about 3660 bytes and ends inside a string literal.
+func reconFirstChunk() (first, rest string) {
+	text := `select "id" as pk, "loaded_at_utc" as loaded_at_ts, (STRTOL(SUBSTRING(MD5(` + reconHashColumns(0, 200) +
+		`''), 1, 8), 16)) as h from t`
+	stored := 0
+	for i := range len(text) {
+		stored++
+		if text[i] == '|' {
+			stored++
+		}
+		if stored >= 4000 {
+			return text[:i], text[i:]
+		}
+	}
+	panic("recon text shorter than a chunk")
+}
+
+func (s *QueryLogTextSuite) TestReconFirstChunkIsShorterThanTheThreshold() {
+	first, _ := reconFirstChunk()
+	s.Less(len(first), queryTextChunkMinBytes)
+	s.Greater(len(first), 3600)
+	s.True(strings.HasSuffix(first, `'<NULL>') || '`), first[len(first)-20:])
+}
+
 func (s *QueryLogTextSuite) TestStatementText() {
+	reconFirst, reconRest := reconFirstChunk()
 	first := longText("select '")
 	cases := []struct {
 		name          string
@@ -88,6 +126,12 @@ func (s *QueryLogTextSuite) TestStatementText() {
 			queryText: &first,
 			chunks:    []queryTextChunk{{0, first}, {0, first}, {1, "'"}},
 			want:      first + "'",
+		},
+		{
+			name:      "a first chunk shorter than the threshold is joined with the next one",
+			queryText: &reconFirst,
+			chunks:    []queryTextChunk{{0, reconFirst}, {1, reconRest}},
+			want:      reconFirst + reconRest,
 		},
 		{
 			name:          "long text without chunks is truncated",
@@ -240,6 +284,7 @@ func (s *QueryLogTextSuite) TestIteratorStopsOnCancelledContext() {
 func (s *QueryLogTextSuite) TestFallsBackToHistoryAlone() {
 	end := time.Date(2025, 11, 1, 10, 35, 0, 0, time.UTC)
 	first := longText("select '")
+	reconFirst, _ := reconFirstChunk()
 	for _, code := range []pq.ErrorCode{"42P01", "42703", "42883", "42501", "0A000"} {
 		s.Run(string(code), func() {
 			query := mockQuerier(s, func(mock sqlmock.Sqlmock) {
@@ -248,15 +293,18 @@ func (s *QueryLogTextSuite) TestFallsBackToHistoryAlone() {
 					WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
 					WillReturnRows(sqlmock.NewRows([]string{"query_id", "end_time", "query_text", "user_id"}).
 						AddRow(1, end, `select 1\nfrom t`, 100).
-						AddRow(2, end, first, 100))
+						AddRow(2, end, first, 100).
+						AddRow(3, end, reconFirst, 100))
 			})
 
 			logs := s.fetch(query)
-			s.Require().Len(logs, 2)
+			s.Require().Len(logs, 3)
 			s.Equal("select 1\nfrom t", logs[0].SQL)
 			s.False(logs[0].IsTruncated)
 			s.Empty(logs[0].DwhContext.User)
 			s.True(logs[1].IsTruncated)
+			s.Equal(reconFirst, logs[2].SQL)
+			s.True(logs[2].IsTruncated, "a first chunk that ends inside a quote is cut")
 		})
 	}
 }
