@@ -438,6 +438,25 @@ func (s *LocalDuckDBScrapperSuite) TestQueryTableConstraints() {
 	s.True(foundAnotherTablePK, "Should find PRIMARY KEY constraint for another_table.key")
 }
 
+// TestQueryTableConstraints_NameTheTablesDatabase: a constraint is on the table
+// QueryTables lists, database included, so it lands on the same table.
+func (s *LocalDuckDBScrapperSuite) TestQueryTableConstraints_NameTheTablesDatabase() {
+	tables, err := s.duckdbScrapper.QueryTables(s.ctx)
+	s.Require().NoError(err)
+	databaseOf := map[string]string{}
+	for _, t := range tables {
+		databaseOf[t.Schema+"."+t.Table] = t.Database
+	}
+
+	constraints, err := s.duckdbScrapper.QueryTableConstraints(s.ctx)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(constraints)
+	for _, c := range constraints {
+		s.NotEmpty(c.Database, "constraint %s on %s.%s", c.ConstraintName, c.Schema, c.Table)
+		s.Equal(databaseOf[c.Schema+"."+c.Table], c.Database, "constraint %s on %s.%s", c.ConstraintName, c.Schema, c.Table)
+	}
+}
+
 func (s *LocalDuckDBScrapperSuite) TestQueryCustomMetrics_WithHugeInt() {
 	sql := `SELECT
 		name as segment_name,
