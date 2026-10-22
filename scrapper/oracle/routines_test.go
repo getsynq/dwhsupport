@@ -41,3 +41,20 @@ func (s *OracleRoutinesSuite) TearDownSuite() {
 		s.Scrapper.Close()
 	}
 }
+
+// TestRoutines_NoOracleMaintainedSchema holds the listing to the schemas a
+// customer owns: Oracle installs routines of its own (Database Vault's DVF
+// factor functions among them) that are no asset of anyone's.
+func (s *OracleRoutinesSuite) TestRoutines_NoOracleMaintainedSchema() {
+	sc := s.Scrapper.(*OracleScrapper)
+	var maintained []string
+	s.Require().NoError(sc.executor.GetDb().SelectContext(s.Ctx(), &maintained,
+		`SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED = 'Y'`))
+	s.Require().NotEmpty(maintained)
+
+	routines, err := s.Scrapper.QueryRoutines(s.Ctx())
+	s.Require().NoError(err)
+	for _, routine := range routines {
+		s.NotContains(maintained, routine.Schema, "%s.%s is Oracle's own", routine.Schema, routine.Name)
+	}
+}
