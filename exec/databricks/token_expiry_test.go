@@ -50,6 +50,38 @@ func TestM2mWalkOutlivesTheFirstToken(t *testing.T) {
 	})
 }
 
+// TestM2mTokenIsRenewedInTheStaleWindow pins when the token is renewed. The SDK's
+// token cache renews a token in the background once it has at most twenty minutes
+// (or half its lifetime) left, and that renewal has to get a new token, not the one
+// the cache already holds: otherwise a new token is issued only ten seconds before the
+// old one expires, which is less than the pacing may hold a request.
+func TestM2mTokenIsRenewedInTheStaleWindow(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		const step = 10 * time.Second
+		const staleWindow = 20 * time.Minute
+
+		fake := newFakeOAuthWorkspace(t, "m2m-renewal.test")
+		client := fake.workspaceClient(t, &databricks.Config{})
+		walkPastTheFirstToken(t, fake, client, step)
+
+		issued := fake.issuedAt()
+		require.GreaterOrEqual(t, len(issued), 2, "the token was never renewed")
+		renewedAt := issued[1]
+		require.GreaterOrEqual(t, renewedAt, m2mTokenLifetime-staleWindow, "the token was renewed before it went stale")
+		require.LessOrEqual(t, renewedAt, m2mTokenLifetime-staleWindow+step,
+			"the token was renewed %s before it expired, not when it went stale", m2mTokenLifetime-renewedAt)
+
+		// The renewal runs in the background, so the request that starts it still goes
+		// out with the old token, and the next one carries the new token.
+		for _, used := range fake.usedTokens() {
+			if used.at > renewedAt {
+				require.Equal(t, "token-2", used.token, "a request after the renewal at %s did not carry the new token", renewedAt)
+				break
+			}
+		}
+	})
+}
+
 // walkPastTheFirstToken sends requests one after another, every step, until well past
 // the lifetime of the first token, the way a lineage walk reads one table after
 // another.

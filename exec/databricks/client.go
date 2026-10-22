@@ -109,10 +109,15 @@ var userAgentOnce sync.Once
 // client built from that config share one throttle per workspace. Idempotent, so a
 // config that has already been paced — one taken off a client built here — can be
 // handed to another constructor.
+//
+// It also gives an OAuth M2M config the credentials strategy that renews its token
+// early (m2mCredentials): a request the pacing holds back is sent later than it was
+// stamped, so the token it carries has to have that much life left in it.
 func WithPacing(cfg *databricks.Config) *databricks.Config {
 	if cfg == nil {
 		cfg = &databricks.Config{}
 	}
+	withM2mRenewal(cfg)
 	if _, alreadyPaced := cfg.HTTPTransport.(*pacedTransport); alreadyPaced {
 		return cfg
 	}
