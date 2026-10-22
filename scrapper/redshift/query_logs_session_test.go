@@ -17,7 +17,7 @@ func TestConvertRedshiftRowSessionID(t *testing.T) {
 
 	t.Run("set", func(t *testing.T) {
 		row := &RedshiftQueryLogSchema{QueryId: 42, EndTime: &endTime, SessionId: &sessionId}
-		log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
+		log, err := convertRedshiftRowToQueryLog(row, nil, true, obfuscator, "redshift", "host", "db")
 		require.NoError(t, err)
 		require.NotNil(t, log.SessionID)
 		require.Equal(t, "1073815778", *log.SessionID)
@@ -25,7 +25,7 @@ func TestConvertRedshiftRowSessionID(t *testing.T) {
 
 	t.Run("null", func(t *testing.T) {
 		row := &RedshiftQueryLogSchema{QueryId: 42, EndTime: &endTime}
-		log, err := convertRedshiftRowToQueryLog(row, nil, obfuscator, "redshift", "host", "db")
+		log, err := convertRedshiftRowToQueryLog(row, nil, true, obfuscator, "redshift", "host", "db")
 		require.NoError(t, err)
 		require.Nil(t, log.SessionID)
 	})

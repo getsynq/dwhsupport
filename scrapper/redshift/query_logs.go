@@ -25,18 +25,21 @@ var (
 	//go:embed query_logs.sql
 	queryLogsTemplate string
 
-	// queryLogsSql reads SYS_QUERY_HISTORY together with each statement's user name and, for a long
-	// one, its SYS_QUERY_TEXT chunks.
+	// queryLogsSql reads SYS_QUERY_HISTORY together with each statement's user name and, for one
+	// longer than a chunk, its SYS_QUERY_TEXT chunks.
 	queryLogsSql = strings.Replace(queryLogsTemplate, "/* SYS_QUERY_HISTORY */", queryLogsHistorySql, 1)
 )
 
-// queryTextChunkMinBytes is the shortest query_text that may be only the start of a statement.
+// queryTextChunkMinBytes is the shortest query_text, as storedChunkBytes counts it, that may be only
+// the start of a statement, for a cluster whose SYS_QUERY_TEXT cannot be read.
 //
 // SYS_QUERY_HISTORY.query_text is the first chunk of the statement's text, and SYS_QUERY_TEXT holds
-// every chunk, keyed by query_id and sequence. A chunk holds at most 4000 bytes, but Redshift ends one
-// short of that often enough that the length of query_text alone cannot tell a cut statement from a
-// complete one. Any statement whose query_text is at least this long has its chunks joined, and a
-// shorter one is always complete.
+// every chunk, keyed by query_id and sequence. A chunk holds at most 4000 bytes as Redshift counts them,
+// which is each pipe twice: a synq-recon row hash, three pipes to a column, is cut into chunks of about
+// 3660 bytes. Redshift also ends a chunk a few bytes short of that. So the length of query_text cannot
+// tell a cut statement from a complete one, and where SYS_QUERY_TEXT can be read a second chunk there
+// decides. Where it cannot, a query_text of at least this many bytes is taken as cut, and so is one that
+// ends inside a quote (endsInsideQuote).
 const queryTextChunkMinBytes = 3800
 
 type RedshiftQueryLogSchema struct {
@@ -106,13 +109,15 @@ func fetchQueryLogs(
 	// end_time is a zone-less timestamp in UTC, and a bound in any other zone would be compared by its
 	// wall clock.
 	from, to = from.UTC(), to.UTC()
-	rows, err := query(ctx, queryLogsSql, from, to, queryTextChunkMinBytes)
+	rows, err := query(ctx, queryLogsSql, from, to)
+	textJoined := true
 	if err != nil && canReadHistoryAlone(err) {
 		// A cluster that cannot read SYS_QUERY_TEXT or pg_user still has its query history. Its logs
-		// carry no user name, and a statement long enough to have been cut is flagged as truncated.
+		// carry no user name, and a statement that may have been cut is flagged as truncated.
 		logging.GetLogger(ctx).WithError(err).
 			Warn("Redshift query logs: reading SYS_QUERY_HISTORY without SYS_QUERY_TEXT and pg_user")
 		rows, err = query(ctx, queryLogsHistorySql, from, to)
+		textJoined = false
 	}
 	if err != nil {
 		return nil, err
@@ -121,7 +126,7 @@ func fetchQueryLogs(
 	return &queryLogIterator{
 		rows: rows,
 		convert: func(row *RedshiftQueryLogSchema, chunks []queryTextChunk) (*querylogs.QueryLog, error) {
-			return convertRedshiftRowToQueryLog(row, chunks, obfuscator, sqlDialect, host, database)
+			return convertRedshiftRowToQueryLog(row, chunks, textJoined, obfuscator, sqlDialect, host, database)
 		},
 	}, nil
 }
@@ -145,8 +150,8 @@ func canReadHistoryAlone(err error) bool {
 	return false
 }
 
-// queryLogIterator turns the rows of query_logs.sql into one QueryLog per statement. A statement long
-// enough to have been cut arrives as one row per SYS_QUERY_TEXT chunk, next to each other and in
+// queryLogIterator turns the rows of query_logs.sql into one QueryLog per statement. A statement longer
+// than one chunk arrives as one row per SYS_QUERY_TEXT chunk, next to each other and in
 // sequence order, and the iterator collects them before converting.
 type queryLogIterator struct {
 	rows    *sqlx.Rows
@@ -252,15 +257,25 @@ func appendChunk(chunks []queryTextChunk, row *RedshiftQueryLogSchema) []queryTe
 
 // statementText returns the text of the statement as it ran, and whether it is incomplete.
 //
+// textJoined says the rows came from query_logs.sql, which joins the SYS_QUERY_TEXT chunks of every
+// statement that has more than one, so a statement without chunks is whole in query_text, unless it
+// ends inside a quote: no statement that ran does, so its other chunks were not there to join. Without
+// the join (query_logs_history.sql), query_text is taken as complete only when it cannot have been cut
+// (queryTextMayBeCut).
+//
 // The chunks are joined before unescaping, because a chunk can end in the middle of an escape
 // sequence, or of a multi-byte character.
-func statementText(row *RedshiftQueryLogSchema, chunks []queryTextChunk) (string, bool) {
+func statementText(row *RedshiftQueryLogSchema, chunks []queryTextChunk, textJoined bool) (string, bool) {
 	historyText := ""
 	if row.QueryText != nil {
 		historyText = *row.QueryText
 	}
-	if len(historyText) < queryTextChunkMinBytes {
-		return unescapeQueryText(historyText), false
+	if len(chunks) == 0 {
+		text := unescapeQueryText(historyText)
+		if textJoined {
+			return text, endsInsideQuote(text)
+		}
+		return text, queryTextMayBeCut(historyText)
 	}
 
 	chunks = slices.Clone(chunks)
@@ -277,10 +292,101 @@ func statementText(row *RedshiftQueryLogSchema, chunks []queryTextChunk) (string
 		contiguous++
 	}
 	if contiguous == 0 {
-		// SYS_QUERY_TEXT has none of it, so query_text is all there is.
+		// SYS_QUERY_TEXT has no first chunk, so query_text is all there is.
 		return unescapeQueryText(historyText), true
 	}
 	return unescapeQueryText(text.String()), contiguous < len(chunks)
+}
+
+// queryTextMayBeCut reports whether a stored query_text may be only the first chunk of a longer
+// statement: it is close to a full chunk as Redshift counts one, or it ends inside a quote, which a
+// statement that ran does not.
+func queryTextMayBeCut(stored string) bool {
+	return storedChunkBytes(stored) >= queryTextChunkMinBytes || endsInsideQuote(unescapeQueryText(stored))
+}
+
+// storedChunkBytes is the length of a stored chunk as Redshift counts it towards the 4000 bytes a chunk
+// holds: each pipe counts twice. Every full chunk of SYS_QUERY_TEXT measured comes to 3999 or 4000.
+func storedChunkBytes(stored string) int {
+	return len(stored) + strings.Count(stored, "|")
+}
+
+// endsInsideQuote reports whether text stops inside a string literal, a quoted identifier, a
+// dollar-quoted string or a block comment.
+func endsInsideQuote(text string) bool {
+	for i := 0; i < len(text); i++ {
+		switch text[i] {
+		case '\'':
+			// A doubled quote and a backslash escape both stay inside the literal.
+			j := i + 1
+			for ; j < len(text); j++ {
+				if text[j] == '\\' {
+					j++
+					continue
+				}
+				if text[j] == '\'' {
+					if j+1 < len(text) && text[j+1] == '\'' {
+						j++
+						continue
+					}
+					break
+				}
+			}
+			if j >= len(text) {
+				return true
+			}
+			i = j
+		case '"':
+			// A doubled quote inside an identifier closes it and opens it again.
+			end := strings.IndexByte(text[i+1:], '"')
+			if end < 0 {
+				return true
+			}
+			i += end + 1
+		case '-':
+			if strings.HasPrefix(text[i:], "--") {
+				end := strings.IndexByte(text[i:], '\n')
+				if end < 0 {
+					return false
+				}
+				i += end
+			}
+		case '/':
+			if strings.HasPrefix(text[i:], "/*") {
+				end := strings.Index(text[i+2:], "*/")
+				if end < 0 {
+					return true
+				}
+				i += end + 3
+			}
+		case '$':
+			if tag := dollarQuoteTag(text[i:]); tag != "" {
+				end := strings.Index(text[i+len(tag):], tag)
+				if end < 0 {
+					return true
+				}
+				i += 2*len(tag) + end - 1
+			}
+		}
+	}
+	return false
+}
+
+// dollarQuoteTag returns the tag that opens a dollar-quoted string at the start of s, $$ or $name$, or
+// "" when s does not start one: a positional parameter such as $1 is not a tag.
+func dollarQuoteTag(s string) string {
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '$':
+			return s[:i+1]
+		case c == '_', 'a' <= c && c <= 'z', 'A' <= c && c <= 'Z', c >= 0x80:
+		case '0' <= c && c <= '9' && i > 1:
+		default:
+			return ""
+		}
+	}
+	return ""
 }
 
 // unescapeQueryText reverses the escaping Redshift applies to query text in SYS_QUERY_HISTORY and
@@ -327,6 +433,7 @@ func trimStringPtr(s *string) *string {
 func convertRedshiftRowToQueryLog(
 	row *RedshiftQueryLogSchema,
 	chunks []queryTextChunk,
+	textJoined bool,
 	obfuscator querylogs.QueryObfuscator,
 	sqlDialect string,
 	host string,
@@ -388,7 +495,7 @@ func convertRedshiftRowToQueryLog(
 	}
 
 	// Rebuild the statement from its chunks, sanitize and apply obfuscation
-	queryText, isTruncated := statementText(row, chunks)
+	queryText, isTruncated := statementText(row, chunks, textJoined)
 	queryText = strings.TrimSpace(strings.ToValidUTF8(queryText, ""))
 	queryText = obfuscator.Obfuscate(queryText)
 
