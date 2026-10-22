@@ -33,7 +33,8 @@ func TestImportedKeyRow(t *testing.T) {
 		ColumnName:           "CUSTOMER_ID",
 		ConstraintType:       scrapper.ConstraintTypeForeignKey,
 		ColumnPosition:       1,
-		IsEnforced:           lo.ToPtr(true),
+		IsEnforced:           lo.ToPtr(false),
+		IsRely:               lo.ToPtr(true),
 		ReferencedDatabase:   "DWH_TESTING",
 		ReferencedSchema:     "SCHEMA_B",
 		ReferencedTable:      "CUSTOMERS",
@@ -45,8 +46,11 @@ func TestImportedKeyRow_NoRely(t *testing.T) {
 	row := map[string]any{"fk_name": "FK", "key_sequence": "2", "rely": "false"}
 	got := importedKeyRow("account", row)
 	require.Equal(t, int32(2), got.ColumnPosition)
-	require.Equal(t, lo.ToPtr(false), got.IsEnforced)
+	require.Equal(t, lo.ToPtr(false), got.IsEnforced, "Snowflake does not enforce a foreign key on a standard table")
+	require.Equal(t, lo.ToPtr(false), got.IsRely)
 
 	delete(row, "rely")
-	require.Nil(t, importedKeyRow("account", row).IsEnforced, "a key with no rely column is unknown")
+	got = importedKeyRow("account", row)
+	require.Equal(t, lo.ToPtr(false), got.IsEnforced, "whether RELY is known does not change enforcement")
+	require.Nil(t, got.IsRely, "a key with no rely column is unknown")
 }

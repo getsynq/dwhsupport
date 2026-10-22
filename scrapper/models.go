@@ -541,7 +541,19 @@ type TableConstraintRow struct {
 	ConstraintType       string `db:"constraint_type"       json:"constraint_type"       ch:"constraint_type"       bigquery:"constraint_type"`
 	ColumnPosition       int32  `db:"column_position"       json:"column_position"       ch:"column_position"       bigquery:"column_position"`
 	ConstraintExpression string `db:"constraint_expression" json:"constraint_expression" ch:"constraint_expression" bigquery:"constraint_expression"`
-	IsEnforced           *bool  `db:"is_enforced"           json:"is_enforced"           ch:"is_enforced"           bigquery:"is_enforced"`
+	// IsEnforced is whether the platform checks the constraint on every write:
+	// nil when the platform has no such notion (a sort or partition key), false
+	// for a key it only records, such as every Snowflake key on a standard
+	// table and every Redshift key.
+	IsEnforced *bool `db:"is_enforced" json:"is_enforced" ch:"is_enforced" bigquery:"is_enforced"`
+	// IsRely is a Snowflake key's RELY: the optimizer may assume the key holds,
+	// which says nothing about whether Snowflake checks it. Nil on every other
+	// platform.
+	IsRely *bool `db:"is_rely" json:"is_rely,omitempty" ch:"is_rely" bigquery:"is_rely"`
+	// IndexType is the kind of index, as the platform's catalog names it
+	// (btree, gin, CLUSTERED, BITMAP, bloom_filter). Empty where the catalog
+	// does not say, and on constraints no index backs.
+	IndexType string `db:"index_type" json:"index_type,omitempty" ch:"index_type" bigquery:"index_type"`
 	// The table a FOREIGN KEY references, on the same instance, and on each
 	// column's row the referenced column at the same position. Empty for every
 	// other constraint type.
