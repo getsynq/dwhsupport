@@ -8,6 +8,7 @@ import (
 
 	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/samber/lo"
 	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/suite"
@@ -424,6 +425,7 @@ func (s *LocalDuckDBScrapperSuite) TestQueryTableConstraints() {
 	var foundTestTablePK, foundAnotherTablePK bool
 	for _, c := range constraints {
 		s.Equal("test_instance", c.Instance)
+		s.Equal(lo.ToPtr(true), c.IsEnforced, "DuckDB checks its keys and checks on every write")
 		if c.Schema == "test_schema" && c.Table == "test_table" && c.ConstraintType == scrapper.ConstraintTypePrimaryKey {
 			foundTestTablePK = true
 			s.Equal("id", c.ColumnName)
