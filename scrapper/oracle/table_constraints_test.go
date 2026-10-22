@@ -37,7 +37,13 @@ func (s *OracleTableConstraintsSuite) SetupSuite() {
 		{Table: products, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"SKU"}, IndexType: "NORMAL"},
 		{Table: products, Type: scrapper.ConstraintTypeIndex, Columns: []string{"CATEGORY"}, IndexType: "NORMAL"},
 		// a function-based index's column is its expression, not the hidden SYS_NC column the index lists
-		{Table: products, Type: scrapper.ConstraintTypeIndex, Columns: []string{`UPPER("NAME")`}, IsEnforced: lo.ToPtr(true), IndexType: "FUNCTION-BASED NORMAL"},
+		{
+			Table:      products,
+			Type:       scrapper.ConstraintTypeIndex,
+			Columns:    []string{`UPPER("NAME")`},
+			IsEnforced: lo.ToPtr(true),
+			IndexType:  "FUNCTION-BASED NORMAL",
+		},
 		{Table: products, Type: scrapper.ConstraintTypeIndex, Columns: []string{"CREATED_AT"}},
 		{Table: customers, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"EMAIL"}},
 		{Table: orderItems, Type: scrapper.ConstraintTypeUniqueIndex, Columns: []string{"ORDER_ID", "PRODUCT_ID"}},

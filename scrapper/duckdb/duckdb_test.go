@@ -8,9 +8,9 @@ import (
 
 	_ "github.com/duckdb/duckdb-go/v2"
 	"github.com/getsynq/dwhsupport/scrapper"
-	"github.com/samber/lo"
 	scrapperstdsql "github.com/getsynq/dwhsupport/scrapper/stdsql"
 	"github.com/jmoiron/sqlx"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
