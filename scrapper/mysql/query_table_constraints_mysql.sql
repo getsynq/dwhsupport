@@ -1,5 +1,5 @@
 SELECT `schema`, `table`, `constraint_name`, `column_name`, `constraint_type`, `column_position`, `constraint_expression`, `is_enforced`,
-    `referenced_schema`, `referenced_table`, `referenced_column_name`
+    `index_type`, `referenced_schema`, `referenced_table`, `referenced_column_name`
 FROM (
     SELECT
         s.TABLE_SCHEMA AS `schema`,
@@ -13,7 +13,9 @@ FROM (
         END AS `constraint_type`,
         s.SEQ_IN_INDEX AS `column_position`,
         '' AS `constraint_expression`,
-        NULL AS `is_enforced`,
+        -- InnoDB checks a primary key and a unique index on every write, a plain index constrains nothing
+        CASE WHEN s.NON_UNIQUE = 0 THEN TRUE ELSE NULL END AS `is_enforced`,
+        s.INDEX_TYPE AS `index_type`,
         '' AS `referenced_schema`,
         '' AS `referenced_table`,
         '' AS `referenced_column_name`
@@ -31,6 +33,7 @@ FROM (
         k.ORDINAL_POSITION AS `column_position`,
         '' AS `constraint_expression`,
         TRUE AS `is_enforced`,
+        '' AS `index_type`,
         k.REFERENCED_TABLE_SCHEMA AS `referenced_schema`,
         k.REFERENCED_TABLE_NAME AS `referenced_table`,
         k.REFERENCED_COLUMN_NAME AS `referenced_column_name`
@@ -48,6 +51,7 @@ FROM (
         0 AS `column_position`,
         cc.CHECK_CLAUSE AS `constraint_expression`,
         CASE WHEN tc.ENFORCED = 'YES' THEN TRUE ELSE FALSE END AS `is_enforced`,
+        '' AS `index_type`,
         '' AS `referenced_schema`,
         '' AS `referenced_table`,
         '' AS `referenced_column_name`
