@@ -11,15 +11,23 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 )
 
-// routineOwnerExclusions are the Oracle-maintained schemas, the same ones the
-// other catalog queries leave out.
+// routineOwnerExclusions are the Oracle-maintained schemas. Oracle installs
+// routines of its own in schemas no list here keeps up with (Database Vault's
+// DVF), so every user ALL_USERS marks ORACLE_MAINTAINED is left out too.
 const routineOwnerExclusions = `(
         'SYS', 'SYSTEM', 'OUTLN', 'DBSNMP', 'APPQOSSYS', 'DBSFWUSER',
         'GGSYS', 'GSMADMIN_INTERNAL', 'XDB', 'WMSYS', 'OJVMSYS',
         'CTXSYS', 'ORDSYS', 'ORDDATA', 'MDSYS', 'LBACSYS',
         'DVSYS', 'AUDSYS', 'OLAPSYS', 'REMOTE_SCHEDULER_AGENT',
+        'ANONYMOUS', 'XS$NULL', 'GGSHAREDCAP', 'MDDATA',
+        'DVF', 'SPATIAL_CSW_ADMIN_USR', 'SPATIAL_WFS_ADMIN_USR',
+        'SYSBACKUP', 'SYSDG', 'SYSKM', 'SYSRAC', 'SYS$UMF',
+        'DIP', 'ORACLE_OCM', 'FLOWS_FILES',
         'VECSYS', 'RASADM', 'GSMCATUSER', 'GSMUSER'
     )`
+
+// oracleMaintainedOwners is every user Oracle maintains.
+const oracleMaintainedOwners = `(SELECT USERNAME FROM ALL_USERS WHERE ORACLE_MAINTAINED = 'Y')`
 
 // Standalone procedures and functions. A procedure or function declared in a
 // package is part of the package and has no object of its own.
@@ -34,6 +42,7 @@ FROM
 WHERE
     o.OBJECT_TYPE IN ('PROCEDURE', 'FUNCTION')
     AND o.OWNER NOT IN ` + routineOwnerExclusions + `
+    AND o.OWNER NOT IN ` + oracleMaintainedOwners + `
     /* SYNQ_SCOPE_FILTER */
 ORDER BY
     o.OWNER, o.OBJECT_NAME`
@@ -51,6 +60,7 @@ FROM
 WHERE
     s.TYPE IN ('PROCEDURE', 'FUNCTION')
     AND s.OWNER NOT IN ` + routineOwnerExclusions + `
+    AND s.OWNER NOT IN ` + oracleMaintainedOwners + `
     /* SYNQ_SCOPE_FILTER */
 ORDER BY
     s.OWNER, s.NAME, s.TYPE, s.LINE`
