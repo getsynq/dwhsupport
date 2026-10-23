@@ -119,6 +119,15 @@ func (r *TableRow) Sanitize() {
 		c.Schema = SanitizeString(c.Schema)
 		c.Table = SanitizeString(c.Table)
 	}
+	if f := r.ForeignOf; f != nil {
+		f.Wrapper = SanitizeString(f.Wrapper)
+		f.Server = SanitizeString(f.Server)
+		f.Host = SanitizeString(f.Host)
+		f.Port = SanitizeString(f.Port)
+		f.Database = SanitizeString(f.Database)
+		f.Schema = SanitizeString(f.Schema)
+		f.Table = SanitizeString(f.Table)
+	}
 	// Options holds warehouse-specific metadata (map[string]interface{}); its string
 	// values originate from typed warehouse APIs (bigquery.TableMetadata, etc.) rather
 	// than raw column data, so they are not sanitised here.

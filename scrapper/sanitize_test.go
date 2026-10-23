@@ -94,6 +94,9 @@ func TestTableRow_Sanitize(t *testing.T) {
 		Annotations: []*Annotation{{AnnotationName: "a\x00", AnnotationValue: "b"}},
 		Constraints: []*TableConstraintRow{{ConstraintName: "pk\x00", ColumnName: "id"}},
 		CopyOf:      &TableCopyOf{Kind: TableCopyClone, Database: "p\x00", Schema: "s\xff", Table: "base\x00"},
+		ForeignOf: &TableForeignOf{
+			Wrapper: "postgres_fdw\x00", Server: "srv\x00", Host: "h\x00", Port: "5432\x00", Database: "d\x00", Schema: "s\xff", Table: "remote\x00",
+		},
 	}
 	row.Sanitize()
 
@@ -103,6 +106,10 @@ func TestTableRow_Sanitize(t *testing.T) {
 	assert.Equal(t, "a", row.Annotations[0].AnnotationName)
 	assert.Equal(t, "pk", row.Constraints[0].ConstraintName)
 	assert.Equal(t, DwhFqn{DatabaseName: "p", SchemaName: "s", ObjectName: "base"}, row.CopyOf.TableFqn())
+	assert.Equal(t, &TableForeignOf{
+		Wrapper: "postgres_fdw", Server: "srv", Host: "h", Port: "5432", Database: "d", Schema: "s", Table: "remote",
+	}, row.ForeignOf)
+	assert.Equal(t, DwhFqn{InstanceName: "h", DatabaseName: "d", SchemaName: "s", ObjectName: "remote"}, row.ForeignOf.TableFqn())
 }
 
 func TestDatabaseRow_Sanitize(t *testing.T) {
