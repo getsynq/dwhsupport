@@ -22,6 +22,7 @@ type relationStats struct {
 	Reltuples    float64 `db:"reltuples"`
 	Relpages     int64   `db:"relpages"`
 	HeapBytes    int64   `db:"heap_bytes"`
+	Estimate     *int64  `db:"estimate"`
 	LiveTuples   *int64  `db:"live_tuples"`
 	CanBeCounted bool    `db:"can_be_counted"`
 }
@@ -33,6 +34,10 @@ select sch.nspname                          as "schema",
        tbl.reltuples                        as "reltuples",
        tbl.relpages                         as "relpages",
        pg_catalog.pg_relation_size(tbl.oid) as "heap_bytes",
+       case when tbl.reltuples >= 0 and tbl.relpages > 0 then
+           round(tbl.reltuples / tbl.relpages *
+                 (pg_catalog.pg_relation_size(tbl.oid) / pg_catalog.current_setting('block_size')::int))::bigint
+       end                                  as "estimate",
        st.n_live_tup                        as "live_tuples",
        has_table_privilege(tbl.oid, 'SELECT') and tbl.relkind in ('r', 'm', 'p') as "can_be_counted"
 from pg_catalog.pg_namespace sch
@@ -84,10 +89,17 @@ func TestPostgresTableMetricsCoversEveryRelation(t *testing.T) {
 
 		switch {
 		case rel.Reltuples >= 0 && rel.Relpages > 0:
-			// Analyzed or vacuumed: the planner's estimate, which a lost n_live_tup does not zero.
-			seen["analyzed"]++
-			if !assert.NotNilf(t, rowCount, "%s", name) {
+			// Analyzed or vacuumed: n_live_tup while it is within half and twice the planner's
+			// estimate, else the estimate, which a lost n_live_tup does not zero.
+			if !assert.NotNilf(t, rowCount, "%s", name) || !assert.NotNilf(t, rel.Estimate, "%s", name) {
 				continue
+			}
+			if rel.LiveTuples != nil && *rel.LiveTuples >= *rel.Estimate/2 && *rel.LiveTuples <= *rel.Estimate*2 {
+				seen["analyzed, statistics agree"]++
+				assert.Equalf(t, *rel.LiveTuples, *rowCount, "%s", name)
+			} else {
+				seen["analyzed, statistics lost"]++
+				assert.Equalf(t, *rel.Estimate, *rowCount, "%s", name)
 			}
 			if rel.Reltuples > 0 && rel.HeapBytes > 0 {
 				assert.Positivef(t, *rowCount, "%s was analyzed with %v rows", name, rel.Reltuples)
