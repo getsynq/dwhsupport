@@ -38,6 +38,8 @@ type fakeGoogle struct {
 	apiCallers []string
 	// scopes records the scopes asked for each target.
 	scopes map[string][]string
+	// stall, when set, holds every generateAccessToken request until it is closed.
+	stall chan struct{}
 }
 
 func newFakeGoogle(t *testing.T) *fakeGoogle {
@@ -49,6 +51,13 @@ func newFakeGoogle(t *testing.T) *fakeGoogle {
 }
 
 func (f *fakeGoogle) serve(w http.ResponseWriter, r *http.Request) {
+	if f.stall != nil && strings.HasSuffix(r.URL.Path, ":generateAccessToken") {
+		select {
+		case <-f.stall:
+		case <-r.Context().Done():
+		}
+		return
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	caller := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer token-for-")
@@ -272,4 +281,32 @@ func TestImpersonationError(t *testing.T) {
 	got, ok := AsImpersonationError(wrapped)
 	require.True(t, ok)
 	assert.Same(t, denied, got)
+}
+
+// IAM can accept a token request and never answer. The request must give up after the configured
+// timeout, or every BigQuery call waiting for that token waits forever too.
+func TestNewHTTPClient_ImpersonationGivesUpOnAStalledTokenRequest(t *testing.T) {
+	f := newFakeGoogle(t)
+	withFakeGoogle(t, f)
+	f.stall = make(chan struct{})
+	t.Cleanup(func() { close(f.stall) })
+
+	client, err := NewHTTPClient(context.Background(), &BigQueryConf{
+		ProjectId:                  "customer-project",
+		ImpersonateServiceAccounts: []string{workspaceServiceAccount},
+		HTTPTimeout:                200 * time.Millisecond,
+	}, bigquery.Scope)
+	require.NoError(t, err)
+
+	done := make(chan error, 1)
+	go func() { done <- f.callBigQuery(t, client) }()
+	select {
+	case err := <-done:
+		impErr, ok := AsImpersonationError(err)
+		require.True(t, ok, "got %v", err)
+		assert.Equal(t, workspaceServiceAccount, impErr.ServiceAccount)
+		assert.ErrorIs(t, err, context.DeadlineExceeded)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the token request did not time out")
+	}
 }
