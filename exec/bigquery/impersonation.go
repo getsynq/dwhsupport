@@ -61,8 +61,14 @@ func AsImpersonationError(err error) (*ImpersonationError, bool) {
 
 // impersonationTokenSource returns tokens for the last service account of chain, each hop
 // authenticated by the token of the hop before it and the first by base. Every hop caches its
-// token until shortly before it expires.
-func impersonationTokenSource(ctx context.Context, base oauth2.TokenSource, chain []string, scopes []string) (oauth2.TokenSource, error) {
+// token until shortly before it expires, and gives up on a token request after timeout.
+func impersonationTokenSource(
+	ctx context.Context,
+	base oauth2.TokenSource,
+	chain []string,
+	scopes []string,
+	timeout time.Duration,
+) (oauth2.TokenSource, error) {
 	if len(chain) == 0 {
 		return nil, errors.New("bigquery: no service account to impersonate")
 	}
@@ -93,6 +99,7 @@ func impersonationTokenSource(ctx context.Context, base oauth2.TokenSource, chai
 			serviceAccount: serviceAccount,
 			caller:         caller,
 			scopes:         hopScopes,
+			timeout:        timeout,
 		})
 		caller = serviceAccount
 	}
@@ -105,13 +112,19 @@ type impersonatedTokenSource struct {
 	serviceAccount string
 	caller         string
 	scopes         []string
+	timeout        time.Duration
 }
 
 func (s *impersonatedTokenSource) Token() (*oauth2.Token, error) {
+	// Token takes no context, and the timeout of the HTTP client that asks for the token does not
+	// reach this request, so it needs its own. ReuseTokenSource holds a lock while it waits, so a
+	// request that never ends blocks every call that needs this token.
+	ctx, cancel := context.WithTimeout(s.ctx, s.timeout)
+	defer cancel()
 	name := "projects/-/serviceAccounts/" + s.serviceAccount
 	resp, err := s.service.Projects.ServiceAccounts.
 		GenerateAccessToken(name, &iamcredentials.GenerateAccessTokenRequest{Scope: s.scopes}).
-		Context(s.ctx).
+		Context(ctx).
 		Do()
 	if err != nil {
 		// A hop before this one failed while authenticating this request: that hop is the one
@@ -145,7 +158,7 @@ func impersonationOption(ctx context.Context, conf *BigQueryConf, scopes []strin
 	if err != nil {
 		return nil, errors.Wrap(err, "bigquery: finding the default credentials to impersonate with")
 	}
-	tokenSource, err := impersonationTokenSource(ctx, base, conf.ImpersonateServiceAccounts, scopes)
+	tokenSource, err := impersonationTokenSource(ctx, base, conf.ImpersonateServiceAccounts, scopes, httpTimeout(conf))
 	if err != nil {
 		return nil, err
 	}

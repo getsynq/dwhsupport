@@ -108,16 +108,19 @@ func NewHTTPClient(ctx context.Context, conf *BigQueryConf, scopes ...string) (*
 	// htransport.NewClient applies the auth options above AND keeps the
 	// google-api OTel HTTP instrumentation; passing a bare &http.Client via
 	// option.WithHTTPClient would drop both credentials and tracing.
-	httpTimeout := conf.HTTPTimeout
-	if httpTimeout <= 0 {
-		httpTimeout = defaultHTTPTimeout
-	}
 	httpClient, _, err := htransport.NewClient(ctx, options...)
 	if err != nil {
 		return nil, err
 	}
-	httpClient.Timeout = httpTimeout
+	httpClient.Timeout = httpTimeout(conf)
 	return httpClient, nil
+}
+
+func httpTimeout(conf *BigQueryConf) time.Duration {
+	if conf.HTTPTimeout <= 0 {
+		return defaultHTTPTimeout
+	}
+	return conf.HTTPTimeout
 }
 
 func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExecutor, error) {
