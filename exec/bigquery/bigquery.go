@@ -29,8 +29,8 @@ import (
 const defaultHTTPTimeout = 2 * time.Minute
 
 // BigQueryConf configures the BigQuery executor connection.
-// Authentication precedence: AccessToken > CredentialsJson > CredentialsFile > Application Default
-// Credentials, the last only when AllowDefaultCredentials is set.
+// Authentication precedence: AccessToken > ImpersonateServiceAccounts > CredentialsJson >
+// CredentialsFile > Application Default Credentials, the last only when AllowDefaultCredentials is set.
 type BigQueryConf struct {
 	// ProjectId is the GCP project containing BigQuery datasets.
 	ProjectId string
@@ -43,6 +43,13 @@ type BigQueryConf struct {
 	// AccessToken is an OAuth access token for user-level authentication.
 	// When set, it takes precedence over CredentialsJson and CredentialsFile.
 	AccessToken string
+	// ImpersonateServiceAccounts is a chain of service account emails. The process's own default
+	// credentials get a token for the first one, that one for the next, and BigQuery sees the last.
+	// Each one must grant roles/iam.serviceAccountTokenCreator to the identity before it. Google
+	// mints the tokens, so no key leaves anyone's project, and the chain needs no
+	// AllowDefaultCredentials: whoever builds it decides which service accounts it names. It can not
+	// be combined with CredentialsJson or CredentialsFile.
+	ImpersonateServiceAccounts []string
 	// AllowDefaultCredentials opts into Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS,
 	// gcloud's login, the GKE or GCE metadata server) when no credential is set. Only a process running
 	// in the customer's own environment sets it, such as the synq-dwh agent. On the hosted side it
@@ -81,6 +88,12 @@ func NewHTTPClient(ctx context.Context, conf *BigQueryConf, scopes ...string) (*
 	if conf.AccessToken != "" {
 		tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: conf.AccessToken})
 		options = append(options, option.WithTokenSource(tokenSource))
+	} else if len(conf.ImpersonateServiceAccounts) > 0 {
+		credential, err := impersonationOption(ctx, conf, scopes)
+		if err != nil {
+			return nil, exec.NewAuthError(err)
+		}
+		options = append(options, credential)
 	} else {
 		credential, err := credentialOption(conf)
 		if err != nil {
@@ -95,16 +108,19 @@ func NewHTTPClient(ctx context.Context, conf *BigQueryConf, scopes ...string) (*
 	// htransport.NewClient applies the auth options above AND keeps the
 	// google-api OTel HTTP instrumentation; passing a bare &http.Client via
 	// option.WithHTTPClient would drop both credentials and tracing.
-	httpTimeout := conf.HTTPTimeout
-	if httpTimeout <= 0 {
-		httpTimeout = defaultHTTPTimeout
-	}
 	httpClient, _, err := htransport.NewClient(ctx, options...)
 	if err != nil {
 		return nil, err
 	}
-	httpClient.Timeout = httpTimeout
+	httpClient.Timeout = httpTimeout(conf)
 	return httpClient, nil
+}
+
+func httpTimeout(conf *BigQueryConf) time.Duration {
+	if conf.HTTPTimeout <= 0 {
+		return defaultHTTPTimeout
+	}
+	return conf.HTTPTimeout
 }
 
 func NewBigqueryExecutor(ctx context.Context, conf *BigQueryConf) (*BigQueryExecutor, error) {
@@ -223,8 +239,10 @@ func CollectBigQueryStats(ctx context.Context, job *bigquery.Job) {
 
 // BigQuery label keys and values must contain only lowercase letters, numeric characters,
 // underscores, and dashes. Keys must start with a letter. Max 63 chars for both key and value.
-var bigQueryLabelSanitizer = regexp.MustCompile(`[^a-z0-9_-]`)
-var consecutiveUnderscores = regexp.MustCompile(`_{2,}`)
+var (
+	bigQueryLabelSanitizer = regexp.MustCompile(`[^a-z0-9_-]`)
+	consecutiveUnderscores = regexp.MustCompile(`_{2,}`)
+)
 
 // queryContextToBigQueryLabels converts a query context to BigQuery-compatible job labels.
 func queryContextToBigQueryLabels(qc querycontext.QueryContext) map[string]string {
