@@ -25,6 +25,15 @@ func TestBigQueryScrapperConf(t *testing.T) {
 	assert.True(t, got.FetchPolicyTags)
 }
 
+// The agent runs in the customer's environment from a configuration its host's owner wrote, so it may
+// authenticate as the host (GKE workload identity, gcloud's login) and with any credential type.
+func TestBigQueryScrapperConf_AgentUsesItsHostsCredentials(t *testing.T) {
+	got := bigQueryScrapperConf(&agentdwhv1.BigQueryConf{ProjectId: "my-gcp-project", Region: "europe-west2"})
+
+	assert.True(t, got.AllowDefaultCredentials)
+	assert.True(t, got.AllowAnyCredentialType)
+}
+
 // A Data Catalog call the role is denied shows in the customer's audit log, so a connection that
 // does not ask for policy tag names does not get the call.
 func TestBigQueryScrapperConf_FetchPolicyTagsIsOptIn(t *testing.T) {

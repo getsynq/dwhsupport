@@ -41,13 +41,20 @@ func BigQuery(ctx context.Context, t *agentdwhv1.BigQueryConf) (*scrapperbigquer
 	return scrapperbigquery.NewBigQueryScrapper(ctx, bigQueryScrapperConf(t))
 }
 
+// bigQueryScrapperConf is for the on-prem agent, whose configuration comes from the owner of the host
+// it runs on. It allows the host's Application Default Credentials (a GKE workload identity, gcloud's
+// login) when the configuration names no key, and any credential type Google's libraries load. A
+// hosted connection MUST leave both off, so a customer's configuration can neither run as our own
+// identity nor make our process read a file or call a URL.
 func bigQueryScrapperConf(t *agentdwhv1.BigQueryConf) *scrapperbigquery.BigQueryScrapperConf {
 	return &scrapperbigquery.BigQueryScrapperConf{
 		BigQueryConf: dwhexecbigquery.BigQueryConf{
-			ProjectId:       t.GetProjectId(),
-			Region:          t.GetRegion(),
-			CredentialsJson: t.GetServiceAccountKey(),
-			CredentialsFile: t.GetServiceAccountKeyFile(),
+			ProjectId:               t.GetProjectId(),
+			Region:                  t.GetRegion(),
+			CredentialsJson:         t.GetServiceAccountKey(),
+			CredentialsFile:         t.GetServiceAccountKeyFile(),
+			AllowDefaultCredentials: true,
+			AllowAnyCredentialType:  true,
 		},
 		Datasets:        t.GetDatasets(),
 		FetchPolicyTags: t.GetFetchPolicyTags(),

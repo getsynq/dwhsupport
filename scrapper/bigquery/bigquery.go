@@ -286,11 +286,11 @@ func (e *BigQueryScrapper) ValidateConfiguration(ctx context.Context) ([]string,
 		return nil, nil
 	}
 
-	crm, err := cloudresourcemanager.NewService(
-		ctx,
-		option.WithCredentialsJSON([]byte(e.conf.CredentialsJson)),
-		option.WithUserAgent("synq-bq-client-v1.0.0"),
-	)
+	httpClient, err := dwhexecbigquery.NewHTTPClient(ctx, &e.conf.BigQueryConf, cloudresourcemanager.CloudPlatformScope)
+	if err != nil {
+		return nil, err
+	}
+	crm, err := cloudresourcemanager.NewService(ctx, option.WithHTTPClient(httpClient))
 	if err != nil {
 		return nil, err
 	}
