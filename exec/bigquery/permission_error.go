@@ -8,9 +8,13 @@ import (
 )
 
 // IsPermissionError reports whether err indicates the DWH credentials lack the
-// privileges required for the attempted operation.
+// privileges required for the attempted operation. A refused impersonation hop is not one, even
+// though Google answers it with a 403: no identity was established, which IsAuthError reports.
 func IsPermissionError(err error) bool {
 	if err == nil {
+		return false
+	}
+	if _, ok := AsImpersonationError(err); ok {
 		return false
 	}
 	if code := status.Code(err); code == codes.PermissionDenied {
