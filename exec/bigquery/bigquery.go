@@ -29,7 +29,8 @@ import (
 const defaultHTTPTimeout = 2 * time.Minute
 
 // BigQueryConf configures the BigQuery executor connection.
-// Authentication precedence: AccessToken > CredentialsJson > CredentialsFile.
+// Authentication precedence: AccessToken > CredentialsJson > CredentialsFile > Application Default
+// Credentials, the last only when AllowDefaultCredentials is set.
 type BigQueryConf struct {
 	// ProjectId is the GCP project containing BigQuery datasets.
 	ProjectId string
@@ -42,6 +43,18 @@ type BigQueryConf struct {
 	// AccessToken is an OAuth access token for user-level authentication.
 	// When set, it takes precedence over CredentialsJson and CredentialsFile.
 	AccessToken string
+	// AllowDefaultCredentials opts into Application Default Credentials (GOOGLE_APPLICATION_CREDENTIALS,
+	// gcloud's login, the GKE or GCE metadata server) when no credential is set. Only a process running
+	// in the customer's own environment sets it, such as the synq-dwh agent. On the hosted side it
+	// stays false, so a connection with no credential is refused instead of running as our own
+	// service account.
+	AllowDefaultCredentials bool
+	// AllowAnyCredentialType accepts every credential type Google's client libraries load in
+	// CredentialsJson and CredentialsFile (external_account, impersonated_service_account,
+	// authorized_user). Some of them read a file or call a URL that the credential names. Only a
+	// process whose configuration comes from the host's owner sets it, such as the synq-dwh agent.
+	// When false, the credential must pass ValidateServiceAccountKey.
+	AllowAnyCredentialType bool
 	// HTTPTimeout caps each BigQuery REST round-trip (table/dataset metadata,
 	// table listing, query-result pages). Guards against a stalled connection
 	// hanging a scrape until the caller's job deadline. Zero uses
@@ -58,11 +71,9 @@ type BigQueryExecutor struct {
 	client *bigquery.Client
 }
 
-// NewHTTPClient returns an HTTP client authenticated the way conf says
-// (AccessToken > CredentialsJson > CredentialsFile) for the given OAuth scopes,
-// with conf's per-request timeout. The BigQuery client and the scrapper's
-// Resource Manager and IAM calls all go through it, so they act as the same
-// identity.
+// NewHTTPClient returns an HTTP client authenticated the way conf says (see BigQueryConf) for the
+// given OAuth scopes, with conf's per-request timeout. The BigQuery client and the scrapper's
+// Resource Manager, IAM and Data Catalog calls all go through it, so they act as the same identity.
 func NewHTTPClient(ctx context.Context, conf *BigQueryConf, scopes ...string) (*http.Client, error) {
 	var options []option.ClientOption
 	options = append(options, option.WithUserAgent("synq-bq-client-v1.0.0"))
@@ -70,10 +81,14 @@ func NewHTTPClient(ctx context.Context, conf *BigQueryConf, scopes ...string) (*
 	if conf.AccessToken != "" {
 		tokenSource := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: conf.AccessToken})
 		options = append(options, option.WithTokenSource(tokenSource))
-	} else if len(conf.CredentialsJson) > 0 {
-		options = append(options, option.WithCredentialsJSON([]byte(conf.CredentialsJson)))
-	} else if len(conf.CredentialsFile) > 0 {
-		options = append(options, option.WithCredentialsFile(conf.CredentialsFile))
+	} else {
+		credential, err := credentialOption(conf)
+		if err != nil {
+			return nil, exec.NewAuthError(err)
+		}
+		if credential != nil {
+			options = append(options, credential)
+		}
 	}
 
 	// Build the HTTP client ourselves so we can enforce a per-request timeout.
