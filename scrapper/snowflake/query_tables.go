@@ -45,7 +45,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 		func(groupCtx context.Context, database string) ([]*scrapper.TableRow, error) {
 			var tmpResults []*scrapper.TableRow
 
-			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tablesQuery, database), "", "t.table_schema", "t.table_name")
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tablesQuery, databaseIdent(database)), "", "t.table_schema", "t.table_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to query tables for database %s", database)
@@ -162,7 +162,7 @@ type ShowStreamsRow struct {
 func (e *SnowflakeScrapper) showStreamsInDatabase(ctx context.Context, database string) ([]*ShowStreamsRow, error) {
 	var results []*ShowStreamsRow
 
-	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW STREAMS IN DATABASE %s", database))
+	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW STREAMS IN DATABASE %s", databaseIdent(database)))
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package snowflake
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
@@ -53,6 +54,20 @@ func (c *SnowflakeScrapperConf) UpperDatabasesLiteral() string {
 		parts[i] = QuoteLiteral(strings.ToUpper(db))
 	}
 	return strings.Join(parts, ", ")
+}
+
+var unquotedIdentifier = regexp.MustCompile(`^[A-Z_][A-Z0-9_$]*$`)
+
+// databaseIdent writes a database name as Snowflake reports it, for use as an
+// identifier in SQL. A name Snowflake would fold to itself is written as it is,
+// and any other one (lower case, a space) is quoted, so it is resolved exactly.
+// With CatalogFromAccountUsage and no configured databases, the names come
+// from ACCOUNT_USAGE, so any name an account has can get here.
+func databaseIdent(name string) string {
+	if unquotedIdentifier.MatchString(name) {
+		return name
+	}
+	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
 }
 
 func QuoteLiteral(literal string) string {
@@ -247,7 +262,7 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 
 		// Probe the database to check if it's an unavailable shared database
 		// We use a simple query against information_schema which will fail if the shared database is unavailable
-		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.tables LIMIT 1", database)
+		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.tables LIMIT 1", databaseIdent(database))
 		probeRows, probeErr := e.executor.QueryRows(ctx, probeQuery)
 		if probeRows != nil {
 			probeRows.Close()

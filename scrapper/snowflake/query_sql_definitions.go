@@ -57,7 +57,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 		func(groupCtx context.Context, database string) ([]*scrapper.SqlDefinitionRow, error) {
 			var tmpResults []*scrapper.SqlDefinitionRow
 
-			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(sqlDefinitionsQuery, database), "", "table_schema", "table_name")
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(sqlDefinitionsQuery, databaseIdent(database)), "", "table_schema", "table_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to query sql definitions for database %s", database)

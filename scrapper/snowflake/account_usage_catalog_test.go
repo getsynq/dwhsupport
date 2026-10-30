@@ -134,6 +134,22 @@ func (s *AccountUsageCatalogSuite) TestTableMetricsFromAccountUsage() {
 	s.Empty(fake.statements(sqlContains("information_schema")))
 }
 
+func TestDatabaseIdent(t *testing.T) {
+	for name, want := range map[string]string{
+		"SALES":          "SALES",
+		"_STAGE$1":       "_STAGE$1",
+		"Sales":          `"Sales"`,
+		"sales data":     `"sales data"`,
+		`odd"name`:       `"odd""name"`,
+		"1ST":            `"1ST"`,
+		"foo - . :: bar": `"foo - . :: bar"`,
+	} {
+		if got := databaseIdent(name); got != want {
+			t.Errorf("databaseIdent(%q) = %s, want %s", name, got, want)
+		}
+	}
+}
+
 func (s *AccountUsageCatalogSuite) TestWarnsAboutDatabasesWithoutPrivileges() {
 	fake := s.fake()
 	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{CatalogFromAccountUsage: true})

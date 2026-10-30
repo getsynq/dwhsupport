@@ -51,7 +51,7 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 	finalResults, err := readDatabases(
 		origCtx, databasesToQuery, 4, scrapper.OmittedColumns,
 		func(groupCtx context.Context, database string) ([]*scrapper.CatalogColumnRow, error) {
-			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(catalogQuery, database), "", "c.table_schema", "c.table_name")
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(catalogQuery, databaseIdent(database)), "", "c.table_schema", "c.table_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to query catalog for database %s", database)

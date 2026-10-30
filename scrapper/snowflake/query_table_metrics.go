@@ -39,7 +39,7 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 		func(groupCtx context.Context, database string) ([]*scrapper.TableMetricsRow, error) {
 			var tmpResults []*scrapper.TableMetricsRow
 
-			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tableMetricsSql, database), "", "table_schema", "table_name")
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tableMetricsSql, databaseIdent(database)), "", "table_schema", "table_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to query metrics for database %s", database)

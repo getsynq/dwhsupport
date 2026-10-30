@@ -45,7 +45,7 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 	// the first database, so an account without one still gets its other keys.
 	clusteringKeyAvailable, isHybridAvailable := false, false
 	if len(databasesToQuery) > 0 {
-		columns, err := e.findTableColumns(ctx, fmt.Sprintf("%s.information_schema.tables", databasesToQuery[0]))
+		columns, err := e.findTableColumns(ctx, fmt.Sprintf("%s.information_schema.tables", databaseIdent(databasesToQuery[0])))
 		if err != nil {
 			logging.GetLogger(ctx).WithError(err).
 				Debug("Failed to describe information_schema.tables, skipping clustering keys and hybrid tables")
@@ -157,7 +157,7 @@ func (h hybridTables) enforces(database, schema, table string) *bool {
 
 // queryHybridTablesInDatabase reads which tables of a database are hybrid.
 func (e *SnowflakeScrapper) queryHybridTablesInDatabase(ctx context.Context, database string) (hybridTables, error) {
-	tableName := fmt.Sprintf("%s.information_schema.tables", database)
+	tableName := fmt.Sprintf("%s.information_schema.tables", databaseIdent(database))
 	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf(
 		`SELECT table_catalog AS "table_catalog", table_schema AS "table_schema", table_name AS "table_name" FROM %s WHERE is_hybrid = 'YES'`,
 		tableName,
@@ -197,7 +197,7 @@ func (e *SnowflakeScrapper) queryKeysInDatabase(
 ) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 
-	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW %s IN DATABASE %s", show, database))
+	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW %s IN DATABASE %s", show, databaseIdent(database)))
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (e *SnowflakeScrapper) queryImportedKeysInDatabase(
 	database string,
 	hybrid hybridTables,
 ) ([]*scrapper.TableConstraintRow, error) {
-	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW IMPORTED KEYS IN DATABASE %s", database))
+	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW IMPORTED KEYS IN DATABASE %s", databaseIdent(database)))
 	if err != nil {
 		return nil, err
 	}
@@ -295,7 +295,7 @@ func (e *SnowflakeScrapper) queryClusteringKeysInDatabase(ctx context.Context, d
 		ctx,
 		fmt.Sprintf(
 			`SELECT table_schema AS "table_schema", table_name AS "table_name", clustering_key AS "clustering_key" FROM %s.information_schema.tables WHERE clustering_key IS NOT NULL AND clustering_key != '' /* SYNQ_SCOPE_FILTER */`,
-			database,
+			databaseIdent(database),
 		),
 		"", "table_schema", "table_name",
 	)
