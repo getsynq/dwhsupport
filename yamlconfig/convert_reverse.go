@@ -103,12 +103,13 @@ func bigqueryConfFromProto(c *agentdwhv1.BigQueryConf) *BigQueryConf {
 		return nil
 	}
 	bq := &BigQueryConf{
-		ProjectId:             c.GetProjectId(),
-		Region:                c.GetRegion(),
-		ServiceAccountKey:     c.GetServiceAccountKey(),
-		ServiceAccountKeyFile: c.GetServiceAccountKeyFile(),
-		Datasets:              c.GetDatasets(),
-		FetchPolicyTags:       c.GetFetchPolicyTags(),
+		ProjectId:                  c.GetProjectId(),
+		Region:                     c.GetRegion(),
+		ServiceAccountKey:          c.GetServiceAccountKey(),
+		ServiceAccountKeyFile:      c.GetServiceAccountKeyFile(),
+		ImpersonateServiceAccounts: c.GetImpersonateServiceAccounts(),
+		Datasets:                   c.GetDatasets(),
+		FetchPolicyTags:            c.GetFetchPolicyTags(),
 	}
 	if bq.ServiceAccountKey != "" {
 		bq.ServiceAccountKeyFile = ""

@@ -192,10 +192,17 @@ func TestFromProtoConnection_BigQuery(t *testing.T) {
 			FetchPolicyTags:   true,
 		},
 		{ProjectId: "my-gcp-project", Region: "europe-west2", ServiceAccountKey: `{"type":"service_account"}`},
+		{
+			ProjectId:                  "my-gcp-project",
+			Region:                     "europe-west2",
+			ImpersonateServiceAccounts: []string{"hop@my-gcp-project.iam.gserviceaccount.com", "reader@data-project.iam.gserviceaccount.com"},
+		},
+		{ProjectId: "my-gcp-project", Region: "europe-west2"},
 	} {
 		pb, err := ToProtoConnection("bigquery", &Connection{BigQuery: original})
 		require.NoError(t, err)
 		assert.Equal(t, original.FetchPolicyTags, pb.GetBigquery().GetFetchPolicyTags())
+		assert.Equal(t, original.ImpersonateServiceAccounts, pb.GetBigquery().GetImpersonateServiceAccounts())
 		rt := FromProtoConnection(pb)
 		require.NotNil(t, rt)
 		assert.Equal(t, original, rt.BigQuery)

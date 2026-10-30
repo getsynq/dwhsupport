@@ -235,6 +235,20 @@ bigquery:
   service_account_key_file: ./sa.json     # or service_account_key: <JSON>
   datasets: [analytics, raw]              # empty = all; set to skip datasets.list
 ```
+
+With no key, the connection uses Application Default Credentials (`gcloud auth
+application-default login`, a GKE workload identity). Instead of a key, it can
+impersonate service accounts, in order, starting from those credentials. Each
+service account must grant `roles/iam.serviceAccountTokenCreator` to the identity
+before it:
+
+```yaml
+bigquery:
+  project_id: my-gcp-project
+  region: EU
+  impersonate_service_accounts:
+    - reader@my-gcp-project.iam.gserviceaccount.com
+```
 </details>
 
 <details>

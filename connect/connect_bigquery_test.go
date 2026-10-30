@@ -34,6 +34,21 @@ func TestBigQueryScrapperConf_AgentUsesItsHostsCredentials(t *testing.T) {
 	assert.True(t, got.AllowAnyCredentialType)
 }
 
+// A host whose organisation allows no service account keys reaches BigQuery by impersonating a chain
+// of service accounts, starting from its own default credentials.
+func TestBigQueryScrapperConf_ImpersonationChain(t *testing.T) {
+	chain := []string{"hop@my-gcp-project.iam.gserviceaccount.com", "reader@data-project.iam.gserviceaccount.com"}
+	got := bigQueryScrapperConf(&agentdwhv1.BigQueryConf{
+		ProjectId:                  "my-gcp-project",
+		Region:                     "europe-west2",
+		ImpersonateServiceAccounts: chain,
+	})
+
+	assert.Equal(t, chain, got.ImpersonateServiceAccounts)
+	assert.Empty(t, got.CredentialsJson)
+	assert.Empty(t, got.CredentialsFile)
+}
+
 // A Data Catalog call the role is denied shows in the customer's audit log, so a connection that
 // does not ask for policy tag names does not get the call.
 func TestBigQueryScrapperConf_FetchPolicyTagsIsOptIn(t *testing.T) {
