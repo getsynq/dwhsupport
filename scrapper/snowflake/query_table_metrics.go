@@ -29,7 +29,7 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 	if e.conf.TableMetricsFromAccountUsage {
 		return e.queryTableMetricsFromAccountUsage(origCtx)
 	}
-	databasesToQuery, err := e.getDatabasesWithPrivileges(origCtx)
+	databasesToQuery, err := e.DatabasesWithPrivileges(origCtx)
 	if err != nil {
 		return nil, err
 	}

@@ -7,7 +7,10 @@ import (
 	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/jmoiron/sqlx"
+	"github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -239,4 +242,26 @@ func (s *RowScannerSuite) TestDiscardsRepeatedColumn() {
 	result := s.scanAll(rows, scanner)
 	s.Require().Len(result, 1)
 	s.Equal("first", result[0].ID)
+}
+
+// A field the query does not select is how our own queries look (the scrapper
+// fills it in later), so on its own it is no drift worth a warning. A column
+// the struct has no field for still is.
+func (s *RowScannerSuite) TestWarnsOnlyAboutUnknownColumns() {
+	logger, hook := logrustest.NewNullLogger()
+	logger.SetLevel(logrus.DebugLevel)
+	ctx := logging.WithLogger(context.Background(), logger)
+
+	missingOnly, err := New[scanTarget](mockRows(s.T(), []string{"ID", "NAME"}))
+	s.Require().NoError(err)
+	missingOnly.LogColumnDrift(ctx, "TEST.SOURCE")
+	s.Require().Len(hook.AllEntries(), 1)
+	s.Equal(logrus.DebugLevel, hook.LastEntry().Level)
+
+	hook.Reset()
+	unknown, err := New[scanTarget](mockRows(s.T(), []string{"ID", "NAME", "BRAND_NEW"}))
+	s.Require().NoError(err)
+	unknown.LogColumnDrift(ctx, "TEST.SOURCE")
+	s.Require().Len(hook.AllEntries(), 1)
+	s.Equal(logrus.WarnLevel, hook.LastEntry().Level)
 }

@@ -235,8 +235,11 @@ func NewSnowflakeExecutor(ctx context.Context, conf *SnowflakeConf) (*SnowflakeE
 		if c.Database == "" || !isDatabaseNotFoundError(err) {
 			return nil, exec.ConnectionError(err, IsAuthError)
 		}
+		// ValidateConfiguration reports the database to the integration's owner,
+		// and a role reading ACCOUNT_USAGE often holds no grant on it, so this is
+		// expected on every connection and no warning.
 		logging.GetLogger(ctx).WithError(err).WithField("database", c.Database).
-			Warn("session default database is unresolvable, reconnecting without it")
+			Info("session default database is unresolvable, reconnecting without it")
 
 		c.Database = ""
 		db = openSnowflakeDb(c)

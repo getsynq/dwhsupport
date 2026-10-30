@@ -36,7 +36,7 @@ func (e *SnowflakeScrapper) QueryTableConstraints(ctx context.Context) ([]*scrap
 	var m sync.Mutex
 
 	// SHOW ... KEYS and INFORMATION_SCHEMA list only what the role holds a privilege on.
-	databasesToQuery, err := e.getDatabasesWithPrivileges(ctx)
+	databasesToQuery, err := e.DatabasesWithPrivileges(ctx)
 	if err != nil {
 		return nil, err
 	}

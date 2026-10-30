@@ -137,6 +137,17 @@ func (r *tagReferences) apply(rows []*scrapper.CatalogColumnRow) {
 // these tags, and their tables keep what GET_DDL gives in QuerySqlDefinitions.
 func (e *SnowflakeScrapper) addTagReferences(ctx context.Context, databases []string, rows []*scrapper.CatalogColumnRow) error {
 	references, err := e.queryTagReferences(ctx, databases)
+	return e.applyTagReferences(ctx, references, err, rows)
+}
+
+// applyTagReferences sets the tags a TAG_REFERENCES read gave on the rows, and
+// logs a read that failed, as addTagReferences describes.
+func (e *SnowflakeScrapper) applyTagReferences(
+	ctx context.Context,
+	references *tagReferences,
+	err error,
+	rows []*scrapper.CatalogColumnRow,
+) error {
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
