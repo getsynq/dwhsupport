@@ -222,6 +222,8 @@ snowflake:
   databases: [ANALYTICS, RAW]         # empty = all accessible
   use_get_ddl: true                   # fetch DDL via GET_DDL()
   account_usage_db: SNOWFLAKE
+  catalog_from_account_usage: true    # catalog from ACCOUNT_USAGE, up to 3h behind
+  table_metrics_from_account_usage: true  # table metrics from ACCOUNT_USAGE, up to 3h behind
 ```
 </details>
 

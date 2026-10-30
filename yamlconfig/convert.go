@@ -139,6 +139,12 @@ func snowflakeConfToProto(c *SnowflakeConf) *agentdwhv1.SnowflakeConf {
 	if c.AuthType != "" {
 		sf.AuthType = &c.AuthType
 	}
+	if c.CatalogFromAccountUsage {
+		sf.CatalogFromAccountUsage = &c.CatalogFromAccountUsage
+	}
+	if c.TableMetricsFromAccountUsage {
+		sf.TableMetricsFromAccountUsage = &c.TableMetricsFromAccountUsage
+	}
 	return sf
 }
 

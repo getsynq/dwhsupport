@@ -184,8 +184,10 @@ func Snowflake(ctx context.Context, t *agentdwhv1.SnowflakeConf) (*scrappersnowf
 			Role:                 t.GetRole(),
 			AuthType:             t.GetAuthType(),
 		},
-		NoGetDll:       !t.GetUseGetDdl(),
-		AccountUsageDb: lo.EmptyableToPtr(t.GetAccountUsageDb()),
+		NoGetDll:                     !t.GetUseGetDdl(),
+		AccountUsageDb:               lo.EmptyableToPtr(t.GetAccountUsageDb()),
+		CatalogFromAccountUsage:      t.GetCatalogFromAccountUsage(),
+		TableMetricsFromAccountUsage: t.GetTableMetricsFromAccountUsage(),
 	})
 }
 

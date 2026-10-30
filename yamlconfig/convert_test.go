@@ -57,6 +57,8 @@ func TestToProtoConnections_AllTypes(t *testing.T) {
 	assert.Equal(t, []string{"ANALYTICS", "STAGING"}, sfConf.GetDatabases())
 	assert.True(t, sfConf.GetUseGetDdl())
 	assert.Equal(t, "SNOWFLAKE", sfConf.GetAccountUsageDb())
+	assert.True(t, sfConf.GetCatalogFromAccountUsage())
+	assert.True(t, sfConf.GetTableMetricsFromAccountUsage())
 
 	// Verify Clickhouse
 	ch := protos["ch-staging"]
