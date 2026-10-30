@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/logging"
@@ -12,14 +14,18 @@ import (
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 )
 
 // The queries below are the CatalogFromAccountUsage reads. Each one reads all
 // databases at once: %[1]s is the database holding ACCOUNT_USAGE and %[2]s the
 // quoted names of the databases to read. ACCOUNT_USAGE keeps a dropped object
-// with its DELETED time, and an object dropped and created again under the same
-// name is a second row, so every query keeps only live objects and the newest
-// object of a name.
+// with its DELETED time, so every query keeps only live objects. An object
+// replaced under the same name can still be listed twice, as Snowflake does not
+// always mark the replaced one deleted. Only the small listings (databases,
+// schemas) keep the newest of a name in SQL. The large ones return the
+// creation time and newestByName keeps the newest in Go, as a window over a
+// whole ACCOUNT_USAGE view costs minutes on a large account.
 
 var accountUsageDatabasesQuery = `
 SELECT database_name AS "name",
@@ -60,19 +66,11 @@ WHERE t.deleted IS NULL
   AND t.table_catalog IN (%[2]s)
   AND UPPER(t.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
   /* SYNQ_SCOPE_FILTER */
-QUALIFY ROW_NUMBER() OVER (PARTITION BY t.table_catalog, t.table_schema, t.table_name ORDER BY t.created DESC) = 1
 `
 
+// accountUsageCatalogQuery joins the columns to their table by id, so a column
+// of a replaced table goes with that table, and newestByName drops both.
 var accountUsageCatalogQuery = `
-WITH live_tables AS (
-    SELECT t.table_id, t.table_catalog, t.table_schema, t.table_name, t.table_type
-    FROM %[1]s.ACCOUNT_USAGE.TABLES AS t
-    WHERE t.deleted IS NULL
-      AND t.table_catalog IN (%[2]s)
-      AND UPPER(t.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
-      /* SYNQ_SCOPE_FILTER */
-    QUALIFY ROW_NUMBER() OVER (PARTITION BY t.table_catalog, t.table_schema, t.table_name ORDER BY t.created DESC) = 1
-)
 SELECT CURRENT_ORGANIZATION_NAME() || '-' || CURRENT_ACCOUNT() AS "instance",
        t.table_catalog AS "database",
        t.table_schema AS "schema",
@@ -84,14 +82,20 @@ SELECT CURRENT_ORGANIZATION_NAME() || '-' || CURRENT_ACCOUNT() AS "instance",
        c.numeric_scale AS "numeric_scale",
        c.is_nullable = 'YES' AS "is_nullable",
        c.comment AS "comment",
-       c.ordinal_position AS "position"
+       c.ordinal_position AS "position",
+       t.table_id AS "table_id",
+       t.created AS "table_created"
 FROM %[1]s.ACCOUNT_USAGE.COLUMNS AS c
-JOIN live_tables AS t ON c.table_id = t.table_id
+JOIN %[1]s.ACCOUNT_USAGE.TABLES AS t ON c.table_id = t.table_id
 WHERE c.deleted IS NULL
+  AND t.deleted IS NULL
+  AND c.table_catalog IN (%[2]s)
+  AND t.table_catalog IN (%[2]s)
+  AND UPPER(t.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
   -- Snowflake's own hidden columns (row versions of change tracking, a dynamic
   -- table's row ids), which INFORMATION_SCHEMA leaves out.
   AND NOT STARTSWITH(c.column_name, 'METADATA$')
-QUALIFY ROW_NUMBER() OVER (PARTITION BY c.table_id, c.column_name ORDER BY c.ordinal_position) = 1
+  /* SYNQ_SCOPE_FILTER */
 `
 
 var accountUsageTableMetricsQuery = `
@@ -100,7 +104,8 @@ SELECT t.table_catalog AS "database",
        t.table_name AS "table",
        t.row_count AS "row_count",
        t.bytes AS "size_bytes",
-       t.last_altered AS "updated_at"
+       t.last_altered AS "updated_at",
+       t.created AS "created"
 FROM %[1]s.ACCOUNT_USAGE.TABLES AS t
 WHERE t.deleted IS NULL
   AND t.row_count IS NOT NULL
@@ -109,7 +114,6 @@ WHERE t.deleted IS NULL
   AND t.table_catalog IN (%[2]s)
   AND t.table_schema NOT IN ('INFORMATION_SCHEMA')
   /* SYNQ_SCOPE_FILTER */
-QUALIFY ROW_NUMBER() OVER (PARTITION BY t.table_catalog, t.table_schema, t.table_name ORDER BY t.created DESC) = 1
 `
 
 // accountUsageSqlDefinitionsQuery reads the view definitions, and lists the
@@ -120,19 +124,20 @@ SELECT v.table_catalog AS "database",
        v.table_schema AS "schema",
        v.table_name AS "table",
        TRUE AS "is_view",
-       NVL(v.view_definition, '') AS "sql"
+       NVL(v.view_definition, '') AS "sql",
+       v.created AS "created"
 FROM %[1]s.ACCOUNT_USAGE.VIEWS AS v
 WHERE v.deleted IS NULL
   AND v.table_catalog IN (%[2]s)
   AND UPPER(v.table_schema) NOT IN ('INFORMATION_SCHEMA', 'SYSADMIN')
   /* SYNQ_SCOPE_FILTER */
-QUALIFY ROW_NUMBER() OVER (PARTITION BY v.table_catalog, v.table_schema, v.table_name ORDER BY v.created DESC) = 1
 UNION ALL
 SELECT t.table_catalog AS "database",
        t.table_schema AS "schema",
        t.table_name AS "table",
        FALSE AS "is_view",
-       '' AS "sql"
+       '' AS "sql",
+       t.created AS "created"
 FROM %[1]s.ACCOUNT_USAGE.TABLES AS t
 WHERE t.deleted IS NULL
   AND t.table_catalog IN (%[2]s)
@@ -140,8 +145,76 @@ WHERE t.deleted IS NULL
   AND t.table_type != 'VIEW'
   AND t.table_type != 'MATERIALIZED VIEW'
   /* SYNQ_SCOPE_FILTER */
-QUALIFY ROW_NUMBER() OVER (PARTITION BY t.table_catalog, t.table_schema, t.table_name ORDER BY t.created DESC) = 1
 `
+
+// accountUsageColumnRow is a COLUMNS row with the id and creation time of its
+// table, which newestByName and the column dedup read.
+type accountUsageColumnRow struct {
+	scrapper.CatalogColumnRow
+	TableId      int64      `db:"table_id"`
+	TableCreated *time.Time `db:"table_created"`
+}
+
+// accountUsageMetricsRow is a TABLES metrics row with its creation time.
+type accountUsageMetricsRow struct {
+	scrapper.TableMetricsRow
+	Created *time.Time `db:"created"`
+}
+
+// accountUsageSqlDefinitionRow is a VIEWS or TABLES row with its creation time.
+type accountUsageSqlDefinitionRow struct {
+	scrapper.SqlDefinitionRow
+	Created *time.Time `db:"created"`
+}
+
+type objectName struct {
+	database, schema, table string
+}
+
+// newestByName keeps, for every name, the rows of the object created last,
+// in the order the rows came. An object is the rows of one id; a read with
+// one row per object passes the row's index as its id.
+func newestByName[T any](rows []T, nameOf func(T) objectName, idOf func(int, T) int64, createdOf func(T) *time.Time) []T {
+	type newest struct {
+		id      int64
+		created time.Time
+	}
+	best := map[objectName]newest{}
+	for i, row := range rows {
+		name := nameOf(row)
+		created := lo.FromPtr(createdOf(row))
+		current, found := best[name]
+		if !found || created.After(current.created) {
+			best[name] = newest{id: idOf(i, row), created: created}
+		}
+	}
+	return lo.Filter(rows, func(row T, i int) bool { return best[nameOf(row)].id == idOf(i, row) })
+}
+
+func rowIndex[T any](i int, _ T) int64 { return int64(i) }
+
+// firstPositionOfEachColumn keeps one row per column of a table, the one at
+// the lowest position, in the order the rows came.
+func firstPositionOfEachColumn(columns []*accountUsageColumnRow) []*scrapper.CatalogColumnRow {
+	type columnKey struct {
+		tableId int64
+		column  string
+	}
+	first := map[columnKey]*accountUsageColumnRow{}
+	for _, column := range columns {
+		key := columnKey{column.TableId, column.Column}
+		if kept, found := first[key]; !found || column.Position < kept.Position {
+			first[key] = column
+		}
+	}
+	rows := make([]*scrapper.CatalogColumnRow, 0, len(first))
+	for _, column := range columns {
+		if first[columnKey{column.TableId, column.Column}] == column {
+			rows = append(rows, &column.CatalogColumnRow)
+		}
+	}
+	return rows
+}
 
 // accountUsageDatabases lists the live databases of the account. A database
 // Snowflake itself provides (the SNOWFLAKE application) and a user's personal
@@ -203,7 +276,7 @@ func selectAccountUsage[T any](ctx context.Context, e *SnowflakeScrapper, query,
 // database SHOW STREAMS fails on is left out. A share gets its streams with
 // the rest of its objects.
 func (e *SnowflakeScrapper) streamsWithPrivileges(ctx context.Context) ([]*ShowStreamsRow, error) {
-	databases, err := e.getDatabasesWithPrivileges(ctx)
+	databases, err := e.DatabasesWithPrivileges(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +346,11 @@ func (e *SnowflakeScrapper) queryTablesFromAccountUsage(ctx context.Context) ([]
 	if err != nil {
 		return nil, err
 	}
+	rows = newestByName(rows,
+		func(row *scrapper.TableRow) objectName { return objectName{row.Database, row.Schema, row.Table} },
+		rowIndex[*scrapper.TableRow],
+		func(row *scrapper.TableRow) *time.Time { return row.CreatedAt },
+	)
 	for _, row := range rows {
 		row.Instance = e.conf.Account
 		if row.Description != nil && *row.Description == "" {
@@ -290,12 +368,33 @@ func (e *SnowflakeScrapper) queryTablesFromAccountUsage(ctx context.Context) ([]
 }
 
 func (e *SnowflakeScrapper) queryCatalogFromAccountUsage(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
-	rows, err := selectAccountUsage[scrapper.CatalogColumnRow](
-		ctx, e, accountUsageCatalogQuery, "t.table_catalog", "t.table_schema", "t.table_name", "COLUMNS",
-	)
+	databases, err := e.GetDatabasesToQuery(ctx)
 	if err != nil {
 		return nil, err
 	}
+	// TAG_REFERENCES is as slow to read as COLUMNS on a large account, so the
+	// two are read at the same time.
+	var references *tagReferences
+	var referencesErr error
+	referencesRead := make(chan struct{})
+	go func() {
+		defer close(referencesRead)
+		references, referencesErr = e.queryTagReferences(ctx, databases)
+	}()
+
+	columns, err := selectAccountUsage[accountUsageColumnRow](
+		ctx, e, accountUsageCatalogQuery, "t.table_catalog", "t.table_schema", "t.table_name", "COLUMNS",
+	)
+	<-referencesRead
+	if err != nil {
+		return nil, err
+	}
+	columns = newestByName(columns,
+		func(row *accountUsageColumnRow) objectName { return objectName{row.Database, row.Schema, row.Table} },
+		func(_ int, row *accountUsageColumnRow) int64 { return row.TableId },
+		func(row *accountUsageColumnRow) *time.Time { return row.TableCreated },
+	)
+	rows := firstPositionOfEachColumn(columns)
 	for _, row := range rows {
 		row.Instance = e.conf.Account
 		row.ResolveNumeric(e.DialectType())
@@ -309,26 +408,30 @@ func (e *SnowflakeScrapper) queryCatalogFromAccountUsage(ctx context.Context) ([
 		return nil, err
 	}
 	rows = append(rows, streamCatalogRows(ctx, streams, rows)...)
-	databases, err := e.GetDatabasesToQuery(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if err := e.addTagReferences(ctx, databases, rows); err != nil {
+	if err := e.applyTagReferences(ctx, references, referencesErr, rows); err != nil {
 		return nil, err
 	}
 	return scope.FilterRows(rows, scope.GetScope(ctx)), incomplete
 }
 
 func (e *SnowflakeScrapper) queryTableMetricsFromAccountUsage(ctx context.Context) ([]*scrapper.TableMetricsRow, error) {
-	rows, err := selectAccountUsage[scrapper.TableMetricsRow](
+	read, err := selectAccountUsage[accountUsageMetricsRow](
 		ctx, e, accountUsageTableMetricsQuery, "t.table_catalog", "t.table_schema", "t.table_name", "TABLES",
 	)
 	if err != nil {
 		return nil, err
 	}
-	for _, row := range rows {
+	read = newestByName(read,
+		func(row *accountUsageMetricsRow) objectName { return objectName{row.Database, row.Schema, row.Table} },
+		rowIndex[*accountUsageMetricsRow],
+		func(row *accountUsageMetricsRow) *time.Time { return row.Created },
+	)
+	rows := make([]*scrapper.TableMetricsRow, 0, len(read))
+	for _, r := range read {
+		row := &r.TableMetricsRow
 		row.Instance = e.conf.Account
 		row.UpdatedAt = scrapper.UTCTimePtr(row.UpdatedAt)
+		rows = append(rows, row)
 	}
 	return withShares(ctx, e, rows, e.queryTableMetricsIn)
 }
@@ -338,14 +441,24 @@ func (e *SnowflakeScrapper) queryTableMetricsFromAccountUsage(ctx context.Contex
 // privilege on, so only there a table, a dynamic table or a materialized view
 // gets its DDL and an object its tags.
 func (e *SnowflakeScrapper) querySqlDefinitionsFromAccountUsage(ctx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
-	rows, err := selectAccountUsage[scrapper.SqlDefinitionRow](
+	read, err := selectAccountUsage[accountUsageSqlDefinitionRow](
 		ctx, e, accountUsageSqlDefinitionsQuery, "table_catalog", "table_schema", "table_name", "VIEWS",
 	)
 	if err != nil {
 		return nil, err
 	}
-	for _, row := range rows {
+	read = newestByName(read,
+		func(row *accountUsageSqlDefinitionRow) objectName {
+			return objectName{row.Database, row.Schema, row.Table}
+		},
+		rowIndex[*accountUsageSqlDefinitionRow],
+		func(row *accountUsageSqlDefinitionRow) *time.Time { return row.Created },
+	)
+	rows := make([]*scrapper.SqlDefinitionRow, 0, len(read))
+	for _, r := range read {
+		row := &r.SqlDefinitionRow
 		row.Instance = e.conf.Account
+		rows = append(rows, row)
 	}
 	streams, err := e.streamsWithPrivileges(ctx)
 	if err != nil {
@@ -357,13 +470,66 @@ func (e *SnowflakeScrapper) querySqlDefinitionsFromAccountUsage(ctx context.Cont
 		return nil, incomplete
 	}
 
-	withPrivileges, err := e.getDatabasesWithPrivileges(ctx)
+	withPrivileges, err := e.DatabasesWithPrivileges(ctx)
 	if err != nil {
 		return nil, err
 	}
-	readable := lo.SliceToMap(withPrivileges, func(database string) (string, bool) { return database, true })
-	if err := e.addDdls(ctx, lo.Filter(rows, func(row *scrapper.SqlDefinitionRow, _ int) bool { return readable[row.Database] })); err != nil {
+	readable, err := e.schemasWithPrivileges(ctx, withPrivileges)
+	if err != nil {
+		return nil, err
+	}
+	if err := e.addDdls(ctx, lo.Filter(rows, func(row *scrapper.SqlDefinitionRow, _ int) bool {
+		return readable[DatabaseAndSchema{DatabaseName: row.Database, SchemaName: row.Schema}]
+	})); err != nil {
 		return nil, err
 	}
 	return rows, incomplete
+}
+
+// schemasWithPrivileges lists the schemas of the databases that the role holds
+// a privilege on, as SHOW SCHEMAS lists only those. GET_DDL of any other
+// schema fails with "does not exist or not authorized", and a role reading
+// ACCOUNT_USAGE often has USAGE on a database but not on all its schemas. A
+// database SHOW SCHEMAS fails on is left out.
+func (e *SnowflakeScrapper) schemasWithPrivileges(ctx context.Context, databases []string) (map[DatabaseAndSchema]bool, error) {
+	var mu sync.Mutex
+	schemas := map[DatabaseAndSchema]bool{}
+	g, groupCtx := errgroup.WithContext(ctx)
+	g.SetLimit(8)
+	for _, database := range databases {
+		g.Go(func() error {
+			var shown []string
+			rows, err := e.executor.QueryRows(groupCtx, fmt.Sprintf("SHOW TERSE SCHEMAS IN DATABASE %s", databaseIdent(database)))
+			if err == nil {
+				defer rows.Close()
+				for rows.Next() {
+					row := map[string]any{}
+					if err = rows.MapScan(row); err != nil {
+						break
+					}
+					shown = append(shown, mapStr(row, "name"))
+				}
+				if err == nil {
+					err = rows.Err()
+				}
+			}
+			if err != nil {
+				if ctxErr := groupCtx.Err(); ctxErr != nil {
+					return ctxErr
+				}
+				logging.GetLogger(ctx).WithField("database", database).WithError(err).Warn("SHOW SCHEMAS IN DATABASE failed")
+				return nil
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			for _, schema := range shown {
+				schemas[DatabaseAndSchema{DatabaseName: database, SchemaName: schema}] = true
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	return schemas, nil
 }
