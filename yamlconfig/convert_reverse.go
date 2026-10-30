@@ -91,6 +91,9 @@ func snowflakeConfFromProto(c *agentdwhv1.SnowflakeConf) *SnowflakeConf {
 		UseGetDdl:            c.GetUseGetDdl(),
 		AccountUsageDb:       c.GetAccountUsageDb(),
 		AuthType:             c.GetAuthType(),
+
+		CatalogFromAccountUsage:      c.GetCatalogFromAccountUsage(),
+		TableMetricsFromAccountUsage: c.GetTableMetricsFromAccountUsage(),
 	}
 	if sf.PrivateKey != "" {
 		sf.PrivateKeyFile = ""

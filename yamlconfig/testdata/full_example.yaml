@@ -65,6 +65,8 @@ connections:
         - STAGING
       use_get_ddl: true
       account_usage_db: SNOWFLAKE
+      catalog_from_account_usage: true
+      table_metrics_from_account_usage: true
 
   "trino-galaxy":
     trino:

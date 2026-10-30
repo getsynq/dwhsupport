@@ -105,6 +105,11 @@ type SnowflakeConf struct {
 	UseGetDdl bool `yaml:"use_get_ddl,omitempty"`
 	// Database containing the ACCOUNT_USAGE schema. Defaults to SNOWFLAKE.
 	AccountUsageDb string `yaml:"account_usage_db,omitempty"`
+	// Read databases, schemas, tables, columns and view definitions from ACCOUNT_USAGE, for a role
+	// with only IMPORTED PRIVILEGES on the SNOWFLAKE database. ACCOUNT_USAGE lags behind by up to three hours.
+	CatalogFromAccountUsage bool `yaml:"catalog_from_account_usage,omitempty"`
+	// Read row counts, sizes and last change times from ACCOUNT_USAGE. They lag behind by up to three hours.
+	TableMetricsFromAccountUsage bool `yaml:"table_metrics_from_account_usage,omitempty"`
 	// Set to "externalbrowser" to use SSO browser-based authentication.
 	AuthType string `yaml:"auth_type,omitempty"`
 }
