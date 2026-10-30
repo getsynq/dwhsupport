@@ -44,6 +44,13 @@ func TestConnectionsSchema_ClickhouseSettingsAndCluster(t *testing.T) {
 	}
 }
 
+func TestConnectionsSchema_BigQueryImpersonation(t *testing.T) {
+	data, err := json.MarshalIndent(ConnectionsSchema(), "", "  ")
+	require.NoError(t, err)
+
+	assert.Contains(t, string(data), "impersonate_service_accounts")
+}
+
 func TestNewReflector(t *testing.T) {
 	r := NewReflector()
 	require.NotNil(t, r)

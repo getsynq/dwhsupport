@@ -118,7 +118,8 @@ func (c *SnowflakeConf) fileFields() []fileFieldPair {
 }
 
 // BigQueryConf contains BigQuery connection parameters.
-// Exactly one of service_account_key or service_account_key_file should be set.
+// Set at most one of service_account_key, service_account_key_file and impersonate_service_accounts.
+// With none of them, the connection uses the host's Application Default Credentials.
 type BigQueryConf struct {
 	// GCP project ID.
 	ProjectId string `yaml:"project_id" jsonschema:"required"`
@@ -128,6 +129,11 @@ type BigQueryConf struct {
 	ServiceAccountKey string `yaml:"service_account_key,omitempty"`
 	// Path to the service account key JSON file.
 	ServiceAccountKeyFile string `yaml:"service_account_key_file,omitempty"`
+	// Service account emails to impersonate, in order, instead of a key. The host's Application
+	// Default Credentials get a token for the first one, each one gets a token for the next, and
+	// BigQuery sees the last. Each one must grant roles/iam.serviceAccountTokenCreator to the
+	// identity before it.
+	ImpersonateServiceAccounts []string `yaml:"impersonate_service_accounts,omitempty"`
 	// Explicit list of dataset names to scrape. When set, only these datasets are queried
 	// and bigquery.datasets.get on the project, which listing the datasets needs, is not required.
 	Datasets []string `yaml:"datasets,omitempty"`

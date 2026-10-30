@@ -144,12 +144,13 @@ func snowflakeConfToProto(c *SnowflakeConf) *agentdwhv1.SnowflakeConf {
 
 func bigqueryConfToProto(c *BigQueryConf) *agentdwhv1.BigQueryConf {
 	return &agentdwhv1.BigQueryConf{
-		ProjectId:             c.ProjectId,
-		Region:                c.Region,
-		ServiceAccountKey:     c.ServiceAccountKey,
-		ServiceAccountKeyFile: c.ServiceAccountKeyFile,
-		Datasets:              c.Datasets,
-		FetchPolicyTags:       c.FetchPolicyTags,
+		ProjectId:                  c.ProjectId,
+		Region:                     c.Region,
+		ServiceAccountKey:          c.ServiceAccountKey,
+		ServiceAccountKeyFile:      c.ServiceAccountKeyFile,
+		ImpersonateServiceAccounts: c.ImpersonateServiceAccounts,
+		Datasets:                   c.Datasets,
+		FetchPolicyTags:            c.FetchPolicyTags,
 	}
 }
 

@@ -49,12 +49,13 @@ func BigQuery(ctx context.Context, t *agentdwhv1.BigQueryConf) (*scrapperbigquer
 func bigQueryScrapperConf(t *agentdwhv1.BigQueryConf) *scrapperbigquery.BigQueryScrapperConf {
 	return &scrapperbigquery.BigQueryScrapperConf{
 		BigQueryConf: dwhexecbigquery.BigQueryConf{
-			ProjectId:               t.GetProjectId(),
-			Region:                  t.GetRegion(),
-			CredentialsJson:         t.GetServiceAccountKey(),
-			CredentialsFile:         t.GetServiceAccountKeyFile(),
-			AllowDefaultCredentials: true,
-			AllowAnyCredentialType:  true,
+			ProjectId:                  t.GetProjectId(),
+			Region:                     t.GetRegion(),
+			CredentialsJson:            t.GetServiceAccountKey(),
+			CredentialsFile:            t.GetServiceAccountKeyFile(),
+			ImpersonateServiceAccounts: t.GetImpersonateServiceAccounts(),
+			AllowDefaultCredentials:    true,
+			AllowAnyCredentialType:     true,
 		},
 		Datasets:        t.GetDatasets(),
 		FetchPolicyTags: t.GetFetchPolicyTags(),

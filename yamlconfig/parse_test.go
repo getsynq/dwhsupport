@@ -693,3 +693,29 @@ connections:
 	require.NoError(t, err)
 	assert.Equal(t, "MY_KEY_DATA", conns["sf"].Snowflake.PrivateKey)
 }
+
+func TestParseConnections_BigQueryImpersonationChain(t *testing.T) {
+	data := []byte(`
+connections:
+  bq-keyless:
+    bigquery:
+      project_id: data-project
+      region: EU
+      impersonate_service_accounts:
+        - hop@agent-project.iam.gserviceaccount.com
+        - reader@data-project.iam.gserviceaccount.com
+`)
+
+	conns, err := ParseConnections(data, ParseOptions{})
+	require.NoError(t, err)
+
+	bq := conns["bq-keyless"]
+	require.NotNil(t, bq)
+	require.NotNil(t, bq.BigQuery)
+	assert.Equal(t, []string{
+		"hop@agent-project.iam.gserviceaccount.com",
+		"reader@data-project.iam.gserviceaccount.com",
+	}, bq.BigQuery.ImpersonateServiceAccounts)
+	assert.Empty(t, bq.BigQuery.ServiceAccountKey)
+	assert.Empty(t, bq.BigQuery.ServiceAccountKeyFile)
+}
