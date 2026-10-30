@@ -28,15 +28,19 @@ type SnowflakeScrapperConf struct {
 	// UseAccessHistoryForTableChanges enables ACCESS_HISTORY for FetchTableChangeHistory instead of
 	// TABLE_DML_HISTORY. ACCESS_HISTORY provides ~3h lag vs ~6h but requires Snowflake Enterprise edition.
 	UseAccessHistoryForTableChanges bool
-	// CatalogFromAccountUsage reads databases, schemas, tables, columns, table metrics and view
-	// definitions from ACCOUNT_USAGE in one query for all databases, instead of each database's
-	// INFORMATION_SCHEMA. A role with only IMPORTED PRIVILEGES on the SNOWFLAKE database can read
-	// ACCOUNT_USAGE, but INFORMATION_SCHEMA and SHOW list only the objects the role has a privilege on.
-	// ACCOUNT_USAGE lags behind by up to three hours, so new objects and table metrics show late.
-	// Streams, table constraints and GET_DDL are read only in the databases SHOW DATABASES lists,
-	// and ValidateConfiguration names the others. With no Databases configured it reads every
-	// database, and the scope leaves some out.
+	// CatalogFromAccountUsage reads databases, schemas, tables, columns and view definitions from
+	// ACCOUNT_USAGE in one query for all databases, instead of each database's INFORMATION_SCHEMA.
+	// A role with only IMPORTED PRIVILEGES on the SNOWFLAKE database can read ACCOUNT_USAGE, but
+	// INFORMATION_SCHEMA and SHOW list only the objects the role has a privilege on. ACCOUNT_USAGE
+	// lags behind by up to three hours, so new objects show late. Streams, table constraints,
+	// GET_DDL and, without TableMetricsFromAccountUsage, table metrics are read only in the
+	// databases SHOW DATABASES lists, and ValidateConfiguration names the others. With no Databases
+	// configured it reads every database, and the scope leaves some out.
 	CatalogFromAccountUsage bool
+	// TableMetricsFromAccountUsage reads row counts, sizes and last change times from
+	// ACCOUNT_USAGE.TABLES in one query for all databases. They lag behind by up to three hours,
+	// so a freshness monitor sees a change that much later than through INFORMATION_SCHEMA.
+	TableMetricsFromAccountUsage bool
 }
 
 // FIXME: I couldn't make it work with `foo IN (?)` binding, so I'm using this
@@ -282,11 +286,15 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 			return nil, err
 		}
 		if len(withoutPrivileges) > 0 {
+			notRead := "their streams, keys and the DDL of their tables"
+			if !e.conf.TableMetricsFromAccountUsage {
+				notRead = "their table metrics, streams, keys and the DDL of their tables"
+			}
 			warnings = append(warnings, fmt.Sprintf(
 				"The role has no privileges on databases %s. Their tables, columns and view definitions are read from ACCOUNT_USAGE, "+
-					"but their streams, keys and the DDL of their tables are not. Grant USAGE on these databases and their schemas, "+
+					"but %s are not. Grant USAGE on these databases and their schemas, "+
 					"and REFERENCES on their tables, to read them.",
-				strings.Join(withoutPrivileges, ", "),
+				strings.Join(withoutPrivileges, ", "), notRead,
 			))
 		}
 	}

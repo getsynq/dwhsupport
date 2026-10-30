@@ -54,7 +54,11 @@ func (s *AccountUsageIntegrationSuite) SetupSuite() {
 	catalogConf := snowflakeTestConf()
 	catalogConf.User = os.Getenv("SNOWFLAKE_CATALOG_USER")
 	catalogConf.Role = os.Getenv("SNOWFLAKE_CATALOG_ROLE")
-	s.accountUsage = s.connect(&SnowflakeScrapperConf{SnowflakeConf: catalogConf, CatalogFromAccountUsage: true})
+	s.accountUsage = s.connect(&SnowflakeScrapperConf{
+		SnowflakeConf:                catalogConf,
+		CatalogFromAccountUsage:      true,
+		TableMetricsFromAccountUsage: true,
+	})
 
 	metrics, err := s.infoSchema.QueryTableMetrics(ctx, time.Time{})
 	s.Require().NoError(err)

@@ -5,6 +5,7 @@ import (
 	"database/sql/driver"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/stretchr/testify/suite"
@@ -99,6 +100,38 @@ func (s *AccountUsageCatalogSuite) TestConfiguredDatabasesLimitTheRead() {
 	_, err := sc.QueryTables(context.Background())
 	s.Require().NoError(err)
 	s.Contains(s.tablesQuery(fake), "t.table_catalog IN ('SALES')")
+}
+
+func (s *AccountUsageCatalogSuite) TestTableMetricsAreReadWhereTheRoleCanUseTheDatabase() {
+	fake := s.fake()
+	fake.routes = append(fake.routes, fakeRoute{
+		match:   sqlContains("MARKETING.information_schema.tables", `as "row_count"`),
+		columns: []string{"database", "schema", "table", "row_count", "size_bytes", "updated_at"},
+	})
+	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{CatalogFromAccountUsage: true})
+
+	_, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+	s.Require().NoError(err)
+	s.Empty(fake.statements(sqlContains("ACCOUNT_USAGE.TABLES")))
+	s.Empty(fake.statements(sqlContains("SALES.information_schema")))
+	s.Len(fake.statements(sqlContains("MARKETING.information_schema.tables")), 1)
+}
+
+func (s *AccountUsageCatalogSuite) TestTableMetricsFromAccountUsage() {
+	fake := s.fake()
+	fake.routes = append([]fakeRoute{{
+		match:   sqlContains("ACCOUNT_USAGE.TABLES", `AS "row_count"`),
+		columns: []string{"database", "schema", "table", "row_count", "size_bytes", "updated_at"},
+	}}, fake.routes...)
+	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{
+		CatalogFromAccountUsage:      true,
+		TableMetricsFromAccountUsage: true,
+	})
+
+	_, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+	s.Require().NoError(err)
+	s.Len(fake.statements(sqlContains("ACCOUNT_USAGE.TABLES", `AS "row_count"`)), 1)
+	s.Empty(fake.statements(sqlContains("information_schema")))
 }
 
 func (s *AccountUsageCatalogSuite) TestWarnsAboutDatabasesWithoutPrivileges() {
