@@ -12,6 +12,7 @@ import (
 	"github.com/getsynq/dwhsupport/scrapper/scope"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	gosnowflake "github.com/snowflakedb/gosnowflake"
 )
 
@@ -27,6 +28,15 @@ type SnowflakeScrapperConf struct {
 	// UseAccessHistoryForTableChanges enables ACCESS_HISTORY for FetchTableChangeHistory instead of
 	// TABLE_DML_HISTORY. ACCESS_HISTORY provides ~3h lag vs ~6h but requires Snowflake Enterprise edition.
 	UseAccessHistoryForTableChanges bool
+	// CatalogFromAccountUsage reads databases, schemas, tables, columns, table metrics and view
+	// definitions from ACCOUNT_USAGE in one query for all databases, instead of each database's
+	// INFORMATION_SCHEMA. A role with only IMPORTED PRIVILEGES on the SNOWFLAKE database can read
+	// ACCOUNT_USAGE, but INFORMATION_SCHEMA and SHOW list only the objects the role has a privilege on.
+	// ACCOUNT_USAGE lags behind by up to three hours, so new objects and table metrics show late.
+	// Streams, table constraints and GET_DDL are read only in the databases SHOW DATABASES lists,
+	// and ValidateConfiguration names the others. With no Databases configured it reads every
+	// database, and the scope leaves some out.
+	CatalogFromAccountUsage bool
 }
 
 // FIXME: I couldn't make it work with `foo IN (?)` binding, so I'm using this
@@ -69,7 +79,9 @@ var _ scrapper.Scrapper = &SnowflakeScrapper{}
 type SnowflakeScrapper struct {
 	conf        *SnowflakeScrapperConf
 	existingDbs lazy.Lazy[[]*DbDesc]
-	executor    *dwhexecsnowflake.SnowflakeExecutor
+	// shownDbs are the databases SHOW DATABASES lists, the ones the role holds a privilege on.
+	shownDbs lazy.Lazy[[]*DbDesc]
+	executor *dwhexecsnowflake.SnowflakeExecutor
 }
 
 func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*SnowflakeScrapper, error) {
@@ -81,33 +93,42 @@ func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*Sn
 }
 
 func newSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf, executor *dwhexecsnowflake.SnowflakeExecutor) *SnowflakeScrapper {
-	lazyExistingDbs := lazy.New(func() ([]*DbDesc, error) {
-		rows, err := executor.QueryRows(ctx, "SHOW DATABASES")
-		if err != nil {
+	shownDbs := lazy.New(func() ([]*DbDesc, error) {
+		return listShownDatabases(ctx, executor)
+	})
+	existingDbs := shownDbs
+	if conf.CatalogFromAccountUsage {
+		existingDbs = lazy.New(func() ([]*DbDesc, error) {
+			return accountUsageDatabases(ctx, executor, accountUsageDb(conf))
+		})
+	}
+	return &SnowflakeScrapper{conf: conf, executor: executor, existingDbs: existingDbs, shownDbs: shownDbs}
+}
+
+func listShownDatabases(ctx context.Context, executor *dwhexecsnowflake.SnowflakeExecutor) ([]*DbDesc, error) {
+	rows, err := executor.QueryRows(ctx, "SHOW DATABASES")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var allDatabases []*DbDesc
+	for rows.Next() {
+		db := &DbDesc{}
+		tmp := map[string]any{}
+		if err := rows.MapScan(tmp); err != nil {
 			return nil, err
 		}
-		defer rows.Close()
+		db.Name = tmp["name"].(string)
+		db.Origin = tmp["origin"].(string)
+		db.Owner = tmp["owner"].(string)
+		db.Comment = tmp["comment"].(string)
+		db.Kind = tmp["kind"].(string)
+		allDatabases = append(allDatabases, db)
+	}
+	logging.GetLogger(ctx).WithField("all_databases", allDatabases).Info("show databases")
 
-		var allDatabases []*DbDesc
-		for rows.Next() {
-			db := &DbDesc{}
-			tmp := map[string]any{}
-			if err := rows.MapScan(tmp); err != nil {
-				return nil, err
-			}
-			db.Name = tmp["name"].(string)
-			db.Origin = tmp["origin"].(string)
-			db.Owner = tmp["owner"].(string)
-			db.Comment = tmp["comment"].(string)
-			db.Kind = tmp["kind"].(string)
-			allDatabases = append(allDatabases, db)
-		}
-		logging.GetLogger(ctx).WithField("all_databases", allDatabases).Info("show databases")
-
-		return allDatabases, nil
-	})
-
-	return &SnowflakeScrapper{conf: conf, executor: executor, existingDbs: lazyExistingDbs}
+	return allDatabases, nil
 }
 
 func (e *SnowflakeScrapper) IsPermissionError(err error) bool {
@@ -156,13 +177,37 @@ func (e *SnowflakeScrapper) GetDatabasesToQuery(ctx context.Context) ([]string, 
 
 	scopeFilter := scope.GetScope(ctx)
 
+	configured := e.conf.Databases
+	// Reading ACCOUNT_USAGE costs the same for every database, so with no
+	// database configured it reads all of them, and the scope leaves some out.
+	if e.conf.CatalogFromAccountUsage && len(configured) == 0 {
+		configured = lo.Map(allDatabases, func(db *DbDesc, _ int) string { return db.Name })
+	}
+
 	var result []string
-	for _, database := range e.conf.Databases {
+	for _, database := range configured {
 		if existingDbs[database] && scopeFilter.IsDatabaseAccepted(database) {
 			result = append(result, database)
 		}
 	}
 	return result, nil
+}
+
+// getDatabasesWithPrivileges returns the databases to query that the role holds
+// a privilege on. Only these answer SHOW, GET_DDL and INFORMATION_SCHEMA. It is
+// GetDatabasesToQuery unless the catalog is read from ACCOUNT_USAGE, which lists
+// databases the role cannot use.
+func (e *SnowflakeScrapper) getDatabasesWithPrivileges(ctx context.Context) ([]string, error) {
+	databases, err := e.GetDatabasesToQuery(ctx)
+	if err != nil || !e.conf.CatalogFromAccountUsage {
+		return databases, err
+	}
+	shown, err := e.shownDbs.Get()
+	if err != nil {
+		return nil, err
+	}
+	shownNames := lo.SliceToMap(shown, func(db *DbDesc) (string, bool) { return db.Name, true })
+	return lo.Filter(databases, func(database string, _ int) bool { return shownNames[database] }), nil
 }
 
 func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
@@ -184,7 +229,8 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 	// A caller accepting incomplete results is told about an unavailable share
 	// by every read, as an omission of that database carrying Snowflake's own
 	// error, so probing for it here would only say the same thing twice.
-	probeShares := !scrapper.IncompleteResultsAccepted(ctx)
+	// The probe reads INFORMATION_SCHEMA, which a role reading ACCOUNT_USAGE may have no access to.
+	probeShares := !scrapper.IncompleteResultsAccepted(ctx) && !e.conf.CatalogFromAccountUsage
 
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
@@ -230,7 +276,37 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 		)
 	}
 
+	if e.conf.CatalogFromAccountUsage {
+		withoutPrivileges, err := e.databasesWithoutPrivileges(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(withoutPrivileges) > 0 {
+			warnings = append(warnings, fmt.Sprintf(
+				"The role has no privileges on databases %s. Their tables, columns and view definitions are read from ACCOUNT_USAGE, "+
+					"but their streams, keys and the DDL of their tables are not. Grant USAGE on these databases and their schemas, "+
+					"and REFERENCES on their tables, to read them.",
+				strings.Join(withoutPrivileges, ", "),
+			))
+		}
+	}
+
 	return warnings, nil
+}
+
+// databasesWithoutPrivileges returns the databases to query that the role
+// holds no privilege on, so it reads them from ACCOUNT_USAGE only.
+func (e *SnowflakeScrapper) databasesWithoutPrivileges(ctx context.Context) ([]string, error) {
+	databases, err := e.GetDatabasesToQuery(ctx)
+	if err != nil {
+		return nil, err
+	}
+	withPrivileges, err := e.getDatabasesWithPrivileges(ctx)
+	if err != nil {
+		return nil, err
+	}
+	without, _ := lo.Difference(databases, withPrivileges)
+	return without, nil
 }
 
 func (e *SnowflakeScrapper) Close() error {

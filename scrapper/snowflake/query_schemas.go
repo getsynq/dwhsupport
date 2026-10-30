@@ -23,6 +23,9 @@ var schemasQuery = `
 	`
 
 func (e *SnowflakeScrapper) QuerySchemas(origCtx context.Context) ([]*scrapper.SchemaRow, error) {
+	if e.conf.CatalogFromAccountUsage {
+		return e.querySchemasFromAccountUsage(origCtx)
+	}
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err

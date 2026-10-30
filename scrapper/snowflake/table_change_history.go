@@ -106,8 +106,12 @@ func (e *SnowflakeScrapper) queryTableChangeEvents(ctx context.Context, sql stri
 }
 
 func (e *SnowflakeScrapper) accountUsageDb() string {
-	if e.conf.AccountUsageDb != nil && len(*e.conf.AccountUsageDb) > 0 {
-		return *e.conf.AccountUsageDb
+	return accountUsageDb(e.conf)
+}
+
+func accountUsageDb(conf *SnowflakeScrapperConf) string {
+	if conf.AccountUsageDb != nil && len(*conf.AccountUsageDb) > 0 {
+		return *conf.AccountUsageDb
 	}
 	return "SNOWFLAKE"
 }

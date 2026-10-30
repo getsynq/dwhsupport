@@ -43,6 +43,9 @@ AND table_type !='MATERIALIZED VIEW'
 `
 
 func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scrapper.SqlDefinitionRow, error) {
+	if e.conf.CatalogFromAccountUsage {
+		return e.querySqlDefinitionsFromAccountUsage(origCtx)
+	}
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
@@ -74,20 +77,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 
 			streamRows, err := e.showStreamsInDatabase(groupCtx, database)
 			if err == nil {
-				for _, streamRow := range streamRows {
-
-					tmpResults = append(
-						tmpResults, &scrapper.SqlDefinitionRow{
-							Instance:           e.conf.Account,
-							Database:           streamRow.DatabaseName,
-							Schema:             streamRow.SchemaName,
-							Table:              streamRow.Name,
-							IsView:             false,
-							IsMaterializedView: false,
-							Sql:                fmt.Sprintf("SELECT * FROM %s", streamRow.TableName),
-						},
-					)
-				}
+				tmpResults = append(tmpResults, e.streamSqlDefinitionRows(streamRows)...)
 			} else {
 				logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 			}
@@ -102,14 +92,41 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
 	finalResults = scope.FilterRows(finalResults, scope.GetScope(origCtx))
 
+	if err := e.addDdls(origCtx, finalResults); err != nil {
+		return nil, err
+	}
+	return finalResults, incomplete
+}
+
+// streamSqlDefinitionRows gives each stream the query of the table it tracks.
+func (e *SnowflakeScrapper) streamSqlDefinitionRows(streamRows []*ShowStreamsRow) []*scrapper.SqlDefinitionRow {
+	var out []*scrapper.SqlDefinitionRow
+	for _, streamRow := range streamRows {
+		out = append(out, &scrapper.SqlDefinitionRow{
+			Instance:           e.conf.Account,
+			Database:           streamRow.DatabaseName,
+			Schema:             streamRow.SchemaName,
+			Table:              streamRow.Name,
+			IsView:             false,
+			IsMaterializedView: false,
+			Sql:                fmt.Sprintf("SELECT * FROM %s", streamRow.TableName),
+		})
+	}
+	return out
+}
+
+// addDdls reads GET_DDL of each schema of the rows, and gives every row its
+// tags and every row without SQL its DDL and comment. A schema GET_DDL fails
+// on keeps its rows as they are.
+func (e *SnowflakeScrapper) addDdls(origCtx context.Context, finalResults []*scrapper.SqlDefinitionRow) error {
 	if e.conf.NoGetDll {
 		logging.GetLogger(origCtx).Info("skipping get ddl in sql definitions")
-		return finalResults, incomplete
+		return nil
 	}
 
 	allDatabases, err := e.GetExistingDbs(origCtx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	ignoreDbDdls := sharedDatabases(allDatabases)
 
@@ -136,7 +153,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 
 			select {
 			case <-groupCtx.Done():
-				return nil, groupCtx.Err()
+				return groupCtx.Err()
 			default:
 			}
 
@@ -184,14 +201,12 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 			)
 		}
 
-		err := g.Wait()
-		if err != nil {
-			return nil, err
+		if err := g.Wait(); err != nil {
+			return err
 		}
-
 	}
 
-	return finalResults, incomplete
+	return nil
 }
 
 func GetObjectNameFromFqn(fqn string) string {

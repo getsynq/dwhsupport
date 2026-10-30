@@ -32,6 +32,9 @@ var tablesQuery = `
 	`
 
 func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
+	if e.conf.CatalogFromAccountUsage {
+		return e.queryTablesFromAccountUsage(origCtx)
+	}
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
@@ -67,41 +70,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 
 			streamRows, err := e.showStreamsInDatabase(groupCtx, database)
 			if err == nil {
-				for _, streamRow := range streamRows {
-
-					tmpResults = append(
-						tmpResults, &scrapper.TableRow{
-							Instance:  e.conf.Account,
-							Database:  streamRow.DatabaseName,
-							Schema:    streamRow.SchemaName,
-							Table:     streamRow.Name,
-							TableType: "STREAM",
-							IsView:    false,
-							IsTable:   true,
-							Options: map[string]interface{}{
-								"table_name": streamRow.TableName,
-							},
-							Description: lo.EmptyableToPtr(streamRow.Comment),
-							Owner:       lo.EmptyableToPtr(streamRow.Owner),
-							CreatedAt:   streamRow.CreatedAt,
-							Annotations: []*scrapper.Annotation{
-								{
-									AnnotationName:  "stream_type",
-									AnnotationValue: streamRow.Type,
-								},
-								{
-									AnnotationName:  "stream_mode",
-									AnnotationValue: streamRow.Mode,
-								},
-								{
-									AnnotationName:  "stream_stale",
-									AnnotationValue: streamRow.Stale,
-								},
-							},
-						},
-					)
-
-				}
+				tmpResults = append(tmpResults, e.streamTableRows(streamRows)...)
 			} else {
 				logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 			}
@@ -115,6 +84,43 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
 	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), err
+}
+
+// streamTableRows lists streams as tables.
+func (e *SnowflakeScrapper) streamTableRows(streamRows []*ShowStreamsRow) []*scrapper.TableRow {
+	var out []*scrapper.TableRow
+	for _, streamRow := range streamRows {
+		out = append(out, &scrapper.TableRow{
+			Instance:  e.conf.Account,
+			Database:  streamRow.DatabaseName,
+			Schema:    streamRow.SchemaName,
+			Table:     streamRow.Name,
+			TableType: "STREAM",
+			IsView:    false,
+			IsTable:   true,
+			Options: map[string]interface{}{
+				"table_name": streamRow.TableName,
+			},
+			Description: lo.EmptyableToPtr(streamRow.Comment),
+			Owner:       lo.EmptyableToPtr(streamRow.Owner),
+			CreatedAt:   streamRow.CreatedAt,
+			Annotations: []*scrapper.Annotation{
+				{
+					AnnotationName:  "stream_type",
+					AnnotationValue: streamRow.Type,
+				},
+				{
+					AnnotationName:  "stream_mode",
+					AnnotationValue: streamRow.Mode,
+				},
+				{
+					AnnotationName:  "stream_stale",
+					AnnotationValue: streamRow.Stale,
+				},
+			},
+		})
+	}
+	return out
 }
 
 // ShowStreamsRow represents the structure of a row returned by SHOW STREAMS command
