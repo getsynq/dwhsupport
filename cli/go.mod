@@ -19,7 +19,7 @@ require (
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260709200747-435963d16310.2 // indirect
-	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-00000000000000-178ceaafefd1.2 // indirect
+	buf.build/gen/go/getsynq/api/protocolbuffers/go v1.36.12-20261030123253-00d33057d7e9.2 // indirect
 	cloud.google.com/go v0.123.0 // indirect
 	cloud.google.com/go/auth v0.20.0 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
