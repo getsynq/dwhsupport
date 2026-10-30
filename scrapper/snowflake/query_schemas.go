@@ -30,7 +30,11 @@ func (e *SnowflakeScrapper) QuerySchemas(origCtx context.Context) ([]*scrapper.S
 	if err != nil {
 		return nil, err
 	}
+	return e.querySchemasIn(origCtx, databasesToQuery)
+}
 
+// querySchemasIn reads the schemas of the databases from their INFORMATION_SCHEMA.
+func (e *SnowflakeScrapper) querySchemasIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.SchemaRow, error) {
 	return readDatabases(
 		origCtx, databasesToQuery, 8, scrapper.OmittedObjects,
 		func(groupCtx context.Context, database string) ([]*scrapper.SchemaRow, error) {

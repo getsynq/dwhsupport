@@ -35,8 +35,10 @@ type SnowflakeScrapperConf struct {
 	// INFORMATION_SCHEMA and SHOW list only the objects the role has a privilege on. ACCOUNT_USAGE
 	// lags behind by up to three hours, so new objects show late. Streams, table constraints,
 	// GET_DDL and, without TableMetricsFromAccountUsage, table metrics are read only in the
-	// databases SHOW DATABASES lists, and ValidateConfiguration names the others. With no Databases
-	// configured it reads every database, and the scope leaves some out.
+	// databases SHOW DATABASES lists, and ValidateConfiguration names the others. ACCOUNT_USAGE has
+	// no objects of an imported share, so a share is read from its own INFORMATION_SCHEMA, and only
+	// with IMPORTED PRIVILEGES on it. With no Databases configured it reads every database, and the
+	// scope leaves some out.
 	CatalogFromAccountUsage bool
 	// TableMetricsFromAccountUsage reads row counts, sizes and last change times from
 	// ACCOUNT_USAGE.TABLES in one query for all databases. They lag behind by up to three hours,
@@ -229,6 +231,53 @@ func (e *SnowflakeScrapper) getDatabasesWithPrivileges(ctx context.Context) ([]s
 	return lo.Filter(databases, func(database string, _ int) bool { return shownNames[database] }), nil
 }
 
+// importedShares names the existing databases that are shares imported from
+// another account.
+func (e *SnowflakeScrapper) importedShares(ctx context.Context) (map[string]bool, error) {
+	existing, err := e.GetExistingDbs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	shares := map[string]bool{}
+	for _, database := range existing {
+		if database.Kind == "IMPORTED DATABASE" {
+			shares[database.Name] = true
+		}
+	}
+	return shares, nil
+}
+
+// splitShares splits the databases to query into the ones the account owns
+// and the imported shares the role can use. ACCOUNT_USAGE lists only the
+// objects the account owns, so a share is read from its own
+// INFORMATION_SCHEMA, which answers only with IMPORTED PRIVILEGES on it. A
+// share the role cannot use is in neither list.
+func (e *SnowflakeScrapper) splitShares(ctx context.Context) ([]string, []string, error) {
+	databases, err := e.GetDatabasesToQuery(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	shares, err := e.importedShares(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	withPrivileges, err := e.getDatabasesWithPrivileges(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	usable := lo.SliceToMap(withPrivileges, func(database string) (string, bool) { return database, true })
+	var owned, usableShares []string
+	for _, database := range databases {
+		switch {
+		case !shares[database]:
+			owned = append(owned, database)
+		case usable[database]:
+			usableShares = append(usableShares, database)
+		}
+	}
+	return owned, usableShares, nil
+}
+
 func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string, error) {
 	var warnings []string
 
@@ -245,21 +294,29 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 	var missingDbs []string
 	var unavailableSharedDbs []string
 
-	// A caller accepting incomplete results is told about an unavailable share
-	// by every read, as an omission of that database carrying Snowflake's own
-	// error, so probing for it here would only say the same thing twice.
-	// The probe reads INFORMATION_SCHEMA, which a role reading ACCOUNT_USAGE may have no access to.
-	probeShares := !scrapper.IncompleteResultsAccepted(ctx) && !e.conf.CatalogFromAccountUsage
-
+	var toProbe []string
 	for _, database := range e.conf.Databases {
 		if !existingDbs[database] {
 			missingDbs = append(missingDbs, database)
 			continue
 		}
-		if !probeShares {
-			continue
+		toProbe = append(toProbe, database)
+	}
+	// A role reading ACCOUNT_USAGE may have no access to the INFORMATION_SCHEMA
+	// the probe reads, so it probes only the shares it reads from there.
+	if e.conf.CatalogFromAccountUsage {
+		if _, toProbe, err = e.splitShares(ctx); err != nil {
+			return nil, err
 		}
+	}
+	// A caller accepting incomplete results is told about an unavailable share
+	// by every read, as an omission of that database carrying Snowflake's own
+	// error, so probing for it here would only say the same thing twice.
+	if scrapper.IncompleteResultsAccepted(ctx) {
+		toProbe = nil
+	}
 
+	for _, database := range toProbe {
 		// Probe the database to check if it's an unavailable shared database
 		// We use a simple query against information_schema which will fail if the shared database is unavailable
 		probeQuery := fmt.Sprintf("SELECT 1 FROM %s.information_schema.tables LIMIT 1", databaseIdent(database))
@@ -300,6 +357,11 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 		if err != nil {
 			return nil, err
 		}
+		shares, err := e.importedShares(ctx)
+		if err != nil {
+			return nil, err
+		}
+		unusableShares, withoutPrivileges := lo.FilterReject(withoutPrivileges, func(database string, _ int) bool { return shares[database] })
 		if len(withoutPrivileges) > 0 {
 			notRead := "their streams, keys and the DDL of their tables"
 			if !e.conf.TableMetricsFromAccountUsage {
@@ -310,6 +372,13 @@ func (e *SnowflakeScrapper) ValidateConfiguration(ctx context.Context) ([]string
 					"but %s are not. Grant USAGE on these databases and their schemas, "+
 					"and REFERENCES on their tables, to read them.",
 				strings.Join(withoutPrivileges, ", "), notRead,
+			))
+		}
+		if len(unusableShares) > 0 {
+			warnings = append(warnings, fmt.Sprintf(
+				"The role cannot use the shared databases %s. ACCOUNT_USAGE does not list the objects of a share, "+
+					"so nothing is read from them. Grant IMPORTED PRIVILEGES on them to read them.",
+				strings.Join(unusableShares, ", "),
 			))
 		}
 	}

@@ -165,10 +165,10 @@ func accountUsageDatabases(
 }
 
 // accountUsageQuery fills in a CatalogFromAccountUsage query for the
-// databases to read and the scope filter. It answers false when there is no
-// database to read.
+// databases the account owns and the scope filter. It answers false when
+// there is no database to read.
 func (e *SnowflakeScrapper) accountUsageQuery(ctx context.Context, query, dbCol, schemaCol, tableCol string) (string, bool, error) {
-	databases, err := e.GetDatabasesToQuery(ctx)
+	databases, _, err := e.splitShares(ctx)
 	if err != nil {
 		return "", false, err
 	}
@@ -198,16 +198,24 @@ func selectAccountUsage[T any](ctx context.Context, e *SnowflakeScrapper, query,
 	return scrapper.ScanAll[T](ctx, rows, fmt.Sprintf("%s.ACCOUNT_USAGE.%s", e.accountUsageDb(), source))
 }
 
-// streamsWithPrivileges lists the streams of the databases the role holds a
-// privilege on, as SHOW STREAMS lists only those. A database SHOW STREAMS
-// fails on is left out.
+// streamsWithPrivileges lists the streams of the databases the account owns
+// and the role holds a privilege on, as SHOW STREAMS lists only those. A
+// database SHOW STREAMS fails on is left out. A share gets its streams with
+// the rest of its objects.
 func (e *SnowflakeScrapper) streamsWithPrivileges(ctx context.Context) ([]*ShowStreamsRow, error) {
 	databases, err := e.getDatabasesWithPrivileges(ctx)
 	if err != nil {
 		return nil, err
 	}
+	shares, err := e.importedShares(ctx)
+	if err != nil {
+		return nil, err
+	}
 	var out []*ShowStreamsRow
 	for _, database := range databases {
+		if shares[database] {
+			continue
+		}
 		streams, err := e.showStreamsInDatabase(ctx, database)
 		if err != nil {
 			if ctxErr := ctx.Err(); ctxErr != nil {
@@ -232,7 +240,30 @@ func (e *SnowflakeScrapper) querySchemasFromAccountUsage(ctx context.Context) ([
 			row.Description = nil
 		}
 	}
-	return rows, nil
+	return withShares(ctx, e, rows, e.querySchemasIn)
+}
+
+// withShares adds to the rows read from ACCOUNT_USAGE the rows of the shares
+// the role can use, which readIn reads from their own INFORMATION_SCHEMA. An
+// incomplete read of the shares goes back with the rows.
+func withShares[T any](
+	ctx context.Context,
+	e *SnowflakeScrapper,
+	rows []*T,
+	readIn func(context.Context, []string) ([]*T, error),
+) ([]*T, error) {
+	_, shares, err := e.splitShares(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(shares) == 0 {
+		return rows, nil
+	}
+	shareRows, incomplete := readIn(ctx, shares)
+	if scrapper.Failed(incomplete) {
+		return nil, incomplete
+	}
+	return append(rows, shareRows...), incomplete
 }
 
 func (e *SnowflakeScrapper) queryTablesFromAccountUsage(ctx context.Context) ([]*scrapper.TableRow, error) {
@@ -254,8 +285,8 @@ func (e *SnowflakeScrapper) queryTablesFromAccountUsage(ctx context.Context) ([]
 	if err != nil {
 		return nil, err
 	}
-	rows = append(rows, e.streamTableRows(streams)...)
-	return scope.FilterRows(rows, scope.GetScope(ctx)), nil
+	rows = scope.FilterRows(append(rows, e.streamTableRows(streams)...), scope.GetScope(ctx))
+	return withShares(ctx, e, rows, e.queryTablesIn)
 }
 
 func (e *SnowflakeScrapper) queryCatalogFromAccountUsage(ctx context.Context) ([]*scrapper.CatalogColumnRow, error) {
@@ -269,6 +300,10 @@ func (e *SnowflakeScrapper) queryCatalogFromAccountUsage(ctx context.Context) ([
 		row.Instance = e.conf.Account
 		row.ResolveNumeric(e.DialectType())
 	}
+	rows, incomplete := withShares(ctx, e, rows, e.queryCatalogIn)
+	if scrapper.Failed(incomplete) {
+		return nil, incomplete
+	}
 	streams, err := e.streamsWithPrivileges(ctx)
 	if err != nil {
 		return nil, err
@@ -281,7 +316,7 @@ func (e *SnowflakeScrapper) queryCatalogFromAccountUsage(ctx context.Context) ([
 	if err := e.addTagReferences(ctx, databases, rows); err != nil {
 		return nil, err
 	}
-	return scope.FilterRows(rows, scope.GetScope(ctx)), nil
+	return scope.FilterRows(rows, scope.GetScope(ctx)), incomplete
 }
 
 func (e *SnowflakeScrapper) queryTableMetricsFromAccountUsage(ctx context.Context) ([]*scrapper.TableMetricsRow, error) {
@@ -295,7 +330,7 @@ func (e *SnowflakeScrapper) queryTableMetricsFromAccountUsage(ctx context.Contex
 		row.Instance = e.conf.Account
 		row.UpdatedAt = scrapper.UTCTimePtr(row.UpdatedAt)
 	}
-	return rows, nil
+	return withShares(ctx, e, rows, e.queryTableMetricsIn)
 }
 
 // querySqlDefinitionsFromAccountUsage reads the view definitions from
@@ -317,6 +352,10 @@ func (e *SnowflakeScrapper) querySqlDefinitionsFromAccountUsage(ctx context.Cont
 		return nil, err
 	}
 	rows = scope.FilterRows(append(rows, e.streamSqlDefinitionRows(streams)...), scope.GetScope(ctx))
+	rows, incomplete := withShares(ctx, e, rows, e.querySqlDefinitionsIn)
+	if scrapper.Failed(incomplete) {
+		return nil, incomplete
+	}
 
 	withPrivileges, err := e.getDatabasesWithPrivileges(ctx)
 	if err != nil {
@@ -326,5 +365,5 @@ func (e *SnowflakeScrapper) querySqlDefinitionsFromAccountUsage(ctx context.Cont
 	if err := e.addDdls(ctx, lo.Filter(rows, func(row *scrapper.SqlDefinitionRow, _ int) bool { return readable[row.Database] })); err != nil {
 		return nil, err
 	}
-	return rows, nil
+	return rows, incomplete
 }

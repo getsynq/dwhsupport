@@ -52,6 +52,20 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	}
 
 	// incomplete names the databases left out, and goes back with the rows.
+	finalResults, incomplete := e.querySqlDefinitionsIn(origCtx, databasesToQuery)
+	if scrapper.Failed(incomplete) {
+		return nil, incomplete
+	}
+
+	if err := e.addDdls(origCtx, finalResults); err != nil {
+		return nil, err
+	}
+	return finalResults, incomplete
+}
+
+// querySqlDefinitionsIn reads the view definitions of the databases from their
+// INFORMATION_SCHEMA, and lists their other tables and streams, with no DDL.
+func (e *SnowflakeScrapper) querySqlDefinitionsIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.SqlDefinitionRow, error) {
 	finalResults, incomplete := readDatabases(
 		origCtx, databasesToQuery, 8, scrapper.OmittedDefinitions,
 		func(groupCtx context.Context, database string) ([]*scrapper.SqlDefinitionRow, error) {
@@ -90,12 +104,7 @@ func (e *SnowflakeScrapper) QuerySqlDefinitions(origCtx context.Context) ([]*scr
 	}
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
-	finalResults = scope.FilterRows(finalResults, scope.GetScope(origCtx))
-
-	if err := e.addDdls(origCtx, finalResults); err != nil {
-		return nil, err
-	}
-	return finalResults, incomplete
+	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), incomplete
 }
 
 // streamSqlDefinitionRows gives each stream the query of the table it tracks.

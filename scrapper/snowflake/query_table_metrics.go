@@ -33,7 +33,11 @@ func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetri
 	if err != nil {
 		return nil, err
 	}
+	return e.queryTableMetricsIn(origCtx, databasesToQuery)
+}
 
+// queryTableMetricsIn reads the table metrics of the databases from their INFORMATION_SCHEMA.
+func (e *SnowflakeScrapper) queryTableMetricsIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.TableMetricsRow, error) {
 	return readDatabases(
 		origCtx, databasesToQuery, 8, scrapper.OmittedMetrics,
 		func(groupCtx context.Context, database string) ([]*scrapper.TableMetricsRow, error) {

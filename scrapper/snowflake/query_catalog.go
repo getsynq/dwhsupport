@@ -48,7 +48,22 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 		return nil, err
 	}
 
-	finalResults, err := readDatabases(
+	finalResults, err := e.queryCatalogIn(origCtx, databasesToQuery)
+	if scrapper.Failed(err) {
+		return nil, err
+	}
+	if tagErr := e.addTagReferences(origCtx, databasesToQuery, finalResults); tagErr != nil {
+		return nil, tagErr
+	}
+
+	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
+	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), err
+}
+
+// queryCatalogIn reads the columns of the tables and streams of the databases
+// from their INFORMATION_SCHEMA and SHOW STREAMS, with no tags.
+func (e *SnowflakeScrapper) queryCatalogIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.CatalogColumnRow, error) {
+	return readDatabases(
 		origCtx, databasesToQuery, 4, scrapper.OmittedColumns,
 		func(groupCtx context.Context, database string) ([]*scrapper.CatalogColumnRow, error) {
 			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(catalogQuery, databaseIdent(database)), "", "c.table_schema", "c.table_name")
@@ -78,15 +93,6 @@ func (e *SnowflakeScrapper) QueryCatalog(origCtx context.Context) ([]*scrapper.C
 			return tmpResults, nil
 		},
 	)
-	if scrapper.Failed(err) {
-		return nil, err
-	}
-	if tagErr := e.addTagReferences(origCtx, databasesToQuery, finalResults); tagErr != nil {
-		return nil, tagErr
-	}
-
-	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
-	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), err
 }
 
 // streamCatalogRows lists the columns of streams: the columns of the table each

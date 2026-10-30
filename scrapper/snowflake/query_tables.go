@@ -39,7 +39,12 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 	if err != nil {
 		return nil, err
 	}
+	return e.queryTablesIn(origCtx, databasesToQuery)
+}
 
+// queryTablesIn reads the tables and streams of the databases from their
+// INFORMATION_SCHEMA and SHOW STREAMS.
+func (e *SnowflakeScrapper) queryTablesIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.TableRow, error) {
 	finalResults, err := readDatabases(
 		origCtx, databasesToQuery, 8, scrapper.OmittedObjects,
 		func(groupCtx context.Context, database string) ([]*scrapper.TableRow, error) {

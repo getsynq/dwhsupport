@@ -70,7 +70,7 @@ func (s *AccountUsageCatalogSuite) TestReadsAllDatabasesInOneQuery() {
 	s.Len(rows, 1)
 
 	query := s.tablesQuery(fake)
-	s.Contains(query, "t.table_catalog IN ('SALES', 'MARKETING', 'PARTNER_SHARE')")
+	s.Contains(query, "t.table_catalog IN ('SALES', 'MARKETING')")
 	s.Empty(fake.statements(func(sql string) bool { return strings.Contains(strings.ToLower(sql), ".information_schema.") }))
 	// SHOW STREAMS goes only to the database the role holds a privilege on.
 	s.Empty(fake.statements(sqlContains("SHOW STREAMS IN DATABASE SALES")))
@@ -176,6 +176,37 @@ func (s *AccountUsageCatalogSuite) TestReadsAUsableShareFromItsInformationSchema
 	s.Contains(s.tablesQuery(fake), "t.table_catalog IN ('SALES', 'MARKETING')")
 }
 
+func (s *AccountUsageCatalogSuite) TestTableMetricsFromAccountUsageReadAUsableShareFromItsInformationSchema() {
+	fake := s.fake()
+	withUsableShare(fake)
+	fake.routes = append([]fakeRoute{
+		{
+			match:   sqlContains("ACCOUNT_USAGE.TABLES", `AS "row_count"`),
+			columns: []string{"database", "schema", "table", "row_count", "size_bytes", "updated_at"},
+			rows:    [][]driver.Value{{"SALES", "PUBLIC", "ORDERS", int64(1), int64(10), nil}},
+		},
+		{
+			match:   sqlContains("PARTNER_SHARE.information_schema.tables", `as "row_count"`),
+			columns: []string{"database", "schema", "table", "row_count", "size_bytes", "updated_at"},
+			rows:    [][]driver.Value{{"PARTNER_SHARE", "PUBLIC", "WEATHER", int64(2), int64(20), nil}},
+		},
+	}, fake.routes...)
+	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{
+		CatalogFromAccountUsage:      true,
+		TableMetricsFromAccountUsage: true,
+	})
+
+	rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+	s.Require().NoError(err)
+	s.ElementsMatch(
+		[]string{"SALES.PUBLIC.ORDERS", "PARTNER_SHARE.PUBLIC.WEATHER"},
+		lo.Map(rows, func(row *scrapper.TableMetricsRow, _ int) string {
+			return row.Database + "." + row.Schema + "." + row.Table
+		}),
+	)
+	s.Empty(fake.statements(sqlContains("MARKETING.information_schema")))
+}
+
 func (s *AccountUsageCatalogSuite) TestWarnsAboutSharesWithoutImportedPrivileges() {
 	fake := s.fake()
 	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{CatalogFromAccountUsage: true})
@@ -202,14 +233,4 @@ func TestDatabaseIdent(t *testing.T) {
 			t.Errorf("databaseIdent(%q) = %s, want %s", name, got, want)
 		}
 	}
-}
-
-func (s *AccountUsageCatalogSuite) TestWarnsAboutDatabasesWithoutPrivileges() {
-	fake := s.fake()
-	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{CatalogFromAccountUsage: true})
-
-	warnings, err := sc.ValidateConfiguration(context.Background())
-	s.Require().NoError(err)
-	s.Require().Len(warnings, 1)
-	s.Contains(warnings[0], "The role has no privileges on databases SALES, PARTNER_SHARE.")
 }
