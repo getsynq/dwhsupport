@@ -26,17 +26,24 @@ var tableMetricsSql = `
 	`
 
 func (e *SnowflakeScrapper) QueryTableMetrics(origCtx context.Context, lastMetricsFetchTime time.Time) ([]*scrapper.TableMetricsRow, error) {
-	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
+	if e.conf.TableMetricsFromAccountUsage {
+		return e.queryTableMetricsFromAccountUsage(origCtx)
+	}
+	databasesToQuery, err := e.getDatabasesWithPrivileges(origCtx)
 	if err != nil {
 		return nil, err
 	}
+	return e.queryTableMetricsIn(origCtx, databasesToQuery)
+}
 
+// queryTableMetricsIn reads the table metrics of the databases from their INFORMATION_SCHEMA.
+func (e *SnowflakeScrapper) queryTableMetricsIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.TableMetricsRow, error) {
 	return readDatabases(
 		origCtx, databasesToQuery, 8, scrapper.OmittedMetrics,
 		func(groupCtx context.Context, database string) ([]*scrapper.TableMetricsRow, error) {
 			var tmpResults []*scrapper.TableMetricsRow
 
-			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tableMetricsSql, database), "", "table_schema", "table_name")
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tableMetricsSql, databaseIdent(database)), "", "table_schema", "table_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to query metrics for database %s", database)

@@ -23,15 +23,22 @@ var schemasQuery = `
 	`
 
 func (e *SnowflakeScrapper) QuerySchemas(origCtx context.Context) ([]*scrapper.SchemaRow, error) {
+	if e.conf.CatalogFromAccountUsage {
+		return e.querySchemasFromAccountUsage(origCtx)
+	}
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
 	}
+	return e.querySchemasIn(origCtx, databasesToQuery)
+}
 
+// querySchemasIn reads the schemas of the databases from their INFORMATION_SCHEMA.
+func (e *SnowflakeScrapper) querySchemasIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.SchemaRow, error) {
 	return readDatabases(
 		origCtx, databasesToQuery, 8, scrapper.OmittedObjects,
 		func(groupCtx context.Context, database string) ([]*scrapper.SchemaRow, error) {
-			query := scope.AppendSchemaScopeConditions(groupCtx, fmt.Sprintf(schemasQuery, database), "s.catalog_name", "s.schema_name")
+			query := scope.AppendSchemaScopeConditions(groupCtx, fmt.Sprintf(schemasQuery, databaseIdent(database)), "s.catalog_name", "s.schema_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to query schemas for database %s", database)

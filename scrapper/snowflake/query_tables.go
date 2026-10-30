@@ -32,17 +32,25 @@ var tablesQuery = `
 	`
 
 func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
+	if e.conf.CatalogFromAccountUsage {
+		return e.queryTablesFromAccountUsage(origCtx)
+	}
 	databasesToQuery, err := e.GetDatabasesToQuery(origCtx)
 	if err != nil {
 		return nil, err
 	}
+	return e.queryTablesIn(origCtx, databasesToQuery)
+}
 
+// queryTablesIn reads the tables and streams of the databases from their
+// INFORMATION_SCHEMA and SHOW STREAMS.
+func (e *SnowflakeScrapper) queryTablesIn(origCtx context.Context, databasesToQuery []string) ([]*scrapper.TableRow, error) {
 	finalResults, err := readDatabases(
 		origCtx, databasesToQuery, 8, scrapper.OmittedObjects,
 		func(groupCtx context.Context, database string) ([]*scrapper.TableRow, error) {
 			var tmpResults []*scrapper.TableRow
 
-			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tablesQuery, database), "", "t.table_schema", "t.table_name")
+			query := scope.AppendScopeConditions(groupCtx, fmt.Sprintf(tablesQuery, databaseIdent(database)), "", "t.table_schema", "t.table_name")
 			rows, err := e.executor.QueryRows(groupCtx, query)
 			if err != nil {
 				return nil, errors.Wrapf(err, "failed to query tables for database %s", database)
@@ -67,41 +75,7 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 
 			streamRows, err := e.showStreamsInDatabase(groupCtx, database)
 			if err == nil {
-				for _, streamRow := range streamRows {
-
-					tmpResults = append(
-						tmpResults, &scrapper.TableRow{
-							Instance:  e.conf.Account,
-							Database:  streamRow.DatabaseName,
-							Schema:    streamRow.SchemaName,
-							Table:     streamRow.Name,
-							TableType: "STREAM",
-							IsView:    false,
-							IsTable:   true,
-							Options: map[string]interface{}{
-								"table_name": streamRow.TableName,
-							},
-							Description: lo.EmptyableToPtr(streamRow.Comment),
-							Owner:       lo.EmptyableToPtr(streamRow.Owner),
-							CreatedAt:   streamRow.CreatedAt,
-							Annotations: []*scrapper.Annotation{
-								{
-									AnnotationName:  "stream_type",
-									AnnotationValue: streamRow.Type,
-								},
-								{
-									AnnotationName:  "stream_mode",
-									AnnotationValue: streamRow.Mode,
-								},
-								{
-									AnnotationName:  "stream_stale",
-									AnnotationValue: streamRow.Stale,
-								},
-							},
-						},
-					)
-
-				}
+				tmpResults = append(tmpResults, e.streamTableRows(streamRows)...)
 			} else {
 				logging.GetLogger(groupCtx).WithField("database", database).WithError(err).Error("SHOW STREAMS IN DATABASE failed")
 			}
@@ -115,6 +89,43 @@ func (e *SnowflakeScrapper) QueryTables(origCtx context.Context, opts ...scrappe
 
 	// Post-filter for SHOW STREAMS results which bypass SQL scope conditions.
 	return scope.FilterRows(finalResults, scope.GetScope(origCtx)), err
+}
+
+// streamTableRows lists streams as tables.
+func (e *SnowflakeScrapper) streamTableRows(streamRows []*ShowStreamsRow) []*scrapper.TableRow {
+	var out []*scrapper.TableRow
+	for _, streamRow := range streamRows {
+		out = append(out, &scrapper.TableRow{
+			Instance:  e.conf.Account,
+			Database:  streamRow.DatabaseName,
+			Schema:    streamRow.SchemaName,
+			Table:     streamRow.Name,
+			TableType: "STREAM",
+			IsView:    false,
+			IsTable:   true,
+			Options: map[string]interface{}{
+				"table_name": streamRow.TableName,
+			},
+			Description: lo.EmptyableToPtr(streamRow.Comment),
+			Owner:       lo.EmptyableToPtr(streamRow.Owner),
+			CreatedAt:   streamRow.CreatedAt,
+			Annotations: []*scrapper.Annotation{
+				{
+					AnnotationName:  "stream_type",
+					AnnotationValue: streamRow.Type,
+				},
+				{
+					AnnotationName:  "stream_mode",
+					AnnotationValue: streamRow.Mode,
+				},
+				{
+					AnnotationName:  "stream_stale",
+					AnnotationValue: streamRow.Stale,
+				},
+			},
+		})
+	}
+	return out
 }
 
 // ShowStreamsRow represents the structure of a row returned by SHOW STREAMS command
@@ -156,7 +167,7 @@ type ShowStreamsRow struct {
 func (e *SnowflakeScrapper) showStreamsInDatabase(ctx context.Context, database string) ([]*ShowStreamsRow, error) {
 	var results []*ShowStreamsRow
 
-	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW STREAMS IN DATABASE %s", database))
+	rows, err := e.executor.QueryRows(ctx, fmt.Sprintf("SHOW STREAMS IN DATABASE %s", databaseIdent(database)))
 	if err != nil {
 		return nil, err
 	}
