@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scope"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -132,6 +134,58 @@ func (s *AccountUsageCatalogSuite) TestTableMetricsFromAccountUsage() {
 	s.Require().NoError(err)
 	s.Len(fake.statements(sqlContains("ACCOUNT_USAGE.TABLES", `AS "row_count"`)), 1)
 	s.Empty(fake.statements(sqlContains("information_schema")))
+}
+
+// withUsableShare lets the role use the share PARTNER_SHARE, as with IMPORTED
+// PRIVILEGES on it, and puts a table in the share's INFORMATION_SCHEMA.
+func withUsableShare(fake *fakeSnowflake) {
+	fake.routes = append([]fakeRoute{
+		{
+			match:   sqlContains("SHOW DATABASES"),
+			columns: []string{"name", "origin", "owner", "comment", "kind"},
+			rows: [][]driver.Value{
+				{"MARKETING", "", "SYSADMIN", "", "STANDARD"},
+				{"PARTNER_SHARE", "", "", "", "IMPORTED DATABASE"},
+			},
+		},
+		{
+			match:   sqlContains("PARTNER_SHARE.information_schema.tables"),
+			columns: []string{"database", "schema", "table", "table_type", "description", "is_view", "is_table"},
+			rows:    [][]driver.Value{{"PARTNER_SHARE", "PUBLIC", "WEATHER", "BASE TABLE", "", false, true}},
+		},
+		{
+			match:   sqlContains("SHOW STREAMS IN DATABASE PARTNER_SHARE"),
+			columns: []string{"created_on", "name", "database_name", "schema_name", "table_name"},
+		},
+	}, fake.routes...)
+}
+
+// ACCOUNT_USAGE lists only the objects the account owns, so it has no rows
+// for a share. A share the role can use is read from its INFORMATION_SCHEMA.
+func (s *AccountUsageCatalogSuite) TestReadsAUsableShareFromItsInformationSchema() {
+	fake := s.fake()
+	withUsableShare(fake)
+	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{CatalogFromAccountUsage: true})
+
+	rows, err := sc.QueryTables(context.Background())
+	s.Require().NoError(err)
+	s.ElementsMatch(
+		[]string{"SALES.PUBLIC.ORDERS", "PARTNER_SHARE.PUBLIC.WEATHER"},
+		lo.Map(rows, func(row *scrapper.TableRow, _ int) string { return row.Database + "." + row.Schema + "." + row.Table }),
+	)
+	s.Contains(s.tablesQuery(fake), "t.table_catalog IN ('SALES', 'MARKETING')")
+}
+
+func (s *AccountUsageCatalogSuite) TestWarnsAboutSharesWithoutImportedPrivileges() {
+	fake := s.fake()
+	sc := newFakeSnowflakeScrapper(context.Background(), fake, &SnowflakeScrapperConf{CatalogFromAccountUsage: true})
+
+	warnings, err := sc.ValidateConfiguration(context.Background())
+	s.Require().NoError(err)
+	s.Require().Len(warnings, 2)
+	s.Contains(warnings[0], "The role has no privileges on databases SALES.")
+	s.Contains(warnings[1], "The role cannot use the shared databases PARTNER_SHARE.")
+	s.Contains(warnings[1], "Grant IMPORTED PRIVILEGES on them")
 }
 
 func TestDatabaseIdent(t *testing.T) {
