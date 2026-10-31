@@ -114,6 +114,10 @@ func snowflakeQueryTextMayBeTruncated(text string) bool {
 	return len(snappy.Encode(nil, []byte(text))) >= snowflakeQueryTextMinCutSnappy
 }
 
+// defaultQueryHistoryTimeout is how long QUERY_HISTORY may take to start answering a query log
+// fetch.
+const defaultQueryHistoryTimeout = 10 * time.Minute
+
 var queryHistoryMandatoryColumns = []string{
 	"QUERY_ID",
 	"QUERY_TEXT",
