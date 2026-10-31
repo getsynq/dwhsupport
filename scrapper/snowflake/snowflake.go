@@ -223,11 +223,15 @@ func (e *SnowflakeScrapper) GetDatabasesToQuery(ctx context.Context) ([]string, 
 	return result, nil
 }
 
-// getDatabasesWithPrivileges returns the databases to query that the role holds
+// DatabasesWithPrivileges returns the databases to query that the role holds
 // a privilege on. Only these answer SHOW, GET_DDL and INFORMATION_SCHEMA. It is
 // GetDatabasesToQuery unless the catalog is read from ACCOUNT_USAGE, which lists
 // databases the role cannot use.
-func (e *SnowflakeScrapper) getDatabasesWithPrivileges(ctx context.Context) ([]string, error) {
+//
+// A caller sending its own SHOW or INFORMATION_SCHEMA query to each database
+// reads this list, or every database the role cannot use answers with an
+// error.
+func (e *SnowflakeScrapper) DatabasesWithPrivileges(ctx context.Context) ([]string, error) {
 	databases, err := e.GetDatabasesToQuery(ctx)
 	if err != nil || !e.conf.CatalogFromAccountUsage {
 		return databases, err
@@ -270,7 +274,7 @@ func (e *SnowflakeScrapper) splitShares(ctx context.Context) ([]string, []string
 	if err != nil {
 		return nil, nil, err
 	}
-	withPrivileges, err := e.getDatabasesWithPrivileges(ctx)
+	withPrivileges, err := e.DatabasesWithPrivileges(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -402,7 +406,7 @@ func (e *SnowflakeScrapper) databasesWithoutPrivileges(ctx context.Context) ([]s
 	if err != nil {
 		return nil, err
 	}
-	withPrivileges, err := e.getDatabasesWithPrivileges(ctx)
+	withPrivileges, err := e.DatabasesWithPrivileges(ctx)
 	if err != nil {
 		return nil, err
 	}

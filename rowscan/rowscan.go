@@ -145,6 +145,10 @@ func (s *Scanner[T]) RequireColumns(columns ...string) error {
 // object read, for example "SNOWFLAKE.ACCOUNT_USAGE.TASK_HISTORY"; it is left
 // empty by callers that read an arbitrary statement rather than a named object,
 // where the target type is what identifies the read.
+//
+// Only a result column with no field is a warning. A field with no column is
+// how most of our own queries look, as a row model carries fields the scrapper
+// fills in later, so it is logged at debug level.
 func (s *Scanner[T]) LogColumnDrift(ctx context.Context, source string) {
 	if len(s.unknown) == 0 && len(s.missing) == 0 {
 		return
@@ -157,8 +161,12 @@ func (s *Scanner[T]) LogColumnDrift(ctx context.Context, source string) {
 	if source != "" {
 		fields["source"] = source
 	}
-	logging.GetLogger(ctx).WithFields(fields).
-		Warn("result set columns differ from the expected shape, scanning what matched")
+	logger := logging.GetLogger(ctx).WithFields(fields)
+	if len(s.unknown) == 0 {
+		logger.Debug("result set columns differ from the expected shape, scanning what matched")
+		return
+	}
+	logger.Warn("result set columns differ from the expected shape, scanning what matched")
 }
 
 // Scan reads the current row into dest.

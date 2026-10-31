@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/getsynq/dwhsupport/logging"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/samber/lo"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -182,5 +184,34 @@ func (s *AccountUsageIntegrationSuite) TestSqlDefinitions() {
 		}
 		s.True(actualRows[k].IsView, k)
 		s.NotEmpty(actualRows[k].Sql, k)
+	}
+}
+
+// TestRoleWithUsageOnSomeSchemas reads the catalog as SNOWFLAKE_CATALOG_PARTIAL_USER,
+// whose role holds USAGE on the database and on SCHEMA_A only. GET_DDL
+// fails for every other schema, so the scraper asks only for SCHEMA_A, and its
+// tables get their DDL.
+func (s *AccountUsageIntegrationSuite) TestRoleWithUsageOnSomeSchemas() {
+	user := os.Getenv("SNOWFLAKE_CATALOG_PARTIAL_USER")
+	if user == "" {
+		s.T().Skip("SNOWFLAKE_CATALOG_PARTIAL_USER not set")
+	}
+	conf := snowflakeTestConf()
+	conf.User = user
+	conf.Role = ""
+	partial := s.connect(&SnowflakeScrapperConf{SnowflakeConf: conf, CatalogFromAccountUsage: true})
+
+	logger, hook := logrustest.NewNullLogger()
+	ctx := logging.WithLogger(context.Background(), logger)
+	rows, err := partial.QuerySqlDefinitions(ctx)
+	s.Require().NoError(err)
+
+	for _, entry := range hook.AllEntries() {
+		s.NotEqual("failed to get ddl for schema", entry.Message, entry.Data)
+	}
+	withDdl := lo.Filter(rows, func(row *scrapper.SqlDefinitionRow, _ int) bool { return !row.IsView && row.Sql != "" })
+	s.NotEmpty(withDdl)
+	for _, row := range withDdl {
+		s.Equal("SCHEMA_A", row.Schema, tableKey(row.Database, row.Schema, row.Table))
 	}
 }
