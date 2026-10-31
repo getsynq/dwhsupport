@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	dwhexecsnowflake "github.com/getsynq/dwhsupport/exec/snowflake"
 	"github.com/getsynq/dwhsupport/lazy"
@@ -103,6 +104,8 @@ type SnowflakeScrapper struct {
 	// shownDbs are the databases SHOW DATABASES lists, the ones the role holds a privilege on.
 	shownDbs lazy.Lazy[[]*DbDesc]
 	executor *dwhexecsnowflake.SnowflakeExecutor
+	// queryHistoryTimeout bounds how long QUERY_HISTORY may take to answer a query log fetch.
+	queryHistoryTimeout time.Duration
 }
 
 func NewSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf) (*SnowflakeScrapper, error) {
@@ -123,7 +126,13 @@ func newSnowflakeScrapper(ctx context.Context, conf *SnowflakeScrapperConf, exec
 			return accountUsageDatabases(ctx, executor, accountUsageDb(conf))
 		})
 	}
-	return &SnowflakeScrapper{conf: conf, executor: executor, existingDbs: existingDbs, shownDbs: shownDbs}
+	return &SnowflakeScrapper{
+		conf:                conf,
+		executor:            executor,
+		existingDbs:         existingDbs,
+		shownDbs:            shownDbs,
+		queryHistoryTimeout: defaultQueryHistoryTimeout,
+	}
 }
 
 func listShownDatabases(ctx context.Context, executor *dwhexecsnowflake.SnowflakeExecutor) ([]*DbDesc, error) {
