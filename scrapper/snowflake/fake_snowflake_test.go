@@ -32,6 +32,9 @@ type fakeRoute struct {
 	columns []string
 	rows    [][]driver.Value
 	err     error
+	// hang answers only once the statement's context is done, with the error
+	// the driver returns for a query it aborted.
+	hang bool
 }
 
 func sqlContains(parts ...string) func(string) bool {
@@ -71,6 +74,10 @@ func (f *fakeSnowflake) query(ctx context.Context, query string) (driver.Rows, e
 		}
 		if route.err != nil {
 			return nil, route.err
+		}
+		if route.hang {
+			<-ctx.Done()
+			return nil, ctx.Err()
 		}
 		return &fakeRows{columns: route.columns, rows: route.rows}, nil
 	}
