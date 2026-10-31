@@ -120,7 +120,7 @@ func (s *QueryLogsSuite) TestBuildQueryLogsSql() {
 			// Check database filtering based on config
 			if len(tc.conf.Databases) > 0 || len(tc.conf.QueryLogsDatabases) > 0 {
 				// Should have database filtering
-				s.Contains(sql, "REGEXP_LIKE")
+				s.Contains(sql, "REGEXP_INSTR")
 				s.Contains(sql, "DATABASE_NAME")
 			}
 
@@ -155,17 +155,17 @@ func (s *QueryLogsSuite) TestBuildQueryLogsSqlRegexPattern() {
 
 	// Verify the regex pattern is correctly formatted
 	// Should match both "NYC_TAXI"."PUBLIC" and NYC_TAXI.PUBLIC
-	s.Contains(sql, `REGEXP_LIKE(QUERY_TEXT,`)
+	s.Contains(sql, `REGEXP_INSTR(QUERY_TEXT,`)
 
 	// Verify proper escaping of special characters for whitespace
 	s.Contains(sql, `\\t\\n\\r`)
 
 	// Verify the pattern has case-insensitive flag
-	s.Contains(sql, `'is')`)
+	s.Contains(sql, `, 'i') > 0`)
 
 	// Verify OR condition with DATABASE_NAME
 	s.Contains(sql, `DATABASE_NAME in ('NYC_TAXI')`)
-	s.Contains(sql, ` or REGEXP_LIKE`)
+	s.Contains(sql, ` or REGEXP_INSTR`)
 }
 
 func (s *QueryLogsSuite) TestBuildQueryLogsSqlMultipleDatabases() {
@@ -209,7 +209,7 @@ func (s *QueryLogsSuite) TestBuildQueryLogsSqlAdmitsAppFileFetches() {
 	require.NoError(s.T(), err)
 
 	s.Contains(sql, `REGEXP_LIKE(QUERY_TEXT, '[ \\t\\n\\r]*(GET|LS|LIST)[ \\t\\n\\r]+''snow://(streamlit|notebook)/.*', 'is')`)
-	s.Contains(sql, `DATABASE_NAME in ('ANALYTICS') or REGEXP_LIKE`)
+	s.Contains(sql, `DATABASE_NAME in ('ANALYTICS') or REGEXP_INSTR`)
 }
 
 func (s *QueryLogsSuite) TestAppFileFetchPattern() {

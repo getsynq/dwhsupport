@@ -12,6 +12,8 @@ import (
 	"github.com/getsynq/dwhsupport/querylogs"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/golang/snappy"
+	"github.com/jmoiron/sqlx"
+	"github.com/pkg/errors"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -118,6 +120,10 @@ func snowflakeQueryTextMayBeTruncated(text string) bool {
 // fetch.
 const defaultQueryHistoryTimeout = 10 * time.Minute
 
+// snowflakeStatementMaxDuration is the longest a Snowflake statement can run, the largest
+// STATEMENT_TIMEOUT_IN_SECONDS an account can set.
+const snowflakeStatementMaxDuration = 7 * 24 * time.Hour
+
 var queryHistoryMandatoryColumns = []string{
 	"QUERY_ID",
 	"QUERY_TEXT",
@@ -147,21 +153,57 @@ func (s *SnowflakeScrapper) FetchQueryLogs(
 		return nil, err
 	}
 
-	// Use native QueryRows - returns sqlx.Rows iterator
-	rows, err := s.Executor().QueryRows(ctx, sqlQuery)
+	rows, stop, err := s.queryHistoryRows(ctx, sqlQuery)
 	if err != nil {
 		return nil, err
 	}
 
 	account := s.conf.Account
-	return querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](
-		rows,
-		obfuscator,
-		s.DialectType(),
-		func(row *SnowflakeQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
-			return convertSnowflakeRowToQueryLog(row, obfuscator, sqlDialect, account)
-		},
-	), nil
+	return &stoppingIterator{
+		QueryLogIterator: querylogs.NewSqlxRowsIterator[SnowflakeQueryLogSchema](
+			rows,
+			obfuscator,
+			s.DialectType(),
+			func(row *SnowflakeQueryLogSchema, obfuscator querylogs.QueryObfuscator, sqlDialect string) (*querylogs.QueryLog, error) {
+				return convertSnowflakeRowToQueryLog(row, obfuscator, sqlDialect, account)
+			},
+		),
+		stop: stop,
+	}, nil
+}
+
+// errQueryHistoryTimeout is why a QUERY_HISTORY read that did not answer in time was stopped.
+var errQueryHistoryTimeout = errors.New("QUERY_HISTORY did not answer in time")
+
+// queryHistoryRows sends the read and stops it when it has not answered within
+// queryHistoryTimeout. The driver aborts a statement whose context is cancelled, so a stopped
+// read stops running on the warehouse too. The limit ends once the read answers: the rows stream
+// for as long as the caller reads them, and stop releases the context when the caller is done.
+func (s *SnowflakeScrapper) queryHistoryRows(ctx context.Context, sqlQuery string) (*sqlx.Rows, func(), error) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	timer := time.AfterFunc(s.queryHistoryTimeout, func() { cancel(errQueryHistoryTimeout) })
+	rows, err := s.Executor().QueryRows(ctx, sqlQuery)
+	timer.Stop()
+	if err != nil {
+		cause := context.Cause(ctx)
+		cancel(nil)
+		if errors.Is(cause, errQueryHistoryTimeout) {
+			return nil, nil, fmt.Errorf("%w within %s, the read was stopped", errQueryHistoryTimeout, s.queryHistoryTimeout)
+		}
+		return nil, nil, err
+	}
+	return rows, func() { cancel(nil) }, nil
+}
+
+// stoppingIterator releases the read's context once the rows are closed.
+type stoppingIterator struct {
+	querylogs.QueryLogIterator
+	stop func()
+}
+
+func (it *stoppingIterator) Close() error {
+	defer it.stop()
+	return it.QueryLogIterator.Close()
 }
 
 // findTableColumns queries the table to find available columns
@@ -276,12 +318,15 @@ func (s *SnowflakeScrapper) buildQueryLogsSql(ctx context.Context, from time.Tim
 		cols[i] = sqldialect.Identifier(col)
 	}
 
+	timestamp := func(t time.Time) sqldialect.Expr {
+		return sqldialect.Fn("to_timestamp_ltz", sqldialect.String(t.Format(time.RFC3339)))
+	}
 	conditions := []sqldialect.CondExpr{
-		sqldialect.Between(
-			sqldialect.TimeCol("END_TIME"),
-			sqldialect.Fn("to_timestamp_ltz", sqldialect.String(from.Format(time.RFC3339))),
-			sqldialect.Fn("to_timestamp_ltz", sqldialect.String(to.Format(time.RFC3339))),
-		),
+		sqldialect.Between(sqldialect.TimeCol("END_TIME"), timestamp(from), timestamp(to)),
+		// The same window on START_TIME, widened by the longest a statement can run, adds nothing to
+		// the result but lets a large account prune QUERY_HISTORY on the column it is ordered by.
+		sqldialect.Gte(sqldialect.TimeCol("START_TIME"), timestamp(from.Add(-snowflakeStatementMaxDuration))),
+		sqldialect.Lte(sqldialect.TimeCol("START_TIME"), timestamp(to)),
 	}
 
 	// Determine which databases to filter by
@@ -304,18 +349,24 @@ func (s *SnowflakeScrapper) buildQueryLogsSql(ctx context.Context, from time.Tim
 			sqldialect.In(sqldialect.TextCol("DATABASE_NAME"), dbExprs...),
 		)
 
-		// Condition 2: REGEXP_LIKE on QUERY_TEXT to catch queries that reference the database
-		// This handles both: NYC_TAXI.PUBLIC and "NYC_TAXI"."PUBLIC"
-		// Match database name with optional quotes/whitespace before the dot
+		// Condition 2: QUERY_TEXT names one of the databases, as NYC_TAXI.PUBLIC or
+		// "NYC_TAXI"."PUBLIC". REGEXP_INSTR searches the text for it, where REGEXP_LIKE would need
+		// a pattern spanning the whole text, which costs twice as much on long texts.
 		// Note: Snowflake doesn't support \s, so we use explicit character class.
 		// This is the regex itself: sqldialect.String escapes it for the
 		// string literal, backslashes included.
-		regexpString := fmt.Sprintf(`.*["' \t\n\r]?(%s)["' \t\n\r]*[.].*`, strings.Join(databasesForQueryLogs, "|"))
+		regexpString := fmt.Sprintf(`["' \t\n\r]?(%s)["' \t\n\r]*[.]`, strings.Join(databasesForQueryLogs, "|"))
 		dbMatchConditions = append(dbMatchConditions,
-			sqldialect.FnCond("REGEXP_LIKE",
-				sqldialect.TextCol("QUERY_TEXT"),
-				sqldialect.String(regexpString),
-				sqldialect.String("is"),
+			sqldialect.Gt(
+				sqldialect.Fn("REGEXP_INSTR",
+					sqldialect.TextCol("QUERY_TEXT"),
+					sqldialect.String(regexpString),
+					sqldialect.Int64(1),
+					sqldialect.Int64(1),
+					sqldialect.Int64(0),
+					sqldialect.String("i"),
+				),
+				sqldialect.Int64(0),
 			),
 		)
 
