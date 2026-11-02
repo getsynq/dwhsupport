@@ -35,7 +35,7 @@ type SnowflakeQueryLogSchema struct {
 	WarehouseSize                          *string   `db:"WAREHOUSE_SIZE"`
 	WarehouseType                          *string   `db:"WAREHOUSE_TYPE"`
 	ClusterNumber                          *int32    `db:"CLUSTER_NUMBER"`
-	QueryTag                               string    `db:"QUERY_TAG"`
+	QueryTag                               *string   `db:"QUERY_TAG"`
 	ExecutionStatus                        string    `db:"EXECUTION_STATUS"`
 	ErrorCode                              *int32    `db:"ERROR_CODE"`
 	ErrorMessage                           *string   `db:"ERROR_MESSAGE"`
@@ -459,7 +459,7 @@ func convertSnowflakeRowToQueryLog(
 		"warehouse_size":                              querylogs.StringPtrValue(row.WarehouseSize),
 		"warehouse_type":                              querylogs.StringPtrValue(row.WarehouseType),
 		"cluster_number":                              querylogs.Int32PtrValue(row.ClusterNumber),
-		"query_tag":                                   querylogs.StringValue(row.QueryTag),
+		"query_tag":                                   querylogs.StringPtrValue(row.QueryTag),
 		"execution_status":                            querylogs.StringValue(row.ExecutionStatus),
 		"error_code":                                  querylogs.Int32PtrValue(row.ErrorCode),
 		"error_message":                               querylogs.StringPtrValue(row.ErrorMessage),
