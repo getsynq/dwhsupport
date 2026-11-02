@@ -157,7 +157,8 @@ func buildSnowflakeConfig(conf *SnowflakeConf) (*gosnowflake.Config, error) {
 		Params:              map[string]*string{},
 		DisableConsoleLogin: gosnowflake.ConfigBoolTrue,
 		LoginTimeout:        30 * time.Second, // Timeout for JWT token authentication exchange
-		Transporter:         conf.Transporter,
+		RequestTimeout:      requestTimeout,
+		Transporter:         newPrivateEndpointTransport(baseTransport(conf.Transporter)),
 	}
 
 	// Handle authentication type
