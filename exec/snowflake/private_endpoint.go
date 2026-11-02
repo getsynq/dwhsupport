@@ -24,12 +24,18 @@ const requestTimeout = time.Minute
 // dialed is answered from memory instead of being dialed again.
 const unreachableEndpointMemory = 10 * time.Minute
 
-// isPrivateEndpoint says whether host is a VPC endpoint or a PrivateLink
-// address. Snowflake serves the results of an account with PrivateLink on its
-// internal stage from such a host, and it resolves to an address in the
-// customer's own network.
+// isPrivateEndpoint says whether host is a stage behind a VPC endpoint or
+// PrivateLink. Snowflake serves the results of an account with PrivateLink on
+// its internal stage from such a host, and it resolves to an address in the
+// customer's own network. An account reached over PrivateLink has
+// `.privatelink.` in its own host too, and a failed dial to it is not a stage
+// out of reach, so Snowflake's own hosts are left out, under every domain its
+// regions serve accounts from (`.snowflakecomputing.com`, `.snowflakecomputing.cn`).
 func isPrivateEndpoint(host string) bool {
 	host = strings.ToLower(host)
+	if strings.Contains(host, ".snowflakecomputing.") {
+		return false
+	}
 	return strings.Contains(host, ".vpce.") || strings.Contains(host, ".privatelink.")
 }
 

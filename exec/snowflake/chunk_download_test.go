@@ -263,3 +263,27 @@ func (s *ChunkDownloadSuite) TestOnlyAnUnreachableEndpointIsRemembered() {
 		}
 	}
 }
+
+// An account reached over PrivateLink has `.privatelink.` in its own host. A
+// refused dial to it is the account being unreachable for a moment, and
+// remembering it would fail every query on the connection for a while, so only
+// stage hosts are remembered.
+func (s *ChunkDownloadSuite) TestAPrivateLinkAccountHostIsNotRemembered() {
+	for _, accountURL := range []string{
+		"https://acme.privatelink.snowflakecomputing.com:443/queries/v1/query-request",
+		// The China regions serve accounts under their own domain.
+		"https://xy12345.cn-northwest-1.privatelink.snowflakecomputing.cn:443/queries/v1/query-request",
+	} {
+		base := &failingTransport{err: &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)}}
+		transport := newPrivateEndpointTransport(base)
+		accountRequest := func() *http.Request {
+			req, _ := http.NewRequest(http.MethodPost, accountURL, nil)
+			return req
+		}
+
+		_, _ = transport.RoundTrip(accountRequest())
+		_, _ = transport.RoundTrip(accountRequest())
+
+		s.Equal(2, base.calls, accountURL)
+	}
+}
