@@ -1,12 +1,14 @@
 package snowflake
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/snowflakedb/gosnowflake"
@@ -72,11 +74,36 @@ func (t *privateEndpointTransport) RoundTrip(req *http.Request) (*http.Response,
 		return nil, err
 	}
 	resp, err := t.base.RoundTrip(req)
-	var opErr *net.OpError
-	if err != nil && errors.As(err, &opErr) && opErr.Op == "dial" {
+	if err != nil && req.Context().Err() == nil && isUnreachable(err) {
 		t.remember(host, err)
 	}
 	return resp, err
+}
+
+// isUnreachable says whether a failed request is a dial the endpoint's network
+// turned away: refused, unroutable, or never answered within the dial timeout.
+// A dial its caller cut short and a name that did not resolve say nothing about
+// the next request, so they are not remembered.
+//
+// The dialer reports its own timeout and the caller's deadline as the same
+// error, so the caller passes only a request whose context is still live, and
+// a timeout here is the dialer's.
+func isUnreachable(err error) bool {
+	var opErr *net.OpError
+	if !errors.As(err, &opErr) || opErr.Op != "dial" {
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) || errors.Is(err, context.Canceled) {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.EHOSTUNREACH) ||
+		errors.Is(err, syscall.ENETUNREACH)
 }
 
 func (t *privateEndpointTransport) remembered(host string) error {

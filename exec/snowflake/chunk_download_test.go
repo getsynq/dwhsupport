@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -180,4 +182,84 @@ func (s *ChunkDownloadSuite) TestAPrivateEndpointIsDialedOnceAcrossRetries() {
 	mu.Lock()
 	defer mu.Unlock()
 	s.Equal(1, privateDials)
+}
+
+// failingTransport fails every request with err and counts them.
+type failingTransport struct {
+	err   error
+	calls int
+}
+
+func (t *failingTransport) RoundTrip(*http.Request) (*http.Response, error) {
+	t.calls++
+	return nil, t.err
+}
+
+func privateEndpointRequest(ctx context.Context) *http.Request {
+	req, _ := http.NewRequestWithContext(
+		ctx, http.MethodGet, "https://sfc-stage.bucket.vpce-0123456789abcdef0-abcd1234.s3.ap-southeast-2.vpce.amazonaws.com/results", nil,
+	)
+	return req
+}
+
+// Only a dial the endpoint's network turned away says it is unreachable. A dial
+// cut short by its caller, or a name that did not resolve this once, says
+// nothing about the next request, and remembering it would fail every chunk
+// read on the connection for a while.
+func (s *ChunkDownloadSuite) TestOnlyAnUnreachableEndpointIsRemembered() {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	// A dial whose own timeout has already passed fails the way one does that
+	// waited it out, with the error the dialer reports for a timeout.
+	_, dialTimeout := (&net.Dialer{Timeout: time.Nanosecond}).Dial("tcp", "10.255.255.1:443")
+	s.Require().Error(dialTimeout)
+	_, callerCanceled := (&net.Dialer{}).DialContext(cancelled, "tcp", "10.255.255.1:443")
+	s.Require().Error(callerCanceled)
+
+	for name, tc := range map[string]struct {
+		ctx      context.Context
+		err      error
+		remember bool
+	}{
+		"refused": {
+			ctx: context.Background(), remember: true,
+			err: &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)},
+		},
+		"timed out": {
+			ctx: context.Background(), remember: true,
+			err: dialTimeout,
+		},
+		"host unreachable": {
+			ctx: context.Background(), remember: true,
+			err: &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.EHOSTUNREACH)},
+		},
+		"canceled by the caller": {
+			ctx: context.Background(),
+			err: callerCanceled,
+		},
+		"timed out on the caller's deadline": {
+			ctx: cancelled,
+			err: dialTimeout,
+		},
+		"caller's context done": {
+			ctx: cancelled,
+			err: &net.OpError{Op: "dial", Net: "tcp", Err: os.NewSyscallError("connect", syscall.ECONNREFUSED)},
+		},
+		"name not resolved": {
+			ctx: context.Background(),
+			err: &net.OpError{Op: "dial", Net: "tcp", Err: &net.DNSError{Err: "no such host", IsTimeout: true}},
+		},
+	} {
+		base := &failingTransport{err: tc.err}
+		transport := newPrivateEndpointTransport(base)
+
+		_, _ = transport.RoundTrip(privateEndpointRequest(tc.ctx))
+		_, _ = transport.RoundTrip(privateEndpointRequest(context.Background()))
+
+		if tc.remember {
+			s.Equal(1, base.calls, name)
+		} else {
+			s.Equal(2, base.calls, name)
+		}
+	}
 }
