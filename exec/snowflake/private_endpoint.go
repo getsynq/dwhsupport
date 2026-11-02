@@ -29,10 +29,11 @@ const unreachableEndpointMemory = 10 * time.Minute
 // its internal stage from such a host, and it resolves to an address in the
 // customer's own network. An account reached over PrivateLink has
 // `.privatelink.` in its own host too, and a failed dial to it is not a stage
-// out of reach, so Snowflake's own hosts are left out.
+// out of reach, so Snowflake's own hosts are left out, under every domain its
+// regions serve accounts from (`.snowflakecomputing.com`, `.snowflakecomputing.cn`).
 func isPrivateEndpoint(host string) bool {
 	host = strings.ToLower(host)
-	if strings.HasSuffix(host, ".snowflakecomputing.com") {
+	if strings.Contains(host, ".snowflakecomputing.") {
 		return false
 	}
 	return strings.Contains(host, ".vpce.") || strings.Contains(host, ".privatelink.")
