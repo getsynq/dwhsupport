@@ -73,3 +73,20 @@ func TestSchemaRejectsInvalidConnection(t *testing.T) {
 	require.Contains(t, msgs, "bogus_field")
 	require.Contains(t, msgs, "nope") // nested $ref (ScopeConf → ScopeRuleConf) is resolved
 }
+
+// A connection may leave out port wherever the executor has a default:
+// Redshift dials 5439, and ClickHouse 9440 (9000 with allow_insecure).
+func TestSchemaAcceptsConnectionWithoutPort(t *testing.T) {
+	cases := map[string]string{
+		"redshift":   `{"connections":{"x":{"redshift":{"host":"h","database":"d","username":"u","password":"p"}}}}`,
+		"clickhouse": `{"connections":{"x":{"clickhouse":{"host":"h","username":"u","password":"p"}}}}`,
+	}
+	for name, doc := range cases {
+		t.Run(name, func(t *testing.T) {
+			res := validateAgainstConnectionsSchema(t, []byte(doc))
+			for _, e := range res.Errors() {
+				t.Errorf("%s connection without port does not match the schema: %s", name, e)
+			}
+		})
+	}
+}

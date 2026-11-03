@@ -157,11 +157,12 @@ func (c *BigQueryConf) fileFields() []fileFieldPair {
 
 // RedshiftConf contains Amazon Redshift connection parameters.
 type RedshiftConf struct {
-	Host     string `yaml:"host"     jsonschema:"required"`
-	Port     int    `yaml:"port"     jsonschema:"required,minimum=1,maximum=65535"`
-	Database string `yaml:"database" jsonschema:"required"`
-	Username string `yaml:"username" jsonschema:"required"`
-	Password string `yaml:"password" jsonschema:"required"`
+	Host string `yaml:"host" jsonschema:"required"`
+	// Defaults to 5439.
+	Port     int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	Database string `yaml:"database"       jsonschema:"required"`
+	Username string `yaml:"username"       jsonschema:"required"`
+	Password string `yaml:"password"       jsonschema:"required"`
 	// Estimate table freshness from Redshift query logs instead of metadata.
 	FreshnessFromQueryLogs bool `yaml:"freshness_from_query_logs,omitempty"`
 	// Read each table's DDL with SHOW TABLE, one statement per table.
@@ -183,8 +184,9 @@ type MySQLConf struct {
 
 // ClickhouseConf contains ClickHouse connection parameters.
 type ClickhouseConf struct {
-	Host string `yaml:"host"           jsonschema:"required"`
-	Port int    `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
+	Host string `yaml:"host" jsonschema:"required"`
+	// Defaults to 9440, the native TLS port, or to 9000 with allow_insecure.
+	Port int `yaml:"port,omitempty" jsonschema:"minimum=1,maximum=65535"`
 	// Name this ClickHouse is published under, and the top element of every path
 	// and breadcrumb its tables appear in — "prod", "staging", "eu-analytics".
 	//
@@ -204,7 +206,7 @@ type ClickhouseConf struct {
 	Database string `yaml:"database,omitempty"`
 	Username string `yaml:"username"           jsonschema:"required"`
 	Password string `yaml:"password"           jsonschema:"required"`
-	// Disable SSL certificate verification.
+	// Connect in plain text, without TLS.
 	AllowInsecure bool `yaml:"allow_insecure,omitempty"`
 	// ClickHouse server settings applied to every connection, written as they
 	// would be in a DSN query string (e.g. max_execution_time: "300"). Values are

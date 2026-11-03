@@ -51,8 +51,14 @@ func (e *ClickhouseExecutor) Close() error {
 }
 
 func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*ClickhouseExecutor, error) {
+	// The native protocol listens on 9440 over TLS and on 9000 in plain text.
+	// ClickHouse Cloud answers only on 9440, so a TLS dial to 9000 fails.
 	if conf.Port == 0 {
-		conf.Port = 9000
+		if conf.NoSsl {
+			conf.Port = 9000
+		} else {
+			conf.Port = 9440
+		}
 	}
 
 	clickhouseOptions := &clickhouse.Options{
