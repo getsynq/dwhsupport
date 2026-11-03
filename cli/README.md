@@ -259,7 +259,7 @@ bigquery:
 ```yaml
 redshift:
   host: cluster.abc.eu-west-1.redshift.amazonaws.com  # ✱
-  port: 5439                                          # ✱
+  port: 5439                                          # default 5439
   database: analytics                                 # ✱
   username: readonly                                  # ✱
   password: ${RS_PASSWORD}                            # ✱
@@ -289,7 +289,7 @@ databricks:
 ```yaml
 clickhouse:
   host: clickhouse.internal   # ✱
-  port: 9440
+  port: 9440                  # default 9440, 9000 with allow_insecure
   database: default           # empty = all databases
   username: readonly          # ✱
   password: ${CH_PASSWORD}    # ✱
