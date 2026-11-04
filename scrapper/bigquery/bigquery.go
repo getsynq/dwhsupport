@@ -15,6 +15,7 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+	bqv2 "google.golang.org/api/bigquery/v2"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	datacatalog "google.golang.org/api/datacatalog/v1"
 
@@ -64,6 +65,10 @@ type BigQueryScrapper struct {
 	// policy tags. Nil when the configuration did not opt in, and then the
 	// Data Catalog API is never called.
 	newDataCatalog func(ctx context.Context) (*datacatalog.Service, error)
+	// newBigQueryAPI builds the BigQuery REST client that reads what the
+	// cloud.google.com/go/bigquery client leaves out: the source of a linked
+	// dataset, and the project listing that names its project.
+	newBigQueryAPI func(ctx context.Context) (*bqv2.Service, error)
 	// regionTablesRefused and regionRoutinesRefused remember a refused read of
 	// the region's INFORMATION_SCHEMA.TABLES and ROUTINES, after which each
 	// dataset's is read without asking the region again.
@@ -128,6 +133,7 @@ func NewBigQueryScrapper(ctx context.Context, conf *BigQueryScrapperConf) (*BigQ
 		scope:          scopeFilter,
 		rateLimitCfg:   rateLimitCfg,
 		newDataCatalog: dataCatalogServiceFor(conf),
+		newBigQueryAPI: bigQueryAPIFor(conf),
 	}, nil
 }
 

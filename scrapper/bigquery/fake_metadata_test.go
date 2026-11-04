@@ -16,6 +16,7 @@ import (
 	"cloud.google.com/go/bigquery"
 	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	"github.com/stretchr/testify/require"
+	bqv2 "google.golang.org/api/bigquery/v2"
 	"google.golang.org/api/option"
 )
 
@@ -32,13 +33,17 @@ type fakeTable struct {
 // fakeDataset is a dataset of fakeMetadataServer. A non-zero metadataStatus
 // fails datasets.get, a non-zero listStatus fails tables.list, a non-zero
 // tablesQueryStatus fails a query of the dataset's INFORMATION_SCHEMA.TABLES.
-// labels is the JSON object of its labels, {"team":"data"} when empty.
+// labels is the JSON object of its labels, {"team":"data"} when empty. linked
+// is the JSON a linked dataset adds to datasets.get (its type, source and link
+// state), and a non-zero linkedStatus fails the datasets.get that asks for it.
 type fakeDataset struct {
 	id                string
 	metadataStatus    int
 	listStatus        int
 	tablesQueryStatus int
 	labels            string
+	linked            string
+	linkedStatus      int
 	tables            []fakeTable
 }
 
@@ -55,13 +60,26 @@ type fakeDataset struct {
 // INFORMATION_SCHEMA.ROUTINES answers with no rows. With regionQuotaExceeded
 // the region's query fails with the 403 BigQuery gives a quota instead of the
 // refusal.
+//
+// projects.list answers with projects, the JSON of each project the caller has
+// a role on, or fails with projectsStatus.
 type fakeMetadataServer struct {
 	datasets            []fakeDataset
+	projects            []string
+	projectsStatus      int
 	answersQueries      bool
 	regionQuotaExceeded bool
 
-	mu      sync.Mutex
-	queries []string
+	mu           sync.Mutex
+	queries      []string
+	projectLists int
+}
+
+// projectListings returns how many times projects.list was asked.
+func (f *fakeMetadataServer) projectListings() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.projectLists
 }
 
 // queried returns the SQL of every query job it was asked to run.
@@ -85,6 +103,17 @@ func (f *fakeMetadataServer) regionQueries() []string {
 
 func (f *fakeMetadataServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	if strings.HasSuffix(r.URL.Path, "/projects") {
+		f.mu.Lock()
+		f.projectLists++
+		f.mu.Unlock()
+		if f.projectsStatus != 0 {
+			fakeError(w, f.projectsStatus, "projects refused")
+			return
+		}
+		_, _ = fmt.Fprintf(w, `{"kind":"bigquery#projectList","projects":[%s]}`, strings.Join(f.projects, ","))
+		return
+	}
 	_, rest, found := strings.Cut(r.URL.Path, "/projects/"+fakeProject+"/")
 	if !found {
 		fakeError(w, http.StatusNotFound, "unexpected request "+r.URL.Path)
@@ -116,6 +145,19 @@ func (f *fakeMetadataServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case len(parts) == 2:
 			if ds.metadataStatus != 0 {
 				fakeError(w, ds.metadataStatus, "dataset "+ds.id+" refused")
+				return
+			}
+			// Only the read asking for the link names fields; the client's read asks for the whole dataset.
+			if r.URL.Query().Get("fields") != "" {
+				if ds.linkedStatus != 0 {
+					fakeError(w, ds.linkedStatus, "dataset "+ds.id+" refused")
+					return
+				}
+				linked := ds.linked
+				if linked == "" {
+					linked = `"type":"DEFAULT"`
+				}
+				_, _ = fmt.Fprintf(w, `{%s}`, linked)
 				return
 			}
 			labels := ds.labels
@@ -309,6 +351,10 @@ func newFakeMetadataScrapperOn(t *testing.T, fake *fakeMetadataServer) *BigQuery
 		scope:        ScopeFromConf(conf),
 		executor:     dwhexecbigquery.NewBigqueryExecutorFromClient(client, &conf.BigQueryConf),
 		rateLimitCfg: rateLimitCfg,
+		newBigQueryAPI: func(ctx context.Context) (*bqv2.Service, error) {
+			return bqv2.NewService(ctx, option.WithEndpoint(srv.URL), option.WithoutAuthentication(),
+				option.WithHTTPClient(&http.Client{Timeout: 5 * time.Second}))
+		},
 	}
 	t.Cleanup(func() { _ = s.Close() })
 	return s

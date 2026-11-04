@@ -32,6 +32,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 	g, groupCtx := errgroup.WithContext(ctx)
 	g.SetLimit(e.rateLimitCfg.MetadataConcurrency)
 	reads := e.newDatasetReads(ctx, scrapper.OmittedObjects)
+	linked := newLinkedDatasets(e.newBigQueryAPI, e.rateLimitCfg)
 
 	numTablesTotal := 0
 
@@ -57,6 +58,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 			continue
 		}
 		datasetLabels := datasetMeta.Labels
+		linkedSource := linked.source(groupCtx, e.conf.ProjectId, dataset.DatasetID)
 
 		numTables := 0
 
@@ -118,6 +120,7 @@ func (e *BigQueryScrapper) QueryTables(ctx context.Context, opts ...scrapper.Que
 					Tags:        tableTags,
 					CreatedAt:   scrapper.UTCTimePtr(&tableMeta.CreationTime),
 					CopyOf:      copyOf(tableMeta, shardLowerBound, shardUpperBound),
+					LinkedFrom:  linkedFrom(linkedSource, tableAlias),
 				}
 
 				if includeConstraints {

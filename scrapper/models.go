@@ -251,6 +251,30 @@ type TableRow struct {
 	// states it: the wrapper and server of a Postgres foreign table, and for
 	// postgres_fdw the remote table. Nil when the object is not a foreign table.
 	ForeignOf *TableForeignOf `json:"foreign_of,omitempty"`
+
+	// LinkedFrom is the table a read-only link serves in this warehouse, as the
+	// warehouse states it: the source table of a table in a BigQuery linked
+	// dataset. Nil when the object is not in a link, or the source cannot be
+	// named.
+	LinkedFrom *TableLinkedFrom `json:"linked_from,omitempty"`
+}
+
+// TableLinkedFrom names the source table a link serves. The link holds no rows
+// of its own and cannot be written: every read of it reads the source.
+type TableLinkedFrom struct {
+	Instance string `json:"instance,omitempty"`
+	Database string `json:"database"`
+	Schema   string `json:"schema"`
+	Table    string `json:"table"`
+}
+
+func (l TableLinkedFrom) TableFqn() DwhFqn {
+	return DwhFqn{
+		InstanceName: l.Instance,
+		DatabaseName: l.Database,
+		SchemaName:   l.Schema,
+		ObjectName:   l.Table,
+	}
 }
 
 // TableForeignOf names the foreign data wrapper and server a foreign table
