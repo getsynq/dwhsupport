@@ -28,20 +28,20 @@ func (e *DatabricksScrapper) QueryCatalog(ctx context.Context) ([]*scrapper.Cata
 	var res []*scrapper.CatalogColumnRow
 	tablesFound := 0
 
-	// Tags are read once per catalog, on its first schema whose tables listed, so a
-	// catalog whose listing is refused costs no statement on the SQL warehouse.
+	// Tags are read once per catalog, on its first page of tables, so a catalog whose
+	// listing is refused or has no tables costs no statement on the SQL warehouse.
 	var tagsCatalog string
 	var tagsLookup map[string][]*Tags
 
 	walk := e.walkUnityCatalog(ctx, scrapper.OmittedColumns)
-	err := walk.forEachSchema(ctx, servicecatalog.ListTablesRequest{OmitProperties: true},
+	err := walk.forEachTablePage(ctx, servicecatalog.ListTablesRequest{OmitProperties: true},
 		func(schemaInfo servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error {
 			if tagsLookup == nil || tagsCatalog != schemaInfo.CatalogName {
 				tagsCatalog, tagsLookup = schemaInfo.CatalogName, e.createTagsLookup(ctx, schemaInfo.CatalogName)
 			}
 
 			tablesFound += len(tables)
-			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), schemaInfo.CatalogName, schemaInfo.Name, tablesFound)
+			log.Infof("Read %d tables of catalog '%s' schema '%s', %d total", len(tables), schemaInfo.CatalogName, schemaInfo.Name, tablesFound)
 
 			for _, tableInfo := range tables {
 				tableTags := getTableTags(tagsLookup, tableInfo.CatalogName, tableInfo.SchemaName, tableInfo.Name)

@@ -91,9 +91,16 @@ func (w *unityCatalogWalk) forEachCatalog(
 	return nil
 }
 
-// forEachSchema calls visit with the accepted tables of each accepted schema. request
-// names how much of each table's metadata the listing carries.
-func (w *unityCatalogWalk) forEachSchema(
+// forEachTablePage calls visit with the accepted tables of each accepted schema, at
+// most one page of a schema's table listing at a time (see listTables), so a scrape
+// never holds the listing of a whole schema. A visit can get several pages of one
+// schema, and gets none for a schema without accepted tables. request names how much
+// of each table's metadata the listing carries.
+//
+// A schema whose listing fails after some pages were visited is still an omission of
+// the whole schema: the caller keeps the rows it read and must not read the schema as
+// complete.
+func (w *unityCatalogWalk) forEachTablePage(
 	ctx context.Context,
 	request servicecatalog.ListTablesRequest,
 	visit func(schema servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error,
@@ -107,7 +114,28 @@ func (w *unityCatalogWalk) forEachSchema(
 		}
 		for _, schemaInfo := range schemas {
 			request.CatalogName, request.SchemaName = catalogInfo.Name, schemaInfo.Name
-			tables, err := w.e.listTables(ctx, request)
+			// visitErr is a failure of the visit, which fails the call, and never an
+			// omission of the schema.
+			var visitErr error
+			err := w.e.listTables(ctx, request, func(tables []servicecatalog.TableInfo) error {
+				w.markRead()
+				accepted := tables[:0:0]
+				for _, tableInfo := range tables {
+					if !w.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
+						log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
+						continue
+					}
+					accepted = append(accepted, tableInfo)
+				}
+				if len(accepted) == 0 {
+					return nil
+				}
+				visitErr = visit(schemaInfo, accepted)
+				return visitErr
+			})
+			if visitErr != nil {
+				return visitErr
+			}
 			if err != nil {
 				omission := scrapper.Omission{Database: catalogInfo.Name, Schema: schemaInfo.Name, Part: w.failedPart, Err: err}
 				if err := w.leaveOut(ctx, omission); err != nil {
@@ -115,18 +143,8 @@ func (w *unityCatalogWalk) forEachSchema(
 				}
 				continue
 			}
+			// The listing answered, an empty schema included.
 			w.markRead()
-			accepted := tables[:0:0]
-			for _, tableInfo := range tables {
-				if !w.scope.IsObjectAccepted(catalogInfo.Name, schemaInfo.Name, tableInfo.Name) {
-					log.Infof("table %s.%s.%s excluded by scope filter", catalogInfo.Name, schemaInfo.Name, tableInfo.Name)
-					continue
-				}
-				accepted = append(accepted, tableInfo)
-			}
-			if err := visit(schemaInfo, accepted); err != nil {
-				return err
-			}
 		}
 		return nil
 	})

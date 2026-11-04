@@ -19,10 +19,10 @@ func (e *DatabricksScrapper) QuerySqlDefinitions(ctx context.Context) ([]*scrapp
 	tablesFound := 0
 
 	walk := e.walkUnityCatalog(ctx, scrapper.OmittedDefinitions)
-	err := walk.forEachSchema(ctx, servicecatalog.ListTablesRequest{OmitColumns: true, OmitProperties: true},
+	err := walk.forEachTablePage(ctx, servicecatalog.ListTablesRequest{OmitColumns: true, OmitProperties: true},
 		func(schemaInfo servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error {
 			tablesFound += len(tables)
-			log.Infof("Found %d tables in catalog '%s' schema '%s', %d total", len(tables), schemaInfo.CatalogName, schemaInfo.Name, tablesFound)
+			log.Infof("Read %d tables of catalog '%s' schema '%s', %d total", len(tables), schemaInfo.CatalogName, schemaInfo.Name, tablesFound)
 
 			for _, tableInfo := range tables {
 				sqlDefs = append(sqlDefs, &scrapper.SqlDefinitionRow{

@@ -10,7 +10,7 @@ import (
 func (e *DatabricksScrapper) QueryTableConstraints(ctx context.Context) ([]*scrapper.TableConstraintRow, error) {
 	var results []*scrapper.TableConstraintRow
 	walk := e.walkUnityCatalog(ctx, scrapper.OmittedObjects)
-	err := walk.forEachSchema(ctx, servicecatalog.ListTablesRequest{},
+	err := walk.forEachTablePage(ctx, servicecatalog.ListTablesRequest{},
 		func(_ servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error {
 			for _, tableInfo := range tables {
 				// Extract primary key constraints
