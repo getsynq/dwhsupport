@@ -19,6 +19,11 @@ const (
 	// string as the region fragment appearing in the account's hostname
 	// (Snowflake CURRENT_REGION() returns AWS_US_EAST_2 for us-east-2.aws).
 	InstanceIdentityRegion = "region"
+	// InstanceIdentityNamespace is the UUID of the storage namespace the
+	// warehouse serves (Redshift current_namespace). It names one provisioned
+	// cluster or serverless namespace whichever endpoint the connection went
+	// through.
+	InstanceIdentityNamespace = "namespace"
 )
 
 // Host kinds used in InstanceHost.Kind.
