@@ -38,20 +38,59 @@ func (e *DatabricksScrapper) listSchemas(ctx context.Context, catalogName string
 	return schemas, err
 }
 
-// listTables returns every table the request selects. The caller owns the rest of
-// the request — which schema, and how much of each table's metadata it needs. A
-// schema dropped since it was listed has no tables rather than failing the scrape —
-// see vanished.
+// tablesWithColumnsPerPage is the page size of a table listing that carries the
+// columns. A page of maxResultsPerPage tables with all their columns can be hundreds of
+// MB, and the SDK holds the body two times while it decodes it, so the page size sets
+// the memory peak of a column catalog scrape. A listing with OmitColumns keeps
+// maxResultsPerPage.
+const tablesWithColumnsPerPage = 100
+
+// tablesPageSize is the page size of a table listing request.
+func tablesPageSize(request servicecatalog.ListTablesRequest) int {
+	if request.OmitColumns {
+		return maxResultsPerPage
+	}
+	return tablesWithColumnsPerPage
+}
+
+// listTables calls visit with the tables the request selects, at most one page of
+// tables at a time, so only one page is kept in memory. The caller owns the rest of
+// the request: which schema, and how much of each table's metadata it needs. A schema
+// dropped since it was listed ends the listing without an error, see vanished. The
+// tables visited before that stay visited.
 func (e *DatabricksScrapper) listTables(
 	ctx context.Context,
 	request servicecatalog.ListTablesRequest,
-) ([]servicecatalog.TableInfo, error) {
-	request.MaxResults = maxResultsPerPage
-	tables, err := e.client.Tables.ListAll(ctx, request)
-	if vanished(ctx, err, "schema", request.CatalogName+"."+request.SchemaName) {
-		return nil, nil
+	visit func(tables []servicecatalog.TableInfo) error,
+) error {
+	pageSize := tablesPageSize(request)
+	request.MaxResults = pageSize
+	iterator := e.client.Tables.List(ctx, request)
+	var page []servicecatalog.TableInfo
+	for iterator.HasNext(ctx) {
+		table, err := iterator.Next(ctx)
+		if vanished(ctx, err, "schema", request.CatalogName+"."+request.SchemaName) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if page == nil {
+			page = make([]servicecatalog.TableInfo, 0, pageSize)
+		}
+		page = append(page, table)
+		if len(page) == pageSize {
+			if err := visit(page); err != nil {
+				return err
+			}
+			// A new slice for the next page, as visit can keep this one.
+			page = nil
+		}
 	}
-	return tables, err
+	if len(page) > 0 {
+		return visit(page)
+	}
+	return nil
 }
 
 // vanished reports whether err says the object a listing named is gone, in which case

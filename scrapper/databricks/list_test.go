@@ -92,6 +92,70 @@ func TestQueriesPageUnityCatalogListings(t *testing.T) {
 	})
 }
 
+// TestTableListingsWithColumnsAskForSmallPages checks the page size of each table
+// listing. A page that carries columns can be hundreds of MB at 1000 tables, and the
+// SDK holds two copies of the body while it decodes it, so a listing with columns asks
+// for 100 tables a page. A listing without columns keeps maxResultsPerPage.
+// Every scrape must still follow the page tokens to the last table.
+func TestTableListingsWithColumnsAskForSmallPages(t *testing.T) {
+	const (
+		withColumnsPageSize = 100
+		tablesInSchema      = 2*withColumnsPageSize + 7
+	)
+	fake := newFakeWorkspace()
+	fake.addCatalog("catalog")
+	fake.addSchema("catalog", "schema")
+	for tbl := 0; tbl < tablesInSchema; tbl++ {
+		fake.addTable("catalog", "schema", fmt.Sprintf("table_%d", tbl))
+	}
+	scrapper := fake.start(t)
+	ctx := context.Background()
+
+	scrapes := []struct {
+		name        string
+		omitColumns bool
+		read        func() (int, error)
+	}{
+		{"QueryCatalog", false, func() (int, error) { rows, err := scrapper.QueryCatalog(ctx); return len(rows), err }},
+		{"QueryTableConstraints", false, func() (int, error) { rows, err := scrapper.QueryTableConstraints(ctx); return len(rows), err }},
+		{"QueryTables", true, func() (int, error) { rows, err := scrapper.QueryTables(ctx); return len(rows), err }},
+		{"QuerySqlDefinitions", true, func() (int, error) { rows, err := scrapper.QuerySqlDefinitions(ctx); return len(rows), err }},
+		{"QueryTableMetrics", true, func() (int, error) {
+			rows, err := scrapper.QueryTableMetrics(ctx, time.Now())
+			return len(rows), err
+		}},
+	}
+	for _, scrape := range scrapes {
+		t.Run(scrape.name, func(t *testing.T) {
+			fake.mu.Lock()
+			fake.tablePageSizes = map[bool][]int{}
+			fake.largestTablePage = 0
+			fake.mu.Unlock()
+
+			rows, err := scrape.read()
+			require.NoError(t, err)
+			// One row per table: the fake gives every table one column, which is also
+			// its partitioning column.
+			require.Equal(t, tablesInSchema, rows)
+
+			fake.mu.Lock()
+			defer fake.mu.Unlock()
+			require.Empty(t, fake.tablePageSizes[!scrape.omitColumns], "listing asked for columns it does not use, or left out columns it needs")
+			wantPageSize := maxResultsPerPage
+			if !scrape.omitColumns {
+				wantPageSize = withColumnsPageSize
+			}
+			pages := fake.tablePageSizes[scrape.omitColumns]
+			require.NotEmpty(t, pages)
+			for _, size := range pages {
+				require.Equal(t, wantPageSize, size)
+			}
+			require.Len(t, pages, (tablesInSchema+wantPageSize-1)/wantPageSize, "listing did not follow the page tokens to the end")
+			require.LessOrEqual(t, fake.largestTablePage, wantPageSize)
+		})
+	}
+}
+
 // fakeWorkspace serves the Unity Catalog listing endpoints the scrapes call.
 type fakeWorkspace struct {
 	catalogs []servicecatalog.CatalogInfo
@@ -131,6 +195,12 @@ type fakeWorkspace struct {
 	// what a scrape asked the API for rather than only what it returned.
 	listedCatalogs []string
 	listedSchemas  []string
+	// tablePageSizes records the max_results of every table listing request, keyed by
+	// whether the request left the columns out, so a test can tell how large a page each
+	// listing asked for.
+	tablePageSizes map[bool][]int
+	// largestTablePage is the most tables one table listing response carried.
+	largestTablePage int
 	// readTables records the full name of every per-table read served.
 	readTables []string
 	// queryHistory is what the Query History API answers with, in one page.
@@ -159,6 +229,7 @@ func newFakeWorkspace() *fakeWorkspace {
 		vanishedSchemas:  map[string]bool{},
 		deniedSchemas:    map[string]bool{},
 		deniedCatalogs:   map[string]bool{},
+		tablePageSizes:   map[bool][]int{},
 	}
 }
 
@@ -276,8 +347,12 @@ func (f *fakeWorkspace) tryStart(t *testing.T, conf *DatabricksScrapperConf) (*D
 				fmt.Sprintf("User does not have USE SCHEMA on Schema '%s'.", key))
 			return
 		}
+		f.recordTablePageSize(t, r)
 		tables := f.tables[r.URL.Query().Get("catalog_name")+"."+r.URL.Query().Get("schema_name")]
 		page, next := f.page(t, r, len(tables))
+		f.mu.Lock()
+		f.largestTablePage = max(f.largestTablePage, page.to-page.from)
+		f.mu.Unlock()
 		f.writeJson(t, w, http.StatusOK, "tables", tables[page.from:page.to], next)
 	})
 	// One table's own metadata, which is what a metrics scrape reads per table on top of
@@ -444,6 +519,17 @@ func (f *fakeWorkspace) record(into *[]string, key string) {
 	*into = append(*into, key)
 }
 
+// recordTablePageSize records the page size a table listing request asked for.
+func (f *fakeWorkspace) recordTablePageSize(t *testing.T, r *http.Request) {
+	t.Helper()
+	maxResults, err := strconv.Atoi(r.URL.Query().Get("max_results"))
+	require.NoError(t, err)
+	omitColumns := r.URL.Query().Get("omit_columns") == "true"
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tablePageSizes[omitColumns] = append(f.tablePageSizes[omitColumns], maxResults)
+}
+
 // requested reports whether any listing named key.
 func (f *fakeWorkspace) requested(log *[]string, key string) bool {
 	f.mu.Lock()
@@ -465,7 +551,15 @@ func (f *fakeWorkspace) page(t *testing.T, r *http.Request, total int) (pageRang
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.pageSize <= 0 {
+	// A page holds at most what the request asked for, as on the real API, and at most
+	// pageSize when the test set one.
+	size := f.pageSize
+	if maxResults, err := strconv.Atoi(r.URL.Query().Get("max_results")); err == nil && maxResults > 0 {
+		if size <= 0 || maxResults < size {
+			size = maxResults
+		}
+	}
+	if size <= 0 {
 		return pageRange{0, total}, ""
 	}
 	from := 0
@@ -476,7 +570,7 @@ func (f *fakeWorkspace) page(t *testing.T, r *http.Request, total int) (pageRang
 		}
 		from = parsed
 	}
-	to := min(from+f.pageSize, total)
+	to := min(from+size, total)
 	if to < total {
 		return pageRange{from, to}, strconv.Itoa(to)
 	}

@@ -42,7 +42,7 @@ func (e *DatabricksScrapper) QueryTableMetrics(ctx context.Context, lastMetricsF
 	g.SetLimit(16)
 
 	walk := e.walkUnityCatalog(ctx, scrapper.OmittedMetrics)
-	err := walk.forEachSchema(ctx, servicecatalog.ListTablesRequest{OmitColumns: true},
+	err := walk.forEachTablePage(ctx, servicecatalog.ListTablesRequest{OmitColumns: true},
 		func(_ servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error {
 			for _, tableInfo := range tables {
 				if err := groupCtx.Err(); err != nil {

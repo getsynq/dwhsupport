@@ -14,7 +14,9 @@ import (
 func (e *DatabricksScrapper) QueryTables(ctx context.Context, opts ...scrapper.QueryTablesOption) ([]*scrapper.TableRow, error) {
 	var res []*scrapper.TableRow
 	walk := e.walkUnityCatalog(ctx, scrapper.OmittedObjects)
-	err := walk.forEachSchema(ctx, servicecatalog.ListTablesRequest{},
+	// A table row needs neither the columns nor the properties, and a listing without
+	// columns reads maxResultsPerPage tables a page.
+	err := walk.forEachTablePage(ctx, servicecatalog.ListTablesRequest{OmitColumns: true, OmitProperties: true},
 		func(_ servicecatalog.SchemaInfo, tables []servicecatalog.TableInfo) error {
 			for _, tableInfo := range tables {
 				res = append(res, &scrapper.TableRow{
