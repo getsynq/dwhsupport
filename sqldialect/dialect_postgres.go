@@ -2,6 +2,7 @@ package sqldialect
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -114,8 +115,17 @@ func (d *PostgresDialect) ResolveFieldRef(name string) string {
 	return QuoteForFoldLower(name)
 }
 
+// StringLiteral is safe whatever the session's standard_conforming_strings is.
+// A plain literal reads a backslash as an escape when it is off, so a value
+// ending in one, or holding a backslash before a quote, would close the literal
+// early. A value with a backslash is therefore written as an E literal, which
+// reads the same in both modes, with the backslash and the quote each doubled.
+// A value without one stays a plain literal.
 func (d *PostgresDialect) StringLiteral(s string) string {
-	return StandardSQLStringLiteral(s)
+	if !strings.Contains(s, `\`) {
+		return StandardSQLStringLiteral(s)
+	}
+	return "E" + backslashStringLiteral(s, "''")
 }
 
 func (d *PostgresDialect) ToString(expr Expr) Expr {
