@@ -33,7 +33,7 @@ require (
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
-	github.com/lib/pq v1.10.9
+	github.com/lib/pq v1.12.3
 	github.com/microsoft/go-mssqldb v1.9.7
 	github.com/pkg/errors v0.9.1
 	github.com/samber/lo v1.53.0
