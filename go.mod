@@ -19,7 +19,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/athena v1.57.3
 	github.com/aws/aws-sdk-go-v2/service/glue v1.140.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.9
-	github.com/aws/smithy-go v1.25.1
+	github.com/aws/smithy-go v1.28.8
 	github.com/databricks/databricks-sdk-go v0.118.0
 	github.com/databricks/databricks-sql-go v1.7.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
