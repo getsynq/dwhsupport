@@ -27,6 +27,24 @@ type FabricQueryLogSchema struct {
 	Status        string     `db:"status"`
 	StatementType *string    `db:"statement_type"`
 	Command       *string    `db:"command"`
+
+	SessionID                  *int64   `db:"session_id"`
+	ConnectionID               *string  `db:"connection_id"`
+	BatchID                    *string  `db:"batch_id"`
+	RootBatchID                *string  `db:"root_batch_id"`
+	ProgramName                *string  `db:"program_name"`
+	QueryHash                  *string  `db:"query_hash"`
+	Label                      *string  `db:"label"`
+	SqlPoolName                *string  `db:"sql_pool_name"`
+	ErrorCode                  *int64   `db:"error_code"`
+	ResultCacheHit             *int64   `db:"result_cache_hit"`
+	IsDistributed              *int64   `db:"is_distributed"`
+	IsAccelerated              *int64   `db:"is_accelerated"`
+	IsUsingExternalAPI         *int64   `db:"is_using_external_api"`
+	AllocatedCpuTimeMs         *int64   `db:"allocated_cpu_time_ms"`
+	DataScannedRemoteStorageMB *float64 `db:"data_scanned_remote_storage_mb"`
+	DataScannedMemoryMB        *float64 `db:"data_scanned_memory_mb"`
+	DataScannedDiskMB          *float64 `db:"data_scanned_disk_mb"`
 }
 
 var _ querylogs.QueryLogsProvider = &FabricScrapper{}
@@ -76,7 +94,18 @@ const queryLogsSelect = `SELECT
     database_name,
     CAST(distributed_statement_id AS VARCHAR(64)) AS query_id,
     login_name, submit_time, start_time, end_time,
-    total_elapsed_time_ms, row_count, status, statement_type, command
+    total_elapsed_time_ms, row_count, status, statement_type, command,
+    session_id,
+    CAST(connection_id AS VARCHAR(64)) AS connection_id,
+    CAST(batch_id AS VARCHAR(64)) AS batch_id,
+    CAST(root_batch_id AS VARCHAR(64)) AS root_batch_id,
+    program_name, query_hash, label, sql_pool_name, error_code,
+    result_cache_hit, is_distributed, is_accelerated,
+    CAST(is_using_external_api AS INT) AS is_using_external_api,
+    allocated_cpu_time_ms,
+    CAST(data_scanned_remote_storage_mb AS FLOAT) AS data_scanned_remote_storage_mb,
+    CAST(data_scanned_memory_mb AS FLOAT) AS data_scanned_memory_mb,
+    CAST(data_scanned_disk_mb AS FLOAT) AS data_scanned_disk_mb
 FROM %[1]s.` + queryInsightsView + `
 WHERE submit_time >= %[2]s AND submit_time < %[3]s`
 
@@ -253,6 +282,25 @@ func convertFabricRowToQueryLog(
 		"total_elapsed_time_ms": querylogs.IntPtrValue(row.ElapsedMs),
 		"row_count":             querylogs.IntPtrValue(row.RowCount),
 		"statement_type":        querylogs.StringPtrValue(row.StatementType),
+		"status":                querylogs.StringValue(row.Status),
+
+		"session_id":                     querylogs.IntPtrValue(row.SessionID),
+		"connection_id":                  querylogs.TrimmedStringPtrValue(row.ConnectionID),
+		"batch_id":                       querylogs.TrimmedStringPtrValue(row.BatchID),
+		"root_batch_id":                  querylogs.TrimmedStringPtrValue(row.RootBatchID),
+		"program_name":                   querylogs.TrimmedStringPtrValue(row.ProgramName),
+		"query_hash":                     querylogs.TrimmedStringPtrValue(row.QueryHash),
+		"label":                          querylogs.TrimmedStringPtrValue(row.Label),
+		"sql_pool_name":                  querylogs.TrimmedStringPtrValue(row.SqlPoolName),
+		"error_code":                     querylogs.IntPtrValue(row.ErrorCode),
+		"result_cache_hit":               querylogs.IntPtrValue(row.ResultCacheHit),
+		"is_distributed":                 querylogs.IntPtrValue(row.IsDistributed),
+		"is_accelerated":                 querylogs.IntPtrValue(row.IsAccelerated),
+		"is_using_external_api":          querylogs.IntPtrValue(row.IsUsingExternalAPI),
+		"allocated_cpu_time_ms":          querylogs.IntPtrValue(row.AllocatedCpuTimeMs),
+		"data_scanned_remote_storage_mb": querylogs.FloatPtrValue(row.DataScannedRemoteStorageMB),
+		"data_scanned_memory_mb":         querylogs.FloatPtrValue(row.DataScannedMemoryMB),
+		"data_scanned_disk_mb":           querylogs.FloatPtrValue(row.DataScannedDiskMB),
 	}
 
 	return &querylogs.QueryLog{
