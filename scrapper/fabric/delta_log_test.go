@@ -364,6 +364,7 @@ func (w *fakeWorkspace) reader(t *testing.T) *deltaLogReader {
 		lake:        dwhexecfabric.NewOneLakeClientWith(fakeCredential{}, srv.URL+"/lake", srv.Client()),
 		items:       dwhexecfabric.NewAPIClientWith(fakeCredential{}, srv.URL+"/v1", srv.Client()),
 		now:         time.Now,
+		versions:    map[string]int64{},
 	}
 }
 
@@ -589,6 +590,7 @@ func TestLastChangeOfALongLogListsOnlyItsEnd(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, lo.ToPtr(t0.Add((commits-1)*time.Minute)), at)
 			requests, entries := w.listingCost()
+			t.Logf("first run: %d listing requests, %d entries", requests, entries)
 			// The whole log is 6000 entries in 60 pages.
 			require.LessOrEqual(t, requests, 30, "listing requests")
 			require.LessOrEqual(t, entries, 4*maxCommitsForLastChange, "listed entries")
@@ -599,10 +601,57 @@ func TestLastChangeOfALongLogListsOnlyItsEnd(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, lo.ToPtr(t0.Add(commits*time.Minute)), at)
 			again, againEntries := w.listingCost()
+			t.Logf("next run: %d listing requests, %d entries", again-requests, againEntries-entries)
 			require.LessOrEqual(t, again-requests, 6, "listing requests of the next run")
 			require.LessOrEqual(t, againEntries-entries, 4*maxCommitsForLastChange, "listed entries of the next run")
 		})
 	}
+}
+
+func TestLastChangeOfALogWithItsOldVersionsCleanedUp(t *testing.T) {
+	w := seedWorkspace(t)
+	dir := "Tables/sales/cleaned"
+	longLog(w, dir, 700, false)
+	for v := int64(0); v < 500; v++ {
+		delete(w.files, salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.json", v))
+		delete(w.files, salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.crc", v))
+	}
+	at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
+	require.NoError(t, err)
+	require.Equal(t, lo.ToPtr(t0.Add(699*time.Minute)), at)
+}
+
+func TestLastChangeOfATableCreatedAgain(t *testing.T) {
+	w := seedWorkspace(t)
+	dir := "Tables/sales/again"
+	longLog(w, dir, 300, true)
+	reader := w.reader(t)
+	_, err := reader.lastChange(context.Background(), salesItem, []string{dir})
+	require.NoError(t, err)
+
+	// The table is dropped and created with a new log of 3 commits.
+	for p := range w.files {
+		if strings.HasPrefix(p, salesItem+"/"+dir+"/") {
+			delete(w.files, p)
+		}
+	}
+	w.commit(salesItem, dir, 0, t0.Add(48*time.Hour), createCommit)
+	w.commit(salesItem, dir, 1, t0.Add(49*time.Hour), fmt.Sprintf(appendCommit, "a", 1))
+	w.commit(salesItem, dir, 2, t0.Add(50*time.Hour), compaction)
+
+	at, err := reader.lastChange(context.Background(), salesItem, []string{dir})
+	require.NoError(t, err)
+	require.Equal(t, lo.ToPtr(t0.Add(49*time.Hour)), at)
+}
+
+func TestLastChangeOfAnEmptyLog(t *testing.T) {
+	w := seedWorkspace(t)
+	dir := "Tables/sales/empty_log"
+	// Only a file that is no version.
+	w.files[salesItem+"/"+dir+"/_delta_log/_last_checkpoint"] = fakeFile{body: []byte(`{"version":40}`), written: t0}
+	at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
+	require.NoError(t, err)
+	require.Nil(t, at)
 }
 
 func historyWorkspace(t *testing.T) *fakeWorkspace {

@@ -102,10 +102,22 @@ type oneLakePathJSON struct {
 	ContentLength string `json:"contentLength"`
 }
 
+// ListOptions narrows a directory listing.
+type ListOptions struct {
+	// BeginFrom starts the listing at the first child whose name sorts at or
+	// after it. The children are in the byte order of their names.
+	BeginFrom string
+	// Limit ends the listing after this many children. Zero lists all of them.
+	Limit int
+}
+
+// maxListResults is the largest page that the DFS API gives.
+const maxListResults = 5000
+
 // ListDirectory lists the direct children of directory, a path inside the item
-// (for example "Tables/sales/orders/_delta_log"). It follows the continuation
-// of a listing that spans several pages.
-func (c *OneLakeClient) ListDirectory(ctx context.Context, workspaceID, itemID, directory string) ([]*OneLakePath, error) {
+// (for example "Tables/sales/orders/_delta_log"), in the order of their names.
+// It follows the continuation of a listing that spans several pages.
+func (c *OneLakeClient) ListDirectory(ctx context.Context, workspaceID, itemID, directory string, opts ListOptions) ([]*OneLakePath, error) {
 	var all []*OneLakePath
 	continuation := ""
 	for {
@@ -113,6 +125,13 @@ func (c *OneLakeClient) ListDirectory(ctx context.Context, workspaceID, itemID, 
 		q.Set("resource", "filesystem")
 		q.Set("recursive", "false")
 		q.Set("directory", itemID+"/"+strings.Trim(directory, "/"))
+		// The continuation holds the position, so only the first page needs beginFrom.
+		if opts.BeginFrom != "" && continuation == "" {
+			q.Set("beginFrom", opts.BeginFrom)
+		}
+		if opts.Limit > 0 {
+			q.Set("maxResults", strconv.Itoa(min(opts.Limit-len(all), maxListResults)))
+		}
 		if continuation != "" {
 			q.Set("continuation", continuation)
 		}
@@ -135,7 +154,9 @@ func (c *OneLakeClient) ListDirectory(ctx context.Context, workspaceID, itemID, 
 			all = append(all, path)
 		}
 		continuation = header.Get("x-ms-continuation")
-		if continuation == "" {
+		// A page can hold fewer children than asked for, even none, and still
+		// have a continuation.
+		if continuation == "" || (opts.Limit > 0 && len(all) >= opts.Limit) {
 			return all, nil
 		}
 	}

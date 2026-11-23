@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -51,7 +52,7 @@ var commitFileName = regexp.MustCompile(`^(\d{20})\.json$`)
 
 // oneLake is the part of dwhexecfabric.OneLakeClient the reader uses.
 type oneLake interface {
-	ListDirectory(ctx context.Context, workspaceID, itemID, directory string) ([]*dwhexecfabric.OneLakePath, error)
+	ListDirectory(ctx context.Context, workspaceID, itemID, directory string, opts dwhexecfabric.ListOptions) ([]*dwhexecfabric.OneLakePath, error)
 	ReadFile(ctx context.Context, workspaceID, itemID, path string) ([]byte, error)
 }
 
@@ -70,6 +71,11 @@ type deltaLogReader struct {
 	mu        sync.Mutex
 	itemsByDB map[string]string
 	itemsAt   time.Time
+
+	// versions maps "<item>/<log directory>" to the newest version of the log
+	// that the reader saw, where the next run starts to look for newer ones.
+	versionsMu sync.Mutex
+	versions   map[string]int64
 }
 
 func newDeltaLogReader(conf *FabricScrapperConf) (*deltaLogReader, error) {
@@ -85,7 +91,7 @@ func newDeltaLogReader(conf *FabricScrapperConf) (*deltaLogReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &deltaLogReader{workspaceID: identity.WorkspaceID, lake: lake, items: api, now: time.Now}, nil
+	return &deltaLogReader{workspaceID: identity.WorkspaceID, lake: lake, items: api, now: time.Now, versions: map[string]int64{}}, nil
 }
 
 // itemOf returns the GUID of the item that stores the tables of database. A
@@ -128,7 +134,7 @@ func storageItemsByName(items []*dwhexecfabric.WorkspaceItem) map[string]string 
 type tableLayout map[string]bool
 
 func (r *deltaLogReader) layoutOf(ctx context.Context, itemID string) (tableLayout, error) {
-	children, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, "Tables")
+	children, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, "Tables", dwhexecfabric.ListOptions{})
 	if err != nil {
 		if dwhexecfabric.IsOneLakeNotFound(err) {
 			return tableLayout{}, nil
@@ -166,33 +172,164 @@ type deltaCommitFile struct {
 	Written time.Time
 }
 
-// commitsOf lists the commit files of the table, newest first. errNoDeltaLog
-// means none of the directories holds a Delta log.
-func (r *deltaLogReader) commitsOf(ctx context.Context, itemID string, dirs []string) (string, []*deltaCommitFile, error) {
+// versionPrefix is the start of the name of each file of a version: its commit,
+// its CRC and its checkpoint.
+func versionPrefix(version int64) string { return fmt.Sprintf("%020d", version) }
+
+var versionFileName = regexp.MustCompile(`^(\d{20})\.`)
+
+// commitFiles keeps the commit files of a listing of a Delta log, newest first.
+func commitFiles(files []*dwhexecfabric.OneLakePath) []*deltaCommitFile {
+	var commits []*deltaCommitFile
+	for _, f := range files {
+		m := commitFileName.FindStringSubmatch(f.Name)
+		if f.IsDirectory || m == nil {
+			continue
+		}
+		version, err := strconv.ParseInt(m[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		commits = append(commits, &deltaCommitFile{Version: version, Name: f.Name, Written: f.LastModified})
+	}
+	sort.Slice(commits, func(i, j int) bool { return commits[i].Version > commits[j].Version })
+	return commits
+}
+
+// findLog calls list for each directory the table can be in, and returns the
+// first directory whose Delta log exists. errNoDeltaLog means no directory
+// holds one.
+func findLog(dirs []string, list func(logDir string) ([]*deltaCommitFile, error)) (string, []*deltaCommitFile, error) {
 	for _, dir := range dirs {
-		files, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, dir+"/_delta_log")
+		commits, err := list(dir + "/_delta_log")
 		if dwhexecfabric.IsOneLakeNotFound(err) {
 			continue
 		}
 		if err != nil {
 			return "", nil, err
 		}
-		var commits []*deltaCommitFile
-		for _, f := range files {
-			m := commitFileName.FindStringSubmatch(f.Name)
-			if f.IsDirectory || m == nil {
-				continue
-			}
-			version, err := strconv.ParseInt(m[1], 10, 64)
-			if err != nil {
-				continue
-			}
-			commits = append(commits, &deltaCommitFile{Version: version, Name: f.Name, Written: f.LastModified})
-		}
-		sort.Slice(commits, func(i, j int) bool { return commits[i].Version > commits[j].Version })
 		return dir, commits, nil
 	}
 	return "", nil, errNoDeltaLog
+}
+
+// commitsOf lists all commit files of the table, newest first.
+func (r *deltaLogReader) commitsOf(ctx context.Context, itemID string, dirs []string) (string, []*deltaCommitFile, error) {
+	return findLog(dirs, func(logDir string) ([]*deltaCommitFile, error) {
+		files, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, logDir, dwhexecfabric.ListOptions{})
+		return commitFiles(files), err
+	})
+}
+
+// recentCommitsOf lists the commit files of the newest maxCommitsForLastChange
+// versions of the table, newest first. A log keeps its commits for 30 days by
+// default, so a table that loads often has thousands of them. The listing of
+// all of them costs many pages on each run, so it lists only the end of the log.
+func (r *deltaLogReader) recentCommitsOf(ctx context.Context, itemID string, dirs []string) (string, []*deltaCommitFile, error) {
+	return findLog(dirs, func(logDir string) ([]*deltaCommitFile, error) {
+		key := itemID + "/" + logDir
+		latest, err := r.latestVersion(ctx, itemID, logDir, r.knownVersion(ctx, itemID, key, logDir))
+		if err != nil || latest < 0 {
+			return nil, err
+		}
+		begin := max(0, latest-maxCommitsForLastChange+1)
+		files, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, logDir, dwhexecfabric.ListOptions{BeginFrom: versionPrefix(begin)})
+		if err != nil {
+			return nil, err
+		}
+		commits := commitFiles(files)
+		if len(commits) > 0 {
+			r.versionsMu.Lock()
+			r.versions[key] = commits[0].Version
+			r.versionsMu.Unlock()
+		}
+		return commits, nil
+	})
+}
+
+// knownVersion is a version of the log that likely exists: the newest version
+// that the reader saw, else the version of the last checkpoint, else 0. A Spark
+// writer adds a checkpoint every 10 commits. The Warehouse writes none.
+func (r *deltaLogReader) knownVersion(ctx context.Context, itemID, key, logDir string) int64 {
+	r.versionsMu.Lock()
+	version, ok := r.versions[key]
+	r.versionsMu.Unlock()
+	if ok {
+		return version
+	}
+	body, err := r.lake.ReadFile(ctx, r.workspaceID, itemID, logDir+"/_last_checkpoint")
+	if err != nil {
+		// The probes of latestVersion report a refusal.
+		return 0
+	}
+	var checkpoint struct {
+		Version int64 `json:"version"`
+	}
+	if json.Unmarshal(body, &checkpoint) != nil || checkpoint.Version < 0 {
+		return 0
+	}
+	return checkpoint.Version
+}
+
+// firstVersionFrom returns the oldest version of the log at or after version,
+// or -1 if there is none. It is one listing request of one entry.
+func (r *deltaLogReader) firstVersionFrom(ctx context.Context, itemID, logDir string, version int64) (int64, error) {
+	files, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, logDir,
+		dwhexecfabric.ListOptions{BeginFrom: versionPrefix(version), Limit: 1})
+	if err != nil || len(files) == 0 {
+		return -1, err
+	}
+	// The names that sort after the versions are not versions: _last_checkpoint,
+	// the _commits directory.
+	m := versionFileName.FindStringSubmatch(files[0].Name)
+	if m == nil {
+		return -1, nil
+	}
+	return strconv.ParseInt(m[1], 10, 64)
+}
+
+// latestVersion returns the newest version of the log, or -1 for a log with no
+// version. It starts at hint, steps forward in doubling steps until no version
+// is found, then halves the range between. That is about 2*log2(n) requests for
+// n commits after hint. If no version is at or after hint, the table was
+// created again, and it starts at 0.
+func (r *deltaLogReader) latestVersion(ctx context.Context, itemID, logDir string, hint int64) (int64, error) {
+	low, err := r.firstVersionFrom(ctx, itemID, logDir, hint)
+	if err != nil {
+		return -1, err
+	}
+	if low < 0 {
+		if hint == 0 {
+			return -1, nil
+		}
+		return r.latestVersion(ctx, itemID, logDir, 0)
+	}
+	// low exists. No version is at or after high.
+	step := int64(1)
+	var high int64
+	for {
+		next, err := r.firstVersionFrom(ctx, itemID, logDir, low+step)
+		if err != nil {
+			return -1, err
+		}
+		if next < 0 {
+			high = low + step
+			break
+		}
+		low, step = next, step*2
+	}
+	for high-low > 1 {
+		next, err := r.firstVersionFrom(ctx, itemID, logDir, low+(high-low)/2)
+		if err != nil {
+			return -1, err
+		}
+		if next < 0 {
+			high = low + (high-low)/2
+		} else {
+			low = next
+		}
+	}
+	return low, nil
 }
 
 var errNoDeltaLog = errors.New("the table has no Delta log in OneLake")
@@ -211,7 +348,7 @@ func (r *deltaLogReader) readCommit(ctx context.Context, itemID, dir string, fil
 // nil if the newest maxCommitsForLastChange commits change no data and older
 // ones exist.
 func (r *deltaLogReader) lastChange(ctx context.Context, itemID string, dirs []string) (*time.Time, error) {
-	dir, commits, err := r.commitsOf(ctx, itemID, dirs)
+	dir, commits, err := r.recentCommitsOf(ctx, itemID, dirs)
 	if err != nil {
 		return nil, err
 	}
