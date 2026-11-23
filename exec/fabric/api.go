@@ -34,6 +34,8 @@ type APIClient struct {
 	cred    azcore.TokenCredential
 	baseURL string
 	http    *http.Client
+	// operationTimeout bounds the wait for one long running operation.
+	operationTimeout time.Duration
 }
 
 // NewAPIClient builds a Fabric REST API client from the same identity the SQL
@@ -54,7 +56,7 @@ func NewAPIClientWith(cred azcore.TokenCredential, baseURL string, httpClient *h
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 60 * time.Second}
 	}
-	return &APIClient{cred: cred, baseURL: baseURL, http: httpClient}
+	return &APIClient{cred: cred, baseURL: baseURL, http: httpClient, operationTimeout: maxOperationWait}
 }
 
 func (c *FabricConf) apiCredential() (azcore.TokenCredential, error) {
@@ -168,6 +170,10 @@ func (c *APIClient) ListWorkspaceRoleAssignments(ctx context.Context, workspaceI
 // the quota of one service principal.
 const maxThrottledRetries = 3
 
+// maxOperationWait is how long a long running operation may take before the call
+// fails. A definition that Fabric does not give in this time is no answer.
+const maxOperationWait = 5 * time.Minute
+
 // maxRetryAfter caps the wait that a 429 or a long running operation asks for, so
 // one answer cannot hold a catalog refresh for long.
 const maxRetryAfter = 60 * time.Second
@@ -211,19 +217,36 @@ type operationState struct {
 }
 
 // waitForOperation polls a long running operation until it succeeds or fails. A
-// succeeded operation has its answer at <Location>/result.
+// succeeded operation has its answer at <Location>/result. Each poll waits for the
+// Retry-After of the answer before it. The operation fails after
+// c.operationTimeout, and on a status that the client does not know.
 func (c *APIClient) waitForOperation(ctx context.Context, accepted *http.Response, out any) error {
+	ctx, cancel := context.WithTimeout(ctx, c.operationTimeout)
+	defer cancel()
 	location := accepted.Header.Get("Location")
 	wait := retryAfter(accepted)
 	for {
 		if err := sleep(ctx, wait); err != nil {
-			return err
+			return errors.Wrap(err, "waiting for a Fabric operation")
 		}
-		var state operationState
-		if err := c.do(ctx, http.MethodGet, location, &state); err != nil {
+		resp, body, err := c.send(ctx, http.MethodGet, location)
+		if err != nil {
 			return errors.Wrap(err, "polling a Fabric operation")
 		}
+		wait = retryAfter(resp)
+		if resp.StatusCode == http.StatusTooManyRequests {
+			continue
+		}
+		if resp.StatusCode != http.StatusOK {
+			return errors.Wrap(apiErrorOf(resp.StatusCode, body), "polling a Fabric operation")
+		}
+		var state operationState
+		if err := json.Unmarshal(body, &state); err != nil {
+			return errors.Wrap(err, "decoding a Fabric operation")
+		}
 		switch state.Status {
+		case "NotStarted", "Running":
+			continue
 		case "Succeeded":
 			return c.do(ctx, http.MethodGet, strings.TrimSuffix(location, "/")+"/result", out)
 		case "Failed":
@@ -233,6 +256,7 @@ func (c *APIClient) waitForOperation(ctx context.Context, accepted *http.Respons
 			}
 			return errors.WithStack(apiErr)
 		}
+		return errors.Errorf("the Fabric operation has the status %q, which the client does not know", state.Status)
 	}
 }
 

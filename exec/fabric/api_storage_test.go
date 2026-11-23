@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -219,6 +220,7 @@ func (s *APIStorageSuite) TestGetMirroringDefinitionWaitsForTheOperation() {
 			w.WriteHeader(http.StatusAccepted)
 		},
 		"/operations/op-1": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Retry-After", "0")
 			if polls.Add(1) == 1 {
 				_, _ = w.Write([]byte(`{"status":"Running"}`))
 				return
@@ -256,6 +258,71 @@ func (s *APIStorageSuite) TestGetMirroringDefinitionFailedOperation() {
 	s.Require().True(errors.As(err, &apiErr))
 	s.Equal("ItemDefinitionNotSupported", apiErr.ErrorCode)
 	s.False(IsPermissionError(err))
+}
+
+// operationServer answers getDefinition with a long running operation whose
+// polls answer poll in turn.
+func (s *APIStorageSuite) operationServer(poll http.HandlerFunc) *httptest.Server {
+	var srvURL string
+	srv, _ := s.server(map[string]http.HandlerFunc{
+		"/workspaces/ws-1/mirroredDatabases/md-1/getDefinition": func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Location", srvURL+"/operations/op-1")
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusAccepted)
+		},
+		"/operations/op-1":        poll,
+		"/operations/op-1/result": answer(s.fixture("mirror_definition_generic.json")),
+	})
+	srvURL = srv.URL
+	return srv
+}
+
+func (s *APIStorageSuite) TestUnknownOperationStatusFails() {
+	srv := s.operationServer(answer([]byte(`{"status":"Undefined"}`)))
+
+	_, err := NewAPIClientWith(&staticToken{}, srv.URL, nil).GetMirroringDefinition(context.Background(), "ws-1", "md-1")
+	s.Require().Error(err)
+	s.Contains(err.Error(), `"Undefined"`)
+}
+
+func (s *APIStorageSuite) TestOperationThatDoesNotEndTimesOut() {
+	var polls atomic.Int32
+	srv := s.operationServer(func(w http.ResponseWriter, _ *http.Request) {
+		polls.Add(1)
+		w.Header().Set("Retry-After", "0")
+		_, _ = w.Write([]byte(`{"status":"Running"}`))
+	})
+	client := NewAPIClientWith(&staticToken{}, srv.URL, nil)
+	client.operationTimeout = 200 * time.Millisecond
+
+	_, err := client.GetMirroringDefinition(context.Background(), "ws-1", "md-1")
+	s.Require().ErrorIs(err, context.DeadlineExceeded)
+	s.Greater(polls.Load(), int32(1), "the client polls until the timeout")
+}
+
+// A poll answer gives the wait before the next poll, and a throttled poll is
+// polled again.
+func (s *APIStorageSuite) TestOperationPollsFollowTheirRetryAfter() {
+	var polls atomic.Int32
+	srv := s.operationServer(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "0")
+		switch polls.Add(1) {
+		case 1:
+			w.WriteHeader(http.StatusTooManyRequests)
+		case 2:
+			_, _ = w.Write([]byte(`{"status":"NotStarted"}`))
+		default:
+			_, _ = w.Write([]byte(`{"status":"Succeeded"}`))
+		}
+	})
+	client := NewAPIClientWith(&staticToken{}, srv.URL, nil)
+	// A poll that waited the default second three times would take longer.
+	client.operationTimeout = 2 * time.Second
+
+	definition, err := client.GetMirroringDefinition(context.Background(), "ws-1", "md-1")
+	s.Require().NoError(err)
+	s.Equal("GenericMirror", definition.SourceType)
+	s.Equal(int32(3), polls.Load())
 }
 
 func (s *APIStorageSuite) TestGetMirroringDefinitionWithoutTheMirroringPart() {
