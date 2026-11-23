@@ -261,11 +261,16 @@ func IsUnavailableError(err error) bool {
 // IsPermissionError reports whether err indicates the connection's identity
 // lacks privileges. Fabric surfaces the same SQL Server permission messages as
 // MSSQL, so it delegates to the single source of truth. A Fabric REST API
-// refusal (APIError 401/403) is one too.
+// refusal (APIError 401/403) is one too, and so is a OneLake refusal
+// (OneLakeError 401/403).
 func IsPermissionError(err error) bool {
 	var apiErr *APIError
 	if errors.As(err, &apiErr) {
 		return apiErr.IsPermissionError()
+	}
+	var lakeErr *OneLakeError
+	if errors.As(err, &lakeErr) {
+		return lakeErr.IsPermissionError()
 	}
 	return dwhexecmssql.IsPermissionError(err)
 }

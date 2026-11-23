@@ -210,6 +210,86 @@ func (s *FabricScrapperSuite) TestQueryTableMetrics() {
 	s.True(foundCustomers, "Should find metrics for sales.customers")
 }
 
+// The Warehouse publishes the Delta log of each table to OneLake, so every
+// seeded table has a last change, no later than now.
+func (s *FabricScrapperSuite) TestQueryTableMetricsHasTheLastChange() {
+	metrics, err := s.scrapper.QueryTableMetrics(s.ctx, time.Time{})
+	s.Require().NoError(err)
+	var orders *scrapper.TableMetricsRow
+	for _, m := range metrics {
+		if m.Schema == "sales" && m.Table == "orders" {
+			orders = m
+		}
+	}
+	s.Require().NotNil(orders)
+	s.Require().NotNil(orders.UpdatedAt, "sales.orders should have a last change from its Delta log")
+	s.False(orders.UpdatedAt.After(time.Now()))
+	s.True(orders.UpdatedAt.After(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+}
+
+func (s *FabricScrapperSuite) TestFetchTableChangeHistory() {
+	fqn := scrapper.DwhFqn{DatabaseName: s.databaseName, SchemaName: "sales", ObjectName: "orders"}
+	events, err := s.scrapper.FetchTableChangeHistory(s.ctx, fqn, time.Time{}, time.Now(), 50)
+	s.Require().NoError(err)
+	s.Require().NotEmpty(events, "the seed loaded sales.orders")
+	for i, e := range events {
+		s.NotEmpty(e.Version)
+		s.Contains([]string{"INSERT", "DELETE", "OTHER"}, e.Operation, "the Warehouse records no operation")
+		if i > 0 {
+			s.False(e.Timestamp.After(events[i-1].Timestamp), "newest first")
+		}
+	}
+	metrics, err := s.scrapper.QueryTableMetrics(s.ctx, time.Time{})
+	s.Require().NoError(err)
+	for _, m := range metrics {
+		if m.Schema == "sales" && m.Table == "orders" {
+			s.Require().NotNil(m.UpdatedAt)
+			s.Equal(*m.UpdatedAt, events[0].Timestamp, "the last change is the newest event")
+		}
+	}
+}
+
+// TestFabricLakehouseLastChange reads a table of the seed Lakehouse, which has
+// no schemas, so its tables are at Tables/<table> and SQL shows them in dbo.
+// The seed pipeline writes wh_orders with a Copy activity.
+func TestFabricLakehouseLastChange(t *testing.T) {
+	if os.Getenv("CI") != "" || os.Getenv("FABRIC_HOST") == "" {
+		t.Skip("needs the Fabric seed workspace (FABRIC_* variables)")
+	}
+	ctx := context.Background()
+	lakehouse := testenv.EnvOrDefault("FABRIC_LAKEHOUSE", "COALESCE_QUALITY_LH")
+	sc, err := newFabricScrapper(ctx, &scope.ScopeFilter{Include: []scope.ScopeRule{{Database: lakehouse, Table: "wh_orders"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sc.Close()
+
+	metrics, err := sc.QueryTableMetrics(ctx, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(metrics) != 1 || metrics[0].Schema != "dbo" || metrics[0].UpdatedAt == nil {
+		t.Fatalf("want dbo.wh_orders with a last change, got %+v", metrics)
+	}
+
+	events, err := sc.FetchTableChangeHistory(
+		ctx,
+		scrapper.DwhFqn{DatabaseName: lakehouse, SchemaName: "dbo", ObjectName: "wh_orders"},
+		time.Time{},
+		time.Now(),
+		10,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) == 0 || !events[0].Timestamp.Equal(*metrics[0].UpdatedAt) {
+		t.Fatalf("want the newest event at the last change %s, got %+v", metrics[0].UpdatedAt, events)
+	}
+	if events[0].Operation != "INSERT" || events[0].RowsInserted == nil {
+		t.Fatalf("a Copy appends rows, got %+v", events[0])
+	}
+}
+
 func (s *FabricScrapperSuite) TestQuerySqlDefinitions() {
 	definitions, err := s.scrapper.QuerySqlDefinitions(s.ctx)
 	s.Require().NoError(err)
