@@ -689,6 +689,25 @@ func historyWorkspace(t *testing.T) *fakeWorkspace {
 	return w
 }
 
+func TestHistoryFiltersByTheCommitTime(t *testing.T) {
+	w := seedWorkspace(t)
+	dir := "Tables/sales/ict"
+	ict := func(at time.Time, file string) string {
+		return fmt.Sprintf(`{"commitInfo":{"inCommitTimestamp":%d,"operation":"WRITE"}}
+`, at.UnixMilli()) + fmt.Sprintf(appendCommit, file, 1)
+	}
+	committed := t0.Add(900 * time.Millisecond)
+	// The file is written after the commit time, and after the end of the window.
+	w.commit(salesItem, dir, 0, t0.Add(time.Second), ict(committed, "a"))
+	// The file is in the window, but the commit time is before it.
+	w.commit(salesItem, dir, 1, t0.Add(2*time.Second), ict(t0.Add(-time.Second), "b"))
+
+	commits, err := w.reader(t).history(context.Background(), salesItem, []string{dir}, t0, t0.Add(950*time.Millisecond), 10)
+	require.NoError(t, err)
+	require.Equal(t, []int64{0}, lo.Map(commits, func(c *deltaCommit, _ int) int64 { return c.Version }))
+	require.Equal(t, committed, commits[0].Time)
+}
+
 func TestFetchTableChangeHistory(t *testing.T) {
 	w := historyWorkspace(t)
 	sc := metricsScrapper(t, w)

@@ -332,8 +332,13 @@ func (r *deltaLogReader) lastChange(ctx context.Context, itemID string, dirs []s
 	return nil, nil
 }
 
-// history returns the commits that changed data and were written in [from, to],
-// newest first, at most limit of them.
+// commitTimeSlack is how far the time of a commit can be from the time its file
+// was written. An in-commit timestamp is set before the file is written.
+const commitTimeSlack = time.Minute
+
+// history returns the commits that changed data with a commit time in [from, to],
+// newest first, at most limit of them. The file times select the candidates,
+// with commitTimeSlack on each side, and the commit time decides.
 func (r *deltaLogReader) history(ctx context.Context, itemID string, dirs []string, from, to time.Time, limit int) ([]*deltaCommit, error) {
 	if limit <= 0 {
 		return nil, nil
@@ -344,7 +349,7 @@ func (r *deltaLogReader) history(ctx context.Context, itemID string, dirs []stri
 	}
 	var inRange []*deltaCommitFile
 	for _, c := range commits {
-		if !c.Written.Before(from) && !c.Written.After(to) {
+		if !c.Written.Before(from.Add(-commitTimeSlack)) && !c.Written.After(to.Add(commitTimeSlack)) {
 			inRange = append(inRange, c)
 		}
 	}
@@ -366,7 +371,7 @@ func (r *deltaLogReader) history(ctx context.Context, itemID string, dirs []stri
 			return nil, err
 		}
 		for _, c := range batch {
-			if c.DataChange && len(out) < limit {
+			if c.DataChange && !c.Time.Before(from) && !c.Time.After(to) && len(out) < limit {
 				out = append(out, c)
 			}
 		}
