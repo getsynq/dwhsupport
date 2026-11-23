@@ -1,0 +1,16 @@
+{
+  "definition": {
+    "parts": [
+      {
+        "path": "mirroring.json",
+        "payload": "ew0KICAicHJvcGVydGllcyI6IHsNCiAgICAic291cmNlIjogew0KICAgICAgInR5cGUiOiAiR2VuZXJpY01pcnJvciIsDQogICAgICAidHlwZVByb3BlcnRpZXMiOiB7fQ0KICAgIH0sDQogICAgInRhcmdldCI6IHsNCiAgICAgICJ0eXBlIjogIk1vdW50ZWRSZWxhdGlvbmFsRGF0YWJhc2UiLA0KICAgICAgInR5cGVQcm9wZXJ0aWVzIjogew0KICAgICAgICAiZm9ybWF0IjogIkRlbHRhIg0KICAgICAgfQ0KICAgIH0NCiAgfQ0KfQ==",
+        "payloadType": "InlineBase64"
+      },
+      {
+        "path": ".platform",
+        "payload": "ewogICIkc2NoZW1hIjogImh0dHBzOi8vZGV2ZWxvcGVyLm1pY3Jvc29mdC5jb20vanNvbi1zY2hlbWFzL2ZhYnJpYy9naXRJbnRlZ3JhdGlvbi9wbGF0Zm9ybVByb3BlcnRpZXMvMi4wLjAvc2NoZW1hLmpzb24iLAogICJtZXRhZGF0YSI6IHsKICAgICJ0eXBlIjogIk1pcnJvcmVkRGF0YWJhc2UiLAogICAgImRpc3BsYXlOYW1lIjogIkNPQUxFU0NFX1FVQUxJVFlfTUlSUk9SIgogIH0sCiAgImNvbmZpZyI6IHsKICAgICJ2ZXJzaW9uIjogIjIuMCIsCiAgICAibG9naWNhbElkIjogIjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCIKICB9Cn0=",
+        "payloadType": "InlineBase64"
+      }
+    ]
+  }
+}

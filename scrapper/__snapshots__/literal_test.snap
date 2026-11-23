@@ -59,7 +59,7 @@ numeric: 12345678901234.567890
 numeric: -42
 integer: 1180591620717411303424
 float: 12.5
-text: 'it''s a back\slash'
+text: E'it''s a back\\slash'
 uuid: CAST('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' AS UUID)
 
 ---

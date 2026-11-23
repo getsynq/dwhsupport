@@ -35,8 +35,8 @@ func IsUpper(s string) bool {
 
 // StandardSQLStringLiteral implements the standard SQL string literal escaping
 // where single quotes are escaped by doubling them (”).
-// This is used by most SQL dialects: Snowflake, BigQuery, Postgres, Redshift,
-// Databricks, DuckDB, Trino, and MySQL.
+// It leaves a backslash alone, so it is only safe where a backslash is no escape.
+// Postgres uses it only for a value without a backslash (see its StringLiteral).
 func StandardSQLStringLiteral(s string) string {
 	escaped := strings.ReplaceAll(s, "'", "''")
 	return fmt.Sprintf("'%s'", escaped)

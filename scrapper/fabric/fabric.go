@@ -41,6 +41,11 @@ type FabricScrapper struct {
 	conf        *FabricScrapperConf
 	executor    *dwhexecfabric.FabricExecutor
 	existingDbs lazy.Lazy[[]string]
+	apiClient   lazy.Lazy[*dwhexecfabric.APIClient]
+	// deltaLog reads the Delta logs of the tables in OneLake: the last change
+	// of a table and its change history. It fails for a connection that cannot
+	// reach OneLake (a pre-acquired SQL token, a host that names no workspace).
+	deltaLog lazy.Lazy[*deltaLogReader]
 }
 
 // listDatabasesSql lists the workspace databases visible to the connection. The
@@ -75,7 +80,25 @@ func newFabricScrapperWithExecutor(ctx context.Context, conf *FabricScrapperConf
 		}
 		return names, nil
 	})
+	e.apiClient = lazy.New(func() (*dwhexecfabric.APIClient, error) {
+		return dwhexecfabric.NewAPIClient(&conf.FabricConf)
+	})
+	e.deltaLog = lazy.New(func() (*deltaLogReader, error) {
+		api, err := e.GetApiClient()
+		if err != nil {
+			return nil, err
+		}
+		return newDeltaLogReader(conf, api)
+	})
 	return e
+}
+
+// GetApiClient returns the Fabric REST API client of the connection, built once
+// with the same identity as the SQL connection. It returns
+// dwhexecfabric.ErrNoAPICredential when the configuration holds only a
+// pre-acquired SQL token.
+func (e *FabricScrapper) GetApiClient() (*dwhexecfabric.APIClient, error) {
+	return e.apiClient.Get()
 }
 
 type dbNameRow struct {

@@ -131,7 +131,7 @@ func isAPIUnavailable(err error) bool {
 }
 
 func (e *FabricScrapper) listRoleAssignments(ctx context.Context, workspaceID string) ([]*dwhexecfabric.WorkspaceRoleAssignment, error) {
-	client, err := dwhexecfabric.NewAPIClient(&e.conf.FabricConf)
+	client, err := e.GetApiClient()
 	if err != nil {
 		return nil, &apiUnavailableError{err: err}
 	}

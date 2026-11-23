@@ -10,11 +10,12 @@
 -- A login name has the server's collation and a user name the database's,
 -- which differ whenever the database was created with its own. UNION ALL
 -- refuses to put two collations in one column, so every name takes the
--- database's.
+-- database's. So does type_desc: a Synapse serverless pool gives it one
+-- collation in sys.server_principals and another in sys.database_principals.
 SELECT
     sp.name COLLATE DATABASE_DEFAULT                                         AS login,
     CONVERT(varchar(200), sp.sid, 1)                                         AS platform_id,
-    sp.type_desc                                                             AS type,
+    sp.type_desc COLLATE DATABASE_DEFAULT                                    AS type,
     sp.is_disabled                                                           AS disabled,
     DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), sp.create_date) AS created_at
 FROM sys.server_principals sp
@@ -24,7 +25,7 @@ UNION ALL
 SELECT
     dp.name COLLATE DATABASE_DEFAULT,
     CONVERT(varchar(200), dp.sid, 1),
-    dp.type_desc,
+    dp.type_desc COLLATE DATABASE_DEFAULT,
     NULL,
     DATEADD(MINUTE, DATEDIFF(MINUTE, GETDATE(), GETUTCDATE()), dp.create_date)
 FROM sys.database_principals dp

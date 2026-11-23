@@ -210,6 +210,9 @@ func (s *BaseSuite) TestStringLiteral() {
 		// bigquery is the expected literal on BigQuery, which also escapes a
 		// newline; empty means the same as quoteEscaped.
 		bigquery string
+		// postgres is the expected literal on Postgres, which writes a value
+		// holding a backslash as an E literal; empty means the same as expected.
+		postgres string
 	}{
 		{
 			name:     "simple string",
@@ -249,6 +252,15 @@ func (s *BaseSuite) TestStringLiteral() {
 			input:    `path\to\file`,
 			expected: `'path\to\file'`,
 			escaped:  `'path\\to\\file'`,
+			postgres: `E'path\\to\\file'`,
+		},
+		{
+			name:         "string with backslash and quote",
+			input:        `\'); DROP TABLE t; --`,
+			expected:     `'\''); DROP TABLE t; --'`,
+			escaped:      `'\\''); DROP TABLE t; --'`,
+			quoteEscaped: `'\\\'); DROP TABLE t; --'`,
+			postgres:     `E'\\''); DROP TABLE t; --'`,
 		},
 		{
 			name:     "string with newline",
@@ -274,6 +286,8 @@ func (s *BaseSuite) TestStringLiteral() {
 					switch {
 					case dialect.Name == "bigquery" && tc.bigquery != "":
 						expected = tc.bigquery
+					case dialect.Name == "postgres" && tc.postgres != "":
+						expected = tc.postgres
 					case backslashQuote[dialect.Name]:
 						expected = quoteEscaped
 					case backslashDoubled[dialect.Name]:
