@@ -1,18 +1,18 @@
 {
   "value": [
     {
-      "id": "8867ec2b-64bb-4d3d-bc08-57a147aa3350",
+      "id": "aaaa0001-0000-4000-8000-000000000001",
       "type": "Lakehouse",
       "displayName": "COALESCE_QUALITY_LH",
       "description": "",
-      "workspaceId": "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
+      "workspaceId": "11111111-2222-4333-8444-555555555555",
       "logicalId": null,
       "properties": {
-        "oneLakeTablesPath": "https://onelake.dfs.fabric.microsoft.com/43531ef0-2f75-4b08-9e6d-e157dbc6c6fa/8867ec2b-64bb-4d3d-bc08-57a147aa3350/Tables",
-        "oneLakeFilesPath": "https://onelake.dfs.fabric.microsoft.com/43531ef0-2f75-4b08-9e6d-e157dbc6c6fa/8867ec2b-64bb-4d3d-bc08-57a147aa3350/Files",
+        "oneLakeTablesPath": "https://onelake.dfs.fabric.microsoft.com/11111111-2222-4333-8444-555555555555/aaaa0001-0000-4000-8000-000000000001/Tables",
+        "oneLakeFilesPath": "https://onelake.dfs.fabric.microsoft.com/11111111-2222-4333-8444-555555555555/aaaa0001-0000-4000-8000-000000000001/Files",
         "sqlEndpointProperties": {
-          "connectionString": "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com",
-          "id": "cb9726b9-0359-4c38-aa12-3070089db623",
+          "connectionString": "aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.datawarehouse.fabric.microsoft.com",
+          "id": "aaaa0001-0000-4000-8000-0000000000e1",
           "provisioningStatus": "Success"
         }
       }

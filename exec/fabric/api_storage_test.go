@@ -73,24 +73,24 @@ func (s *APIStorageSuite) TestListStorageItemsReadsEachTypeFromItsListing() {
 		"GET /workspaces/ws-1/sqlDatabases",
 	}, *requests)
 
-	host := "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com"
-	workspace := "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa"
+	host := "aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.datawarehouse.fabric.microsoft.com"
+	workspace := "11111111-2222-4333-8444-555555555555"
 	s.Equal([]*StorageItem{
 		{
-			ID: "8867ec2b-64bb-4d3d-bc08-57a147aa3350", WorkspaceID: workspace, Type: ItemTypeLakehouse, DisplayName: "COALESCE_QUALITY_LH",
-			SQLEndpointHost: host, SQLEndpointID: "cb9726b9-0359-4c38-aa12-3070089db623", SQLEndpointStatus: "Success",
+			ID: "aaaa0001-0000-4000-8000-000000000001", WorkspaceID: workspace, Type: ItemTypeLakehouse, DisplayName: "COALESCE_QUALITY_LH",
+			SQLEndpointHost: host, SQLEndpointID: "aaaa0001-0000-4000-8000-0000000000e1", SQLEndpointStatus: "Success",
 		},
 		{
-			ID: "404f2e37-9d18-4590-bbf6-56ff987b3e05", WorkspaceID: workspace, Type: ItemTypeWarehouse, DisplayName: "COALESCE_QUALITY_DWHTESTING",
+			ID: "aaaa0002-0000-4000-8000-000000000002", WorkspaceID: workspace, Type: ItemTypeWarehouse, DisplayName: "COALESCE_QUALITY_DWHTESTING",
 			SQLEndpointHost: host,
 		},
 		{
-			ID: "998219a9-daf9-4ddd-afee-c0ce45804d33", WorkspaceID: workspace, Type: ItemTypeMirroredDatabase, DisplayName: "COALESCE_QUALITY_MIRROR",
-			SQLEndpointHost: host, SQLEndpointID: "06ae26f7-19e7-42aa-be95-0e856be61f90", SQLEndpointStatus: "Success",
+			ID: "aaaa0003-0000-4000-8000-000000000003", WorkspaceID: workspace, Type: ItemTypeMirroredDatabase, DisplayName: "COALESCE_QUALITY_MIRROR",
+			SQLEndpointHost: host, SQLEndpointID: "aaaa0003-0000-4000-8000-0000000000e3", SQLEndpointStatus: "Success",
 		},
 		{
 			// The listing of a SQL database gives no SQL analytics endpoint.
-			ID: "1bea3694-2705-471b-90bb-007e81797312", WorkspaceID: workspace, Type: ItemTypeSQLDatabase, DisplayName: "COALESCE_QUALITY_SQLDB",
+			ID: "aaaa0004-0000-4000-8000-000000000004", WorkspaceID: workspace, Type: ItemTypeSQLDatabase, DisplayName: "COALESCE_QUALITY_SQLDB",
 		},
 	}, items)
 }
@@ -166,8 +166,8 @@ func (s *APIStorageSuite) TestListShortcutsTrimsThePaths() {
 		{
 			Name: "wh_sales_orders", Path: "Tables", TargetType: "OneLake",
 			OneLake: &OneLakeTarget{
-				WorkspaceID: "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
-				ItemID:      "404f2e37-9d18-4590-bbf6-56ff987b3e05",
+				WorkspaceID: "11111111-2222-4333-8444-555555555555",
+				ItemID:      "aaaa0002-0000-4000-8000-000000000002",
 				Path:        "Tables/sales/orders",
 			},
 		},

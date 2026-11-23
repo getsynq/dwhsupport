@@ -6,8 +6,8 @@
       "target": {
         "type": "OneLake",
         "oneLake": {
-          "workspaceId": "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
-          "itemId": "404f2e37-9d18-4590-bbf6-56ff987b3e05",
+          "workspaceId": "11111111-2222-4333-8444-555555555555",
+          "itemId": "aaaa0002-0000-4000-8000-000000000002",
           "path": "Tables/sales/orders"
         }
       }

@@ -1,17 +1,17 @@
 {
   "value": [
     {
-      "id": "998219a9-daf9-4ddd-afee-c0ce45804d33",
+      "id": "aaaa0003-0000-4000-8000-000000000003",
       "type": "MirroredDatabase",
       "displayName": "COALESCE_QUALITY_MIRROR",
       "description": "",
-      "workspaceId": "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
+      "workspaceId": "11111111-2222-4333-8444-555555555555",
       "logicalId": null,
       "properties": {
-        "oneLakeTablesPath": "https://onelake.dfs.fabric.microsoft.com/43531ef0-2f75-4b08-9e6d-e157dbc6c6fa/998219a9-daf9-4ddd-afee-c0ce45804d33/Tables",
+        "oneLakeTablesPath": "https://onelake.dfs.fabric.microsoft.com/11111111-2222-4333-8444-555555555555/aaaa0003-0000-4000-8000-000000000003/Tables",
         "sqlEndpointProperties": {
-          "connectionString": "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com",
-          "id": "06ae26f7-19e7-42aa-be95-0e856be61f90",
+          "connectionString": "aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.datawarehouse.fabric.microsoft.com",
+          "id": "aaaa0003-0000-4000-8000-0000000000e3",
           "provisioningStatus": "Success"
         }
       }

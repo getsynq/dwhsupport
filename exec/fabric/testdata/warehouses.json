@@ -1,15 +1,15 @@
 {
   "value": [
     {
-      "id": "404f2e37-9d18-4590-bbf6-56ff987b3e05",
+      "id": "aaaa0002-0000-4000-8000-000000000002",
       "type": "Warehouse",
       "displayName": "COALESCE_QUALITY_DWHTESTING",
       "description": "",
-      "workspaceId": "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
+      "workspaceId": "11111111-2222-4333-8444-555555555555",
       "logicalId": null,
       "properties": {
-        "connectionInfo": "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com",
-        "connectionString": "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com",
+        "connectionInfo": "aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.datawarehouse.fabric.microsoft.com",
+        "connectionString": "aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.datawarehouse.fabric.microsoft.com",
         "createdDate": "2026-06-23T11:45:24.1880279",
         "lastUpdatedTime": "2026-07-15T15:14:42.0620272",
         "collationType": "Latin1_General_100_BIN2_UTF8",
