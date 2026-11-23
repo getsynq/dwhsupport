@@ -1,0 +1,44 @@
+{
+  "properties": {
+    "source": {
+      "type": "Snowflake",
+      "typeProperties": {
+        "connection": "6b2b3e1c-6f0a-4c39-9d5d-2a7c1b0e9f11",
+        "database": "DWH_TESTING"
+      }
+    },
+    "target": {
+      "type": "MountedRelationalDatabase",
+      "typeProperties": {
+        "defaultSchema": "dbo",
+        "format": "Delta"
+      }
+    },
+    "mountedTables": [
+      {
+        "source": {
+          "typeProperties": {
+            "schemaName": "SCHEMA_B",
+            "tableName": "CUSTOMERS"
+          }
+        }
+      },
+      {
+        "source": {
+          "typeProperties": {
+            "schemaName": "SCHEMA_B",
+            "tableName": ""
+          }
+        }
+      },
+      {
+        "source": {
+          "typeProperties": {
+            "schemaName": "PUBLIC",
+            "tableName": "ORDERS"
+          }
+        }
+      }
+    ]
+  }
+}

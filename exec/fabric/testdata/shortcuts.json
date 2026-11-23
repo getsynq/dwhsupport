@@ -1,0 +1,16 @@
+{
+  "value": [
+    {
+      "name": "wh_sales_orders",
+      "path": "/Tables",
+      "target": {
+        "type": "OneLake",
+        "oneLake": {
+          "workspaceId": "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
+          "itemId": "404f2e37-9d18-4590-bbf6-56ff987b3e05",
+          "path": "Tables/sales/orders"
+        }
+      }
+    }
+  ]
+}

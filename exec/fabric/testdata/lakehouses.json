@@ -1,0 +1,21 @@
+{
+  "value": [
+    {
+      "id": "8867ec2b-64bb-4d3d-bc08-57a147aa3350",
+      "type": "Lakehouse",
+      "displayName": "COALESCE_QUALITY_LH",
+      "description": "",
+      "workspaceId": "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
+      "logicalId": null,
+      "properties": {
+        "oneLakeTablesPath": "https://onelake.dfs.fabric.microsoft.com/43531ef0-2f75-4b08-9e6d-e157dbc6c6fa/8867ec2b-64bb-4d3d-bc08-57a147aa3350/Tables",
+        "oneLakeFilesPath": "https://onelake.dfs.fabric.microsoft.com/43531ef0-2f75-4b08-9e6d-e157dbc6c6fa/8867ec2b-64bb-4d3d-bc08-57a147aa3350/Files",
+        "sqlEndpointProperties": {
+          "connectionString": "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com",
+          "id": "cb9726b9-0359-4c38-aa12-3070089db623",
+          "provisioningStatus": "Success"
+        }
+      }
+    }
+  ]
+}

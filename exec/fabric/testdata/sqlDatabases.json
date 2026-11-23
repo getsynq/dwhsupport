@@ -1,0 +1,18 @@
+{
+  "value": [
+    {
+      "id": "1bea3694-2705-471b-90bb-007e81797312",
+      "type": "SQLDatabase",
+      "displayName": "COALESCE_QUALITY_SQLDB",
+      "description": "",
+      "workspaceId": "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
+      "logicalId": null,
+      "properties": {
+        "connectionInfo": "Data Source=lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.database.fabric.microsoft.com,1433;Initial Catalog=COALESCE_QUALITY_SQLDB-1bea3694-2705-471b-90bb-007e81797312;Multiple Active Result Sets=False;Connect Timeout=30;Encrypt=True;Trust Server Certificate=False",
+        "connectionString": "Data Source=lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.database.fabric.microsoft.com,1433;Initial Catalog=COALESCE_QUALITY_SQLDB-1bea3694-2705-471b-90bb-007e81797312;Multiple Active Result Sets=False;Connect Timeout=30;Encrypt=True;Trust Server Certificate=False",
+        "databaseName": "COALESCE_QUALITY_SQLDB-1bea3694-2705-471b-90bb-007e81797312",
+        "serverFqdn": "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.database.fabric.microsoft.com,1433"
+      }
+    }
+  ]
+}

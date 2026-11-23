@@ -41,6 +41,7 @@ type FabricScrapper struct {
 	conf        *FabricScrapperConf
 	executor    *dwhexecfabric.FabricExecutor
 	existingDbs lazy.Lazy[[]string]
+	apiClient   lazy.Lazy[*dwhexecfabric.APIClient]
 }
 
 // listDatabasesSql lists the workspace databases visible to the connection. The
@@ -75,7 +76,18 @@ func newFabricScrapperWithExecutor(ctx context.Context, conf *FabricScrapperConf
 		}
 		return names, nil
 	})
+	e.apiClient = lazy.New(func() (*dwhexecfabric.APIClient, error) {
+		return dwhexecfabric.NewAPIClient(&conf.FabricConf)
+	})
 	return e
+}
+
+// GetApiClient returns the Fabric REST API client of the connection, built once
+// with the same identity as the SQL connection. It returns
+// dwhexecfabric.ErrNoAPICredential when the configuration holds only a
+// pre-acquired SQL token.
+func (e *FabricScrapper) GetApiClient() (*dwhexecfabric.APIClient, error) {
+	return e.apiClient.Get()
 }
 
 type dbNameRow struct {

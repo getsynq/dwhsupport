@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -161,36 +163,137 @@ func (c *APIClient) ListWorkspaceRoleAssignments(ctx context.Context, workspaceI
 	}
 }
 
+// maxThrottledRetries is how many times one request waits out a 429 before it
+// fails. Fabric throttles each principal, and the kernels that read the API share
+// the quota of one service principal.
+const maxThrottledRetries = 3
+
+// maxRetryAfter caps the wait that a 429 or a long running operation asks for, so
+// one answer cannot hold a catalog refresh for long.
+const maxRetryAfter = 60 * time.Second
+
 func (c *APIClient) get(ctx context.Context, u string, out any) error {
+	return c.do(ctx, http.MethodGet, u, out)
+}
+
+// do sends one request and decodes a 200 answer into out. A 429 is retried after
+// its Retry-After, up to maxThrottledRetries times. A 202 is a long running
+// operation (getDefinition): do polls its Location until the operation ends, then
+// decodes its result into out.
+func (c *APIClient) do(ctx context.Context, method, u string, out any) error {
+	for attempt := 0; ; attempt++ {
+		resp, body, err := c.send(ctx, method, u)
+		if err != nil {
+			return err
+		}
+		switch {
+		case resp.StatusCode == http.StatusTooManyRequests && attempt < maxThrottledRetries:
+			if err := sleep(ctx, retryAfter(resp)); err != nil {
+				return err
+			}
+			continue
+		case resp.StatusCode == http.StatusAccepted && resp.Header.Get("Location") != "":
+			return c.waitForOperation(ctx, resp, out)
+		case resp.StatusCode == http.StatusOK:
+			return errors.Wrapf(json.Unmarshal(body, out), "decoding %s %s", method, u)
+		}
+		return apiErrorOf(resp.StatusCode, body)
+	}
+}
+
+// operationState is the body of a long running operation.
+type operationState struct {
+	Status string `json:"status"`
+	Error  *struct {
+		ErrorCode string `json:"errorCode"`
+		Message   string `json:"message"`
+	} `json:"error"`
+}
+
+// waitForOperation polls a long running operation until it succeeds or fails. A
+// succeeded operation has its answer at <Location>/result.
+func (c *APIClient) waitForOperation(ctx context.Context, accepted *http.Response, out any) error {
+	location := accepted.Header.Get("Location")
+	wait := retryAfter(accepted)
+	for {
+		if err := sleep(ctx, wait); err != nil {
+			return err
+		}
+		var state operationState
+		if err := c.do(ctx, http.MethodGet, location, &state); err != nil {
+			return errors.Wrap(err, "polling a Fabric operation")
+		}
+		switch state.Status {
+		case "Succeeded":
+			return c.do(ctx, http.MethodGet, strings.TrimSuffix(location, "/")+"/result", out)
+		case "Failed":
+			apiErr := &APIError{StatusCode: http.StatusOK, Message: "the operation failed"}
+			if state.Error != nil {
+				apiErr.ErrorCode, apiErr.Message = state.Error.ErrorCode, state.Error.Message
+			}
+			return errors.WithStack(apiErr)
+		}
+	}
+}
+
+func (c *APIClient) send(ctx context.Context, method, u string) (*http.Response, []byte, error) {
 	token, err := c.cred.GetToken(ctx, policy.TokenRequestOptions{Scopes: []string{fabricAPIScope}})
 	if err != nil {
-		return errors.Wrap(err, "failed to get a Fabric API token")
+		return nil, nil, errors.Wrap(err, "failed to get a Fabric API token")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, method, u, nil)
 	if err != nil {
-		return errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token.Token)
 	req.Header.Set("Accept", "application/json")
+	if method != http.MethodGet {
+		// Fabric answers 411 to a POST with no length.
+		req.ContentLength = 0
+		req.Header.Set("Content-Length", "0")
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return errors.Wrapf(err, "GET %s", u)
+		return nil, nil, errors.Wrapf(err, "%s %s", method, u)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return errors.Wrapf(err, "reading GET %s", u)
+		return nil, nil, errors.Wrapf(err, "reading %s %s", method, u)
 	}
-	if resp.StatusCode != http.StatusOK {
-		apiErr := &APIError{StatusCode: resp.StatusCode}
-		var payload struct {
-			ErrorCode string `json:"errorCode"`
-			Message   string `json:"message"`
-		}
-		if json.Unmarshal(body, &payload) == nil {
-			apiErr.ErrorCode, apiErr.Message = payload.ErrorCode, payload.Message
-		}
-		return errors.WithStack(apiErr)
+	return resp, body, nil
+}
+
+// apiErrorOf builds the error of an answer that is not a success.
+func apiErrorOf(statusCode int, body []byte) error {
+	apiErr := &APIError{StatusCode: statusCode}
+	var payload struct {
+		ErrorCode string `json:"errorCode"`
+		Message   string `json:"message"`
 	}
-	return errors.Wrapf(json.Unmarshal(body, out), "decoding GET %s", u)
+	if json.Unmarshal(body, &payload) == nil {
+		apiErr.ErrorCode, apiErr.Message = payload.ErrorCode, payload.Message
+	}
+	return errors.WithStack(apiErr)
+}
+
+// retryAfter is the wait that an answer asks for in seconds, one second if it asks
+// for none or for a value that is no number, and at most maxRetryAfter.
+func retryAfter(resp *http.Response) time.Duration {
+	seconds, err := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After")))
+	if err != nil || seconds < 0 {
+		return time.Second
+	}
+	return min(time.Duration(seconds)*time.Second, maxRetryAfter)
+}
+
+func sleep(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
