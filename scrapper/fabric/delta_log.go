@@ -25,11 +25,6 @@ import (
 // Delta protocol makes the time the file was written the time of the commit,
 // unless the commit carries an in-commit timestamp.
 
-// itemsTTL is how long a listing of the storage items names the item of each
-// database. A database created after the listing has no last change until the
-// next listing.
-const itemsTTL = 15 * time.Minute
-
 // maxCommitsForLastChange bounds how many commits, newest first, are read to
 // find the last one that changed data. Commits that change no data (a
 // compaction, a change of the table properties) do not move the last change.
@@ -56,16 +51,11 @@ type deltaLogReader struct {
 	workspaceID string
 	lake        oneLake
 	items       storageItems
-	now         func() time.Time
 
+	// itemsByDB is the storage items listing, read one time for each scrapper.
+	// A scrapper serves one run, so a new database is in the next run.
 	mu        sync.Mutex
 	itemsByDB map[string]*dwhexecfabric.StorageItem
-	itemsAt   time.Time
-
-	// versions maps "<item>/<log directory>" to the newest version of the log
-	// that the reader saw, where the next run starts to look for newer ones.
-	versionsMu sync.Mutex
-	versions   map[string]int64
 }
 
 // newDeltaLogReader builds the reader with the REST client of the scrapper, so
@@ -79,7 +69,7 @@ func newDeltaLogReader(conf *FabricScrapperConf, api storageItems) (*deltaLogRea
 	if err != nil {
 		return nil, err
 	}
-	return &deltaLogReader{workspaceID: identity.WorkspaceID, lake: lake, items: api, now: time.Now, versions: map[string]int64{}}, nil
+	return &deltaLogReader{workspaceID: identity.WorkspaceID, lake: lake, items: api}, nil
 }
 
 // itemOf returns the storage item that holds the tables of database. A
@@ -89,12 +79,12 @@ func newDeltaLogReader(conf *FabricScrapperConf, api storageItems) (*deltaLogRea
 func (r *deltaLogReader) itemOf(ctx context.Context, database string) (*dwhexecfabric.StorageItem, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.itemsAt.IsZero() || r.now().Sub(r.itemsAt) > itemsTTL {
+	if r.itemsByDB == nil {
 		items, err := r.items.ListStorageItems(ctx, r.workspaceID)
 		if err != nil {
 			return nil, false, err
 		}
-		r.itemsByDB, r.itemsAt = storageItemsByName(items), r.now()
+		r.itemsByDB = storageItemsByName(items)
 	}
 	item := r.itemsByDB[database]
 	return item, item != nil, nil
@@ -191,8 +181,7 @@ func (r *deltaLogReader) commitsOf(ctx context.Context, itemID string, dirs []st
 // all of them costs many pages on each run, so it lists only the end of the log.
 func (r *deltaLogReader) recentCommitsOf(ctx context.Context, itemID string, dirs []string) (string, []*deltaCommitFile, error) {
 	return findLog(dirs, func(logDir string) ([]*deltaCommitFile, error) {
-		key := itemID + "/" + logDir
-		latest, err := r.latestVersion(ctx, itemID, logDir, r.knownVersion(ctx, itemID, key, logDir))
+		latest, err := r.latestVersion(ctx, itemID, logDir, r.checkpointVersion(ctx, itemID, logDir))
 		if err != nil || latest < 0 {
 			return nil, err
 		}
@@ -201,26 +190,14 @@ func (r *deltaLogReader) recentCommitsOf(ctx context.Context, itemID string, dir
 		if err != nil {
 			return nil, err
 		}
-		commits := commitFiles(files)
-		if len(commits) > 0 {
-			r.versionsMu.Lock()
-			r.versions[key] = commits[0].Version
-			r.versionsMu.Unlock()
-		}
-		return commits, nil
+		return commitFiles(files), nil
 	})
 }
 
-// knownVersion is a version of the log that likely exists: the newest version
-// that the reader saw, else the version of the last checkpoint, else 0. A Spark
-// writer adds a checkpoint every 10 commits. The Warehouse writes none.
-func (r *deltaLogReader) knownVersion(ctx context.Context, itemID, key, logDir string) int64 {
-	r.versionsMu.Lock()
-	version, ok := r.versions[key]
-	r.versionsMu.Unlock()
-	if ok {
-		return version
-	}
+// checkpointVersion is the version of the last checkpoint of the log, or 0 if
+// the log has none. A Spark writer adds a checkpoint every 10 commits. The
+// Warehouse writes none.
+func (r *deltaLogReader) checkpointVersion(ctx context.Context, itemID, logDir string) int64 {
 	body, err := r.lake.ReadFile(ctx, r.workspaceID, itemID, logDir+"/_last_checkpoint")
 	if err != nil {
 		// The probes of latestVersion report a refusal.

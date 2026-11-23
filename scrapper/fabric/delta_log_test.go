@@ -383,8 +383,6 @@ func (w *fakeWorkspace) reader(t *testing.T) *deltaLogReader {
 		workspaceID: w.workspaceID,
 		lake:        dwhexecfabric.NewOneLakeClientWith(fakeCredential{}, srv.URL+"/lake", srv.Client()),
 		items:       dwhexecfabric.NewAPIClientWith(fakeCredential{}, srv.URL+"/v1", srv.Client()),
-		now:         time.Now,
-		versions:    map[string]int64{},
 	}
 }
 
@@ -618,16 +616,6 @@ func TestLastChangeOfALongLogListsOnlyItsEnd(t *testing.T) {
 			// The whole log is 6000 entries in 60 pages.
 			require.LessOrEqual(t, requests, 30, "listing requests")
 			require.LessOrEqual(t, entries, 4*maxCommitsForLastChange, "listed entries")
-
-			// The next run lists from the version the reader saw last.
-			w.commit(salesItem, dir, commits, t0.Add(commits*time.Minute), fmt.Sprintf(appendCommit, "new", 1))
-			at, err = reader.lastChange(context.Background(), salesItem, []string{dir})
-			require.NoError(t, err)
-			require.Equal(t, lo.ToPtr(t0.Add(commits*time.Minute)), at)
-			again, againEntries := w.listingCost()
-			t.Logf("next run: %d listing requests, %d entries", again-requests, againEntries-entries)
-			require.LessOrEqual(t, again-requests, 6, "listing requests of the next run")
-			require.LessOrEqual(t, againEntries-entries, 4*maxCommitsForLastChange, "listed entries of the next run")
 		})
 	}
 }
@@ -645,27 +633,19 @@ func TestLastChangeOfALogWithItsOldVersionsCleanedUp(t *testing.T) {
 	require.Equal(t, lo.ToPtr(t0.Add(699*time.Minute)), at)
 }
 
-func TestLastChangeOfATableCreatedAgain(t *testing.T) {
+func TestLastChangeWithACheckpointPastTheLog(t *testing.T) {
+	// _last_checkpoint names a version that the log does not have, so the search
+	// starts again at 0.
 	w := seedWorkspace(t)
-	dir := "Tables/sales/again"
-	longLog(w, dir, 300, true)
-	reader := w.reader(t)
-	_, err := reader.lastChange(context.Background(), salesItem, []string{dir})
-	require.NoError(t, err)
+	dir := "Tables/sales/stale"
+	w.commit(salesItem, dir, 0, t0, createCommit)
+	w.commit(salesItem, dir, 1, t0.Add(time.Hour), fmt.Sprintf(appendCommit, "a", 1))
+	w.commit(salesItem, dir, 2, t0.Add(2*time.Hour), compaction)
+	w.files[salesItem+"/"+dir+"/_delta_log/_last_checkpoint"] = fakeFile{body: []byte(`{"version":300}`), written: t0}
 
-	// The table is dropped and created with a new log of 3 commits.
-	for p := range w.files {
-		if strings.HasPrefix(p, salesItem+"/"+dir+"/") {
-			delete(w.files, p)
-		}
-	}
-	w.commit(salesItem, dir, 0, t0.Add(48*time.Hour), createCommit)
-	w.commit(salesItem, dir, 1, t0.Add(49*time.Hour), fmt.Sprintf(appendCommit, "a", 1))
-	w.commit(salesItem, dir, 2, t0.Add(50*time.Hour), compaction)
-
-	at, err := reader.lastChange(context.Background(), salesItem, []string{dir})
+	at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
 	require.NoError(t, err)
-	require.Equal(t, lo.ToPtr(t0.Add(49*time.Hour)), at)
+	require.Equal(t, lo.ToPtr(t0.Add(time.Hour)), at)
 }
 
 func TestLastChangeOfAnEmptyLog(t *testing.T) {
@@ -778,25 +758,18 @@ func TestFetchTableChangeHistoryFailures(t *testing.T) {
 	require.ErrorIs(t, err, dwhexecfabric.ErrNoAPICredential)
 }
 
-func TestItemsListingIsCached(t *testing.T) {
+func TestItemsAreListedOneTimeForEachScrapper(t *testing.T) {
 	w := seedWorkspace(t)
 	reader := w.reader(t)
-	now := t0
-	reader.now = func() time.Time { return now }
 	ctx := context.Background()
 
 	_, _, err := reader.itemOf(ctx, "sales")
 	require.NoError(t, err)
-	_, _, err = reader.itemOf(ctx, "lake")
-	require.NoError(t, err)
-	require.Equal(t, 1, w.itemsHits)
-
-	now = now.Add(itemsTTL + time.Second)
-	item, ok, err := reader.itemOf(ctx, "sales")
+	item, ok, err := reader.itemOf(ctx, "lake")
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, salesItem, item.ID)
-	require.Equal(t, 2, w.itemsHits)
+	require.Equal(t, lakeItem, item.ID)
+	require.Equal(t, 1, w.itemsHits)
 }
 
 func TestFailedItemsListingIsNotCached(t *testing.T) {
