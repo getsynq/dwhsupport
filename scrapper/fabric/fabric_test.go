@@ -416,6 +416,10 @@ func (s *FabricScrapperSuite) TestFetchQueryLogs() {
 		s.NotEmpty(log.DwhContext.Database)
 		s.Contains([]string{"SUCCESS", "FAILED", "ABORTED", "RUNNING", "UNKNOWN"}, log.Status)
 		s.False(log.CreatedAt.IsZero())
+		fields := log.Metadata.GetFields()
+		s.NotEmpty(fields["status"].GetStringValue(), "status should be in the metadata of %s", log.QueryID)
+		s.Contains(fields, "session_id", "session_id should be in the metadata of %s", log.QueryID)
+		s.Contains(fields, "data_scanned_remote_storage_mb", "the data scanned should be in the metadata of %s", log.QueryID)
 	}
 	s.T().Logf("fetched %d query logs from queryinsights", len(logs))
 }
