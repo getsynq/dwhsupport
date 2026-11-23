@@ -178,42 +178,6 @@ const maxOperationWait = 5 * time.Minute
 // one answer cannot hold a catalog refresh for long.
 const maxRetryAfter = 60 * time.Second
 
-// WorkspaceItem is one item of a workspace: a Warehouse, a Lakehouse, a data
-// pipeline, a report and so on.
-type WorkspaceItem struct {
-	// ID is the item GUID, which also names the item's directory in OneLake.
-	ID          string `json:"id"`
-	Type        string `json:"type"`
-	DisplayName string `json:"displayName"`
-}
-
-type workspaceItemsPage struct {
-	Value             []*WorkspaceItem `json:"value"`
-	ContinuationToken string           `json:"continuationToken"`
-}
-
-// ListWorkspaceItems lists the items of the workspace. Any workspace role can
-// list them.
-func (c *APIClient) ListWorkspaceItems(ctx context.Context, workspaceID string) ([]*WorkspaceItem, error) {
-	var all []*WorkspaceItem
-	continuation := ""
-	for {
-		u := c.baseURL + "/workspaces/" + url.PathEscape(workspaceID) + "/items"
-		if continuation != "" {
-			u += "?continuationToken=" + url.QueryEscape(continuation)
-		}
-		var page workspaceItemsPage
-		if err := c.get(ctx, u, &page); err != nil {
-			return nil, err
-		}
-		all = append(all, page.Value...)
-		if page.ContinuationToken == "" {
-			return all, nil
-		}
-		continuation = page.ContinuationToken
-	}
-}
-
 func (c *APIClient) get(ctx context.Context, u string, out any) error {
 	return c.do(ctx, http.MethodGet, u, out)
 }

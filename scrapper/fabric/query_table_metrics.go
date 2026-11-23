@@ -114,7 +114,7 @@ func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows 
 		log.WithError(err).Debug("No OneLake access, tables have no last change")
 		return nil
 	}
-	itemID, ok, err := reader.itemOf(ctx, database)
+	item, ok, err := reader.itemOf(ctx, database)
 	if err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -126,15 +126,6 @@ func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows 
 		log.Debug("No single storage item has the name of the database, tables have no last change")
 		return nil
 	}
-	layout, err := reader.layoutOf(ctx, itemID)
-	if err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		log.WithError(err).Warn("Tables of the database could not be listed in OneLake, tables have no last change")
-		return nil
-	}
-
 	var mu sync.Mutex
 	var failed int
 	var firstErr error
@@ -142,7 +133,7 @@ func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows 
 	g.SetLimit(maxDeltaLogConcurrency)
 	for _, row := range rows {
 		g.Go(func() error {
-			at, err := reader.lastChange(gctx, itemID, tableDirs(layout, row.Schema, row.Table))
+			at, err := reader.lastChange(gctx, item.ID, tableDirs(item.HasSchemas(), row.Schema, row.Table))
 			if errors.Is(err, errNoDeltaLog) {
 				// A shortcut to files that are not a Delta table, for example.
 				return nil

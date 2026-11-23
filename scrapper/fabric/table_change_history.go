@@ -32,14 +32,14 @@ func (e *FabricScrapper) FetchTableChangeHistory(
 	if err != nil {
 		return nil, err
 	}
-	itemID, ok, err := reader.itemOf(ctx, fqn.DatabaseName)
+	item, ok, err := reader.itemOf(ctx, fqn.DatabaseName)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, errors.Errorf("no single storage item of the workspace is named %q", fqn.DatabaseName)
 	}
-	commits, err := reader.history(ctx, itemID, tableDirs(nil, fqn.SchemaName, fqn.ObjectName), from, to, limit)
+	commits, err := reader.history(ctx, item.ID, tableDirs(item.HasSchemas(), fqn.SchemaName, fqn.ObjectName), from, to, limit)
 	if err != nil {
 		return nil, errors.Wrapf(err, "reading the Delta log of %s.%s.%s", fqn.DatabaseName, fqn.SchemaName, fqn.ObjectName)
 	}

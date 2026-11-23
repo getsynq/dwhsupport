@@ -177,33 +177,30 @@ func TestParseDeltaCommitEdges(t *testing.T) {
 
 func TestTableDirs(t *testing.T) {
 	// A Warehouse, or a Lakehouse with schemas: every schema is a directory.
-	require.Equal(t, []string{"Tables/sales/orders"}, tableDirs(tableLayout{"sales": true}, "sales", "orders"))
-	require.Equal(t, []string{"Tables/dbo/orders", "Tables/orders"}, tableDirs(tableLayout{"dbo": true}, "dbo", "orders"))
+	require.Equal(t, []string{"Tables/sales/orders"}, tableDirs(true, "sales", "orders"))
+	require.Equal(t, []string{"Tables/dbo/orders", "Tables/orders"}, tableDirs(true, "dbo", "orders"))
 	// A Lakehouse with no schemas: its tables are at the top, and SQL shows them in dbo.
-	require.Equal(t, []string{"Tables/orders", "Tables/dbo/orders"}, tableDirs(tableLayout{"orders": true}, "dbo", "orders"))
-	// No layout: the schema directory first.
-	require.Equal(t, []string{"Tables/dbo/orders", "Tables/orders"}, tableDirs(nil, "dbo", "orders"))
+	require.Equal(t, []string{"Tables/orders", "Tables/dbo/orders"}, tableDirs(false, "dbo", "orders"))
+	require.Equal(t, []string{"Tables/sales/orders"}, tableDirs(false, "sales", "orders"))
 }
 
 func TestStorageItemsByName(t *testing.T) {
-	got := storageItemsByName([]*dwhexecfabric.WorkspaceItem{
-		{ID: "AAAA", Type: "Lakehouse", DisplayName: "lake"},
-		{ID: "bbbb", Type: "SQLEndpoint", DisplayName: "lake"},
-		{ID: "cccc", Type: "Warehouse", DisplayName: "sales"},
-		{ID: "dddd", Type: "DataPipeline", DisplayName: "pipe"},
-		{ID: "eeee", Type: "Warehouse", DisplayName: "twice"},
-		{ID: "ffff", Type: "MirroredDatabase", DisplayName: "twice"},
-		{ID: "0000", Type: "SQLDatabase", DisplayName: "app"},
-		{ID: "1111", Type: "MirroredDatabase", DisplayName: "mirror"},
+	lake := &dwhexecfabric.StorageItem{ID: "aaaa", Type: dwhexecfabric.ItemTypeLakehouse, DisplayName: "lake"}
+	sales := &dwhexecfabric.StorageItem{ID: "cccc", Type: dwhexecfabric.ItemTypeWarehouse, DisplayName: "sales"}
+	got := storageItemsByName([]*dwhexecfabric.StorageItem{
+		lake,
+		sales,
+		{ID: "eeee", Type: dwhexecfabric.ItemTypeWarehouse, DisplayName: "twice"},
+		{ID: "ffff", Type: dwhexecfabric.ItemTypeMirroredDatabase, DisplayName: "twice"},
 	})
-	require.Equal(t, map[string]string{"lake": "aaaa", "sales": "cccc", "twice": "", "app": "0000", "mirror": "1111"}, got)
+	require.Equal(t, map[string]*dwhexecfabric.StorageItem{"lake": lake, "sales": sales, "twice": nil}, got)
 }
 
 // fakeWorkspace is the Fabric REST API and OneLake of one workspace.
 type fakeWorkspace struct {
 	t           *testing.T
 	workspaceID string
-	items       []*dwhexecfabric.WorkspaceItem
+	items       []*dwhexecfabric.StorageItem
 	itemsStatus int
 	// files maps "<item>/<path>" to a file.
 	files map[string]fakeFile
@@ -244,17 +241,40 @@ func (w *fakeWorkspace) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	w.serveLake(rw, r)
 }
 
+// typedListings maps the path of each typed listing to its item type.
+var typedListings = map[string]string{
+	"lakehouses":        dwhexecfabric.ItemTypeLakehouse,
+	"warehouses":        dwhexecfabric.ItemTypeWarehouse,
+	"mirroredDatabases": dwhexecfabric.ItemTypeMirroredDatabase,
+	"sqlDatabases":      dwhexecfabric.ItemTypeSQLDatabase,
+}
+
 func (w *fakeWorkspace) serveAPI(rw http.ResponseWriter, r *http.Request) {
-	require.Equal(w.t, "/v1/workspaces/"+w.workspaceID+"/items", r.URL.Path)
-	w.mu.Lock()
-	w.itemsHits++
-	w.mu.Unlock()
+	listing, ok := strings.CutPrefix(r.URL.Path, "/v1/workspaces/"+w.workspaceID+"/")
+	itemType, known := typedListings[listing]
+	require.True(w.t, ok && known, "unexpected API call %s", r.URL.Path)
+	if listing == "lakehouses" {
+		// The first of the four typed listings counts the listing.
+		w.mu.Lock()
+		w.itemsHits++
+		w.mu.Unlock()
+	}
 	if w.itemsStatus != 0 {
 		rw.WriteHeader(w.itemsStatus)
 		_, _ = rw.Write([]byte(`{"errorCode":"InsufficientWorkspaceRole","message":"no"}`))
 		return
 	}
-	_ = json.NewEncoder(rw).Encode(map[string]any{"value": w.items})
+	var value []map[string]any
+	for _, it := range w.items {
+		if it.Type == itemType {
+			value = append(value, map[string]any{
+				"id":          it.ID,
+				"displayName": it.DisplayName,
+				"properties":  map[string]any{"defaultSchema": it.DefaultSchema},
+			})
+		}
+	}
+	_ = json.NewEncoder(rw).Encode(map[string]any{"value": value})
 }
 
 func (w *fakeWorkspace) refusal(p string) int {
@@ -387,10 +407,10 @@ func seedWorkspace(t *testing.T) *fakeWorkspace {
 	w := &fakeWorkspace{
 		t:           t,
 		workspaceID: "43531ef0-2f75-4b08-9e6d-e157dbc6c6fa",
-		items: []*dwhexecfabric.WorkspaceItem{
-			{ID: lakeItem, Type: "Lakehouse", DisplayName: "lake"},
-			{ID: "3c3c3c3c-0000-0000-0000-000000000003", Type: "SQLEndpoint", DisplayName: "lake"},
-			{ID: salesItem, Type: "Warehouse", DisplayName: "sales"},
+		items: []*dwhexecfabric.StorageItem{
+			// A Lakehouse with no schemas has no default schema.
+			{ID: lakeItem, Type: dwhexecfabric.ItemTypeLakehouse, DisplayName: "lake"},
+			{ID: salesItem, Type: dwhexecfabric.ItemTypeWarehouse, DisplayName: "sales"},
 		},
 		files: map[string]fakeFile{},
 	}
@@ -497,7 +517,11 @@ func TestQueryTableMetricsKeepsRowCountsWhenOneLakeFails(t *testing.T) {
 			setup: func(w *fakeWorkspace) {
 				w.items = append(
 					w.items,
-					&dwhexecfabric.WorkspaceItem{ID: "4d4d4d4d-0000-0000-0000-000000000004", Type: "MirroredDatabase", DisplayName: "sales"},
+					&dwhexecfabric.StorageItem{
+						ID:          "4d4d4d4d-0000-0000-0000-000000000004",
+						Type:        dwhexecfabric.ItemTypeMirroredDatabase,
+						DisplayName: "sales",
+					},
 				)
 			},
 			want: map[string]*time.Time{"lake.dbo.orders": lo.ToPtr(t0.Add(time.Hour)), "sales.sales.orders": nil},
@@ -718,16 +742,20 @@ func TestFetchTableChangeHistoryFailures(t *testing.T) {
 	err = window(metricsScrapper(t, refused), scrapper.DwhFqn{DatabaseName: "sales", SchemaName: "sales", ObjectName: "orders"})
 	require.True(t, dwhexecfabric.IsPermissionError(err), "a OneLake refusal is a permission error: %v", err)
 
-	// The fake host names no workspace.
+	// The fake connection holds only a SQL token, so it has no REST client.
 	sc, _ := newFakeFabricScrapper(t)
 	err = window(sc, scrapper.DwhFqn{DatabaseName: "sales", SchemaName: "sales", ObjectName: "orders"})
+	require.ErrorIs(t, err, dwhexecfabric.ErrNoAPICredential)
+
+	// The fake host names no workspace.
+	_, err = newDeltaLogReader(&FabricScrapperConf{FabricConf: dwhexecfabric.FabricConf{Host: "fake"}}, nil)
 	require.ErrorContains(t, err, "the host names no Fabric workspace")
 
 	// A pre-acquired SQL token cannot be used for OneLake.
 	_, err = newDeltaLogReader(&FabricScrapperConf{FabricConf: dwhexecfabric.FabricConf{
 		Host:        "lvmghcalzphu5hhdgghdffivni-6apfgq3vf4eexhtn4fl5xrwg7i.datawarehouse.fabric.microsoft.com",
 		AccessToken: "sql-token",
-	}})
+	}}, nil)
 	require.ErrorIs(t, err, dwhexecfabric.ErrNoAPICredential)
 }
 
@@ -745,10 +773,10 @@ func TestItemsListingIsCached(t *testing.T) {
 	require.Equal(t, 1, w.itemsHits)
 
 	now = now.Add(itemsTTL + time.Second)
-	id, ok, err := reader.itemOf(ctx, "sales")
+	item, ok, err := reader.itemOf(ctx, "sales")
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, salesItem, id)
+	require.Equal(t, salesItem, item.ID)
 	require.Equal(t, 2, w.itemsHits)
 }
 
@@ -762,10 +790,10 @@ func TestFailedItemsListingIsNotCached(t *testing.T) {
 	require.Error(t, err)
 
 	w.itemsStatus = 0
-	id, ok, err := reader.itemOf(ctx, "sales")
+	item, ok, err := reader.itemOf(ctx, "sales")
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, salesItem, id)
+	require.Equal(t, salesItem, item.ID)
 	require.Equal(t, 2, w.itemsHits)
 }
 

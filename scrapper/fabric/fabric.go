@@ -84,7 +84,11 @@ func newFabricScrapperWithExecutor(ctx context.Context, conf *FabricScrapperConf
 		return dwhexecfabric.NewAPIClient(&conf.FabricConf)
 	})
 	e.deltaLog = lazy.New(func() (*deltaLogReader, error) {
-		return newDeltaLogReader(conf)
+		api, err := e.GetApiClient()
+		if err != nil {
+			return nil, err
+		}
+		return newDeltaLogReader(conf, api)
 	})
 	return e
 }

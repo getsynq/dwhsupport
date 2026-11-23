@@ -25,17 +25,7 @@ import (
 // Delta protocol makes the time the file was written the time of the commit,
 // unless the commit carries an in-commit timestamp.
 
-// storageItemTypes are the item types whose SQL database has its tables in
-// OneLake. A SQLEndpoint has no OneLake directory of its own: it is the SQL face
-// of the Lakehouse with the same name.
-var storageItemTypes = map[string]bool{
-	"Lakehouse":        true,
-	"Warehouse":        true,
-	"MirroredDatabase": true,
-	"SQLDatabase":      true,
-}
-
-// itemsTTL is how long a listing of the workspace items names the item of each
+// itemsTTL is how long a listing of the storage items names the item of each
 // database. A database created after the listing has no last change until the
 // next listing.
 const itemsTTL = 15 * time.Minute
@@ -56,20 +46,20 @@ type oneLake interface {
 	ReadFile(ctx context.Context, workspaceID, itemID, path string) ([]byte, error)
 }
 
-// workspaceItems is the part of dwhexecfabric.APIClient the reader uses.
-type workspaceItems interface {
-	ListWorkspaceItems(ctx context.Context, workspaceID string) ([]*dwhexecfabric.WorkspaceItem, error)
+// storageItems is the part of dwhexecfabric.APIClient the reader uses.
+type storageItems interface {
+	ListStorageItems(ctx context.Context, workspaceID string) ([]*dwhexecfabric.StorageItem, error)
 }
 
 // deltaLogReader reads the Delta logs of the tables of one workspace.
 type deltaLogReader struct {
 	workspaceID string
 	lake        oneLake
-	items       workspaceItems
+	items       storageItems
 	now         func() time.Time
 
 	mu        sync.Mutex
-	itemsByDB map[string]string
+	itemsByDB map[string]*dwhexecfabric.StorageItem
 	itemsAt   time.Time
 
 	// versions maps "<item>/<log directory>" to the newest version of the log
@@ -78,7 +68,9 @@ type deltaLogReader struct {
 	versions   map[string]int64
 }
 
-func newDeltaLogReader(conf *FabricScrapperConf) (*deltaLogReader, error) {
+// newDeltaLogReader builds the reader with the REST client of the scrapper, so
+// all calls of the scrapper share one client.
+func newDeltaLogReader(conf *FabricScrapperConf, api storageItems) (*deltaLogReader, error) {
 	identity, err := dwhexecfabric.ParseHostIdentity(conf.Host)
 	if err != nil {
 		return nil, errors.Wrap(err, "the host names no Fabric workspace")
@@ -87,79 +79,51 @@ func newDeltaLogReader(conf *FabricScrapperConf) (*deltaLogReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	api, err := dwhexecfabric.NewAPIClient(&conf.FabricConf)
-	if err != nil {
-		return nil, err
-	}
 	return &deltaLogReader{workspaceID: identity.WorkspaceID, lake: lake, items: api, now: time.Now, versions: map[string]int64{}}, nil
 }
 
-// itemOf returns the GUID of the item that stores the tables of database. A
+// itemOf returns the storage item that holds the tables of database. A
 // database that no storage item names, or that two storage items name, has no
 // item: the SQL endpoint cannot tell two such items apart either. A failed
 // listing is not kept, so the next call lists again.
-func (r *deltaLogReader) itemOf(ctx context.Context, database string) (string, bool, error) {
+func (r *deltaLogReader) itemOf(ctx context.Context, database string) (*dwhexecfabric.StorageItem, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.itemsAt.IsZero() || r.now().Sub(r.itemsAt) > itemsTTL {
-		items, err := r.items.ListWorkspaceItems(ctx, r.workspaceID)
+		items, err := r.items.ListStorageItems(ctx, r.workspaceID)
 		if err != nil {
-			return "", false, err
+			return nil, false, err
 		}
 		r.itemsByDB, r.itemsAt = storageItemsByName(items), r.now()
 	}
-	id, ok := r.itemsByDB[database]
-	return id, ok && id != "", nil
+	item := r.itemsByDB[database]
+	return item, item != nil, nil
 }
 
 // storageItemsByName maps each display name to its storage item. A name two
-// storage items share maps to "".
-func storageItemsByName(items []*dwhexecfabric.WorkspaceItem) map[string]string {
-	out := map[string]string{}
+// storage items share maps to nil.
+func storageItemsByName(items []*dwhexecfabric.StorageItem) map[string]*dwhexecfabric.StorageItem {
+	out := map[string]*dwhexecfabric.StorageItem{}
 	for _, it := range items {
-		if !storageItemTypes[it.Type] {
-			continue
-		}
 		if _, seen := out[it.DisplayName]; seen {
-			out[it.DisplayName] = ""
+			out[it.DisplayName] = nil
 			continue
 		}
-		out[it.DisplayName] = strings.ToLower(it.ID)
+		out[it.DisplayName] = it
 	}
 	return out
 }
 
-// tableLayout is what the Tables directory of an item holds at its top level.
-// A schema directory there means the table of that schema is below it.
-type tableLayout map[string]bool
-
-func (r *deltaLogReader) layoutOf(ctx context.Context, itemID string) (tableLayout, error) {
-	children, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, "Tables", dwhexecfabric.ListOptions{})
-	if err != nil {
-		if dwhexecfabric.IsOneLakeNotFound(err) {
-			return tableLayout{}, nil
-		}
-		return nil, err
-	}
-	layout := tableLayout{}
-	for _, c := range children {
-		if c.IsDirectory {
-			layout[c.Name] = true
-		}
-	}
-	return layout, nil
-}
-
 // tableDirs gives the directories the table can be in, the likely one first.
-// A dbo table is at Tables/<table> in a Lakehouse with no schemas. With no
-// layout (nil) the schema directory is tried first.
-func tableDirs(layout tableLayout, schema, table string) []string {
+// A dbo table is at Tables/<table> in a Lakehouse with no schemas
+// (StorageItem.HasSchemas is false). The other directory is the fallback.
+func tableDirs(hasSchemas bool, schema, table string) []string {
 	withSchema := "Tables/" + schema + "/" + table
 	if !strings.EqualFold(schema, "dbo") {
 		return []string{withSchema}
 	}
 	noSchema := "Tables/" + table
-	if layout != nil && !layout[schema] {
+	if !hasSchemas {
 		return []string{noSchema, withSchema}
 	}
 	return []string{withSchema, noSchema}
