@@ -70,12 +70,14 @@ func TestAQueryThatKeepsFailingReturnsTheDriverError(t *testing.T) {
 	executor := connectToFake(t, s)
 
 	_, err := queryN(t, executor)
-	require.ErrorContains(t, err, "pq: unexpected message during extended query execution: '2'")
+	require.ErrorContains(t, err, unexpectedExtendedQueryMessage)
 	require.LessOrEqual(t, s.executes.Load(), int32(3))
 }
 
 func TestOnlyTheOutOfProtocolMessageMeansABrokenConnection(t *testing.T) {
 	require.True(t, isUnexpectedExtendedQueryMessage(errors.New("pq: unexpected message during extended query execution: '2'")))
+	// lib/pq 1.12 names the message.
+	require.True(t, isUnexpectedExtendedQueryMessage(errors.New(`pq: unexpected message during extended query execution: "(2) BindComplete"`)))
 	require.False(t, isUnexpectedExtendedQueryMessage(nil))
 	require.False(t, isUnexpectedExtendedQueryMessage(&pq.Error{Code: "42501", Message: "permission denied for relation svv_table_info"}))
 	require.False(t, isUnexpectedExtendedQueryMessage(errors.New("pq: unexpected Bind response 'E'")))
