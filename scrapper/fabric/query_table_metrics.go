@@ -104,8 +104,9 @@ func (e *FabricScrapper) tableMetricsForDatabase(ctx context.Context, database s
 }
 
 // lastChanges sets UpdatedAt of each row to the time of the last commit of the
-// table that changed data. A read that fails leaves UpdatedAt nil and is
-// logged once for the database. Only a cancelled context fails the call.
+// table that changed data. A table with no Delta log, and a read that fails,
+// leave UpdatedAt nil. The failures are logged once for the database. Only a
+// cancelled context fails the call.
 func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows []*scrapper.TableMetricsRow) error {
 	log := logging.GetLogger(ctx).WithField("database", database)
 	reader, err := e.deltaLog.Get()
@@ -142,6 +143,10 @@ func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows 
 	for _, row := range rows {
 		g.Go(func() error {
 			at, err := reader.lastChange(gctx, itemID, tableDirs(layout, row.Schema, row.Table))
+			if errors.Is(err, errNoDeltaLog) {
+				// A shortcut to files that are not a Delta table, for example.
+				return nil
+			}
 			if err != nil {
 				if ctx.Err() != nil {
 					return ctx.Err()

@@ -638,6 +638,23 @@ func TestItemsListingIsCached(t *testing.T) {
 	require.Equal(t, 2, w.itemsHits)
 }
 
+func TestFailedItemsListingIsNotCached(t *testing.T) {
+	w := seedWorkspace(t)
+	w.itemsStatus = http.StatusServiceUnavailable
+	reader := w.reader(t)
+	ctx := context.Background()
+
+	_, _, err := reader.itemOf(ctx, "sales")
+	require.Error(t, err)
+
+	w.itemsStatus = 0
+	id, ok, err := reader.itemOf(ctx, "sales")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, salesItem, id)
+	require.Equal(t, 2, w.itemsHits)
+}
+
 func TestOneLakeReadEscapesThePath(t *testing.T) {
 	w := seedWorkspace(t)
 	dir := "Tables/sales/order lines"

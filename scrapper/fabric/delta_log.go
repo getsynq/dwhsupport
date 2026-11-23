@@ -69,7 +69,6 @@ type deltaLogReader struct {
 
 	mu        sync.Mutex
 	itemsByDB map[string]string
-	itemsErr  error
 	itemsAt   time.Time
 }
 
@@ -91,19 +90,17 @@ func newDeltaLogReader(conf *FabricScrapperConf) (*deltaLogReader, error) {
 
 // itemOf returns the GUID of the item that stores the tables of database. A
 // database that no storage item names, or that two storage items name, has no
-// item: the SQL endpoint cannot tell two such items apart either.
+// item: the SQL endpoint cannot tell two such items apart either. A failed
+// listing is not kept, so the next call lists again.
 func (r *deltaLogReader) itemOf(ctx context.Context, database string) (string, bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.itemsAt.IsZero() || r.now().Sub(r.itemsAt) > itemsTTL {
 		items, err := r.items.ListWorkspaceItems(ctx, r.workspaceID)
-		if err != nil && ctx.Err() != nil {
-			return "", false, ctx.Err()
+		if err != nil {
+			return "", false, err
 		}
-		r.itemsByDB, r.itemsErr, r.itemsAt = storageItemsByName(items), err, r.now()
-	}
-	if r.itemsErr != nil {
-		return "", false, r.itemsErr
+		r.itemsByDB, r.itemsAt = storageItemsByName(items), r.now()
 	}
 	id, ok := r.itemsByDB[database]
 	return id, ok && id != "", nil
