@@ -30,8 +30,11 @@ import (
 // compaction, a change of the table properties) do not move the last change.
 const maxCommitsForLastChange = 20
 
-// maxDeltaLogConcurrency bounds the concurrent OneLake reads of one database.
-const maxDeltaLogConcurrency = 8
+// maxDeltaLogConcurrency bounds the tables whose Delta log the reader reads at
+// the same time, over all databases of the scrapper. A table is three OneLake
+// requests in sequence, and a request takes about 150 ms, so a database of 500
+// tables takes about 7 s.
+const maxDeltaLogConcurrency = 32
 
 var commitFileName = regexp.MustCompile(`^(\d{20})\.json$`)
 
@@ -51,6 +54,9 @@ type deltaLogReader struct {
 	workspaceID string
 	lake        oneLake
 	items       storageItems
+	// slots holds one token for each table that is read, so the databases that
+	// QueryTableMetrics reads at the same time share maxDeltaLogConcurrency.
+	slots chan struct{}
 
 	// itemsByDB is the storage items listing, read one time for each scrapper.
 	// A scrapper serves one run, so a new database is in the next run.
@@ -69,7 +75,7 @@ func newDeltaLogReader(conf *FabricScrapperConf, api storageItems) (*deltaLogRea
 	if err != nil {
 		return nil, err
 	}
-	return &deltaLogReader{workspaceID: identity.WorkspaceID, lake: lake, items: api}, nil
+	return &deltaLogReader{workspaceID: identity.WorkspaceID, lake: lake, items: api, slots: make(chan struct{}, maxDeltaLogConcurrency)}, nil
 }
 
 // itemOf returns the storage item that holds the tables of database. A
@@ -229,6 +235,12 @@ func (r *deltaLogReader) readCommit(ctx context.Context, itemID, dir string, fil
 // nil if the newest maxCommitsForLastChange commits change no data and older
 // ones exist.
 func (r *deltaLogReader) lastChange(ctx context.Context, itemID string, dirs []string) (*time.Time, error) {
+	select {
+	case r.slots <- struct{}{}:
+		defer func() { <-r.slots }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	dir, commits, err := r.recentCommitsOf(ctx, itemID, dirs)
 	if err != nil {
 		return nil, err

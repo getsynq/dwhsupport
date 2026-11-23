@@ -214,6 +214,11 @@ type fakeWorkspace struct {
 	// listings counts the listing requests, and listed the entries they gave.
 	listings int
 	listed   int
+	// delay holds each OneLake request, and maxInFlight is the most requests
+	// that OneLake served at the same time.
+	delay       time.Duration
+	inFlight    int
+	maxInFlight int
 }
 
 func (w *fakeWorkspace) listingCost() (requests, entries int) {
@@ -293,6 +298,16 @@ func lakeError(rw http.ResponseWriter, status int, code string) {
 }
 
 func (w *fakeWorkspace) serveLake(rw http.ResponseWriter, r *http.Request) {
+	w.mu.Lock()
+	w.inFlight++
+	w.maxInFlight = max(w.maxInFlight, w.inFlight)
+	w.mu.Unlock()
+	defer func() {
+		w.mu.Lock()
+		w.inFlight--
+		w.mu.Unlock()
+	}()
+	time.Sleep(w.delay)
 	segments := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/lake/"), "/", 2)
 	require.Equal(w.t, w.workspaceID, segments[0], "OneLake read outside the workspace")
 	if len(segments) == 2 {
@@ -383,6 +398,7 @@ func (w *fakeWorkspace) reader(t *testing.T) *deltaLogReader {
 		workspaceID: w.workspaceID,
 		lake:        dwhexecfabric.NewOneLakeClientWith(fakeCredential{}, srv.URL+"/lake", srv.Client()),
 		items:       dwhexecfabric.NewAPIClientWith(fakeCredential{}, srv.URL+"/v1", srv.Client()),
+		slots:       make(chan struct{}, maxDeltaLogConcurrency),
 	}
 }
 
@@ -552,6 +568,28 @@ func TestQueryTableMetricsReadsNoDeltaLogWhenTheLastLoadTimeIsOff(t *testing.T) 
 	require.Zero(t, requests, "no OneLake listing")
 	require.Empty(t, w.reads, "no OneLake read")
 	require.Zero(t, w.itemsHits, "no items listing")
+}
+
+func TestQueryTableMetricsReadsTheDeltaLogsOfAllDatabasesWithinOneCap(t *testing.T) {
+	w := seedWorkspace(t)
+	w.delay = 5 * time.Millisecond
+	var lakeTables, salesTables [][2]string
+	for i := range 3 * maxDeltaLogConcurrency {
+		name := fmt.Sprintf("t%03d", i)
+		w.commit(lakeItem, "Tables/"+name, 0, t0, fmt.Sprintf(appendCommit, name, 1))
+		w.commit(salesItem, "Tables/sales/"+name, 0, t0, fmt.Sprintf(appendCommit, name, 1))
+		lakeTables = append(lakeTables, [2]string{"dbo", name})
+		salesTables = append(salesTables, [2]string{"sales", name})
+	}
+	sc := metricsScrapper(t, w, databasesRoute("lake", "sales"), metricsRoutes("lake", lakeTables...), metricsRoutes("sales", salesTables...))
+
+	rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+	require.NoError(t, err)
+	for _, r := range rows {
+		require.NotNil(t, r.UpdatedAt, r.Table)
+	}
+	require.LessOrEqual(t, w.maxInFlight, maxDeltaLogConcurrency, "one cap for all databases")
+	require.Greater(t, w.maxInFlight, maxDeltaLogConcurrency/2, "the reads run in parallel")
 }
 
 func TestQueryTableMetricsWithNoOneLakeAccess(t *testing.T) {
