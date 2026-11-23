@@ -441,6 +441,7 @@ func metricsScrapper(t *testing.T, w *fakeWorkspace, routes ...[]fakeRoute) *Fab
 	sc, _ := newFakeFabricScrapper(t, routes...)
 	reader := w.reader(t)
 	sc.deltaLog = lazy.New(func() (*deltaLogReader, error) { return reader, nil })
+	sc.conf.FetchLastLoadTime = true
 	return sc
 }
 
@@ -539,9 +540,24 @@ func TestQueryTableMetricsKeepsRowCountsWhenOneLakeFails(t *testing.T) {
 	}
 }
 
+func TestQueryTableMetricsReadsNoDeltaLogWhenTheLastLoadTimeIsOff(t *testing.T) {
+	w := seedWorkspace(t)
+	sc := metricsScrapper(t, w, databasesRoute("sales"), metricsRoutes("sales", [2]string{"sales", "orders"}))
+	sc.conf.FetchLastLoadTime = false
+	rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*time.Time{"sales.sales.orders": nil}, updatedAtByTable(rows))
+	require.NotNil(t, rows[0].RowCount)
+	requests, _ := w.listingCost()
+	require.Zero(t, requests, "no OneLake listing")
+	require.Empty(t, w.reads, "no OneLake read")
+	require.Zero(t, w.itemsHits, "no items listing")
+}
+
 func TestQueryTableMetricsWithNoOneLakeAccess(t *testing.T) {
 	// A connection with only a pre-acquired SQL token cannot reach OneLake.
 	sc, _ := newFakeFabricScrapper(t, databasesRoute("sales"), metricsRoutes("sales", [2]string{"sales", "orders"}))
+	sc.conf.FetchLastLoadTime = true
 	rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
@@ -582,13 +598,14 @@ func TestCommitListingFollowsTheContinuation(t *testing.T) {
 	require.Equal(t, t0.Add(4*time.Minute), commits[0].Written)
 }
 
-// longLog writes a log of n commits, each with its CRC file. A Spark writer adds a
-// checkpoint every 10 commits and _last_checkpoint. The Warehouse writes neither.
-func longLog(w *fakeWorkspace, dir string, n int64, checkpoints bool) {
+// longLog writes a log of n commits, each with its CRC file, and a checkpoint
+// every checkpointEvery commits with _last_checkpoint (0: none). A Spark writer
+// checkpoints every 10 commits, the Warehouse about every 100 to 120.
+func longLog(w *fakeWorkspace, dir string, n, checkpointEvery int64) {
 	for v := int64(0); v < n; v++ {
 		w.commit(salesItem, dir, v, t0.Add(time.Duration(v)*time.Minute), fmt.Sprintf(appendCommit, fmt.Sprint(v), 1))
 		w.files[salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.crc", v)] = fakeFile{written: t0}
-		if checkpoints && v > 0 && v%10 == 0 {
+		if checkpointEvery > 0 && v > 0 && v%checkpointEvery == 0 {
 			w.files[salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.checkpoint.parquet", v)] = fakeFile{written: t0}
 			w.files[salesItem+"/"+dir+"/_delta_log/_last_checkpoint"] = fakeFile{
 				body:    []byte(fmt.Sprintf(`{"version":%d,"size":4}`, v)),
@@ -600,30 +617,40 @@ func longLog(w *fakeWorkspace, dir string, n int64, checkpoints bool) {
 
 func TestLastChangeOfALongLogListsOnlyItsEnd(t *testing.T) {
 	const commits = 3000
-	for _, checkpoints := range []bool{false, true} {
-		t.Run(fmt.Sprintf("checkpoints=%v", checkpoints), func(t *testing.T) {
+	for _, every := range []int64{10, 117} {
+		t.Run(fmt.Sprintf("checkpoint every %d", every), func(t *testing.T) {
 			w := seedWorkspace(t)
-			w.pageSize = 100
+			w.pageSize = 500
 			dir := "Tables/sales/long"
-			longLog(w, dir, commits, checkpoints)
-			reader := w.reader(t)
+			longLog(w, dir, commits, every)
 
-			at, err := reader.lastChange(context.Background(), salesItem, []string{dir})
+			at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
 			require.NoError(t, err)
 			require.Equal(t, lo.ToPtr(t0.Add((commits-1)*time.Minute)), at)
 			requests, entries := w.listingCost()
-			t.Logf("first run: %d listing requests, %d entries", requests, entries)
-			// The whole log is 6000 entries in 60 pages.
-			require.LessOrEqual(t, requests, 30, "listing requests")
-			require.LessOrEqual(t, entries, 4*maxCommitsForLastChange, "listed entries")
+			// The whole log is more than 6000 entries in 13 pages.
+			require.Equal(t, 1, requests, "listing requests")
+			require.LessOrEqual(t, entries, int(3*(every+maxCommitsForLastChange)), "listed entries")
+			require.Equal(t, 1, w.readsOf("_last_checkpoint"))
+			require.Equal(t, 1, w.readsOf(".json"), "one commit read")
 		})
 	}
+}
+
+func TestLastChangeOfALogWithNoCheckpoint(t *testing.T) {
+	// A short log has no checkpoint yet, so the whole log is listed.
+	w := seedWorkspace(t)
+	dir := "Tables/sales/short"
+	longLog(w, dir, 14, 0)
+	at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
+	require.NoError(t, err)
+	require.Equal(t, lo.ToPtr(t0.Add(13*time.Minute)), at)
 }
 
 func TestLastChangeOfALogWithItsOldVersionsCleanedUp(t *testing.T) {
 	w := seedWorkspace(t)
 	dir := "Tables/sales/cleaned"
-	longLog(w, dir, 700, false)
+	longLog(w, dir, 700, 0)
 	for v := int64(0); v < 500; v++ {
 		delete(w.files, salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.json", v))
 		delete(w.files, salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.crc", v))

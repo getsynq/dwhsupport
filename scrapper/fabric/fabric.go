@@ -33,6 +33,13 @@ type FabricScrapperConf struct {
 	// only narrow within this configured scope, never escape it — see
 	// effectiveScope.
 	Scope *scope.ScopeFilter
+
+	// FetchLastLoadTime makes QueryTableMetrics read the time of the last load
+	// of each table (UpdatedAt) from its Delta log in OneLake. It costs about
+	// three OneLake requests for each table on each call, and OneLake requests
+	// use Fabric capacity, so it is off by default. FetchTableChangeHistory
+	// reads the Delta log whatever its value.
+	FetchLastLoadTime bool
 }
 
 var _ scrapper.Scrapper = &FabricScrapper{}

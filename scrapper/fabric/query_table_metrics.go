@@ -48,9 +48,10 @@ type fabricTableRef struct {
 // engine, but callers should still schedule this at a sane cadence. SizeBytes
 // is left nil because Fabric surfaces no dependable value.
 //
-// The SQL surface has no time of the last change either, so UpdatedAt comes
-// from the table's Delta log in OneLake (lastChanges). A table whose log cannot
-// be read keeps a nil UpdatedAt and its row count.
+// The SQL surface has no time of the last change either. With
+// FetchLastLoadTime, UpdatedAt comes from the table's Delta log in OneLake
+// (lastChanges). Without it, or if the log cannot be read, UpdatedAt is nil
+// and the row count stays.
 //
 // lastMetricsFetchTime is ignored: the row count has no cheaper read to skip,
 // so every call recomputes counts.
@@ -104,10 +105,13 @@ func (e *FabricScrapper) tableMetricsForDatabase(ctx context.Context, database s
 }
 
 // lastChanges sets UpdatedAt of each row to the time of the last commit of the
-// table that changed data. A table with no Delta log, and a read that fails,
+// table that changed data, if FetchLastLoadTime is on. A table with no Delta log, and a read that fails,
 // leave UpdatedAt nil. The failures are logged once for the database. Only a
 // cancelled context fails the call.
 func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows []*scrapper.TableMetricsRow) error {
+	if !e.conf.FetchLastLoadTime {
+		return nil
+	}
 	log := logging.GetLogger(ctx).WithField("database", database)
 	reader, err := e.deltaLog.Get()
 	if err != nil {

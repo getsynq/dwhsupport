@@ -130,8 +130,6 @@ type deltaCommitFile struct {
 // its CRC and its checkpoint.
 func versionPrefix(version int64) string { return fmt.Sprintf("%020d", version) }
 
-var versionFileName = regexp.MustCompile(`^(\d{20})\.`)
-
 // commitFiles keeps the commit files of a listing of a Delta log, newest first.
 func commitFiles(files []*dwhexecfabric.OneLakePath) []*deltaCommitFile {
 	var commits []*deltaCommitFile
@@ -175,32 +173,35 @@ func (r *deltaLogReader) commitsOf(ctx context.Context, itemID string, dirs []st
 	})
 }
 
-// recentCommitsOf lists the commit files of the newest maxCommitsForLastChange
-// versions of the table, newest first. A log keeps its commits for 30 days by
-// default, so a table that loads often has thousands of them. The listing of
-// all of them costs many pages on each run, so it lists only the end of the log.
+// recentCommitsOf lists the commit files from maxCommitsForLastChange versions
+// before the last checkpoint to the end of the log, newest first. A log keeps
+// its commits for 30 days by default, so a table that loads often has
+// thousands of them. Both Spark and the Warehouse write a checkpoint at least
+// every few hundred commits (Spark every 10, the Warehouse about every 100), so
+// this is one listing page. If the checkpoint is past the end of the log (the
+// table was created again), it lists from version 0.
 func (r *deltaLogReader) recentCommitsOf(ctx context.Context, itemID string, dirs []string) (string, []*deltaCommitFile, error) {
 	return findLog(dirs, func(logDir string) ([]*deltaCommitFile, error) {
-		latest, err := r.latestVersion(ctx, itemID, logDir, r.checkpointVersion(ctx, itemID, logDir))
-		if err != nil || latest < 0 {
-			return nil, err
+		begin := max(0, r.checkpointVersion(ctx, itemID, logDir)-maxCommitsForLastChange+1)
+		for {
+			files, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, logDir, dwhexecfabric.ListOptions{BeginFrom: versionPrefix(begin)})
+			if err != nil {
+				return nil, err
+			}
+			commits := commitFiles(files)
+			if len(commits) > 0 || begin == 0 {
+				return commits, nil
+			}
+			begin = 0
 		}
-		begin := max(0, latest-maxCommitsForLastChange+1)
-		files, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, logDir, dwhexecfabric.ListOptions{BeginFrom: versionPrefix(begin)})
-		if err != nil {
-			return nil, err
-		}
-		return commitFiles(files), nil
 	})
 }
 
 // checkpointVersion is the version of the last checkpoint of the log, or 0 if
-// the log has none. A Spark writer adds a checkpoint every 10 commits. The
-// Warehouse writes none.
+// the log has none or it cannot be read. A refusal shows in the listing.
 func (r *deltaLogReader) checkpointVersion(ctx context.Context, itemID, logDir string) int64 {
 	body, err := r.lake.ReadFile(ctx, r.workspaceID, itemID, logDir+"/_last_checkpoint")
 	if err != nil {
-		// The probes of latestVersion report a refusal.
 		return 0
 	}
 	var checkpoint struct {
@@ -210,67 +211,6 @@ func (r *deltaLogReader) checkpointVersion(ctx context.Context, itemID, logDir s
 		return 0
 	}
 	return checkpoint.Version
-}
-
-// firstVersionFrom returns the oldest version of the log at or after version,
-// or -1 if there is none. It is one listing request of one entry.
-func (r *deltaLogReader) firstVersionFrom(ctx context.Context, itemID, logDir string, version int64) (int64, error) {
-	files, err := r.lake.ListDirectory(ctx, r.workspaceID, itemID, logDir,
-		dwhexecfabric.ListOptions{BeginFrom: versionPrefix(version), Limit: 1})
-	if err != nil || len(files) == 0 {
-		return -1, err
-	}
-	// The names that sort after the versions are not versions: _last_checkpoint,
-	// the _commits directory.
-	m := versionFileName.FindStringSubmatch(files[0].Name)
-	if m == nil {
-		return -1, nil
-	}
-	return strconv.ParseInt(m[1], 10, 64)
-}
-
-// latestVersion returns the newest version of the log, or -1 for a log with no
-// version. It starts at hint, steps forward in doubling steps until no version
-// is found, then halves the range between. That is about 2*log2(n) requests for
-// n commits after hint. If no version is at or after hint, the table was
-// created again, and it starts at 0.
-func (r *deltaLogReader) latestVersion(ctx context.Context, itemID, logDir string, hint int64) (int64, error) {
-	low, err := r.firstVersionFrom(ctx, itemID, logDir, hint)
-	if err != nil {
-		return -1, err
-	}
-	if low < 0 {
-		if hint == 0 {
-			return -1, nil
-		}
-		return r.latestVersion(ctx, itemID, logDir, 0)
-	}
-	// low exists. No version is at or after high.
-	step := int64(1)
-	var high int64
-	for {
-		next, err := r.firstVersionFrom(ctx, itemID, logDir, low+step)
-		if err != nil {
-			return -1, err
-		}
-		if next < 0 {
-			high = low + step
-			break
-		}
-		low, step = next, step*2
-	}
-	for high-low > 1 {
-		next, err := r.firstVersionFrom(ctx, itemID, logDir, low+(high-low)/2)
-		if err != nil {
-			return -1, err
-		}
-		if next < 0 {
-			high = low + (high-low)/2
-		} else {
-			low = next
-		}
-	}
-	return low, nil
 }
 
 var errNoDeltaLog = errors.New("the table has no Delta log in OneLake")

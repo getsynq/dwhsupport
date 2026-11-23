@@ -213,6 +213,8 @@ func (s *FabricScrapperSuite) TestQueryTableMetrics() {
 // The Warehouse publishes the Delta log of each table to OneLake, so every
 // seeded table has a last change, no later than now.
 func (s *FabricScrapperSuite) TestQueryTableMetricsHasTheLastChange() {
+	s.scrapper.conf.FetchLastLoadTime = true
+	defer func() { s.scrapper.conf.FetchLastLoadTime = false }()
 	metrics, err := s.scrapper.QueryTableMetrics(s.ctx, time.Time{})
 	s.Require().NoError(err)
 	var orders *scrapper.TableMetricsRow
@@ -239,6 +241,8 @@ func (s *FabricScrapperSuite) TestFetchTableChangeHistory() {
 			s.False(e.Timestamp.After(events[i-1].Timestamp), "newest first")
 		}
 	}
+	s.scrapper.conf.FetchLastLoadTime = true
+	defer func() { s.scrapper.conf.FetchLastLoadTime = false }()
 	metrics, err := s.scrapper.QueryTableMetrics(s.ctx, time.Time{})
 	s.Require().NoError(err)
 	for _, m := range metrics {
@@ -263,6 +267,7 @@ func TestFabricLakehouseLastChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sc.Close()
+	sc.conf.FetchLastLoadTime = true
 
 	metrics, err := sc.QueryTableMetrics(ctx, time.Time{})
 	if err != nil {
