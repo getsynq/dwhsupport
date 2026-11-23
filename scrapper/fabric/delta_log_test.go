@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -213,6 +214,15 @@ type fakeWorkspace struct {
 	mu        sync.Mutex
 	itemsHits int
 	reads     []string
+	// listings counts the listing requests, and listed the entries they gave.
+	listings int
+	listed   int
+}
+
+func (w *fakeWorkspace) listingCost() (requests, entries int) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.listings, w.listed
 }
 
 type fakeFile struct {
@@ -311,19 +321,28 @@ func (w *fakeWorkspace) serveLake(rw http.ResponseWriter, r *http.Request) {
 	}
 	names := lo.Keys(children)
 	sort.Strings(names)
-	start := 0
+	// beginFrom starts the listing at the first name at or after it, as OneLake does.
+	start := sort.SearchStrings(names, q.Get("beginFrom"))
 	if c := q.Get("continuation"); c != "" {
 		_, _ = fmt.Sscan(c, &start)
 	}
+	pageSize := w.pageSize
+	if m, _ := strconv.Atoi(q.Get("maxResults")); m > 0 && (pageSize == 0 || m < pageSize) {
+		pageSize = m
+	}
 	end := len(names)
-	if w.pageSize > 0 && start+w.pageSize < end {
-		end = start + w.pageSize
+	if pageSize > 0 && start+pageSize < end {
+		end = start + pageSize
 		rw.Header().Set("x-ms-continuation", fmt.Sprint(end))
 	}
 	var paths []map[string]any
 	for _, n := range names[start:end] {
 		paths = append(paths, children[n])
 	}
+	w.mu.Lock()
+	w.listings++
+	w.listed += len(paths)
+	w.mu.Unlock()
 	_ = json.NewEncoder(rw).Encode(map[string]any{"paths": paths})
 }
 
@@ -538,6 +557,52 @@ func TestCommitListingFollowsTheContinuation(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []int64{4, 3, 2, 1, 0}, lo.Map(commits, func(c *deltaCommitFile, _ int) int64 { return c.Version }))
 	require.Equal(t, t0.Add(4*time.Minute), commits[0].Written)
+}
+
+// longLog writes a log of n commits, each with its CRC file. A Spark writer adds a
+// checkpoint every 10 commits and _last_checkpoint. The Warehouse writes neither.
+func longLog(w *fakeWorkspace, dir string, n int64, checkpoints bool) {
+	for v := int64(0); v < n; v++ {
+		w.commit(salesItem, dir, v, t0.Add(time.Duration(v)*time.Minute), fmt.Sprintf(appendCommit, fmt.Sprint(v), 1))
+		w.files[salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.crc", v)] = fakeFile{written: t0}
+		if checkpoints && v > 0 && v%10 == 0 {
+			w.files[salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.checkpoint.parquet", v)] = fakeFile{written: t0}
+			w.files[salesItem+"/"+dir+"/_delta_log/_last_checkpoint"] = fakeFile{
+				body:    []byte(fmt.Sprintf(`{"version":%d,"size":4}`, v)),
+				written: t0,
+			}
+		}
+	}
+}
+
+func TestLastChangeOfALongLogListsOnlyItsEnd(t *testing.T) {
+	const commits = 3000
+	for _, checkpoints := range []bool{false, true} {
+		t.Run(fmt.Sprintf("checkpoints=%v", checkpoints), func(t *testing.T) {
+			w := seedWorkspace(t)
+			w.pageSize = 100
+			dir := "Tables/sales/long"
+			longLog(w, dir, commits, checkpoints)
+			reader := w.reader(t)
+
+			at, err := reader.lastChange(context.Background(), salesItem, []string{dir})
+			require.NoError(t, err)
+			require.Equal(t, lo.ToPtr(t0.Add((commits-1)*time.Minute)), at)
+			requests, entries := w.listingCost()
+			// The whole log is 6000 entries in 60 pages.
+			require.LessOrEqual(t, requests, 30, "listing requests")
+			require.LessOrEqual(t, entries, 4*maxCommitsForLastChange, "listed entries")
+
+			// The next run lists from the version the reader saw last.
+			w.commit(salesItem, dir, commits, t0.Add(commits*time.Minute), fmt.Sprintf(appendCommit, "new", 1))
+			at, err = reader.lastChange(context.Background(), salesItem, []string{dir})
+			require.NoError(t, err)
+			require.Equal(t, lo.ToPtr(t0.Add(commits*time.Minute)), at)
+			again, againEntries := w.listingCost()
+			require.LessOrEqual(t, again-requests, 6, "listing requests of the next run")
+			require.LessOrEqual(t, againEntries-entries, 4*maxCommitsForLastChange, "listed entries of the next run")
+		})
+	}
 }
 
 func historyWorkspace(t *testing.T) *fakeWorkspace {
