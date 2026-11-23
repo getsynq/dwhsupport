@@ -214,6 +214,11 @@ type fakeWorkspace struct {
 	// listings counts the listing requests, and listed the entries they gave.
 	listings int
 	listed   int
+	// delay holds each OneLake request, and maxInFlight is the most requests
+	// that OneLake served at the same time.
+	delay       time.Duration
+	inFlight    int
+	maxInFlight int
 }
 
 func (w *fakeWorkspace) listingCost() (requests, entries int) {
@@ -293,6 +298,16 @@ func lakeError(rw http.ResponseWriter, status int, code string) {
 }
 
 func (w *fakeWorkspace) serveLake(rw http.ResponseWriter, r *http.Request) {
+	w.mu.Lock()
+	w.inFlight++
+	w.maxInFlight = max(w.maxInFlight, w.inFlight)
+	w.mu.Unlock()
+	defer func() {
+		w.mu.Lock()
+		w.inFlight--
+		w.mu.Unlock()
+	}()
+	time.Sleep(w.delay)
 	segments := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/lake/"), "/", 2)
 	require.Equal(w.t, w.workspaceID, segments[0], "OneLake read outside the workspace")
 	if len(segments) == 2 {
@@ -383,8 +398,7 @@ func (w *fakeWorkspace) reader(t *testing.T) *deltaLogReader {
 		workspaceID: w.workspaceID,
 		lake:        dwhexecfabric.NewOneLakeClientWith(fakeCredential{}, srv.URL+"/lake", srv.Client()),
 		items:       dwhexecfabric.NewAPIClientWith(fakeCredential{}, srv.URL+"/v1", srv.Client()),
-		now:         time.Now,
-		versions:    map[string]int64{},
+		slots:       make(chan struct{}, maxDeltaLogConcurrency),
 	}
 }
 
@@ -443,6 +457,7 @@ func metricsScrapper(t *testing.T, w *fakeWorkspace, routes ...[]fakeRoute) *Fab
 	sc, _ := newFakeFabricScrapper(t, routes...)
 	reader := w.reader(t)
 	sc.deltaLog = lazy.New(func() (*deltaLogReader, error) { return reader, nil })
+	sc.conf.FetchLastLoadTime = true
 	return sc
 }
 
@@ -541,9 +556,46 @@ func TestQueryTableMetricsKeepsRowCountsWhenOneLakeFails(t *testing.T) {
 	}
 }
 
+func TestQueryTableMetricsReadsNoDeltaLogWhenTheLastLoadTimeIsOff(t *testing.T) {
+	w := seedWorkspace(t)
+	sc := metricsScrapper(t, w, databasesRoute("sales"), metricsRoutes("sales", [2]string{"sales", "orders"}))
+	sc.conf.FetchLastLoadTime = false
+	rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*time.Time{"sales.sales.orders": nil}, updatedAtByTable(rows))
+	require.NotNil(t, rows[0].RowCount)
+	requests, _ := w.listingCost()
+	require.Zero(t, requests, "no OneLake listing")
+	require.Empty(t, w.reads, "no OneLake read")
+	require.Zero(t, w.itemsHits, "no items listing")
+}
+
+func TestQueryTableMetricsReadsTheDeltaLogsOfAllDatabasesWithinOneCap(t *testing.T) {
+	w := seedWorkspace(t)
+	w.delay = 5 * time.Millisecond
+	var lakeTables, salesTables [][2]string
+	for i := range 3 * maxDeltaLogConcurrency {
+		name := fmt.Sprintf("t%03d", i)
+		w.commit(lakeItem, "Tables/"+name, 0, t0, fmt.Sprintf(appendCommit, name, 1))
+		w.commit(salesItem, "Tables/sales/"+name, 0, t0, fmt.Sprintf(appendCommit, name, 1))
+		lakeTables = append(lakeTables, [2]string{"dbo", name})
+		salesTables = append(salesTables, [2]string{"sales", name})
+	}
+	sc := metricsScrapper(t, w, databasesRoute("lake", "sales"), metricsRoutes("lake", lakeTables...), metricsRoutes("sales", salesTables...))
+
+	rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
+	require.NoError(t, err)
+	for _, r := range rows {
+		require.NotNil(t, r.UpdatedAt, r.Table)
+	}
+	require.LessOrEqual(t, w.maxInFlight, maxDeltaLogConcurrency, "one cap for all databases")
+	require.Greater(t, w.maxInFlight, maxDeltaLogConcurrency/2, "the reads run in parallel")
+}
+
 func TestQueryTableMetricsWithNoOneLakeAccess(t *testing.T) {
 	// A connection with only a pre-acquired SQL token cannot reach OneLake.
 	sc, _ := newFakeFabricScrapper(t, databasesRoute("sales"), metricsRoutes("sales", [2]string{"sales", "orders"}))
+	sc.conf.FetchLastLoadTime = true
 	rows, err := sc.QueryTableMetrics(context.Background(), time.Time{})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
@@ -584,13 +636,14 @@ func TestCommitListingFollowsTheContinuation(t *testing.T) {
 	require.Equal(t, t0.Add(4*time.Minute), commits[0].Written)
 }
 
-// longLog writes a log of n commits, each with its CRC file. A Spark writer adds a
-// checkpoint every 10 commits and _last_checkpoint. The Warehouse writes neither.
-func longLog(w *fakeWorkspace, dir string, n int64, checkpoints bool) {
+// longLog writes a log of n commits, each with its CRC file, and a checkpoint
+// every checkpointEvery commits with _last_checkpoint (0: none). A Spark writer
+// checkpoints every 10 commits, the Warehouse about every 100 to 120.
+func longLog(w *fakeWorkspace, dir string, n, checkpointEvery int64) {
 	for v := int64(0); v < n; v++ {
 		w.commit(salesItem, dir, v, t0.Add(time.Duration(v)*time.Minute), fmt.Sprintf(appendCommit, fmt.Sprint(v), 1))
 		w.files[salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.crc", v)] = fakeFile{written: t0}
-		if checkpoints && v > 0 && v%10 == 0 {
+		if checkpointEvery > 0 && v > 0 && v%checkpointEvery == 0 {
 			w.files[salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.checkpoint.parquet", v)] = fakeFile{written: t0}
 			w.files[salesItem+"/"+dir+"/_delta_log/_last_checkpoint"] = fakeFile{
 				body:    []byte(fmt.Sprintf(`{"version":%d,"size":4}`, v)),
@@ -602,40 +655,40 @@ func longLog(w *fakeWorkspace, dir string, n int64, checkpoints bool) {
 
 func TestLastChangeOfALongLogListsOnlyItsEnd(t *testing.T) {
 	const commits = 3000
-	for _, checkpoints := range []bool{false, true} {
-		t.Run(fmt.Sprintf("checkpoints=%v", checkpoints), func(t *testing.T) {
+	for _, every := range []int64{10, 117} {
+		t.Run(fmt.Sprintf("checkpoint every %d", every), func(t *testing.T) {
 			w := seedWorkspace(t)
-			w.pageSize = 100
+			w.pageSize = 500
 			dir := "Tables/sales/long"
-			longLog(w, dir, commits, checkpoints)
-			reader := w.reader(t)
+			longLog(w, dir, commits, every)
 
-			at, err := reader.lastChange(context.Background(), salesItem, []string{dir})
+			at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
 			require.NoError(t, err)
 			require.Equal(t, lo.ToPtr(t0.Add((commits-1)*time.Minute)), at)
 			requests, entries := w.listingCost()
-			t.Logf("first run: %d listing requests, %d entries", requests, entries)
-			// The whole log is 6000 entries in 60 pages.
-			require.LessOrEqual(t, requests, 30, "listing requests")
-			require.LessOrEqual(t, entries, 4*maxCommitsForLastChange, "listed entries")
-
-			// The next run lists from the version the reader saw last.
-			w.commit(salesItem, dir, commits, t0.Add(commits*time.Minute), fmt.Sprintf(appendCommit, "new", 1))
-			at, err = reader.lastChange(context.Background(), salesItem, []string{dir})
-			require.NoError(t, err)
-			require.Equal(t, lo.ToPtr(t0.Add(commits*time.Minute)), at)
-			again, againEntries := w.listingCost()
-			t.Logf("next run: %d listing requests, %d entries", again-requests, againEntries-entries)
-			require.LessOrEqual(t, again-requests, 6, "listing requests of the next run")
-			require.LessOrEqual(t, againEntries-entries, 4*maxCommitsForLastChange, "listed entries of the next run")
+			// The whole log is more than 6000 entries in 13 pages.
+			require.Equal(t, 1, requests, "listing requests")
+			require.LessOrEqual(t, entries, int(3*(every+maxCommitsForLastChange)), "listed entries")
+			require.Equal(t, 1, w.readsOf("_last_checkpoint"))
+			require.Equal(t, 1, w.readsOf(".json"), "one commit read")
 		})
 	}
+}
+
+func TestLastChangeOfALogWithNoCheckpoint(t *testing.T) {
+	// A short log has no checkpoint yet, so the whole log is listed.
+	w := seedWorkspace(t)
+	dir := "Tables/sales/short"
+	longLog(w, dir, 14, 0)
+	at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
+	require.NoError(t, err)
+	require.Equal(t, lo.ToPtr(t0.Add(13*time.Minute)), at)
 }
 
 func TestLastChangeOfALogWithItsOldVersionsCleanedUp(t *testing.T) {
 	w := seedWorkspace(t)
 	dir := "Tables/sales/cleaned"
-	longLog(w, dir, 700, false)
+	longLog(w, dir, 700, 0)
 	for v := int64(0); v < 500; v++ {
 		delete(w.files, salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.json", v))
 		delete(w.files, salesItem+"/"+dir+"/_delta_log/"+fmt.Sprintf("%020d.crc", v))
@@ -645,27 +698,19 @@ func TestLastChangeOfALogWithItsOldVersionsCleanedUp(t *testing.T) {
 	require.Equal(t, lo.ToPtr(t0.Add(699*time.Minute)), at)
 }
 
-func TestLastChangeOfATableCreatedAgain(t *testing.T) {
+func TestLastChangeWithACheckpointPastTheLog(t *testing.T) {
+	// _last_checkpoint names a version that the log does not have, so the search
+	// starts again at 0.
 	w := seedWorkspace(t)
-	dir := "Tables/sales/again"
-	longLog(w, dir, 300, true)
-	reader := w.reader(t)
-	_, err := reader.lastChange(context.Background(), salesItem, []string{dir})
-	require.NoError(t, err)
+	dir := "Tables/sales/stale"
+	w.commit(salesItem, dir, 0, t0, createCommit)
+	w.commit(salesItem, dir, 1, t0.Add(time.Hour), fmt.Sprintf(appendCommit, "a", 1))
+	w.commit(salesItem, dir, 2, t0.Add(2*time.Hour), compaction)
+	w.files[salesItem+"/"+dir+"/_delta_log/_last_checkpoint"] = fakeFile{body: []byte(`{"version":300}`), written: t0}
 
-	// The table is dropped and created with a new log of 3 commits.
-	for p := range w.files {
-		if strings.HasPrefix(p, salesItem+"/"+dir+"/") {
-			delete(w.files, p)
-		}
-	}
-	w.commit(salesItem, dir, 0, t0.Add(48*time.Hour), createCommit)
-	w.commit(salesItem, dir, 1, t0.Add(49*time.Hour), fmt.Sprintf(appendCommit, "a", 1))
-	w.commit(salesItem, dir, 2, t0.Add(50*time.Hour), compaction)
-
-	at, err := reader.lastChange(context.Background(), salesItem, []string{dir})
+	at, err := w.reader(t).lastChange(context.Background(), salesItem, []string{dir})
 	require.NoError(t, err)
-	require.Equal(t, lo.ToPtr(t0.Add(49*time.Hour)), at)
+	require.Equal(t, lo.ToPtr(t0.Add(time.Hour)), at)
 }
 
 func TestLastChangeOfAnEmptyLog(t *testing.T) {
@@ -778,25 +823,18 @@ func TestFetchTableChangeHistoryFailures(t *testing.T) {
 	require.ErrorIs(t, err, dwhexecfabric.ErrNoAPICredential)
 }
 
-func TestItemsListingIsCached(t *testing.T) {
+func TestItemsAreListedOneTimeForEachScrapper(t *testing.T) {
 	w := seedWorkspace(t)
 	reader := w.reader(t)
-	now := t0
-	reader.now = func() time.Time { return now }
 	ctx := context.Background()
 
 	_, _, err := reader.itemOf(ctx, "sales")
 	require.NoError(t, err)
-	_, _, err = reader.itemOf(ctx, "lake")
-	require.NoError(t, err)
-	require.Equal(t, 1, w.itemsHits)
-
-	now = now.Add(itemsTTL + time.Second)
-	item, ok, err := reader.itemOf(ctx, "sales")
+	item, ok, err := reader.itemOf(ctx, "lake")
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, salesItem, item.ID)
-	require.Equal(t, 2, w.itemsHits)
+	require.Equal(t, lakeItem, item.ID)
+	require.Equal(t, 1, w.itemsHits)
 }
 
 func TestFailedItemsListingIsNotCached(t *testing.T) {

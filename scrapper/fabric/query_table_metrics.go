@@ -48,9 +48,10 @@ type fabricTableRef struct {
 // engine, but callers should still schedule this at a sane cadence. SizeBytes
 // is left nil because Fabric surfaces no dependable value.
 //
-// The SQL surface has no time of the last change either, so UpdatedAt comes
-// from the table's Delta log in OneLake (lastChanges). A table whose log cannot
-// be read keeps a nil UpdatedAt and its row count.
+// The SQL surface has no time of the last change either. With
+// FetchLastLoadTime, UpdatedAt comes from the table's Delta log in OneLake
+// (lastChanges). Without it, or if the log cannot be read, UpdatedAt is nil
+// and the row count stays.
 //
 // lastMetricsFetchTime is ignored: the row count has no cheaper read to skip,
 // so every call recomputes counts.
@@ -78,6 +79,32 @@ func (e *FabricScrapper) tableMetricsForDatabase(ctx context.Context, database s
 		return nil, nil
 	}
 
+	// The Delta log reads need only the table names, so they run while the
+	// tables are counted.
+	var changes map[fabricTableRef]*time.Time
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		changes, err = e.lastChanges(gctx, database, refs)
+		return err
+	})
+	var out []*scrapper.TableMetricsRow
+	g.Go(func() error {
+		var err error
+		out, err = e.countRows(gctx, database, refs)
+		return err
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	for _, row := range out {
+		row.UpdatedAt = changes[fabricTableRef{Schema: row.Schema, Table: row.Table}]
+	}
+	return out, nil
+}
+
+// countRows counts the rows of the tables, rowCountBatchSize tables in each query.
+func (e *FabricScrapper) countRows(ctx context.Context, database string, refs []*fabricTableRef) ([]*scrapper.TableMetricsRow, error) {
 	var out []*scrapper.TableMetricsRow
 	for start := 0; start < len(refs); start += rowCountBatchSize {
 		end := start + rowCountBatchSize
@@ -97,43 +124,44 @@ func (e *FabricScrapper) tableMetricsForDatabase(ctx context.Context, database s
 		}
 		out = append(out, rows...)
 	}
-	if err := e.lastChanges(ctx, database, out); err != nil {
-		return nil, err
-	}
 	return out, nil
 }
 
-// lastChanges sets UpdatedAt of each row to the time of the last commit of the
-// table that changed data. A table with no Delta log, and a read that fails,
-// leave UpdatedAt nil. The failures are logged once for the database. Only a
+// lastChanges returns the time of the last commit that changed data of each
+// table, if FetchLastLoadTime is on. A table with no Delta log, and a read that
+// fails, has no entry. The failures are logged once for the database. Only a
 // cancelled context fails the call.
-func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows []*scrapper.TableMetricsRow) error {
+func (e *FabricScrapper) lastChanges(ctx context.Context, database string, refs []*fabricTableRef) (map[fabricTableRef]*time.Time, error) {
+	if !e.conf.FetchLastLoadTime {
+		return nil, nil
+	}
 	log := logging.GetLogger(ctx).WithField("database", database)
 	reader, err := e.deltaLog.Get()
 	if err != nil {
 		log.WithError(err).Debug("No OneLake access, tables have no last change")
-		return nil
+		return nil, nil
 	}
 	item, ok, err := reader.itemOf(ctx, database)
 	if err != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return nil, ctx.Err()
 		}
 		log.WithError(err).Warn("Workspace items could not be listed, tables have no last change")
-		return nil
+		return nil, nil
 	}
 	if !ok {
 		log.Debug("No single storage item has the name of the database, tables have no last change")
-		return nil
+		return nil, nil
 	}
 	var mu sync.Mutex
+	changes := map[fabricTableRef]*time.Time{}
 	var failed int
 	var firstErr error
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(maxDeltaLogConcurrency)
-	for _, row := range rows {
+	for _, ref := range refs {
 		g.Go(func() error {
-			at, err := reader.lastChange(gctx, item.ID, tableDirs(item.HasSchemas(), row.Schema, row.Table))
+			at, err := reader.lastChange(gctx, item.ID, tableDirs(item.HasSchemas(), ref.Schema, ref.Table))
 			if errors.Is(err, errNoDeltaLog) {
 				// A shortcut to files that are not a Delta table, for example.
 				return nil
@@ -145,22 +173,24 @@ func (e *FabricScrapper) lastChanges(ctx context.Context, database string, rows 
 				mu.Lock()
 				failed++
 				if firstErr == nil {
-					firstErr = errors.Wrapf(err, "%s.%s", row.Schema, row.Table)
+					firstErr = errors.Wrapf(err, "%s.%s", ref.Schema, ref.Table)
 				}
 				mu.Unlock()
 				return nil
 			}
-			row.UpdatedAt = at
+			mu.Lock()
+			changes[*ref] = at
+			mu.Unlock()
 			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
-		return err
+		return nil, err
 	}
 	if failed > 0 {
 		log.WithError(firstErr).WithField("tables", failed).Warn("Delta log could not be read, those tables have no last change")
 	}
-	return nil
+	return changes, nil
 }
 
 // buildRowCountUnion assembles a single UNION ALL statement of per-table

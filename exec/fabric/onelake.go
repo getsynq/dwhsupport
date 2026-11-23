@@ -107,12 +107,7 @@ type ListOptions struct {
 	// BeginFrom starts the listing at the first child whose name sorts at or
 	// after it. The children are in the byte order of their names.
 	BeginFrom string
-	// Limit ends the listing after this many children. Zero lists all of them.
-	Limit int
 }
-
-// maxListResults is the largest page that the DFS API gives.
-const maxListResults = 5000
 
 // ListDirectory lists the direct children of directory, a path inside the item
 // (for example "Tables/sales/orders/_delta_log"), in the order of their names.
@@ -128,9 +123,6 @@ func (c *OneLakeClient) ListDirectory(ctx context.Context, workspaceID, itemID, 
 		// The continuation holds the position, so only the first page needs beginFrom.
 		if opts.BeginFrom != "" && continuation == "" {
 			q.Set("beginFrom", opts.BeginFrom)
-		}
-		if opts.Limit > 0 {
-			q.Set("maxResults", strconv.Itoa(min(opts.Limit-len(all), maxListResults)))
 		}
 		if continuation != "" {
 			q.Set("continuation", continuation)
@@ -154,9 +146,7 @@ func (c *OneLakeClient) ListDirectory(ctx context.Context, workspaceID, itemID, 
 			all = append(all, path)
 		}
 		continuation = header.Get("x-ms-continuation")
-		// A page can hold fewer children than asked for, even none, and still
-		// have a continuation.
-		if continuation == "" || (opts.Limit > 0 && len(all) >= opts.Limit) {
+		if continuation == "" {
 			return all, nil
 		}
 	}
