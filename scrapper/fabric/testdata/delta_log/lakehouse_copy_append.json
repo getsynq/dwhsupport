@@ -1,0 +1,2 @@
+{"add":{"path":"895c8ac0-abb2-4459-bc38-de78f39a211a.parquet","partitionValues":{},"size":2126,"modificationTime":1795455475978,"dataChange":true,"stats":"{\"numRecords\":8}","tags":{"vorder":"true"}}}
+{"commitInfo":{"operation":"Update","engineInfo":"DataFactoryCopy_3.0.2.586","additionalCommitInfo":null,"tags":{"vorder":"true"}}}
