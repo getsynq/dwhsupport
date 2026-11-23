@@ -1,0 +1,18 @@
+{
+  "value": [
+    {
+      "id": "aaaa0004-0000-4000-8000-000000000004",
+      "type": "SQLDatabase",
+      "displayName": "COALESCE_QUALITY_SQLDB",
+      "description": "",
+      "workspaceId": "11111111-2222-4333-8444-555555555555",
+      "logicalId": null,
+      "properties": {
+        "connectionInfo": "Data Source=aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.database.fabric.microsoft.com,1433;Initial Catalog=COALESCE_QUALITY_SQLDB-aaaa0004-0000-4000-8000-000000000004;Multiple Active Result Sets=False;Connect Timeout=30;Encrypt=True;Trust Server Certificate=False",
+        "connectionString": "Data Source=aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.database.fabric.microsoft.com,1433;Initial Catalog=COALESCE_QUALITY_SQLDB-aaaa0004-0000-4000-8000-000000000004;Multiple Active Result Sets=False;Connect Timeout=30;Encrypt=True;Trust Server Certificate=False",
+        "databaseName": "COALESCE_QUALITY_SQLDB-aaaa0004-0000-4000-8000-000000000004",
+        "serverFqdn": "aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.database.fabric.microsoft.com,1433"
+      }
+    }
+  ]
+}

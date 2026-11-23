@@ -1,0 +1,21 @@
+{
+  "value": [
+    {
+      "id": "aaaa0001-0000-4000-8000-000000000001",
+      "type": "Lakehouse",
+      "displayName": "COALESCE_QUALITY_LH",
+      "description": "",
+      "workspaceId": "11111111-2222-4333-8444-555555555555",
+      "logicalId": null,
+      "properties": {
+        "oneLakeTablesPath": "https://onelake.dfs.fabric.microsoft.com/11111111-2222-4333-8444-555555555555/aaaa0001-0000-4000-8000-000000000001/Tables",
+        "oneLakeFilesPath": "https://onelake.dfs.fabric.microsoft.com/11111111-2222-4333-8444-555555555555/aaaa0001-0000-4000-8000-000000000001/Files",
+        "sqlEndpointProperties": {
+          "connectionString": "aaaaaaaaaaaaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbbbbbbbbbbbb.datawarehouse.fabric.microsoft.com",
+          "id": "aaaa0001-0000-4000-8000-0000000000e1",
+          "provisioningStatus": "Success"
+        }
+      }
+    }
+  ]
+}
