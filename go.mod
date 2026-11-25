@@ -25,7 +25,7 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/duckdb/duckdb-go/v2 v2.10506.0
 	github.com/gkampitakis/go-snaps v0.5.25
-	github.com/go-db2/go-db2 v0.0.0-20260926194529-3326334e97ba
+	github.com/go-db2/go-db2 v0.0.0-20261116215536-929eea019401
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/golang/snappy v1.0.0
 	github.com/google/uuid v1.6.0
