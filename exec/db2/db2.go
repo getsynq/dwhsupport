@@ -116,6 +116,10 @@ func driverConfig(conf *Db2Conf) (*godb2.Config, error) {
 	switch strings.ToUpper(conf.Authentication) {
 	case "", AuthenticationServer:
 		cfg.SecurityMechanism = 3 // USRIDPWD
+		// go-db2 refuses USRIDPWD over plain TCP/IP unless this is set. SERVER
+		// authentication is the configured choice here, as it is for the IBM
+		// clients, so allow it.
+		cfg.AllowPlaintextAuth = true
 	case AuthenticationServerEncrypt:
 		cfg.SecurityMechanism = 9 // EUSRIDPWD
 	default:
