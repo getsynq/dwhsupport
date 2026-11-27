@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	dwhexecdb2 "github.com/getsynq/dwhsupport/exec/db2"
 	"github.com/getsynq/dwhsupport/scrapper"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/sqldialect"
@@ -385,6 +386,7 @@ func (s *Db2ValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Db2: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecdb2.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *Db2ValueRoundTripSuite) TearDownSuite() {

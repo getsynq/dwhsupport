@@ -176,9 +176,13 @@ func convertToRawValue(v any, col *scrapper.QueryShapeColumn) scrapper.Value {
 		}
 		return scrapper.StringValue(sanitizeRawString(val))
 	case [16]byte:
-		// Native pgx (and google/uuid) surface UUIDs as a raw 16-byte array.
+		// Native pgx surfaces UUIDs as a raw 16-byte array.
 		// Format as canonical xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.
 		return scrapper.StringValue(uuid.UUID(val).String())
+	case uuid.UUID:
+		// A named type, so the [16]byte case does not match it: without this it
+		// falls to the reflect Array branch below and becomes a quoted JSON string.
+		return scrapper.StringValue(val.String())
 	case []byte:
 		if kind == scrapper.KindNumeric {
 			return scrapper.DecimalValueFromText(string(val))

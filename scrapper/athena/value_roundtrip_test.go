@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecathena "github.com/getsynq/dwhsupport/exec/athena"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -30,6 +31,7 @@ func (s *AthenaValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Athena: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecathena.NewQuerier[any](sc.executor).QueryMaps
 }
 
 func (s *AthenaValueRoundTripSuite) TearDownSuite() {

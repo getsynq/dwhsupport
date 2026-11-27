@@ -241,13 +241,15 @@ var nativeTypeKinds = map[string]ValueKind{
 // numbers and for timestamps on the engines that coerce, and wrong for a
 // DATE, UUID or exact NUMERIC column on those that do not (BigQuery, Trino).
 //
-// It fails for nil, IgnoredValue and JsonValue, and for a value that does not
+// It fails for nil, NullValue, IgnoredValue and JsonValue, and for a value that does not
 // fit the kind (text in an integer column), rather than writing a literal
 // that compares with something else.
 func SqlLiteral(d sqldialect.Dialect, kind ValueKind, v Value) (string, error) {
 	switch t := v.(type) {
 	case nil:
 		return "", errors.New("no literal for a nil value")
+	case NullValue:
+		return "", errors.New("no literal for a NULL value (NullValue); write NULL where the statement needs it")
 	case IgnoredValue:
 		return "", errors.New("no literal for a value that was not read (IgnoredValue)")
 	case JsonValue:

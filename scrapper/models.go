@@ -521,6 +521,13 @@ type IgnoredValue struct{}
 
 func (IgnoredValue) isValue() {}
 
+// NullValue is a SQL NULL, from a decoder that has no other way to say so
+// (stdsql.ValueFromRaw over a QueryMaps row). Every As* accessor reports false
+// for it and AsGo gives nil. ColumnValue says NULL with IsNull instead.
+type NullValue struct{}
+
+func (NullValue) isValue() {}
+
 // StringValue preserves text values verbatim. Used by RunRawQuery so generic
 // "run this query" surfaces see string columns as strings rather than having
 // them collapsed to IgnoredValue (as QueryCustomMetrics does, which is correct

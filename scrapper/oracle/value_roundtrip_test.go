@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecoracle "github.com/getsynq/dwhsupport/exec/oracle"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -27,6 +28,7 @@ func (s *OracleValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Oracle: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecoracle.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *OracleValueRoundTripSuite) TearDownSuite() {

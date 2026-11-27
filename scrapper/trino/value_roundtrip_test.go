@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexectrino "github.com/getsynq/dwhsupport/exec/trino"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
@@ -31,6 +32,7 @@ func (s *StarburstValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Starburst: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexectrino.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *StarburstValueRoundTripSuite) TearDownSuite() {
@@ -61,6 +63,7 @@ func (s *SelfHostedTrinoValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to self-hosted Trino: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexectrino.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *SelfHostedTrinoValueRoundTripSuite) TearDownSuite() {

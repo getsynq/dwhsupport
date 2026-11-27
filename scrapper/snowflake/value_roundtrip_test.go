@@ -46,6 +46,7 @@ func (s *SnowflakeValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Snowflake: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecsnowflake.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *SnowflakeValueRoundTripSuite) TearDownSuite() {

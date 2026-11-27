@@ -128,7 +128,7 @@ func columnValueToAny(v *scrapper.ColumnValue) any {
 		return time.Time(val)
 	case *scrapper.BigIntValue:
 		return val.String()
-	case scrapper.IgnoredValue:
+	case scrapper.IgnoredValue, scrapper.NullValue:
 		return nil
 	default:
 		if bi, ok := v.Value.(interface{ BigInt() *big.Int }); ok {

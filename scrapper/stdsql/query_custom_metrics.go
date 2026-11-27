@@ -179,9 +179,17 @@ func convertToScrapperValue(v any, kind scrapper.ValueKind) scrapper.Value {
 	case time.Time:
 		return scrapper.TimeValue(scrapper.NormalizeTimeOfKind(val, kind))
 	case *big.Rat:
+		// A typed nil pointer is not the untyped nil callers check for before
+		// converting (a nullable BigQuery NUMERIC), and would panic below.
+		if val == nil {
+			return scrapper.IgnoredValue{}
+		}
 		f, _ := val.Float64()
 		return scrapper.DoubleValue(f)
 	case *big.Int:
+		if val == nil {
+			return scrapper.IgnoredValue{}
+		}
 		// Handle *big.Int (e.g., DuckDB hugeint)
 		// If it fits in int64, use IntValue; otherwise use BigIntValue to preserve precision
 		if val.IsInt64() {
