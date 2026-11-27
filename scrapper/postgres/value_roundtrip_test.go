@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecpostgres "github.com/getsynq/dwhsupport/exec/postgres"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
@@ -31,6 +32,7 @@ func (s *PostgresValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Postgres: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecpostgres.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *PostgresValueRoundTripSuite) TearDownSuite() {

@@ -45,6 +45,7 @@ func (s *RedshiftValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Redshift: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecredshift.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *RedshiftValueRoundTripSuite) TearDownSuite() {

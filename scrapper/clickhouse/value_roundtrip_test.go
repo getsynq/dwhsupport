@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecclickhouse "github.com/getsynq/dwhsupport/exec/clickhouse"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
@@ -31,6 +32,7 @@ func (s *ClickhouseValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to ClickHouse: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecclickhouse.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *ClickhouseValueRoundTripSuite) TearDownSuite() {

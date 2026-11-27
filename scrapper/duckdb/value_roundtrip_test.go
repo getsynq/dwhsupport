@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	dwhexecduckdb "github.com/getsynq/dwhsupport/exec/duckdb"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -25,6 +26,7 @@ func (s *DuckDBValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not create DuckDB scrapper: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecduckdb.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *DuckDBValueRoundTripSuite) TearDownSuite() {

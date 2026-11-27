@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecbigquery "github.com/getsynq/dwhsupport/exec/bigquery"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -30,6 +31,7 @@ func (s *BigQueryValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to BigQuery: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecbigquery.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *BigQueryValueRoundTripSuite) TearDownSuite() {

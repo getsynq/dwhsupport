@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecfabric "github.com/getsynq/dwhsupport/exec/fabric"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -27,6 +28,7 @@ func (s *FabricValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to Fabric: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecfabric.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *FabricValueRoundTripSuite) TearDownSuite() {

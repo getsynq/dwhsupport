@@ -212,8 +212,8 @@ func isPlainInteger(s string) bool {
 // AsString renders a value as text: a StringValue or JsonValue verbatim, a
 // number in its shortest exact form, a time as RFC 3339 in UTC with every
 // fractional digit it carries. It reports false for nil and IgnoredValue,
-// which mean the value was not read, so a caller can say so instead of
-// writing "{}" or "<nil>".
+// which mean the value was not read, and for NullValue, so a caller can say
+// so instead of writing "{}" or "<nil>".
 func AsString(v Value) (string, bool) {
 	switch t := v.(type) {
 	case StringValue:
@@ -321,7 +321,7 @@ func AsTime(v Value) (time.Time, bool) {
 
 // AsGo unwraps a value to the plain Go value it holds: int64, float64,
 // *big.Int, string, time.Time (UTC), or the JSON text of a JsonValue as a
-// string. nil and IgnoredValue give nil.
+// string. nil, NullValue and IgnoredValue give nil.
 func AsGo(v Value) any {
 	switch t := v.(type) {
 	case IntValue:

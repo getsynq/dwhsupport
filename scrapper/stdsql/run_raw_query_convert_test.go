@@ -1,9 +1,11 @@
 package stdsql
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -18,6 +20,13 @@ func TestConvertToRawValueComplex(t *testing.T) {
 		{"string", "hello", "String", scrapper.StringValue("hello")},
 		{"int", int64(42), "Int64", scrapper.IntValue(42)},
 		{"blob_stays_string", []byte("hi"), "String", scrapper.StringValue("hi")},
+		// A driver that returns google/uuid.UUID (a named [16]byte) gets the canonical text.
+		{
+			"uuid_named_type",
+			uuid.MustParse("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+			"UUID",
+			scrapper.StringValue("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"),
+		},
 
 		// ClickHouse native nested types -> JsonValue.
 		{"ch_array_int", []int32{1, 2, 3}, "Array(Int32)", scrapper.JsonValue(`[1,2,3]`)},
@@ -72,4 +81,11 @@ func TestIsNativeNestedType(t *testing.T) {
 	assert.False(t, isNativeNestedType("String"))
 	assert.False(t, isNativeNestedType("Int64"))
 	assert.False(t, isNativeNestedType("ARRAY")) // JSON-text type, not native nested
+}
+
+// A nullable BigQuery NUMERIC arrives as a typed nil *big.Rat, which the callers'
+// `raw == nil` check does not see; converting it must not panic.
+func TestConvertToScrapperValueTypedNilPointers(t *testing.T) {
+	assert.Equal(t, scrapper.IgnoredValue{}, convertToScrapperValue((*big.Rat)(nil), scrapper.KindUnknown))
+	assert.Equal(t, scrapper.IgnoredValue{}, convertToScrapperValue((*big.Int)(nil), scrapper.KindUnknown))
 }

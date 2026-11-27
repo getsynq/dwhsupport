@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecmysql "github.com/getsynq/dwhsupport/exec/mysql"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/getsynq/dwhsupport/testenv"
 	"github.com/stretchr/testify/suite"
@@ -31,6 +32,7 @@ func (s *MariaDBValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to MariaDB: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecmysql.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *MariaDBValueRoundTripSuite) TearDownSuite() {
@@ -61,6 +63,7 @@ func (s *MySQLValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to MySQL: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecmysql.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *MySQLValueRoundTripSuite) TearDownSuite() {

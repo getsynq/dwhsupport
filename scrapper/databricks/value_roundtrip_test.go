@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecdatabricks "github.com/getsynq/dwhsupport/exec/databricks"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -22,7 +23,11 @@ func TestDatabricksValueRoundTripSuite(t *testing.T) {
 }
 
 func (s *DatabricksValueRoundTripSuite) SetupSuite() {
-	s.Scrapper = newIntegrationScrapper(s.T(), s.Ctx())
+	sc := newIntegrationScrapper(s.T(), s.Ctx())
+	s.Scrapper = sc
+	executor, err := sc.Executor()
+	s.Require().NoError(err)
+	s.QueryMaps = dwhexecdatabricks.NewQuerier[any](executor).QueryMaps
 }
 
 func (s *DatabricksValueRoundTripSuite) TearDownSuite() {

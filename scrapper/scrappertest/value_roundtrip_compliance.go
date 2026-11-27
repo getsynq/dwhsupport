@@ -9,8 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/getsynq/dwhsupport/exec"
 	"github.com/getsynq/dwhsupport/exec/querycontext"
 	"github.com/getsynq/dwhsupport/scrapper"
+	"github.com/getsynq/dwhsupport/scrapper/stdsql"
 	"github.com/getsynq/dwhsupport/sqldialect"
 	"github.com/stretchr/testify/suite"
 )
@@ -198,9 +200,13 @@ func init() {
 // Nothing is written: every value comes from a literal in a SELECT, so the
 // suite needs a connection and nothing else. Embed it in a warehouse's
 // integration tests and set Scrapper in SetupSuite.
+//
+// QueryMaps, when set, is the warehouse querier's QueryMaps, whose cells
+// TestValueRoundTrip_QueryMaps decodes with stdsql.ValueFromRaw.
 type ValueRoundTripSuite struct {
 	suite.Suite
-	Scrapper scrapper.Scrapper
+	Scrapper  scrapper.Scrapper
+	QueryMaps func(ctx context.Context, sql string) ([]exec.QueryMapResult, error)
 }
 
 // Ctx returns a background context for use in SetupSuite of embedding suites.
@@ -258,6 +264,55 @@ func (s *ValueRoundTripSuite) TestValueRoundTrip_Null() {
 			s.Truef(metrics.IsNull, "QueryCustomMetrics: want NULL, got %T %v", metrics.Value, metrics.Value)
 		})
 	}
+}
+
+// TestValueRoundTrip_QueryMaps reads text and a NULL through QueryMaps and
+// decodes them with stdsql.ValueFromRaw: the text must come back with exactly
+// its bytes, whatever it looks like, and the NULL as NullValue.
+func (s *ValueRoundTripSuite) TestValueRoundTrip_QueryMaps() {
+	if s.Scrapper == nil || s.QueryMaps == nil {
+		s.T().Skip("Scrapper or QueryMaps not set")
+	}
+	textExpr, ok := roundTripExprs[s.Scrapper.DialectType()][scrapper.KindText]
+	if !ok {
+		s.T().Skip("no text expression for this dialect")
+	}
+	quote := s.Scrapper.SqlDialect().StringLiteral
+	for name, text := range map[string]string{
+		"sixteen_bytes": "Orders per day..",
+		"uuid_like":     "A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11",
+		"json":          `{"a": 1}`,
+	} {
+		s.Run(name, func() {
+			s.Equal(scrapper.StringValue(text), s.queryMapsValue(s.selectValue(quote(text))))
+		})
+	}
+	s.Run("escaped_text", func() {
+		s.Equal(scrapper.StringValue(roundTripText), s.queryMapsValue(s.selectValue(textExpr)))
+	})
+	s.Run("null", func() {
+		nullExpr := "CASE WHEN 1 = 0 THEN " + textExpr + " END"
+		if cast, ok := oracleNulls[scrapper.KindText]; ok && s.Scrapper.DialectType() == "oracle" {
+			nullExpr = cast
+		}
+		v := s.queryMapsValue(s.selectValue(nullExpr))
+		s.Equal(scrapper.NullValue{}, v)
+		_, ok := scrapper.AsString(v)
+		s.False(ok)
+	})
+}
+
+// queryMapsValue runs sql through QueryMaps and decodes column v of its only row.
+func (s *ValueRoundTripSuite) queryMapsValue(sql string) scrapper.Value {
+	s.T().Helper()
+	s.T().Logf("SQL: %s", sql)
+	rows, err := s.QueryMaps(s.ctx(), sql)
+	s.Require().NoError(err)
+	s.Require().Len(rows, 1)
+	raw, found := rows[0].Get("v")
+	s.Require().True(found, "column v in %v", rows[0])
+	s.T().Logf("QueryMaps: %T %v", raw, raw)
+	return stdsql.ValueFromRaw(raw)
 }
 
 // decimalSize is a column's precision and scale as QueryShapeColumn carries them.

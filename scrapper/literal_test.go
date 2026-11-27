@@ -54,6 +54,7 @@ func TestSqlLiteral_Refuses(t *testing.T) {
 	}{
 		{KindUnknown, nil},
 		{KindUnknown, IgnoredValue{}},
+		{KindText, NullValue{}},
 		{KindUnknown, JsonValue(`[1]`)},
 		{KindNumeric, StringValue("1e10")},
 		{KindNumeric, StringValue("1; DROP TABLE x")},

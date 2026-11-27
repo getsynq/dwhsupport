@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	dwhexecmssql "github.com/getsynq/dwhsupport/exec/mssql"
 	"github.com/getsynq/dwhsupport/scrapper/scrappertest"
 	"github.com/stretchr/testify/suite"
 )
@@ -27,6 +28,7 @@ func (s *MSSQLValueRoundTripSuite) SetupSuite() {
 		s.T().Skipf("Could not connect to MSSQL: %v", err)
 	}
 	s.Scrapper = sc
+	s.QueryMaps = dwhexecmssql.NewQuerier[any](sc.Executor()).QueryMaps
 }
 
 func (s *MSSQLValueRoundTripSuite) TearDownSuite() {
