@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"context"
 	"crypto/tls"
+	"database/sql"
 	_ "embed"
 	"fmt"
 	"time"
@@ -93,7 +94,8 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 		}
 	}
 
-	db := clickhouse.OpenDB(clickhouseOptions)
+	openDB := func() *sql.DB { return sql.OpenDB(noDataBlockConnector{clickhouse.Connector(clickhouseOptions)}) }
+	db := openDB()
 	if err := db.PingContext(ctx); err != nil {
 		if conf.DefaultDatabase == "" {
 			return nil, exec.ConnectionError(err, IsAuthError)
@@ -113,7 +115,7 @@ func NewClickhouseExecutor(ctx context.Context, conf *ClickhouseConf) (*Clickhou
 		}).Warn("could not open a ClickHouse connection on the configured database, connecting without it")
 
 		clickhouseOptions.Auth.Database = ""
-		db = clickhouse.OpenDB(clickhouseOptions)
+		db = openDB()
 		if err := db.PingContext(ctx); err != nil {
 			return nil, exec.ConnectionError(err, IsAuthError)
 		}
